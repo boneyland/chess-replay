@@ -129,8 +129,9 @@
   // end on a bestmove token that isn't the start of its last complete line
   const bestOf = (r) => (r && r.pv && r.pv[0]) || (r && r.best) || null;
 
-  // the least time between a game analysis's requests to the tablebase
-  const TB_GAP_MS = 1000;
+  // the least time between a game analysis's requests to the tablebase: Lichess publishes no limit, and it answered 429
+  // to about 10 requests in a minute
+  const TB_GAP_MS = 4000;
 
   // the browser engines (Settings › Engine): the vendored lite one, or the full one the viewer downloaded (sf-full.js)
   const ENGINE_NAMES = { lite: 'Stockfish 19 lite (browser)', full: 'Stockfish 19 (browser)' };
@@ -191,9 +192,9 @@
   // settings: the engine settings to search with and to record (engineSettings().game)
   // tablebase: Lichess's tablebase client (LichessCore.create(), Settings › Online data › Endgame tablebase on), else
   // null: a position of 7 pieces or fewer takes its certain answer instead of a search (tablebaseResult); an uncertain
-  // one is searched. Its requests go tbGapMs apart (Lichess publishes no limit; a burst of them was answered 429). While
-  // the client backs off after a 429 the positions are searched, then it is asked again; after a request that fails
-  // otherwise (offline, an error, the timeout) the run asks no more. now, sleep: the clock, for tests
+  // one is searched. Its requests go tbGapMs apart (TB_GAP_MS). While the client backs off after a 429 the positions
+  // are searched, then it is asked again; after a request that fails otherwise (offline, an error, the timeout) the run
+  // asks no more. now, sleep: the clock, for tests
   async function runAnalysis({ engine, ucis, sans, headers, signal, onProgress, earlier = [], onSearched, settings = ENGINE, startFen = window.ChessCore.START_FEN, tablebase = null, tbGapMs = TB_GAP_MS, now = Date.now, sleep = (ms) => new Promise((r) => setTimeout(r, ms)) }) {
     const CC = window.ChessCore, LC = window.LichessCore;
     const N = ucis.length, R = earlier.slice(0, N + 1);
@@ -263,24 +264,20 @@
     }
     return out;
   }
-  // A position's tablebase answer as a search result: { result, failed }. result: { cp, depth 0, pv (the DTZ mainline,
-  // else the best move), tb: { category, dtz, dtm } } for a certain answer, else null (search it); failed: a request
-  // didn't answer (the mainline's failing keeps the answer, its line just the best move). The run's signal is a plain
-  // { aborted } (not an AbortSignal), checked after: a stopped run lets its last request finish (10 s at most).
-  // pace(): waits for the run's next turn to ask; an answer the client already has doesn't wait
+  // A position's tablebase answer as a search result: { result, failed }. result: { cp, depth 0, pv (the best move:
+  // one request a position, so no line), tb: { category, dtz, dtm } } for a certain answer, else null (search it);
+  // failed: the request didn't answer. The run's signal is a plain { aborted } (not an AbortSignal), checked after: a
+  // stopped run lets its last request finish (10 s at most). pace(): waits for the run's next turn to ask; an answer
+  // the client already has doesn't wait
   async function tablebaseResult(client, fen, pace) {
     const LC = window.LichessCore, turn = fen.split(' ')[1] === 'b' ? 'b' : 'w';
-    const fresh = (cached) => !cached || cached(fen) === undefined;
-    if (fresh(client.tablebaseCached)) await pace();
+    if (!client.tablebaseCached || client.tablebaseCached(fen) === undefined) await pace();
     const t = await client.tablebase(fen);
     if (!t) return { result: null, failed: true };
     const cp = LC.evalCp(t, turn);
     if (cp == null) return { result: null, failed: false };
-    const first = t.moves.length ? t.moves[0].uci : null;
-    if (first && fresh(client.mainlineCached)) await pace();
-    const line = first ? await client.mainline(fen) : [];
-    const pv = line && line.length ? line : first ? [first] : [];
-    return { result: { cp, depth: 0, pv, best: pv[0] || null, nodes: null, timeMs: null, tb: { category: t.category, dtz: t.dtz, dtm: t.dtm } }, failed: !line };
+    const best = t.moves.length ? t.moves[0].uci : null;
+    return { result: { cp, depth: 0, pv: best ? [best] : [], best, nodes: null, timeMs: null, tb: { category: t.category, dtz: t.dtz, dtm: t.dtm } }, failed: false };
   }
 
   window.AnalysisCore = { C, TB_GAP_MS, ENGINE, ENGINE_NAMES, SEARCH_LIMITS, DEPTHS, SECONDS, HASH_MB, LINES, engineSettings, secondsPerPosition, paceFactor, blendPace, deeperSearch, canGoDeeper, bestOf, winningChances, infoToScore, infoStats, rateMove, rateByOutcome, mateLine, positionFens, playerStats, buildAnalysisJson, runAnalysis };

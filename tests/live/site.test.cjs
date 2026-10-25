@@ -947,7 +947,7 @@ for (const name of BROWSERS) for (const site of SITES) {
       await tb.ctx.close();
     });
     // the tablebase in a game's analysis (the real service): every position of this KBN v K game has 7 pieces or fewer,
-    // so the run asks Lichess (9 requests a second apart, the start's answer already shown) and searches none of them (with
+    // so the run asks Lichess (4 requests 4 s apart, the start's answer already shown) and searches none of them (with
     // 20 s a position, a search would show), and 2. Bc4+, which
     // gives the bishop away, throws the win away: a blunder
     await t.test('desktop: analysing a KBN v K game takes the tablebase and rates the drawing move a blunder', async () => {
@@ -965,7 +965,7 @@ for (const name of BROWSERS) for (const site of SITES) {
       await p.waitForFunction(() => /Lichess tablebase/i.test(document.body.innerText), null, { timeout: 19000 });
       assert.ok(Date.now() - t0 < 19000, 'no 20 s search');
       assert.equal(sent.filter((u) => u.includes('/standard?')).length, 5, 'each position asked once');
-      assert.equal(sent.filter((u) => u.includes('/standard/mainline?')).length, 5);
+      assert.equal(sent.length, 5, 'nothing else asked');
       await p.locator('[data-ply="2"]').click();
       await assert.doesNotReject(p.locator('.plabel').filter({ hasText: /2\. Bc4\+/ }).waitFor({ timeout: 5000 }));
       await p.waitForFunction(() => /Blunder/i.test(document.body.innerText), null, { timeout: 5000 });

@@ -18,14 +18,10 @@ const FENS = A.positionFens(START, GAME.ucis);
 
 // an answer as the API gives it (the side to move's category; its first move the best)
 const answer = (category, dtz, dtm, first) => LC.parseTablebase({ category, dtz, dtm, checkmate: false, stalemate: false, insufficient_material: false, moves: first ? [{ uci: first, san: '?', category: LC.flip(category), dtz: dtz && -dtz, dtm: dtm && -dtm }] : [] });
-// the answers for positions 0..4 (null: the request fails) and the mainlines; records what was asked
-function fakeTb(answers, mainlines = {}) {
-  const asked = [], lines = [];
-  return {
-    asked, lines,
-    tablebase: async (fen) => { const k = FENS.indexOf(fen); asked.push(k); return answers[k] === undefined ? null : answers[k]; },
-    mainline: async (fen) => { const k = FENS.indexOf(fen); lines.push(k); return k in mainlines ? mainlines[k] : []; },
-  };
+// the answers for positions 0..4 (null: the request fails); records what was asked
+function fakeTb(answers) {
+  const asked = [];
+  return { asked, tablebase: async (fen) => { const k = FENS.indexOf(fen); asked.push(k); return answers[k] === undefined ? null : answers[k]; } };
 }
 const fakeEngine = () => ({
   calls: [],
@@ -43,19 +39,18 @@ test('positionFens gives each position its full FEN, the fifty-move count counte
   assert.equal(FENS[4], '8/8/8/2k5/8/3BK3/8/7N w - - 4 3');
 });
 
-test('tablebase positions skip the engine: their evals, best moves, lines and fields come from the tablebase', async () => {
-  const eng = fakeEngine(), tb = fakeTb(WINNING, { 0: ['d2e3', 'e5d6', 'e2d3'] });
+test('tablebase positions skip the engine: their evals, best moves and fields come from the tablebase', async () => {
+  const eng = fakeEngine(), tb = fakeTb(WINNING);
   const out = await run(eng, tb);
   assert.deepEqual(eng.calls, [], 'no search');
   assert.deepEqual(tb.asked, [0, 1, 2, 3, 4]);
-  assert.deepEqual(tb.lines, [0, 1, 2, 3, 4]);
   const [m1, m2, m3] = out.moves;
   assert.equal(m1.eval_before, 10000 - 10 * 28); // a mate in 28 moves from DTM 55
   assert.equal(m1.eval_after, 10000 - 10 * 27); // Black to move, mated in 27
   assert.equal(m1.best_move_uci, 'd2e3');
-  assert.deepEqual(m1.best_line, ['Ke3', 'Kd6', 'Bd3']); // the DTZ mainline
+  assert.deepEqual(m1.best_line, ['Ke3'], 'the best move alone');
   assert.equal(m2.best_move_uci, 'e5d6');
-  assert.deepEqual(m2.best_line, ['Kd6'], 'no mainline: the best move alone');
+  assert.deepEqual(m2.best_line, ['Kd6']);
   assert.deepEqual([m1.search_depth, m1.search_depth_after], [0, 0]);
   assert.deepEqual(m1.tb_before, { category: 'win', dtz: 55, dtm: 55 });
   assert.deepEqual(m1.tb_after, { category: 'loss', dtz: -54, dtm: -54 });
@@ -131,23 +126,14 @@ test('the run\'s requests go tbGapMs apart; an answer the client already has doe
   let t = 0;
   const waits = [], at = [];
   const tb = fakeTb(WINNING);
-  const ask = tb.tablebase, line = tb.mainline;
+  const ask = tb.tablebase;
   tb.tablebase = async (fen) => { at.push(t); return ask(fen); };
-  tb.mainline = async (fen) => { at.push(t); return line(fen); };
   tb.tablebaseCached = (fen) => (FENS.indexOf(fen) === 0 ? WINNING[0] : undefined);
-  tb.mainlineCached = () => undefined;
-  await run(fakeEngine(), tb, { tbGapMs: 1000, now: () => t, sleep: async (ms) => { waits.push(ms); t += ms; } });
-  // position 0's answer is cached: its mainline is the first request, every later one a second after the one before
-  assert.deepEqual(at, [0, 0, 1000, 2000, 3000, 4000, 5000, 6000, 7000, 8000]);
-  assert.deepEqual(waits, Array(8).fill(1000));
-});
-
-test('a failed mainline keeps the answer, its line the best move, and the run asks no more', async () => {
-  const eng = fakeEngine(), tb = fakeTb(WINNING, { 0: null });
-  const out = await run(eng, tb);
-  assert.deepEqual(out.moves[0].best_line, ['Ke3']);
-  assert.deepEqual(tb.asked, [0]);
-  assert.deepEqual(eng.calls, [1, 2, 3, 4]);
+  await run(fakeEngine(), tb, { tbGapMs: 4000, now: () => t, sleep: async (ms) => { waits.push(ms); t += ms; } });
+  // position 0's answer is cached: position 1's is the first request, every later one 4 s after the one before
+  assert.deepEqual(at, [0, 0, 4000, 8000, 12000]);
+  assert.deepEqual(waits, Array(3).fill(4000));
+  assert.equal(A.TB_GAP_MS, 4000);
 });
 
 test('the setting off (no client) sends nothing; more than 7 pieces is never asked', async () => {
@@ -196,25 +182,4 @@ test('LichessCore.evalCp: certain answers as the bar\'s value, checkmate ±10000
   assert.equal(LC.evalCp(answer('maybe-win', 90, null), 'w'), null);
   assert.equal(LC.evalCp({ ...answer('loss', 0, 0), checkmate: true }, 'w'), -10000);
   assert.equal(LC.evalCp({ ...answer('draw', 0, 0), stalemate: true }, 'b'), 0);
-});
-
-test('LichessCore.parseMainline: the moves of a real mainline, empty for a draw', () => {
-  const kbnk = require('./fixtures/tb-mainline-kbnk.json'), krkr = require('./fixtures/tb-mainline-krkr.json');
-  const ucis = LC.parseMainline(kbnk);
-  assert.equal(ucis.length, 55);
-  assert.equal(ucis[0], kbnk.mainline[0].uci);
-  assert.deepEqual(LC.parseMainline(krkr), []);
-  assert.throws(() => LC.parseMainline({ category: 'win' }));
-  assert.equal(LC.mainlineUrl('8/8/8/4k3/8/8/3KB3/7N w - - 0 1'), 'https://tablebase.lichess.ovh/standard/mainline?fen=8%2F8%2F8%2F4k3%2F8%2F8%2F3KB3%2F7N%20w%20-%20-%200%201');
-});
-
-test('the client asks the mainline through the tablebase gate and caches it', async () => {
-  const calls = [];
-  const fetchFn = async (url) => { calls.push(url); return { status: 200, ok: true, json: async () => require('./fixtures/tb-mainline-kbnk.json') }; };
-  const c = LC.create({ fetchFn });
-  const fen = '8/8/8/4k3/8/8/3KB3/7N w - - 0 1';
-  assert.equal((await c.mainline(fen)).length, 55);
-  assert.equal((await c.mainline(fen)).length, 55);
-  assert.equal(calls.length, 1);
-  assert.equal(await c.mainline(CC.START_FEN), null);
 });
