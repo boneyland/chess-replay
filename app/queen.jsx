@@ -39,6 +39,9 @@ const DIRECT_API = 'https://boneyland-queen-pawn-8.hf.space/gradio_api';
 // with `hf_oauth: true` in its README gets its own app, whose ID HF injects as window.huggingface.variables
 const HF_OAUTH = { clientId: (window.huggingface && window.huggingface.variables || {}).OAUTH_CLIENT_ID || '5d94cba5-1c7f-49ec-9ea3-5419e82a3af5', scope: 'openid profile', redirect: location.origin + location.pathname.replace(/[^/]*$/, '') };
 const AUTH_STORE = 'chess-video.hf-auth.v1', PKCE_STORE = 'chess-video.hf-pkce';
+// a pull request's preview on Render (chess-replay-pr-64.onrender.com) is a host the OAuth app doesn't list, so Hugging
+// Face would refuse its redirect: sign-in is offered on the live site only
+const HF_PREVIEW = /-pr-\d+[\w-]*\.onrender\.com$/.test(location.hostname);
 
 async function directCall(moves, token, signal, fen = '') {
   const auth = token ? { Authorization: 'Bearer ' + token } : {};
@@ -68,7 +71,7 @@ function readAuth() { try { const a = JSON.parse(localStorage.getItem(AUTH_STORE
 function useHfAuth() {
   const [auth, setAuth] = React.useState(readAuth);
   const [note, setNote] = React.useState('');
-  const enabled = !!HF_OAUTH.clientId;
+  const enabled = !!HF_OAUTH.clientId && !HF_PREVIEW;
   const start = async () => {
     if (!enabled) return;
     if (window.top !== window) { window.open(HF_OAUTH.redirect + '#hf-signin', '_blank'); return; }
@@ -104,7 +107,7 @@ function useHfAuth() {
     else if (location.hash === '#hf-signin') { history.replaceState(null, '', location.pathname); start(); }
     return () => window.removeEventListener('storage', onStorage);
   }, []);
-  return { auth, enabled, start, signOut, note, clearNote: () => setNote('') };
+  return { auth, enabled, preview: HF_PREVIEW, start, signOut, note, clearNote: () => setNote('') };
 }
 
 function readQueenCache() { try { return window.QueenCore.readQueenCache(JSON.parse(localStorage.getItem(QUEEN_STORE) || '{}')); } catch (e) { return {}; } }
@@ -364,6 +367,7 @@ function QueenPanel({ M, Q, hf, probe, onClose, onOverlay, onSave, left }) {
           {hf.enabled && (hf.auth
             ? <TweakButton secondary label="Sign out of Hugging Face" onClick={hf.signOut} />
             : <TweakButton label="Sign in with Hugging Face" onClick={hf.start} />)}
+          {hf.preview && !hf.auth && <div className="twk-note">Sign-in works on the <a href="https://chess-replay.onrender.com/" target="_blank" rel="noopener">live site</a>, not on a pull request’s preview.</div>}
         </div>
         <TweakButton disabled={!!Q.busy || running} label="Analyse the position on the board" onClick={askHere} />
         {Q.busy && (
