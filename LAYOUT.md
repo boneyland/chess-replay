@@ -14,6 +14,7 @@ What each part of the repo is, with the pinned SHA-256 of every vendored file. B
   - `queen-core.js`, `queen.jsx`: Ask Queen and its Hugging Face sign-in
   - `export.jsx`, `webp-core.js`: MP4 and animated WebP export
   - `sfx-core.js`, `sfx.jsx`: the move sounds
+  - `drag-scroll.js`: a mouse drag scrolls whatever scrolls under it
   - `sample-analysis.js`: the sample game's analysis, trimmed
   - `sw.js`: the site's service worker (offline); `icons/`, `og-image.png`: web app icons and the link-preview image
 - `src/`: files from the original Claude Design project (`pieces.js`, `sample-game.js`, and `game-data.js`, which writes the sample game's commentary, `window.SAMPLE_NOTES`, all built into the page); `pieces/cburnett/` are Colin M.L. Burnett's pieces (GPL-2.0-or-later, as in Lichess)
