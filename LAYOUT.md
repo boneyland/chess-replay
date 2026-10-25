@@ -28,6 +28,8 @@ What each part of the repo is, with the pinned SHA-256 of every vendored file. B
 - `vendor/webp_enc_simd.*`: the WebP export's encoder, libwebp 1.1.0 (BSD-3-Clause, `webp_enc_simd.LICENSE`) built to WebAssembly by Squoosh, unchanged files from `codec/enc/` in @jsquash/webp 1.5.0 (Apache-2.0, https://github.com/jamsinclair/jSquash); the site serves them next to the page. `tests/fixtures/webp_dec.*` is the same package's decoder, used only by the tests
   - `webp_enc_simd.js` sha256 `3038e60ebba6252baba08c691e31d1efe5036a185435daa7b4afaef3cc9273f9`
   - `webp_enc_simd.wasm` sha256 `39c279269ec1163b987b6d69749458e3d5b03b9585f58b6ca5455b76b504a305`
+- `vendor/mediabunny.min.js`: the MP4 export's muxer, Mediabunny 1.61.0 (MPL-2.0, `mediabunny.LICENSE`, https://github.com/Vanilagy/mediabunny), the unchanged `dist/bundles/mediabunny.min.mjs` (an ES module, renamed `.js` so every host serves it as JavaScript); the site serves it next to the page
+  - `mediabunny.min.js` sha256 `fa696c53494b6b09a8b310ec51e3c44a59e79513234fb832255a38c686162009`
 - `vendor/sounds/`: Lichess's futuristic, nes, piano and sfx sound sets by Enigmahack (AGPL-3.0-or-later, per lila's `COPYING.md`), unchanged files from `public/sound/` at lila commit `b003cfa2fab3a07ed6192e9edb8544f012b38e7f`; the page inlines them. Lichess's other sets aren't free (standard, woodland, robot, instrument) or are non-commercial (lisp), so they're left out. The built-in Wood set is synthesized in `sfx-core.js`
   - `futuristic/Move.mp3` sha256 `e68edeb6dfc9d0510b553c7d94adbb249c07e52c8e1c6ae1a207dea56c08195a`
   - `futuristic/Capture.mp3` sha256 `d043743b359844536b991600253453de9d3f95d6ca4688f25ec3eebcf0316874`

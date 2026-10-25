@@ -1,14 +1,16 @@
 // ---------- video export ----------
 // Steps the player through every frame, draws the stage into a canvas with html2canvas-pro and encodes it in
 // the browser: an MP4 (WebCodecs, muxed by Mediabunny), or an animated WebP (each frame a still WebP from libwebp,
-// joined by webp-core.js). The libraries load on the first export only: from the CDN, and libwebp from the site.
+// joined by webp-core.js). The libraries load on the first export only: html2canvas-pro from the CDN, Mediabunny and
+// libwebp from the site.
 // frame rates offered in Settings; each frame takes about 0.2 s to draw, so the export time scales with it
 const EXPORT_FPS_OPTIONS = [8, 12, 15, 24, 30];
-// a new version needs a new hash: html2canvas-pro's here, mediabunny's in the import map in shell.html
+// a new version of html2canvas-pro needs a new hash. Mediabunny 1.61.0 (an ES module) is served next to the page
+// (vendor/): an import() can't carry an integrity hash, and not every browser honours an import map's
 const EXPORT_LIBS = {
   html2canvas: 'https://cdn.jsdelivr.net/npm/html2canvas-pro@2.5.0/dist/html2canvas-pro.min.js',
   html2canvasHash: 'sha384-IT/7L8+t0nqitKnKyUD1rh3hC/qPQehh1Et4A2dTqUuxKbomoRs73yhSQoALaYeI',
-  mediabunny: 'https://cdn.jsdelivr.net/npm/mediabunny@1.61.0/dist/bundles/mediabunny.min.mjs',
+  mediabunny: 'mediabunny.min.js',
 };
 const EXPORT_FORMATS = ['MP4', 'WebP'];
 // WebP widths offered besides the frame's own (1920, or the portrait frame's 840): 1676 fills GitHub's 838 px README
@@ -36,7 +38,7 @@ const loadHtml2canvas = once(() => new Promise((ok, fail) => {
   s.onload = () => ok(window.html2canvas); s.onerror = () => fail(new Error('could not load html2canvas-pro'));
   document.head.appendChild(s);
 }));
-const loadMediabunny = once(() => import(EXPORT_LIBS.mediabunny));
+const loadMediabunny = once(() => import(new URL(EXPORT_LIBS.mediabunny, document.baseURI).href));
 // the codec's glue is an ES module; given the wasm's bytes, it doesn't fetch them itself
 const loadWebp = once(async () => {
   const at = (f) => new URL(f, document.baseURI).href;

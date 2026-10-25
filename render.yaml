@@ -29,8 +29,16 @@ services:
       - type: rewrite
         source: /
         destination: /chess-game-video.html
-    # revalidate on every visit, so a deploy is live at once
+    # revalidate on every visit, so a deploy is live at once; files are taken only as the type they're served as, and
+    # other sites see only the origin a visitor came from. The page's Content-Security-Policy is a <meta> in it
+    # (build.cjs: it lists the inline scripts' hashes). tests/live/serve.cjs reads these headers from here
     headers:
       - path: /*
         name: Cache-Control
         value: public, max-age=0, must-revalidate
+      - path: /*
+        name: X-Content-Type-Options
+        value: nosniff
+      - path: /*
+        name: Referrer-Policy
+        value: strict-origin-when-cross-origin
