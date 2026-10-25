@@ -1118,7 +1118,7 @@ for (const name of BROWSERS) for (const site of SITES) {
       await dialog.getByRole('radio', { name: 'White' }).click();
       await dialog.getByRole('button', { name: 'Start game' }).click();
       await assert.doesNotReject(dialog.waitFor({ state: 'detached', timeout: 3000 }));
-      assert.match(await panel('Play vs Stockfish'), /From a set-up position/);
+      assert.match(await panel('Play vs Stockfish'), /You play White[\s\S]*Stockfish 19 plays at full strength/);
       // Stockfish searches the position while the player thinks: the move is rated against that search
       await p.waitForTimeout(5000);
       const f = square(b, 'e2'), tt = square(b, 'c4');
