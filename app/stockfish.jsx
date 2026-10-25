@@ -97,8 +97,9 @@ function readSfPartial(ucis, settings, fen, tb) {
 function writeSfPartial(ucis, settings, searched, fen, tb) {
   try { if (searched) localStorage.setItem(SF_PARTIAL_STORE, JSON.stringify({ key: sfPartialKey(ucis, settings, fen, tb), searched })); else localStorage.removeItem(SF_PARTIAL_STORE); } catch (e) {}
 }
-// A position the tablebase answers (its result and its mainline, two small requests) costs about this in a run
-const SF_TB_SECONDS = 0.5;
+// A position the tablebase answers costs about this in a run: its result and its mainline, two requests
+// AnalysisCore.TB_GAP_MS apart
+const SF_TB_SECONDS = 2 * window.AnalysisCore.TB_GAP_MS / 1000;
 // which of a game's positions (0: the start, k: after k moves) are small enough for the tablebase
 const sfTbPositions = (M) => [M.start.fen, ...M.plies.map((p) => p.fen)].map((f) => window.LichessCore.pieceCount(f) <= window.LichessCore.TB_MAX_PIECES);
 

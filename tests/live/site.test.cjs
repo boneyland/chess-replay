@@ -947,7 +947,8 @@ for (const name of BROWSERS) for (const site of SITES) {
       await tb.ctx.close();
     });
     // the tablebase in a game's analysis (the real service): every position of this KBN v K game has 7 pieces or fewer,
-    // so the run asks Lichess and searches none of them (with 20 s a position, a search would show), and 2. Bc4+, which
+    // so the run asks Lichess (9 requests a second apart, the start's answer already shown) and searches none of them (with
+    // 20 s a position, a search would show), and 2. Bc4+, which
     // gives the bishop away, throws the win away: a blunder
     await t.test('desktop: analysing a KBN v K game takes the tablebase and rates the drawing move a blunder', async () => {
       const ta = await open(browser, { width: 1440, height: 900 });
@@ -961,8 +962,8 @@ for (const name of BROWSERS) for (const site of SITES) {
       await p.waitForFunction(() => /Kxc4/.test(document.body.innerText), null, { timeout: 10000 });
       const t0 = Date.now();
       await p.getByRole('button', { name: /^Analyse with Stockfish/ }).first().click();
-      await p.waitForFunction(() => /Lichess tablebase/i.test(document.body.innerText), null, { timeout: 15000 });
-      assert.ok(Date.now() - t0 < 15000, 'no 20 s search');
+      await p.waitForFunction(() => /Lichess tablebase/i.test(document.body.innerText), null, { timeout: 19000 });
+      assert.ok(Date.now() - t0 < 19000, 'no 20 s search');
       assert.equal(sent.filter((u) => u.includes('/standard?')).length, 5, 'each position asked once');
       assert.equal(sent.filter((u) => u.includes('/standard/mainline?')).length, 5);
       await p.locator('[data-ply="2"]').click();

@@ -128,6 +128,7 @@
       tablebaseCached: (fen) => cache.get(tbKey(fen)),
       // the moves of the DTZ mainline (parseMainline), or null as tablebase gives it; through the same gate
       mainline: (fen, { signal } = {}) => (pieceCount(fen) > TB_MAX_PIECES ? Promise.resolve(null) : get('tablebase', 'mainline ' + tbKey(fen), mainlineUrl(fen), parseMainline, signal)),
+      mainlineCached: (fen) => cache.get('mainline ' + tbKey(fen)),
       backedOff: (name) => now() < gate(name).until,
     };
   }

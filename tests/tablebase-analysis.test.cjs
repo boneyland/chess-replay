@@ -31,7 +31,7 @@ const fakeEngine = () => ({
   calls: [],
   search(req) { this.calls.push(req.moves.length); return { promise: Promise.resolve({ cp: 50, depth: 20, pv: [], best: null }), cancel() {} }; },
 });
-const run = (engine, tablebase, extra = {}) => A.runAnalysis({ engine, ...GAME, headers: {}, signal: { aborted: false }, onProgress: () => {}, tablebase, ...extra });
+const run = (engine, tablebase, extra = {}) => A.runAnalysis({ engine, ...GAME, headers: {}, signal: { aborted: false }, onProgress: () => {}, tablebase, tbGapMs: 0, ...extra });
 
 // all certain: White wins throughout until 2. Bd3, which (in this made-up table) only draws
 const WINNING = [answer('win', 55, 55, 'd2e3'), answer('loss', -54, -54, 'e5d6'), answer('win', 53, 53, 'e2d3'), answer('draw', 0, 0, 'd5c4'), answer('draw', 0, 0, 'd3c2')];
@@ -110,6 +110,36 @@ test('an uncertain answer is searched; a failed request is searched and the run 
   assert.equal(out.moves[1].search_depth_after, 20);
   // Ke3 into a searched position: the usual eval rules
   assert.ok(out.moves[0].tb_before && out.moves[0].tb_after);
+});
+
+test('a 429 back-off: the positions during it are searched, then the tablebase is asked again', async () => {
+  const eng = fakeEngine(), tb = fakeTb([...WINNING]);
+  let off = false;
+  tb.backedOff = (name) => name === 'tablebase' && off;
+  // position 2's request is answered 429; the back-off ends while position 3 is searched
+  const ask = tb.tablebase;
+  tb.tablebase = async (fen) => { if (FENS.indexOf(fen) === 2) { tb.asked.push(2); off = true; return null; } return ask(fen); };
+  const search = eng.search.bind(eng);
+  eng.search = (req) => { if (req.moves.length === 3) off = false; return search(req); };
+  const out = await run(eng, tb);
+  assert.deepEqual(eng.calls, [2, 3]);
+  assert.deepEqual(tb.asked, [0, 1, 2, 4]);
+  assert.ok(out.moves[3].tb_after, 'asked again after the back-off');
+});
+
+test('the run\'s requests go tbGapMs apart; an answer the client already has doesn\'t wait', async () => {
+  let t = 0;
+  const waits = [], at = [];
+  const tb = fakeTb(WINNING);
+  const ask = tb.tablebase, line = tb.mainline;
+  tb.tablebase = async (fen) => { at.push(t); return ask(fen); };
+  tb.mainline = async (fen) => { at.push(t); return line(fen); };
+  tb.tablebaseCached = (fen) => (FENS.indexOf(fen) === 0 ? WINNING[0] : undefined);
+  tb.mainlineCached = () => undefined;
+  await run(fakeEngine(), tb, { tbGapMs: 1000, now: () => t, sleep: async (ms) => { waits.push(ms); t += ms; } });
+  // position 0's answer is cached: its mainline is the first request, every later one a second after the one before
+  assert.deepEqual(at, [0, 0, 1000, 2000, 3000, 4000, 5000, 6000, 7000, 8000]);
+  assert.deepEqual(waits, Array(8).fill(1000));
 });
 
 test('a failed mainline keeps the answer, its line the best move, and the run asks no more', async () => {
