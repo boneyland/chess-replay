@@ -72,8 +72,8 @@ function TablebaseBlock({ t, onPlay }) {
 }
 
 // The Commentary box on the free board at 7 pieces or fewer, in place of the opening explorer (as on Lichess): the
-// verdict, then every move by result, best first, one row each with its distances; a row plays its move as a drag
-// would. t: useTablebase's answer
+// verdict, then every move by result, best first, the moves of a result wrapping in rows (their distances in their
+// tooltips); a move plays as a drag would. t: useTablebase's answer
 function TablebaseExplorer({ t, posKey, onPlay }) {
   const LC = window.LichessCore, z = L.comment.label || 1;
   const heading = (txt, dim) => <span className="tb-head" style={{ display: 'block', font: `400 ${Math.round(40 * Math.max(1, L.comment.text))}px/1.14 ${SERIF}`, color: dim ? C.dim : C.ink, textWrap: 'pretty' }}>{txt}</span>;
@@ -93,9 +93,6 @@ function TablebaseExplorer({ t, posKey, onPlay }) {
     right = decided ? [tb.dtz != null && `DTZ ${Math.abs(tb.dtz)}`, tb.dtm ? `DTM ${Math.abs(tb.dtm)}` : null].filter(Boolean).join(' · ') : null;
     // a long verdict ("Cursed win for White · drawn by the 50-move rule") is a heading and a note
     const [say, ...why] = LC.verdict(tb, t.turn).split(' · ');
-    // what a move's row says after its SAN: the result's finer kind where it has one, then its distances
-    const KIND = { 'cursed-win': 'cursed win', 'blessed-loss': 'blessed loss', 'maybe-win': 'win, or the 50-move rule draws', 'maybe-loss': 'loss, or the 50-move rule draws' };
-    const detail = (m) => /#$/.test(m.san) ? 'checkmate' : [KIND[m.mine], m.zeroing && 'resets the 50 moves', tbDist(m)].filter(Boolean).join(' · ');
     body = (
       <React.Fragment>
         {heading(say)}
@@ -103,16 +100,13 @@ function TablebaseExplorer({ t, posKey, onPlay }) {
         {LC.groups(tb).map((g) => (
           <div key={g.outcome} className="tb-group" style={{ marginTop: 14 * z }}>
             <span style={{ ...NO_SELECT, display: 'block', marginBottom: 4 * z, font: `600 ${Math.round(14 * z)}px ${MONO}`, letterSpacing: '0.08em', textTransform: 'uppercase', color: tbColor(g.outcome) }}>{TB_GROUP[g.outcome]}</span>
-            <div style={{ display: 'flex', flexDirection: 'column', gap: 2 * z }}>
+            <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6 * z }}>
               {g.moves.map((m) => {
                 const tip = `Play ${m.san}: ${LC.verdict({ category: m.mine, moves: [] }, t.turn)}${tbDist(m) ? ' · ' + tbDist(m) : ''}`;
                 return (
-                  <div key={m.uci} className="mv tb-move" role="button" tabIndex={0} title={tip} aria-label={tip} onClick={(e) => play(e, m.uci)}
+                  <span key={m.uci} className="mv tb-move" role="button" tabIndex={0} title={tip} aria-label={tip} onClick={(e) => play(e, m.uci)}
                     onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') play(e, m.uci); }}
-                    style={{ display: 'flex', alignItems: 'center', gap: 14 * z, minWidth: 0, padding: `${3 * z}px 6px`, borderRadius: 4, cursor: 'pointer' }}>
-                    <span style={{ flex: 'none', minWidth: 58 * z, boxSizing: 'border-box', textAlign: 'center', padding: `${2 * z}px ${8 * z}px`, borderRadius: 4, font: `600 ${Math.round(17 * z)}px ${MONO}`, background: white ? '#f1ebe1' : '#2a2320', color: white ? '#15100d' : '#efe8de', border: `1px solid ${g.outcome === 'win' || g.outcome === 'loss' ? tbColor(g.outcome) : white ? 'rgba(60,40,20,0.22)' : 'rgba(255,236,214,0.22)'}` }}>{m.san}</span>
-                    <span style={{ minWidth: 0, font: `400 ${Math.round(17 * z)}px ${SANS}`, color: C.dim, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{detail(m)}</span>
-                  </div>
+                    style={{ flex: 'none', minWidth: 58 * z, boxSizing: 'border-box', textAlign: 'center', cursor: 'pointer', padding: `${2 * z}px ${8 * z}px`, borderRadius: 4, font: `600 ${Math.round(17 * z)}px ${MONO}`, background: white ? '#f1ebe1' : '#2a2320', color: white ? '#15100d' : '#efe8de', border: `1px solid ${g.outcome === 'win' || g.outcome === 'loss' ? tbColor(g.outcome) : white ? 'rgba(60,40,20,0.22)' : 'rgba(255,236,214,0.22)'}` }}>{m.san}</span>
                 );
               })}
             </div>

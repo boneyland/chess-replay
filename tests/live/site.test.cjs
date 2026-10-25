@@ -952,7 +952,11 @@ for (const name of BROWSERS) for (const site of SITES) {
       await p.waitForFunction(() => /Endgame tablebase\s+DTZ 55 · DTM 55\s+White wins/i.test(document.body.innerText), null, { timeout: 20000 });
       assert.match(await text(), /TB M28/, 'the eval bar shows the mate');
       assert.doesNotMatch(await text(), /Opening explorer/, 'in place of the explorer');
-      assert.equal(await p.locator('.tb-move').count() > 10, true, 'every move a row');
+      // every move a button, side by side in rows, with no distances written beside them
+      assert.equal(await p.locator('.tb-move').count() > 10, true, 'every move listed');
+      const [m0, m1] = await Promise.all([0, 1].map((i) => p.locator('.tb-move').nth(i).boundingBox()));
+      assert.ok(Math.abs(m0.y - m1.y) < 2 && m1.x > m0.x, 'the moves wrap in rows');
+      assert.doesNotMatch(await p.locator('.tb-group').first().innerText(), /DTZ|DTM/);
       assert.deepEqual(sent, ['8/8/8/4k3/8/8/3KB3/7N w - - 0 1']);
       await p.screenshot({ path: path.join(OUT, host + '-tablebase.png') });
       // a move from the tablebase plays on the board, and Black's answer is a loss
