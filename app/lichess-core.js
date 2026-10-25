@@ -67,6 +67,14 @@
     const cp = (white ? 1 : -1) * (10000 - 10 * (n || 1));
     return { cp, txt: n ? `TB ${white ? '' : '−'}M${n}` : `TB ${white ? '1-0' : '0-1'}` };
   }
+  // A game analysis's eval for a certain answer, from White's point of view (as the eval bar's, a checkmate as
+  // ±10000 and a stalemate as 0, as Stockfish scores them), or null where the answer isn't certain
+  function evalCp(t, turn) {
+    if (t.checkmate) return turn === 'w' ? -10000 : 10000;
+    if (t.stalemate || t.insufficient) return 0;
+    const b = bar(t, turn);
+    return b ? b.cp : null;
+  }
   // The moves grouped by what they get the side to move, best first: [{ outcome, moves }] (win, draw, loss, then
   // the uncertain ones as 'unknown'), empty groups left out
   function groups(t) {
@@ -114,5 +122,5 @@
     };
   }
 
-  window.LichessCore = { TB_URL, TB_MAX_PIECES, BACKOFF_MS, pieceCount, fenOf, tbKey, tablebaseUrl, parseTablebase, flip, outcome, verdict, bar, groups, create };
+  window.LichessCore = { TB_URL, TB_MAX_PIECES, BACKOFF_MS, pieceCount, fenOf, tbKey, tablebaseUrl, parseTablebase, flip, outcome, verdict, bar, evalCp, groups, create };
 })();

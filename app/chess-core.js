@@ -313,7 +313,11 @@
       ply.ep = pos.ep; // the FEN carries neither, so positions rebuilt from it need both
       ply.capture = !!before.b[mv.to] || pos.epCap >= 0;
       // analysis files encode mate in N as ±(10000 − 10·N), White's point of view
-      if (am && typeof am.eval_after === 'number') { if (Math.abs(am.eval_after) >= 9000) ply.mate = Math.sign(am.eval_after) * Math.max(1, Math.round((10000 - Math.abs(am.eval_after)) / 10)); else ply.cp = am.eval_after; }
+      // the position after it from the tablebase: a win with no distance to mate (6 and 7 pieces) is won, not a mate count
+      if (am && am.tb_after) ply.tb = am.tb_after;
+      if (am && am.tb_before) ply.tbBefore = am.tb_before; // its best move and line came from the tablebase
+      if (am && typeof am.eval_after === 'number' && ply.tb && !ply.tb.dtm && Math.abs(am.eval_after) >= 9000 && Math.abs(am.eval_after) < 10000) { ply.cp = am.eval_after; ply.won = am.eval_after > 0 ? 'w' : 'b'; }
+      else if (am && typeof am.eval_after === 'number') { if (Math.abs(am.eval_after) >= 9000) ply.mate = Math.sign(am.eval_after) * Math.max(1, Math.round((10000 - Math.abs(am.eval_after)) / 10)); else ply.cp = am.eval_after; }
       else if (pp.cp != null) ply.cp = pp.cp;
       else if (pp.mate != null) ply.mate = pp.mate;
       if (ply.checkmate) { ply.mate = ply.side === 'w' ? 0.5 : -0.5; delete ply.cp; }
@@ -329,7 +333,8 @@
       }
       if (am && am.mate_advice) ply.advice = am.mate_advice;
       // the search of the position after the move, as it actually ran
-      if (am && am.search_depth_after) ply.search = { depth: am.search_depth_after, maxDepth: am.search_maxdepth_after || am.search_depth_after, timeMs: am.search_time_after_ms == null ? null : am.search_time_after_ms, nodes: am.search_nodes_after == null ? null : am.search_nodes_after };
+      if (ply.tb) ply.search = { tablebase: true };
+      else if (am && am.search_depth_after) ply.search = { depth: am.search_depth_after, maxDepth: am.search_maxdepth_after || am.search_depth_after, timeMs: am.search_time_after_ms == null ? null : am.search_time_after_ms, nodes: am.search_nodes_after == null ? null : am.search_nodes_after };
       if (pp.clk != null) ply.clk = pp.clk;
       const note = NT && NT.plies[i + 1];
       if (pp.vars) ply.pgnVars = pp.vars;
@@ -370,7 +375,7 @@
     // search as Python's describe_search; one line and one thread (the browser engine) go unsaid
     const search = eng && (eng.depth && eng.time_limit ? `depth ${eng.depth}, max ${eng.time_limit}s per position` : eng.time_limit ? `${eng.time_limit}s per position` : eng.depth ? `depth ${eng.depth}` : '');
     const single = eng && eng.lines === 1 && eng.threads === 1;
-    const engine = eng ? [eng.name, search, !single && eng.lines ? `${eng.lines} line${eng.lines > 1 ? 's' : ''}` : '', !single && eng.threads ? `${eng.threads} thread${eng.threads > 1 ? 's' : ''}` : ''].filter(Boolean).join(' · ') : pgnHasEval ? 'Evaluations from the PGN' : '';
+    const engine = eng ? [eng.name, search, !single && eng.lines ? `${eng.lines} line${eng.lines > 1 ? 's' : ''}` : '', !single && eng.threads ? `${eng.threads} thread${eng.threads > 1 ? 's' : ''}` : '', eng.tablebase ? 'Lichess tablebase' : ''].filter(Boolean).join(' · ') : pgnHasEval ? 'Evaluations from the PGN' : '';
     const player = (side) => {
       const S = side === 'w' ? 'White' : 'Black', s = side === 'w' ? 'white' : 'black';
       const name = clean(H[S]) || (A && A[s]) || S;

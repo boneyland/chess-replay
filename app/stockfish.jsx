@@ -87,15 +87,20 @@ const sfIsBrowserAnalysis = (analysis) => {
 // The searches of a run that stopped part-way, kept for one game (the latest) so starting again resumes it; a page
 // reload keeps them too. Keyed by the game's moves and the engine settings, so they never fill in another game.
 const SF_PARTIAL_STORE = 'chess-video.sf-partial.v1';
-// A game from a start FEN adds it to the key; a standard game's key is as it always was.
+// A game from a start FEN adds it to the key, and so does the endgame tablebase (tb: on); a standard game's key with
+// the tablebase off is as it always was.
 const sfStartFen = (fen) => (fen && fen !== window.ChessCore.START_FEN ? fen : null);
-const sfPartialKey = (ucis, settings, fen) => JSON.stringify(sfStartFen(fen) ? [fen, settings, ucis] : [settings, ucis]);
-function readSfPartial(ucis, settings, fen) {
-  try { const s = JSON.parse(localStorage.getItem(SF_PARTIAL_STORE) || 'null'); return s && s.key === sfPartialKey(ucis, settings, fen) && Array.isArray(s.searched) ? s.searched : []; } catch (e) { return []; }
+const sfPartialKey = (ucis, settings, fen, tb) => JSON.stringify((sfStartFen(fen) ? [fen, settings, ucis] : [settings, ucis]).concat(tb ? ['tablebase'] : []));
+function readSfPartial(ucis, settings, fen, tb) {
+  try { const s = JSON.parse(localStorage.getItem(SF_PARTIAL_STORE) || 'null'); return s && s.key === sfPartialKey(ucis, settings, fen, tb) && Array.isArray(s.searched) ? s.searched : []; } catch (e) { return []; }
 }
-function writeSfPartial(ucis, settings, searched, fen) {
-  try { if (searched) localStorage.setItem(SF_PARTIAL_STORE, JSON.stringify({ key: sfPartialKey(ucis, settings, fen), searched })); else localStorage.removeItem(SF_PARTIAL_STORE); } catch (e) {}
+function writeSfPartial(ucis, settings, searched, fen, tb) {
+  try { if (searched) localStorage.setItem(SF_PARTIAL_STORE, JSON.stringify({ key: sfPartialKey(ucis, settings, fen, tb), searched })); else localStorage.removeItem(SF_PARTIAL_STORE); } catch (e) {}
 }
+// A position the tablebase answers costs about this in a run: one request, AnalysisCore.TB_GAP_MS after the last
+const SF_TB_SECONDS = window.AnalysisCore.TB_GAP_MS / 1000;
+// which of a game's positions (0: the start, k: after k moves) are small enough for the tablebase
+const sfTbPositions = (M) => [M.start.fen, ...M.plies.map((p) => p.fen)].map((f) => window.LichessCore.pieceCount(f) <= window.LichessCore.TB_MAX_PIECES);
 
 // This device's pace against the model's (AnalysisCore.paceFactor), from the last run that timed enough positions, for
 // each engine (name: the settings' engine name; the full engine searches fewer nodes a second)
@@ -108,8 +113,9 @@ function writeSfPace(name, f) { try { localStorage.setItem(sfPaceKey(name), Stri
 // so far are kept, and starting it again resumes from them.
 // getFiles: the loaded files as they are now (notes or commentary may have changed during the run)
 // settings: the engine settings for a game (AnalysisCore.engineSettings().game); a run keeps those it started with
-function useGameAnalysis(M, files, getFiles, commit, engine, settings) {
-  const A = window.AnalysisCore, setKey = JSON.stringify(settings);
+// tbOn: Settings › Online data › Endgame tablebase: positions of 7 pieces or fewer ask it first (runAnalysis)
+function useGameAnalysis(M, files, getFiles, commit, engine, settings, tbOn) {
+  const A = window.AnalysisCore, tb = !!(tbOn && TB), setKey = JSON.stringify(settings) + (tb ? ' tablebase' : '');
   const [pace, setPace] = React.useState(() => readSfPace(settings.name));
   React.useEffect(() => { setPace(readSfPace(settings.name)); }, [settings.name]);
   const perPos = A.secondsPerPosition(settings, pace);
@@ -121,37 +127,43 @@ function useGameAnalysis(M, files, getFiles, commit, engine, settings) {
   setKeyRef.current = setKey;
   // moves already analysed by a run that stopped
   const [resumeAt, setResumeAt] = React.useState(0);
-  React.useEffect(() => { setResumeAt(Math.max(0, readSfPartial(M.plies.map((p) => p.uci), settings, M.start.fen).length - 1)); }, [ucisKey, setKey, M.start.fen]);
+  React.useEffect(() => { setResumeAt(Math.max(0, readSfPartial(M.plies.map((p) => p.uci), settings, M.start.fen, tb).length - 1)); }, [ucisKey, setKey, M.start.fen]);
+  // the positions the tablebase will answer, near-free in the estimate (an uncertain answer is searched after all)
+  const tbAt = React.useMemo(() => (tb ? sfTbPositions(M) : []), [ucisKey, M.start.fen, tb]);
+  // seconds for positions from..N: Stockfish's at perSec, the tablebase's at SF_TB_SECONDS
+  const secondsFrom = (from, perSec) => { let t = 0; for (let k = from; k <= M.plies.length; k++) t += tbAt[k] ? SF_TB_SECONDS : perSec; return t; };
   React.useEffect(() => () => { if (run.current) { run.current.signal.aborted = true; run.current = null; } setSt(idle); }, [files.pgn, files.gameIndex || 0, !!files.sample, files.analysis]);
   const start = async () => {
     if (run.current) return;
     const me = { signal: { aborted: false } };
     run.current = me;
     const ucis = M.plies.map((p) => p.uci), sans = M.plies.map((p) => p.san), N = ucis.length;
-    const S = settings, earlier = readSfPartial(ucis, S, M.start.fen), d0 = Math.max(0, earlier.length - 1), prior = perPos;
+    const S = settings, T = tb, earlier = readSfPartial(ucis, S, M.start.fen, T), d0 = Math.max(0, earlier.length - 1), prior = perPos;
     // the run's own pace: positions timed from when the engine is ready (its start-up isn't a position's cost)
     const timed = { n: 0, sec: 0, last: 0, searched: earlier.length };
     // { sec, at }: the latest estimate and when it was made; a timer counts it down in between
-    me.eta = { sec: (N + 1 - earlier.length) * prior, at: Date.now() };
+    me.eta = { sec: secondsFrom(earlier.length, prior), at: Date.now() };
     setSt({ state: 'running', done: d0, total: N, etaSec: Math.round(me.eta.sec), err: '' });
     try {
       const eng = await engine.get();
       timed.last = Date.now();
       const json = await window.AnalysisCore.runAnalysis({
-        engine: eng, ucis, sans, headers: M.headers, signal: me.signal, earlier, settings: S, startFen: M.start.fen,
+        engine: eng, ucis, sans, headers: M.headers, signal: me.signal, earlier, settings: S, startFen: M.start.fen, tablebase: T ? TB : null,
         onSearched: (R) => {
-          writeSfPartial(ucis, S, R, M.start.fen);
-          if (JSON.stringify(S) === setKeyRef.current) setResumeAt(Math.max(0, R.length - 1));
+          writeSfPartial(ucis, S, R, M.start.fen, T);
+          if (JSON.stringify(S) + (T ? ' tablebase' : '') === setKeyRef.current) setResumeAt(Math.max(0, R.length - 1));
           const now = Date.now();
-          timed.sec += (now - timed.last) / 1000; timed.n += R.length - timed.searched; timed.searched = R.length; timed.last = now;
-          me.eta = { sec: A.blendPace(prior, timed.sec, timed.n) * (N + 1 - R.length), at: now };
+          // the tablebase's answers say nothing of this device's pace
+          if (!R[R.length - 1].tb) { timed.sec += (now - timed.last) / 1000; timed.n += R.length - timed.searched; }
+          timed.searched = R.length; timed.last = now;
+          me.eta = { sec: secondsFrom(R.length, A.blendPace(prior, timed.sec, timed.n)), at: now };
         },
         onProgress: (d, n) => { if (run.current === me && d > d0 && me.eta) setSt((s) => ({ ...s, done: d, total: n, etaSec: Math.round(me.eta.sec) })); },
       });
       if (run.current !== me) return;
       run.current = null;
       if (!json) { setSt(idle); return; }
-      writeSfPartial(ucis, S, null, M.start.fen);
+      writeSfPartial(ucis, S, null, M.start.fen, T);
       setResumeAt(0);
       // with no depth limit every position takes its time limit, which says nothing about this device's pace
       if (S.depth != null && timed.n >= SF_PACE_MIN_POSITIONS) { const f = A.paceFactor(S, timed.sec / timed.n); writeSfPace(S.name, f); setPace(f); }
@@ -174,8 +186,7 @@ function useGameAnalysis(M, files, getFiles, commit, engine, settings) {
     return () => clearInterval(id);
   }, [st.state]);
   const stop = () => { if (run.current) { run.current.signal.aborted = true; run.current = null; } setSt(idle); };
-  const left = M.plies.length + 1 - (resumeAt ? resumeAt + 1 : 0);
-  return { ...st, start, stop, resumeAt, plies: M.plies.length, estimateMin: Math.max(1, Math.ceil(left * perPos / 60)) };
+  return { ...st, start, stop, resumeAt, plies: M.plies.length, estimateMin: Math.max(1, Math.ceil(secondsFrom(resumeAt ? resumeAt + 1 : 0, perPos) / 60)) };
 }
 
 // A button inside the video frame (frame pixels, theme colours)
