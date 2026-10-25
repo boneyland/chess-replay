@@ -15,6 +15,7 @@ const units = [
   ['openings-data.js', 'window.OPENINGS_TSV = ' + JSON.stringify(require('./openings-data.cjs').openingsTsv()).replace(/</g, '\\u003c') + ';'],
   ['openings-core.js', read(path.join(app, 'openings-core.js'))],
   ['board-core.js', read(path.join(app, 'board-core.js'))],
+  ['edit-core.js', read(path.join(app, 'edit-core.js'))],
   ['play-core.js', read(path.join(app, 'play-core.js'))],
   ['games-core.js', read(path.join(app, 'games-core.js'))],
   ['sf-engine.js', read(path.join(app, 'sf-engine.js'))],
