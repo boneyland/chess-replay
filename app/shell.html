@@ -52,7 +52,7 @@ button:focus-visible, select:focus-visible, input:focus-visible, [role="slider"]
   padding-block: 12px;
   padding-left: max(16px, env(safe-area-inset-left, 0px)); padding-right: max(16px, env(safe-area-inset-right, 0px));
 }
-.stage-area { flex: 1; min-height: 0; width: 100%; display: flex; align-items: center; justify-content: center; overflow: hidden; }
+.stage-area { flex: 1; min-height: 0; width: 100%; display: flex; align-items: center; justify-content: center; }
 /* clip, not just hidden: a hidden box still scrolls when something inside is scrolled into view (a focused row on the
    right of the frame, which is laid out at full size and only scaled down), and the board would slide out from under the pointer */
 .stage-frame { flex: none; overflow: hidden; overflow: clip; border-radius: 4px; box-shadow: 0 20px 60px var(--shadow); }
