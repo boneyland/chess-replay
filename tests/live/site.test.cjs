@@ -1104,7 +1104,6 @@ for (const name of BROWSERS) for (const site of SITES) {
       const panel = (title) => p.evaluate((tt) => { const d = [...document.querySelectorAll('div')].find((e) => e.firstElementChild && e.firstElementChild.firstElementChild && e.firstElementChild.firstElementChild.textContent === tt); return d ? d.innerText : ''; }, title);
       await p.goto(base, { waitUntil: 'load' });
       await loadedOn(p);
-      const b = await boardBox(p);
       await p.getByRole('button', { name: 'Play/Explore' }).click();
       await p.getByRole('button', { name: 'Paste FEN…' }).click();
       const fen = p.getByRole('dialog', { name: 'Paste FEN' });
@@ -1119,6 +1118,9 @@ for (const name of BROWSERS) for (const site of SITES) {
       await dialog.getByRole('button', { name: 'Start game' }).click();
       await assert.doesNotReject(dialog.waitFor({ state: 'detached', timeout: 3000 }));
       assert.match(await panel('Play vs Stockfish'), /You play White[\s\S]*Stockfish 19 plays at full strength/);
+      // measured in the game, whose board is larger than the replay's on the wide frame: by its touch layer, as a few
+      // pieces don't span the board
+      const b = await p.evaluate(() => { const r = [...document.querySelectorAll('div')].find((d) => d.style.touchAction === 'none').getBoundingClientRect(); return { x0: r.left, y0: r.top, sq: r.width / 8 }; });
       // Stockfish searches the position while the player thinks: the move is rated against that search
       await p.waitForTimeout(5000);
       const f = square(b, 'e2'), tt = square(b, 'c4');
