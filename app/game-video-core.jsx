@@ -85,23 +85,27 @@ function shortLayout(W) {
     card: { k: 1, w: 1700, stack: false },
   };
 }
-// Square-ish screen (a desktop window near 1:1, a tablet, an unfolded foldable): 1600 wide, 1440–1760 high. The board
+// Square-ish screen (a desktop window near 1:1, a tablet, an unfolded foldable): 1520 wide, 1400–1720 high. The board
 // with the header (players stacked) and Commentary beside it; the eval graph the full width under the board, then
-// Analysis and Moves side by side, taking the extra height.
-const SQUARE = { width: 1600, minHeight: 1440, maxHeight: 1760 };
+// Analysis and Moves side by side, taking the extra height. Tighter margins, gaps and panel padding than the wide frame,
+// its smallest text (15 px and under) 2 px larger, and Commentary's notes and the
+// hints under Analysis larger still.
+const SQUARE = { width: 1520, minHeight: 1400, maxHeight: 1720 };
 function squareLayout(H) {
-  const hh = 290, cy = 40 + hh + 18, by = 1068, bh = H - by - 30;
+  const m = 20, gap = 14, hh = 290, cy = m + hh + gap, by = 70, py = by + BW + 10 + 40 + gap, ay = py + 120 + gap, bh = H - ay - m;
   return {
-    eval: 44, bx: 100, by: 88, bar: { k: 1, gap: 10 }, title: 13,
-    header: { x: 916, y: 40, w: 644, h: hh, k: 1, stack: true },
-    comment: { x: 916, y: cy, w: 644, h: 904 - cy, k: 1, text: 1, gap: 18, right: 1 },
-    plot: { x: 44, y: 930, w: 1516, h: 120, k: 1 },
-    analysis: { x: 44, y: by, w: 1000, h: bh, k: 1, scroll: true, right: 1 },
-    moves: { x: 1060, y: by, w: 500, h: bh, k: 1, font: 26, num: 68, rows: Math.floor((bh - 61) / 38) },
-    card: { k: 1, w: 1500, stack: false },
+    eval: m, bx: m + 48, by, bar: { k: 1, gap: 10 }, title: 15, small: 2, hint: 20, pad: '12px 16px',
+    header: { x: 856, y: m, w: 644, h: hh, k: 1, stack: true },
+    comment: { x: 856, y: cy, w: 644, h: by + BW + 50 - cy, k: 1, text: 1, label: 1.25, gap: 14, right: 1 },
+    plot: { x: m, y: py, w: 1480, h: 120, k: 1 },
+    analysis: { x: m, y: ay, w: 976, h: bh, k: 1, scroll: true, right: 1 },
+    moves: { x: 1010, y: ay, w: 490, h: bh, k: 1, font: 26, num: 68, rows: Math.floor((bh - 53) / 38) },
+    card: { k: 1, w: 1440, stack: false },
   };
 }
 let L = LAYOUTS.wide, BX = L.bx, BY = L.by, tallH = 0, shortW = 0, squareH = 0;
+// a font size of 15 px or under, raised by the layout's small (the square frame's)
+const sm = (px) => px + (L.small || 0);
 const setLayout = (frame) => {
   if (frame.tall && frame.height !== tallH) { tallH = frame.height; LAYOUTS.tall = tallLayout(tallH); }
   if (frame.short && frame.width !== shortW) { shortW = frame.width; LAYOUTS.short = shortLayout(shortW); }
@@ -182,7 +186,7 @@ function SideScroll({ style, children }) {
 function Panel({ box, title, right, extra, a, style, children }) {
   const { x, y, w, h, k } = box;
   return (
-    <div style={{ position: 'absolute', left: x, top: y, width: w / k, height: h / k, boxSizing: 'border-box', background: C.panel, border: `1px solid ${C.line}`, borderRadius: 8, padding: '16px 22px', opacity: a, transform: `translateY(${(1 - a) * 18}px) scale(${k})`, transformOrigin: '0 0', overflow: 'hidden', ...(box.scroll && { overflowY: 'auto', overscrollBehavior: 'contain', scrollbarWidth: 'thin' }), ...style }}>
+    <div style={{ position: 'absolute', left: x, top: y, width: w / k, height: h / k, boxSizing: 'border-box', background: C.panel, border: `1px solid ${C.line}`, borderRadius: 8, padding: L.pad || '16px 22px', opacity: a, transform: `translateY(${(1 - a) * 18}px) scale(${k})`, transformOrigin: '0 0', overflow: 'hidden', ...(box.scroll && { overflowY: 'auto', overscrollBehavior: 'contain', scrollbarWidth: 'thin' }), ...style }}>
       {title && (
         // the same heading size in every panel, whatever its magnification k; box.right sizes the text on the right
         <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: (L.titleGap || 16) / k, font: `600 ${L.title / k}px ${MONO}`, letterSpacing: '0.12em', textTransform: 'uppercase', color: C.dim, marginBottom: 12 / k }}>
@@ -251,8 +255,8 @@ function boardSquares() {
     const light = (r + f) % 2 === 0, [sf, sr] = view(f, r); // the square drawn here
     sq.push(
       <div key={r * 8 + f} style={{ position: 'absolute', left: f * SQ, top: r * SQ, width: SQ, height: SQ, background: light ? C.light : C.dark }}>
-        {f === 0 && <span style={{ position: 'absolute', left: 6, top: 4, font: `600 14px ${MONO}`, color: light ? C.dark : C.light }}>{8 - sr}</span>}
-        {r === 7 && <span style={{ position: 'absolute', right: 6, bottom: 3, font: `600 14px ${MONO}`, color: light ? C.dark : C.light }}>{String.fromCharCode(97 + sf)}</span>}
+        {f === 0 && <span style={{ position: 'absolute', left: 6, top: 4, font: `600 ${sm(14)}px ${MONO}`, color: light ? C.dark : C.light }}>{8 - sr}</span>}
+        {r === 7 && <span style={{ position: 'absolute', right: 6, bottom: 3, font: `600 ${sm(14)}px ${MONO}`, color: light ? C.dark : C.light }}>{String.fromCharCode(97 + sf)}</span>}
       </div>
     );
   }
@@ -396,7 +400,7 @@ function LineChips({ name, nameColor, accent, moves, ply0, c, legal, sel, onPick
         const ply = ply0 + c + j, white = ply % 2 === 0, num = Math.floor(ply / 2) + 1, ok = j < legal, on = sel === j;
         return (
           <span key={j} style={{ display: 'flex', alignItems: 'center', gap: 5 }}>
-            {(white || j === 0) && <span style={{ color: C.dim, marginLeft: j ? 6 : 0, font: `500 15px ${MONO}` }}>{num}{white ? '.' : '…'}</span>}
+            {(white || j === 0) && <span style={{ color: C.dim, marginLeft: j ? 6 : 0, font: `500 ${sm(15)}px ${MONO}` }}>{num}{white ? '.' : '…'}</span>}
             <span className={ok ? 'mv' : undefined} role={ok ? 'button' : undefined} title={ok ? `Show ${what} on the board up to ${m}` : 'Not a legal move in this line'}
               onClick={ok ? (e) => { e.stopPropagation(); onPick(j); } : undefined} tabIndex={ok ? 0 : undefined}
               onKeyDown={ok ? (e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); e.stopPropagation(); onPick(j); } } : undefined}
@@ -479,7 +483,7 @@ function Header({ M, a }) {
         <span style={{ width: 14, height: 14, borderRadius: 3, background: side === 'w' ? '#f1ebe1' : '#1c1613', border: `1.5px solid ${C.dim}`, flex: 'none' }} />
         <span style={{ font: `400 40px ${SERIF}`, color: C.ink, lineHeight: 1.05, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{P.name}</span>
       </div>
-      <span style={{ font: `500 15px ${MONO}`, color: C.dim, whiteSpace: 'nowrap' }}>{[[P.title, P.elo].filter(Boolean).join(' '), P.team].filter(Boolean).join(' · ')}</span>
+      <span style={{ font: `500 ${sm(15)}px ${MONO}`, color: C.dim, whiteSpace: 'nowrap' }}>{[[P.title, P.elo].filter(Boolean).join(' '), P.team].filter(Boolean).join(' · ')}</span>
     </div>
   );
   const line = { overflow: 'hidden', textOverflow: 'ellipsis', minWidth: 0 };
@@ -487,7 +491,7 @@ function Header({ M, a }) {
   if (L.header.stack) return (
     <Panel box={L.header} a={a}>
       <div style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>{person(M.white, 'w', 'flex-start')}{person(M.black, 'b', 'flex-start')}</div>
-      <div style={{ marginTop: 18, paddingTop: 14, borderTop: `1px solid ${C.line}`, display: 'flex', flexDirection: 'column', gap: 8, font: `500 15px ${MONO}`, color: C.dim, whiteSpace: 'nowrap' }}>
+      <div style={{ marginTop: 18, paddingTop: 14, borderTop: `1px solid ${C.line}`, display: 'flex', flexDirection: 'column', gap: 8, font: `500 ${sm(15)}px ${MONO}`, color: C.dim, whiteSpace: 'nowrap' }}>
         <span style={{ ...line, color: C.ink }}>{[M.event, M.round && 'Round ' + M.round].filter(Boolean).join(' · ')}</span>
         <span style={line}>{[M.site, M.date].filter(Boolean).join(' · ')}</span>
         {(M.eco || M.opening) && <div style={{ display: 'flex', alignItems: 'center', gap: 12, minWidth: 0 }}>
@@ -504,7 +508,7 @@ function Header({ M, a }) {
         <span style={{ font: `500 16px ${MONO}`, color: C.dim, paddingTop: 12 }}>vs</span>
         {person(M.black, 'b', 'flex-end')}
       </div>
-      <div style={{ marginTop: 18, paddingTop: 14, borderTop: `1px solid ${C.line}`, display: 'flex', gap: 18, font: `500 15px ${MONO}`, color: C.dim, alignItems: 'center', whiteSpace: 'nowrap', minWidth: 0 }}>
+      <div style={{ marginTop: 18, paddingTop: 14, borderTop: `1px solid ${C.line}`, display: 'flex', gap: 18, font: `500 ${sm(15)}px ${MONO}`, color: C.dim, alignItems: 'center', whiteSpace: 'nowrap', minWidth: 0 }}>
         <span style={{ color: C.ink, overflow: 'hidden', textOverflow: 'ellipsis', minWidth: 0, flexShrink: 0.1 }}>{[M.event, M.round && 'Round ' + M.round].filter(Boolean).join(' · ')}</span>
         <span style={{ overflow: 'hidden', textOverflow: 'ellipsis', minWidth: 0, flexShrink: 0.2 }}>{[M.site, M.date].filter(Boolean).join(' · ')}</span>
         {M.eco && <span style={{ marginLeft: 'auto', flexShrink: 0, padding: '2px 8px', border: `1px solid ${C.line}`, borderRadius: 4, color: C.ink }}>{M.eco}</span>}
@@ -641,7 +645,7 @@ function Commentary({ M, T, S, a, book, line }) {
           {txt && <span style={{ font: `400 ${size}px/1.14 ${SERIF}`, color: C.ink, textWrap: 'pretty' }}>{txt.slice(0, nh)}<span style={{ opacity: 0 }}>{txt.slice(nh)}</span></span>}
           {qtxt && (
             <div style={{ display: 'flex', flexDirection: 'column', gap: 6, opacity: nq > 0 || !txt ? 1 : 0 }}>
-              <span style={{ font: `600 ${Math.round(13 * (L.comment.label || 1))}px ${MONO}`, letterSpacing: '0.12em', textTransform: 'uppercase', color: C.queen }}>Queen · after {M.plies[c].san}{M.plies[c].mark || ''}</span>
+              <span style={{ font: `600 ${sm(Math.round(13 * (L.comment.label || 1)))}px ${MONO}`, letterSpacing: '0.12em', textTransform: 'uppercase', color: C.queen }}>Queen · after {M.plies[c].san}{M.plies[c].mark || ''}</span>
               <span style={{ font: `italic 400 ${qsize}px/1.2 ${SERIF}`, color: C.ink, textWrap: 'pretty', paddingLeft: 12, borderLeft: `2px solid ${C.queen}` }}>{qtxt.slice(0, nq)}<span style={{ opacity: 0 }}>{qtxt.slice(nq)}</span></span>
             </div>
           )}
@@ -673,7 +677,7 @@ function Analysis({ M, T, S, a, vline, onLine, paused, sf, own, onReply, deep, t
       <Panel box={box} a={a} title="Analysis" right={sf && (sf.status === 'unavailable' || sf.status === 'stopped') ? null : searchStats(sfName, own.after)} extra={<DeeperButton ev={own} />}>
         <OwnMoveAnalysis M={M} vline={vline} own={own} status={sf ? sf.status : 'idle'} onReply={onReply} />
         {tbEl}
-        <span style={{ display: 'block', marginTop: 8, font: `500 15px ${MONO}`, color: C.dim }}>
+        <span style={{ display: 'block', marginTop: 8, font: `500 ${sm(15)}px ${MONO}`, color: C.dim }}>
           <span style={{ color: lineAccent('you') }}>Your moves: {vline.moves.slice(0, vline.upto + 1).map((m, j) => (j === 0 || (M.ply0 + vline.at + j) % 2 === 0 ? lineLabel(M, vline.at, j, m.san) : m.san)).join(' ')}</span> · ← → step · Esc returns to the game
         </span>
       </Panel>
@@ -684,7 +688,7 @@ function Analysis({ M, T, S, a, vline, onLine, paused, sf, own, onReply, deep, t
   }
   if (c < 0) return (
     <Panel box={box} a={a} title="Analysis" right={right}>
-      {paused && <span style={{ ...NO_SELECT, font: `500 17px ${MONO}`, color: C.dim }}>Press play to watch the game, or drag a piece to try your own move.</span>}
+      {paused && <span style={{ ...NO_SELECT, font: `500 ${L.hint || 17}px ${MONO}`, color: C.dim }}>Press play to watch the game, or drag a piece to try your own move.</span>}
       {sf && !M.hasAnalysis && (sf.run.state === 'running' || paused) && <div style={{ marginTop: 16 }}><EngineEmptyState M={M} sf={sf} paused={paused} compact /></div>}
       {tbEl}
     </Panel>
@@ -733,7 +737,7 @@ function Analysis({ M, T, S, a, vline, onLine, paused, sf, own, onReply, deep, t
         {P.advice && <span style={{ color: C.inaccuracy }}>{P.advice}</span>}
         {tb && <div style={{ paddingTop: 8, borderTop: `1px solid ${C.line}` }}><TablebaseBlock t={tb} onPlay={onTb} /></div>}
         {vline && (
-          <span style={{ font: `500 15px ${MONO}`, color: C.dim }}>
+          <span style={{ font: `500 ${sm(15)}px ${MONO}`, color: C.dim }}>
             <span style={{ color: lineAccent(vline.src) }}>
               {vline.src === 'you'
                 ? (vline.upto < 0 ? 'Your moves: drag a piece to play' : `Your moves: ${vline.moves.slice(0, vline.upto + 1).map((m, j) => (j === 0 || (M.ply0 + vline.at + j) % 2 === 0 ? lineLabel(M, vline.at, j, m.san) : m.san)).join(' ')}`)
@@ -742,7 +746,7 @@ function Analysis({ M, T, S, a, vline, onLine, paused, sf, own, onReply, deep, t
           </span>
         )}
         {sf && !M.hasAnalysis && (sf.run.state === 'running' || paused) && <EngineEmptyState M={M} sf={sf} paused={paused} compact />}
-        {!vline && paused && M.hasEval && <FitOrHide style={{ ...NO_SELECT, font: `500 15px ${MONO}`, color: C.dim }}>Tip: drag a piece on the board to try your own move.</FitOrHide>}
+        {!vline && paused && M.hasEval && <FitOrHide style={{ ...NO_SELECT, font: `500 ${L.hint || 15}px ${MONO}`, color: C.dim }}>Tip: drag a piece on the board to try your own move.</FitOrHide>}
       </div>
     </Panel>
   );
@@ -790,7 +794,7 @@ function EvalPlot({ M, T, S, a, paused, onPick }) {
         {ticks.map(({ m, at }) => (
           <g key={m}>
             <line x1={px(at)} x2={px(at)} y1="0" y2={H} stroke={C.line} strokeWidth="1" />
-            <text x={px(at) + 6} y={H + 12} fill={C.dim} style={{ font: `500 12px ${MONO}` }}>{m}</text>
+            <text x={px(at) + 6} y={H + 12} fill={C.dim} style={{ font: `500 ${sm(12)}px ${MONO}` }}>{m}</text>
           </g>
         ))}
         {M.hasEval ? (
@@ -804,7 +808,7 @@ function EvalPlot({ M, T, S, a, paused, onPick }) {
             <circle cx={last[0]} cy={last[1]} r="6" fill={C.ink} />
           </g>
         ) : (
-          <text x={W / 2} y={mid + 5} textAnchor="middle" fill={C.dim} style={{ font: `500 14px ${MONO}` }}>No evaluation data</text>
+          <text x={W / 2} y={mid + 5} textAnchor="middle" fill={C.dim} style={{ font: `500 ${sm(14)}px ${MONO}` }}>No evaluation data</text>
         )}
         {hover != null && (() => {
           const x = px(hover + 1), name = hover < 0 ? 'Start' : label(M, hover), w = name.length * 9 + 16;
@@ -813,12 +817,12 @@ function EvalPlot({ M, T, S, a, paused, onPick }) {
             <g style={{ pointerEvents: 'none' }}>
               <line x1={x} x2={x} y1="0" y2={H} stroke={C.last} strokeWidth="2" opacity="0.8" />
               <rect x={bx} y={-6} width={w} height={22} rx="4" fill={C.bg} stroke={C.last} strokeWidth="1" />
-              <text x={bx + w / 2} y={10} textAnchor="middle" fill={C.ink} style={{ font: `600 14px ${MONO}` }}>{name}</text>
+              <text x={bx + w / 2} y={10} textAnchor="middle" fill={C.ink} style={{ font: `600 ${sm(14)}px ${MONO}` }}>{name}</text>
             </g>
           );
         })()}
-        <text x="4" y="12" fill={C.dim} style={{ font: `600 11px ${MONO}`, letterSpacing: '0.1em' }}>WHITE</text>
-        <text x="4" y={H - 4} fill={C.dim} style={{ font: `600 11px ${MONO}`, letterSpacing: '0.1em' }}>BLACK</text>
+        <text x="4" y="12" fill={C.dim} style={{ font: `600 ${sm(11)}px ${MONO}`, letterSpacing: '0.1em' }}>WHITE</text>
+        <text x="4" y={H - 4} fill={C.dim} style={{ font: `600 ${sm(11)}px ${MONO}`, letterSpacing: '0.1em' }}>BLACK</text>
       </svg>
     </div>
   );
