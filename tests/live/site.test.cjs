@@ -719,6 +719,44 @@ for (const name of BROWSERS) for (const site of SITES) {
         await ep.ctx.close();
       }
     });
+    // the keyboard: a tray piece picked with Enter sends the focus to the board, whose square the arrows move (in the
+    // board's turn, flipped too); Enter places, picks up and puts down, letters place pieces, Delete takes one away
+    await t.test('desktop: Edit position by keyboard', async () => {
+      for (const flip of [false, true]) {
+        const ep = await open(browser, { width: 1440, height: 900 });
+        const p = ep.page;
+        if (flip) await p.addInitScript(() => { try { localStorage.setItem('chess-video.tweaks.v1', JSON.stringify({ flip: true })); } catch (e) {} });
+        await p.goto(base, { waitUntil: 'load' });
+        await loadedOn(p);
+        await p.getByRole('button', { name: 'Play/Explore' }).click();
+        await p.getByRole('button', { name: 'Edit position…' }).click();
+        const field = p.getByRole('textbox', { name: 'FEN' }), tray = (n) => p.getByRole('button', { name: n, exact: true });
+        await assert.doesNotReject(field.waitFor({ timeout: 5000 }));
+        const key = async (k, n = 1) => { for (let i = 0; i < n; i++) await p.keyboard.press(k); };
+        // the arrows as the viewer sees the board: Down is towards White's side unless flipped
+        const down = flip ? 'ArrowUp' : 'ArrowDown', up = flip ? 'ArrowDown' : 'ArrowUp', left = flip ? 'ArrowRight' : 'ArrowLeft', right = flip ? 'ArrowLeft' : 'ArrowRight';
+        await tray('White king').focus();
+        await key('Enter');
+        assert.equal(await tray('White king').getAttribute('aria-pressed'), 'true');
+        assert.equal(await p.evaluate(() => document.activeElement.getAttribute('role')), 'application', 'the board has the focus');
+        await key(down, 3); await key('Enter'); // e4 → e1
+        assert.equal(await field.inputValue(), '8/8/8/8/8/8/8/4K3 w - - 0 1');
+        await key('Escape');
+        assert.equal(await tray('White king').getAttribute('aria-pressed'), 'false', 'Esc lets the held piece go');
+        await key(up, 7); await key('k'); // e8
+        await key(down, 7); await key('Enter'); await key(left); await key('Enter'); // the king e1 → d1
+        assert.equal(await field.inputValue(), '4k3/8/8/8/8/8/8/3K4 w - - 0 1');
+        await key('Enter'); await key('Escape'); // picked up, then put back down where it was
+        assert.equal(await field.isVisible(), true, 'Esc with a piece picked up keeps the editor');
+        await key(right); await key('Enter');
+        assert.equal(await field.inputValue(), '4k3/8/8/8/8/8/8/3K4 w - - 0 1', 'nothing picked up any more: Enter on an empty square does nothing');
+        await key('Q'); assert.equal(await field.inputValue(), '4k3/8/8/8/8/8/8/3KQ3 w - - 0 1');
+        await key('Delete'); assert.equal(await field.inputValue(), '4k3/8/8/8/8/8/8/3K4 w - - 0 1');
+        if (!flip) await p.screenshot({ path: path.join(OUT, host + '-edit-keyboard.png') });
+        assert.deepEqual(ep.errors, []);
+        await ep.ctx.close();
+      }
+    });
     await t.test('phone: Edit position places pieces by tap', async () => {
       const ph = await open(browser, { width: 390, height: 844 }, phone({}));
       const p = ph.page;
