@@ -544,15 +544,18 @@ function DialogChoice({ label, value, options, onChange }) {
 // Play vs human or vs Stockfish (mode): where the game starts (the starting position, or the open board's set-up position
 // when it has one), the clock, and against Stockfish the side the player takes (side: 'w', 'b' or 'random', resolved when
 // the game starts). onStart({ fen, tc, you })
-function PlayDialog({ mode = 'human', setUpFen, clock, side, onStart, onClose }) {
+// Start from: the starting position, or a set-up one: the board's, or with none set up, one set up in the editor first
+// (onSetUp, with the dialog's choices). initial: the choices to open with (back from the editor), else the defaults
+function PlayDialog({ mode = 'human', setUpFen, clock, side, initial, onStart, onSetUp, onClose }) {
   const sfGame = mode === 'stockfish';
-  const [from, setFrom] = React.useState(setUpFen ? 'setup' : 'start');
-  const [tc, setTc] = React.useState(window.PlayCore.TIME_CONTROLS.includes(clock) ? clock : null);
-  const [you, setYou] = React.useState(['w', 'b', 'random'].includes(side) ? side : 'w');
-  const start = () => onStart({ fen: from === 'setup' ? setUpFen : window.ChessCore.START_FEN, tc, you: sfGame ? you : null });
+  const [from, setFrom] = React.useState(initial ? initial.from : setUpFen ? 'setup' : 'start');
+  const [tc, setTc] = React.useState(initial ? initial.tc : window.PlayCore.TIME_CONTROLS.includes(clock) ? clock : null);
+  const [you, setYou] = React.useState(initial ? initial.you : ['w', 'b', 'random'].includes(side) ? side : 'w');
+  const editFirst = from === 'setup' && !setUpFen;
+  const start = () => (editFirst ? onSetUp({ tc, you: sfGame ? you : null }) : onStart({ fen: from === 'setup' ? setUpFen : window.ChessCore.START_FEN, tc, you: sfGame ? you : null }));
   return (
     <DialogBox label={sfGame ? 'Play vs Stockfish' : 'Play vs human'} onClose={onClose}>
-      {setUpFen && <DialogChoice label="Start from" value={from} options={[{ label: 'Starting position', value: 'start' }, { label: 'Set-up position', value: 'setup' }]} onChange={setFrom} />}
+      <DialogChoice label="Start from" value={from} options={[{ label: 'Starting position', value: 'start' }, { label: 'Set-up position', value: 'setup' }]} onChange={setFrom} />
       {sfGame && <DialogChoice label="You play" value={you} options={[{ label: 'White', value: 'w' }, { label: 'Black', value: 'b' }, { label: 'Random', value: 'random' }]} onChange={setYou} />}
       <DialogChoice label="Time control" value={tc} options={[{ label: 'Off', value: null }].concat(window.PlayCore.TIME_CONTROLS.map((x) => ({ label: x, value: x })))} onChange={setTc} />
       <div className="fen-note">{sfGame
@@ -560,7 +563,7 @@ function PlayDialog({ mode = 'human', setUpFen, clock, side, onStart, onClose })
         : 'Two players at this screen. The board turns after each move, so the side to move plays from the bottom; Take back is a button by Resign. Stockfish stays off until the game ends.'}</div>
       <div className="fen-btns">
         <button type="button" className="twk-btn secondary" onClick={onClose}>Cancel</button>
-        <button type="button" className="twk-btn" data-autofocus onClick={start}>Start game</button>
+        <button type="button" className="twk-btn" data-autofocus onClick={start}>{editFirst ? 'Set up position…' : 'Start game'}</button>
       </div>
     </DialogBox>
   );

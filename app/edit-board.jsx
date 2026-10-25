@@ -110,7 +110,7 @@ function useEditInput({ setup, onChange }) {
   return { held, drag, boardEl, handlers, trayHandlers, dropHeld: () => setHeld(null) };
 }
 
-function EditBoard({ setup, onChange, onDone, onCancel, fenText, onFenText, fenMsg, orient, nav, overlay }) {
+function EditBoard({ setup, onChange, onDone, onCancel, fenText, onFenText, fenMsg, doneLabel = 'Done', orient, nav, overlay }) {
   setLayout(useFrame()); // before the children render, which read the layout
   L = editLayout(boardLayout(L)); BX = L.bx; BY = L.by;
   setOrient(orient);
@@ -177,7 +177,7 @@ function EditBoard({ setup, onChange, onDone, onCancel, fenText, onFenText, fenM
           </div>
           <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 12 }}>
             <FrameButton color={C.dim} onClick={onCancel}>Cancel</FrameButton>
-            <FrameButton primary color={C.last} disabled={problems.length > 0} onClick={onDone}>Done</FrameButton>
+            <FrameButton primary color={C.last} disabled={problems.length > 0} onClick={onDone}>{doneLabel}</FrameButton>
           </div>
         </div>
       </Panel>

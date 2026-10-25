@@ -799,6 +799,40 @@ for (const name of BROWSERS) for (const site of SITES) {
       assert.deepEqual(ep.errors, []);
       await ep.ctx.close();
     });
+    // Play's Start from shows with no position set up; Set-up position then opens the editor with the dialog's settings,
+    // whose Done (Start game) starts the game there, and whose Cancel brings the dialog back as it was
+    await t.test('desktop: Play vs human from a position set up in the editor', async () => {
+      const ep = await open(browser, { width: 1440, height: 900 });
+      const p = ep.page, dialog = p.getByRole('dialog', { name: 'Play vs human' });
+      await p.goto(base, { waitUntil: 'load' });
+      await loadedOn(p);
+      await p.getByRole('button', { name: 'Play/Explore' }).click();
+      await p.getByRole('button', { name: 'Play vs human…' }).click();
+      await assert.doesNotReject(dialog.waitFor({ timeout: 3000 }));
+      const from = dialog.getByRole('radiogroup', { name: 'Start from' });
+      assert.equal(await from.getByRole('radio', { name: 'Starting position' }).getAttribute('aria-checked'), 'true');
+      await from.getByRole('radio', { name: 'Set-up position' }).click();
+      await dialog.getByRole('radiogroup', { name: 'Time control' }).getByRole('radio', { name: '5+3' }).click();
+      assert.equal(await dialog.getByRole('button', { name: 'Start game' }).count(), 0);
+      await dialog.getByRole('button', { name: 'Set up position…' }).click();
+      const field = p.getByRole('textbox', { name: 'FEN' });
+      await assert.doesNotReject(field.waitFor({ timeout: 5000 }));
+      // Cancel: the dialog again, as it was
+      await p.getByRole('button', { name: 'Cancel' }).click();
+      await assert.doesNotReject(dialog.waitFor({ timeout: 3000 }));
+      assert.equal(await from.getByRole('radio', { name: 'Set-up position' }).getAttribute('aria-checked'), 'true');
+      assert.equal(await dialog.getByRole('radiogroup', { name: 'Time control' }).getByRole('radio', { name: '5+3' }).getAttribute('aria-checked'), 'true');
+      await dialog.getByRole('button', { name: 'Set up position…' }).click();
+      await typeFen(field, '4k3/8/8/8/8/8/4P3/4K3 w - - 0 1');
+      await p.getByRole('button', { name: 'Start game' }).click();
+      await assert.doesNotReject(field.waitFor({ state: 'detached', timeout: 5000 }));
+      await assert.doesNotReject(p.locator('.game-clock').first().waitFor({ timeout: 5000 }));
+      assert.deepEqual(await p.locator('.game-clock').allInnerTexts(), ['5:00', '5:00']);
+      assert.equal((await boardBox(p)).n, 3, 'the game starts from the set-up position');
+      assert.match(await p.locator('body').innerText(), /Play vs human/);
+      assert.deepEqual(ep.errors, []);
+      await ep.ctx.close();
+    });
     // Paste PGN: an empty box or a PGN that doesn't build gets a plain message and changes nothing; a good one, loaded
     // with Ctrl+Enter, is the loaded game, from the free board too
     await t.test('desktop: Paste PGN loads a game, and says what\'s wrong with a bad one', async () => {
