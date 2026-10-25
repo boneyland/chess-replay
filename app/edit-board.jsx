@@ -110,7 +110,7 @@ function useEditInput({ setup, onChange }) {
   return { held, drag, boardEl, handlers, trayHandlers, dropHeld: () => setHeld(null) };
 }
 
-function EditBoard({ setup, onChange, onDone, onCancel, fenText, onFenText, fenMsg, orient, nav }) {
+function EditBoard({ setup, onChange, onDone, onCancel, fenText, onFenText, fenMsg, orient, nav, overlay }) {
   setLayout(useFrame()); // before the children render, which read the layout
   L = editLayout(boardLayout(L)); BX = L.bx; BY = L.by;
   setOrient(orient);
@@ -119,12 +119,13 @@ function EditBoard({ setup, onChange, onDone, onCancel, fenText, onFenText, fenM
   if (nav) nav.current = { label: 'Edit position', color: C.last, hasPrev: false, hasNext: false, hasLast: false, hasFirst: false, prev: () => {}, next: () => {}, last: () => {}, first: () => {}, fen: () => E.toFen(setup) };
   React.useEffect(() => { if (nav && nav.listen) nav.listen(); }, []);
   const input = useEditInput({ setup, onChange }), { held, drag } = input;
-  // Esc lets a held tray piece go, else cancels (from the FEN field too)
+  // Esc lets a held tray piece go, else cancels (from the FEN field too); not while it closes something over the editor
+  // (overlay: Settings, a menu, Queen's panel), whose own handlers may run before or after this one
   const keyRef = React.useRef(null);
-  keyRef.current = { onCancel, held, dropHeld: input.dropHeld };
+  keyRef.current = { onCancel, held, dropHeld: input.dropHeld, overlay };
   React.useEffect(() => {
     const onKey = (e) => {
-      if (e.code !== 'Escape' || e.defaultPrevented || document.querySelector('[role="dialog"]')) return;
+      if (e.key !== 'Escape' || e.isComposing || e.defaultPrevented || keyRef.current.overlay || document.querySelector('[role="dialog"]')) return;
       e.preventDefault();
       if (keyRef.current.held) keyRef.current.dropHeld(); else keyRef.current.onCancel();
     };

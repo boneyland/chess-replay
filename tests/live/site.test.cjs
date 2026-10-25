@@ -736,6 +736,69 @@ for (const name of BROWSERS) for (const site of SITES) {
       assert.deepEqual(ph.errors, []);
       await ph.ctx.close();
     });
+    // review fixes: Esc that closes Settings or the Play/Explore menu leaves the editor alone; an analysis finishing
+    // meanwhile doesn't close it; a Stockfish reply made while the Leave dialog was up survives Leave and Cancel
+    await t.test('desktop: Edit position survives Esc on an open menu and an analysis finishing', async () => {
+      const ep = await open(browser, { width: 1440, height: 900 });
+      const p = ep.page;
+      await p.addInitScript(() => { try { localStorage.setItem('chess-video.tweaks.v1', JSON.stringify({ sfTime: 1 })); } catch (e) {} });
+      await p.goto(base, { waitUntil: 'load' });
+      await loadedOn(p);
+      // a two-move game, analysed in a few seconds
+      await p.getByRole('button', { name: 'Play/Explore' }).click();
+      await p.getByRole('button', { name: 'Paste PGN…' }).click();
+      // typed, not filled: Firefox over WebDriver BiDi can miss fill()'s text (see typeFen)
+      await p.getByRole('textbox', { name: 'PGN' }).click();
+      await p.keyboard.type('1. e4 e5 *');
+      await p.getByRole('button', { name: 'Load', exact: true }).click();
+      await p.getByRole('button', { name: /^Analyse with Stockfish/ }).first().click();
+      await p.getByRole('button', { name: 'Play/Explore' }).click();
+      await p.getByRole('button', { name: 'Edit position…' }).click();
+      const field = p.getByRole('textbox', { name: 'FEN' });
+      await assert.doesNotReject(field.waitFor({ timeout: 5000 }));
+      await typeFen(field, '4k3/8/8/8/8/8/8/4K3 w - - 0 1');
+      await p.getByRole('button', { name: 'Settings' }).click();
+      await p.keyboard.press('Escape');
+      await p.getByRole('button', { name: 'Play/Explore' }).click();
+      await p.keyboard.press('Escape');
+      assert.equal(await field.isVisible(), true, 'Esc closed the menus, not the editor');
+      await p.waitForTimeout(8000);
+      assert.equal(await field.inputValue(), '4k3/8/8/8/8/8/8/4K3 w - - 0 1', 'the editor outlived the analysis');
+      assert.deepEqual(ep.errors, []);
+      await ep.ctx.close();
+    });
+    await t.test('desktop: Leaving a Stockfish game for Edit position keeps the reply made meanwhile', async () => {
+      const ep = await open(browser, { width: 1440, height: 900 });
+      const p = ep.page, label = p.locator('.plabel');
+      await p.goto(base, { waitUntil: 'load' });
+      await loadedOn(p);
+      await p.getByRole('button', { name: 'Play/Explore' }).click();
+      await p.getByRole('button', { name: 'Play vs Stockfish…' }).click();
+      const dialog = p.getByRole('dialog', { name: 'Play vs Stockfish' });
+      await dialog.getByRole('radio', { name: 'White' }).click();
+      await dialog.getByRole('radio', { name: 'Off' }).click();
+      await dialog.getByRole('button', { name: 'Start game' }).click();
+      await assert.doesNotReject(p.getByRole('button', { name: 'Play (space)' }).waitFor({ state: 'detached', timeout: 5000 }));
+      const b = await boardBox(p), f = square(b, 'e2'), tt = square(b, 'e4');
+      await p.mouse.move(f.x, f.y); await p.mouse.down(); await p.mouse.move(tt.x, tt.y, { steps: 8 }); await p.mouse.up();
+      await p.getByRole('button', { name: 'Play/Explore' }).click();
+      await p.getByRole('button', { name: 'Edit position…' }).click();
+      // Stockfish replies under the Leave dialog
+      await p.getByRole('dialog', { name: 'Leave this game?' }).waitFor({ timeout: 3000 });
+      assert.equal(await label.filter({ hasText: /^1… / }).count(), 0, 'no reply yet when the dialog opens');
+      await assert.doesNotReject(label.filter({ hasText: /^1… / }).waitFor({ timeout: 15000 }));
+      await p.getByRole('button', { name: 'Leave the game' }).click();
+      const field = p.getByRole('textbox', { name: 'FEN' });
+      await assert.doesNotReject(field.waitFor({ timeout: 5000 }));
+      // the stored board, which Cancel goes back to, has both moves
+      const stored = await p.evaluate(() => JSON.parse(localStorage.getItem('chess-video.files.v1')).board.moves);
+      assert.equal(stored.length, 2, JSON.stringify(stored));
+      await p.keyboard.press('Escape');
+      await assert.doesNotReject(field.waitFor({ state: 'detached', timeout: 5000 }));
+      await assert.doesNotReject(label.filter({ hasText: /^1… / }).waitFor({ timeout: 5000 }), 'the reply is still there');
+      assert.deepEqual(ep.errors, []);
+      await ep.ctx.close();
+    });
     // Paste PGN: an empty box or a PGN that doesn't build gets a plain message and changes nothing; a good one, loaded
     // with Ctrl+Enter, is the loaded game, from the free board too
     await t.test('desktop: Paste PGN loads a game, and says what\'s wrong with a bad one', async () => {

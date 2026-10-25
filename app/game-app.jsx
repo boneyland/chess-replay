@@ -240,9 +240,10 @@ function GameApp() {
   React.useEffect(() => { setQueenArrow(null); }, [M]);
 
   // false when it couldn't be remembered (the error says so)
-  const commit = (next) => {
+  // keep: the editor stays open (an analysis finishing in the background isn't the viewer leaving it)
+  const commit = (next, keep) => {
     if (!next.board) try { window.ChessCore.buildGame(next); } catch (e) { setErr(e.message); return false; }
-    setErr(''); setFiles(next); setEditing(null);
+    setErr(''); setFiles(next); if (!keep) setEditing(null);
     try { if (next.sample && !next.evalSource) localStorage.removeItem(STORE); else localStorage.setItem(STORE, JSON.stringify(next)); } catch (e) { setErr(next.board ? 'The board couldn’t be remembered after reload: the browser’s storage is full.' : 'Loaded, but the files are too large to remember after reload.'); return false; }
     return true;
   };
@@ -275,8 +276,9 @@ function GameApp() {
   const editPosition = () => {
     setNewMenu(false); setMenu(false); setPanel(false);
     guard(() => {
-      const E = window.EditCore, P = window.PlayCore, s = E.empty();
-      const resume = editing ? editing.resume : board && P.inProgress(board) ? P.pause(board, Date.now()) : null;
+      // the board as it is now: Stockfish may have replied, or a flag fallen, while the Leave dialog was up
+      const E = window.EditCore, P = window.PlayCore, s = E.empty(), b = boardRef.current;
+      const resume = editing ? editing.resume : b && P.inProgress(b) ? P.pause(b, Date.now()) : null;
       if (resume && !editing) commitBoard(resume);
       setQueenOpen(false); setEditing({ setup: s, text: E.toFen(s), msg: '', resume });
     });
@@ -385,7 +387,7 @@ function GameApp() {
   // the whole annotation whatever the video shows: commentary even when hidden, Queen's answers even when out of the video
   const savePgn = () => saveFile(fileStem + '_annotated.pgn', window.ChessCore.annotatedPgn(withQueen(M, Q.resultAt)), 'application/x-chess-pgn');
   const saveQueen = () => saveFile(fileStem + '_queen.json', JSON.stringify(Q.saved(), null, 1), 'application/json');
-  const analysis = useGameAnalysis(M, files, () => filesRef.current, commit, engine, ES.game);
+  const analysis = useGameAnalysis(M, files, () => filesRef.current, (next) => commit(next, true), engine, ES.game);
   // switching engines stops a running analysis (its searches so far are kept, to resume with the engine that made them)
   const analysisStop = React.useRef(analysis.stop);
   analysisStop.current = analysis.stop;
@@ -512,7 +514,7 @@ function GameApp() {
     <React.Fragment>
       <CompositionStage nav={nav} width={1920} height={1080} compact={COMPACT} portrait={PORTRAIT} square={SQUARE} short={SHORT} top={!net.online && <span className="net-chip" role="status" title={OFFLINE_NOTE}>Offline</span>} menu={<React.Fragment><SoundButton on={t.sound !== false} onChange={(v) => setTweak('sound', v)} />{tall ? menuEl : deskDock}</React.Fragment>} onLayout={onLayout} scenes={scenes} playback={PLAYBACK} bg={C.bg} still={!!board || !!editing}>
         {editing
-          ? <EditBoard setup={editing.setup} onChange={editTo} onDone={editDone} onCancel={editCancel} fenText={editing.text} onFenText={editText} fenMsg={editing.msg} orient={t.flip ? 'b' : 'w'} nav={nav} />
+          ? <EditBoard setup={editing.setup} onChange={editTo} onDone={editDone} onCancel={editCancel} fenText={editing.text} onFenText={editText} fenMsg={editing.msg} orient={t.flip ? 'b' : 'w'} nav={nav} overlay={panel || newMenu || menu || queenOpen} />
           : board
           ? <FreeBoard board={board} onChange={commitBoard} tw={t} sf={sf} nav={nav} orient={t.flip ? 'b' : 'w'} book={book && !board.game ? window.Openings.book() : null} />
           : <GameVideo M={MV} tw={video.busy ? { ...t, cameraPush: false, exporting: true } : t} d={TM.d} probe={probe} queen={queenArrow} nav={nav} scheme={scheme} sf={sf} orient={t.flip ? 'b' : 'w'} />}
