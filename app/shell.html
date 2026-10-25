@@ -111,6 +111,8 @@ body:has(.stage-tall) .twk-panel { bottom: calc(51px + env(safe-area-inset-botto
 .stage-tall { padding-block: 2px 5px; gap: 6px; padding-left: max(8px, env(safe-area-inset-left, 0px)); padding-right: max(8px, env(safe-area-inset-right, 0px)); }
 /* square frame: the phone's padding around a full-size bar, so the frame can be larger */
 .stage-square { padding-block: 2px 5px; gap: 6px; padding-left: max(8px, env(safe-area-inset-left, 0px)); padding-right: max(8px, env(safe-area-inset-right, 0px)); }
+/* compact landscape frame (windows under 1300 px wide): less padding around the full-size bar, so the frame can be larger */
+.stage-compact { padding-block: 4px 6px; gap: 6px; padding-left: max(8px, env(safe-area-inset-left, 0px)); padding-right: max(8px, env(safe-area-inset-right, 0px)); }
 /* phone held sideways: a slim bar and little padding, so the board keeps the height */
 .stage-short { padding-block: 2px 4px; gap: 4px; }
 .stage-tall .pbar, .stage-short .pbar { padding: 3px 6px; gap: 6px; }

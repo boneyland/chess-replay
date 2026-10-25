@@ -419,6 +419,28 @@ for (const name of BROWSERS) for (const site of SITES) {
       assert.deepEqual(fp.errors, []);
       await fp.ctx.close();
     });
+    // a landscape window under 1300 px wide gets the compact frame (1800×1040, slimmer stage padding); 1300 and up the 1920×1080 one
+    await t.test('desktop: under 1300 px wide the landscape frame is the compact one', async () => {
+      const cp = await open(browser, { width: 1280, height: 800 });
+      await cp.page.goto(base, { waitUntil: 'load' });
+      await cp.page.locator('.dock-primary').waitFor({ state: 'attached' });
+      await cp.page.waitForFunction(() => document.querySelectorAll('img').length >= 32);
+      const frame = () => cp.page.evaluate(() => {
+        const st = document.querySelector('.stage'), f = document.querySelector('.stage-frame'), r = f.getBoundingClientRect();
+        return { compact: st.classList.contains('stage-compact'), size: f.firstElementChild.style.width + ' ' + f.firstElementChild.style.height, fits: r.left >= 0 && r.right <= innerWidth && r.top >= 0 && r.bottom <= innerHeight };
+      });
+      assert.deepEqual(await frame(), { compact: true, size: '1800px 1040px', fits: true });
+      assert.deepEqual(await wider(cp.page), []);
+      const b = await boardBox(cp.page);
+      assert.equal(b.n, 32);
+      assert.ok(Math.abs(b.h - 8 * b.sq) < 4, 'the board is square');
+      await cp.page.screenshot({ path: path.join(OUT, host + '-compact.png') });
+      await cp.page.setViewportSize({ width: 1300, height: 800 });
+      await assert.doesNotReject(cp.page.waitForFunction(() => !document.querySelector('.stage').classList.contains('stage-compact'), null, { timeout: 5000 }));
+      assert.deepEqual(await frame(), { compact: false, size: '1920px 1080px', fits: true });
+      assert.deepEqual(cp.errors, []);
+      await cp.ctx.close();
+    });
     // Play/Explore → Starting position: no game, every move (either side's) rated by Stockfish; it survives a reload
     // Settings › Engine › Lines 3: the free board's Analysis lists three lines, each with its arrow
     await t.test('desktop: Lines 3 shows three engine lines and three arrows on the free board', async () => {

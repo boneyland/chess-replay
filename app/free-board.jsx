@@ -129,15 +129,15 @@ function boardLayout(base) {
 }
 
 // A game draws no eval bar, so its board takes the bar's room: centred on the portrait frame; on the wide frame grown
-// (zoom) to fill the height, 40 px from the top and bottom edges with its player bars, the panels moved right to make room.
+// (zoom) to fill the height, 40 px from the top and bottom edges (the compact frame's 20) with its player bars, the panels moved right to make room.
 const GAME_LAYOUTS = new WeakMap();
 function gameLayout(base) {
   if (!GAME_LAYOUTS.has(base)) {
     if (base === LAYOUTS.tall) GAME_LAYOUTS.set(base, { ...base, bx: (PORTRAIT.width - BW) / 2 });
-    else if (base !== boardLayout(LAYOUTS.wide)) GAME_LAYOUTS.set(base, base);
+    else if (base !== boardLayout(LAYOUTS.wide) && base !== boardLayout(LAYOUTS.compact)) GAME_LAYOUTS.set(base, base);
     else {
-      const bar = base.bar.gap + 40 * base.bar.k, zoom = (1080 - 80) / (BW + 2 * bar), bx = base.eval, by = 40 + zoom * bar;
-      const dx = bx + zoom * BW + 36 - base.header.x, right = base.header.x + base.header.w;
+      const e = base.edge || 40, bar = base.bar.gap + 40 * base.bar.k, zoom = ((base.frameH || 1080) - 2 * e) / (BW + 2 * bar), bx = base.eval, by = e + zoom * bar;
+      const dx = bx + zoom * BW + (base.edge ? 20 : 36) - base.header.x, right = base.header.x + base.header.w;
       const move = (b) => ({ ...b, x: b.x + dx, w: b.x + b.w >= right ? b.w - dx : b.w });
       GAME_LAYOUTS.set(base, { ...base, bx, by, zoom, header: move(base.header), moves: move(base.moves), comment: move(base.comment), analysis: move(base.analysis) });
     }

@@ -48,6 +48,21 @@ const LAYOUTS = {
     card: { k: 1, w: 1700, stack: false },
   },
 };
+// Compact landscape, for windows under 1300 px wide: the wide frame's panels at their sizes, with the square frame's
+// margins, gaps and panel padding, so the frame is 1800×1040 and shows larger. The export draws it at that size.
+const COMPACT = { width: 1800, height: 1040 };
+LAYOUTS.compact = (() => {
+  const m = 20, gap = 14, x = m + 48 + BW + 20, w = COMPACT.width - m - x, py = COMPACT.height - m - 120, my = m + 156 + gap, ay = my + 322 + gap;
+  return {
+    eval: m, bx: m + 48, by: m + 50, bar: { k: 1, gap: 10 }, title: 13, pad: '12px 16px', frameH: COMPACT.height, edge: m,
+    header: { x, y: m, w, h: 156, k: 1 },
+    moves: { x, y: my, w: 330, h: 322, k: 1, rows: 7 },
+    comment: { x: x + 330 + gap, y: my, w: w - 330 - gap, h: 322, k: 1, text: 1, gap: 18, right: 1 },
+    analysis: { x, y: ay, w, h: py - gap - ay, k: 1, right: 1 },
+    plot: { x: m, y: py, w: COMPACT.width - 2 * m, h: 120, k: 1 },
+    card: { k: 1, w: 1640, stack: false },
+  };
+})();
 // Portrait: 840 wide, and as tall as the screen allows. A phone shows it at about 0.43×, so text here is ~27 px
 // (about 12 px on screen): no eval graph (the eval bar stays), so Commentary sits right under the board; Moves the full
 // width with two move pairs a row.
@@ -110,7 +125,7 @@ const setLayout = (frame) => {
   if (frame.tall && frame.height !== tallH) { tallH = frame.height; LAYOUTS.tall = tallLayout(tallH); }
   if (frame.short && frame.width !== shortW) { shortW = frame.width; LAYOUTS.short = shortLayout(shortW); }
   if (frame.square && frame.height !== squareH) { squareH = frame.height; LAYOUTS.square = squareLayout(squareH); }
-  L = frame.tall ? LAYOUTS.tall : frame.square ? LAYOUTS.square : frame.short ? LAYOUTS.short : LAYOUTS.wide; BX = L.bx; BY = L.by;
+  L = frame.tall ? LAYOUTS.tall : frame.square ? LAYOUTS.square : frame.short ? LAYOUTS.short : frame.compact ? LAYOUTS.compact : LAYOUTS.wide; BX = L.bx; BY = L.by;
 };
 
 // The side at the bottom ('b' turns the board round). view() maps a board column and row (0 = a, 0 = rank 8) to where it
