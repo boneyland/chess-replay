@@ -129,6 +129,12 @@
   // end on a bestmove token that isn't the start of its last complete line
   const bestOf = (r) => (r && r.pv && r.pv[0]) || (r && r.best) || null;
 
+  // A tablebase win or loss with no distance to mate (6 and 7 pieces): its ±9990 says won, not mate in 1, so it is never
+  // weighed against a search's eval
+  const tbWonOnly = (r) => !!(r && r.tb && !r.tb.dtm && r.cp !== 0 && Math.abs(r.cp) < C.MATE_SCORE_CP);
+  // the eval a move's rating takes for a position: a search of it where one was made beside the tablebase's answer
+  const rateCp = (r) => (r.sf ? r.sf.cp : r.cp);
+
   // the least time between a game analysis's requests to the tablebase: Lichess publishes no limit, and it answered 429
   // to about 10 requests in a minute
   const TB_GAP_MS = 4000;
@@ -194,29 +200,51 @@
   // null: a position of 7 pieces or fewer takes its certain answer instead of a search (tablebaseResult); an uncertain
   // one is searched. Its requests go tbGapMs apart (TB_GAP_MS). While the client backs off after a 429 the positions
   // are searched, then it is asked again; after a request that fails otherwise (offline, an error, the timeout) the run
-  // asks no more. now, sleep: the clock, for tests
-  async function runAnalysis({ engine, ucis, sans, headers, signal, onProgress, earlier = [], onSearched, settings = ENGINE, startFen = window.ChessCore.START_FEN, tablebase = null, tbGapMs = TB_GAP_MS, now = Date.now, sleep = (ms) => new Promise((r) => setTimeout(r, ms)) }) {
+  // asks no more. tablebaseOn(): whether the setting is still on (turned off, the run asks no more). A position the
+  // tablebase calls won without a distance to mate (tbWonOnly) next to a searched one is searched too (kept as its sf),
+  // so the move between them is rated on two searches. onSearched(R, { searches, tbMs }): the engine searches made
+  // and the time spent on the tablebase since the last call, for the run's pace. now, sleep: the clock, for tests
+  async function runAnalysis({ engine, ucis, sans, headers, signal, onProgress, earlier = [], onSearched, settings = ENGINE, startFen = window.ChessCore.START_FEN, tablebase = null, tablebaseOn = () => true, tbGapMs = TB_GAP_MS, now = Date.now, sleep = (ms) => new Promise((r) => setTimeout(r, ms)) }) {
     const CC = window.ChessCore, LC = window.LichessCore;
     const N = ucis.length, R = earlier.slice(0, N + 1);
     const fens = tablebase && LC ? positionFens(startFen, ucis) : null;
     let tbFailed = false, lastAsk = -Infinity;
     const pace = async () => { const wait = lastAsk + tbGapMs - now(); if (wait > 0) await sleep(wait); lastAsk = now(); };
     const backedOff = () => !!(tablebase.backedOff && tablebase.backedOff('tablebase'));
+    let searches = 0, tbMs = 0;
+    const search = async (k) => {
+      const r = await engine.search({ moves: ucis.slice(0, k), fen: startFen, depth: settings.depth, movetimeMs: settings.time_limit * 1000, priority: 'game' }).promise;
+      searches++;
+      if (!signal.aborted && (!r || r.cp == null)) throw new Error('Stockfish stopped before the analysis finished');
+      return r;
+    };
     onProgress(Math.max(0, R.length - 1), N);
     for (let k = R.length; k <= N; k++) {
       if (signal.aborted) return null;
       let r = null;
-      if (fens && !tbFailed && !backedOff() && LC.pieceCount(fens[k]) <= LC.TB_MAX_PIECES) {
-        const got = await tablebaseResult(tablebase, fens[k], pace);
+      if (fens && !tbFailed && tablebaseOn() && !backedOff() && LC.pieceCount(fens[k]) <= LC.TB_MAX_PIECES) {
+        const t0 = now();
+        const got = await tablebaseResult(tablebase, fens[k], pace, tablebaseOn);
+        tbMs += now() - t0;
         if (signal.aborted) return null;
         if (got.failed && !backedOff()) tbFailed = true;
         r = got.result;
       }
-      if (!r) r = await engine.search({ moves: ucis.slice(0, k), fen: startFen, depth: settings.depth, movetimeMs: settings.time_limit * 1000, priority: 'game' }).promise;
+      if (!r) r = await search(k);
       if (signal.aborted) return null;
-      if (!r || r.cp == null) throw new Error('Stockfish stopped before the analysis finished');
+      // a move between a searched position and a tablebase win with no distance to mate: that one searched too
+      if (k > 0 && !r.tb !== !R[k - 1].tb) {
+        const j = tbWonOnly(r) ? k : tbWonOnly(R[k - 1]) && !R[k - 1].sf ? k - 1 : -1;
+        if (j >= 0) {
+          const s = await search(j);
+          if (signal.aborted) return null;
+          const sf = { cp: s.cp, depth: s.depth };
+          if (j === k) r = { ...r, sf }; else R[k - 1] = { ...R[k - 1], sf };
+        }
+      }
       R.push(r);
-      if (onSearched) onSearched(R.slice());
+      if (onSearched) onSearched(R.slice(), { searches, tbMs });
+      searches = 0; tbMs = 0;
       if (k > 0) onProgress(k, N);
     }
     const start = CC.parseFen(startFen);
@@ -226,9 +254,10 @@
       const played = CC.applyUci(pos, uci);
       const san = played ? played.san : sans[i];
       const bestLine = sansOf(pos, before.pv, C.BEST_LINE_MAX_PLIES);
-      // between two tablebase positions the outcome rates the move; a capture into the tablebase is rated as ever
+      // between two tablebase positions the outcome rates the move; a capture into the tablebase is rated as ever, on
+      // searches of both where the tablebase only says won
       const rated = (before.tb && after.tb && rateByOutcome({ bestEval: before.cp, currentEval: after.cp, isWhite, before: before.tb, after: after.tb }))
-        || rateMove({ bestEval: before.cp, currentEval: after.cp, isWhite, playedIsBest: uci === best, isCheckmate: san.endsWith('#') });
+        || rateMove({ bestEval: rateCp(before), currentEval: rateCp(after), isWhite, playedIsBest: uci === best, isCheckmate: san.endsWith('#') });
       const m = {
         ply: start.ply0 + i + 1, move_san: san, move_uci: uci, is_white_move: isWhite,
         eval_before: before.cp, eval_after: after.cp,
@@ -237,7 +266,7 @@
         is_capture: san.includes('x'), is_check: /[+#]$/.test(san),
         pv_line: played ? sansOf(played.pos, after.pv, 3) : [],
         mate_advice: rated.mateAdvice,
-        mate_line: rated.mateAdvice === C.MATE_LOST || rated.mateAdvice === C.MATE_DELAYED ? mateLine(before.cp, bestLine) : '',
+        mate_line: rated.mateAdvice === C.MATE_LOST || rated.mateAdvice === C.MATE_DELAYED ? mateLine(rateCp(before), bestLine) : '',
         search_depth: before.depth, search_depth_after: after.depth, search_lines: 1, best_line: bestLine,
         // what the search of the position after the move actually did (the Python video ignores these)
         search_maxdepth_after: after.maxDepth == null ? after.depth : after.maxDepth, search_time_after_ms: after.timeMs, search_nodes_after: after.nodes,
@@ -268,10 +297,11 @@
   // one request a position, so no line), tb: { category, dtz, dtm } } for a certain answer, else null (search it);
   // failed: the request didn't answer. The run's signal is a plain { aborted } (not an AbortSignal), checked after: a
   // stopped run lets its last request finish (10 s at most). pace(): waits for the run's next turn to ask; an answer
-  // the client already has doesn't wait
-  async function tablebaseResult(client, fen, pace) {
+  // the client already has doesn't wait. on(): the setting, checked again after the wait (off: searched, not asked)
+  async function tablebaseResult(client, fen, pace, on = () => true) {
     const LC = window.LichessCore, turn = fen.split(' ')[1] === 'b' ? 'b' : 'w';
     if (!client.tablebaseCached || client.tablebaseCached(fen) === undefined) await pace();
+    if (!on()) return { result: null, failed: false };
     const t = await client.tablebase(fen);
     if (!t) return { result: null, failed: true };
     const cp = LC.evalCp(t, turn);
@@ -280,5 +310,5 @@
     return { result: { cp, depth: 0, pv: best ? [best] : [], best, nodes: null, timeMs: null, tb: { category: t.category, dtz: t.dtz, dtm: t.dtm } }, failed: false };
   }
 
-  window.AnalysisCore = { C, TB_GAP_MS, ENGINE, ENGINE_NAMES, SEARCH_LIMITS, DEPTHS, SECONDS, HASH_MB, LINES, engineSettings, secondsPerPosition, paceFactor, blendPace, deeperSearch, canGoDeeper, bestOf, winningChances, infoToScore, infoStats, rateMove, rateByOutcome, mateLine, positionFens, playerStats, buildAnalysisJson, runAnalysis };
+  window.AnalysisCore = { C, TB_GAP_MS, ENGINE, ENGINE_NAMES, SEARCH_LIMITS, DEPTHS, SECONDS, HASH_MB, LINES, engineSettings, secondsPerPosition, paceFactor, blendPace, deeperSearch, canGoDeeper, bestOf, winningChances, infoToScore, infoStats, rateMove, rateByOutcome, tbWonOnly, mateLine, positionFens, playerStats, buildAnalysisJson, runAnalysis };
 })();
