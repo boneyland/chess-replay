@@ -81,6 +81,7 @@
     const expect = (re) => new Promise((res) => waiting.push([re, res]));
     function ready() {
       if (readyP) return readyP;
+      if (failed) return (readyP = Promise.reject(failed)); // the engine died before anyone waited for it
       readyP = new Promise((resolve, reject) => {
         rejectReady = reject;
         const timer = setTimeout(() => fail(new Error('Stockfish did not start')), readyTimeoutMs);

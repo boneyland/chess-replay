@@ -39,6 +39,15 @@ test('ready rejects after readyTimeoutMs when the worker is silent', async () =>
   await assert.rejects(e.ready());
 });
 
+test('ready rejects at once when the engine died before it was asked', async () => {
+  let w;
+  const e = SF.create(() => (w = fakeWorker({ silent: true })), { readyTimeoutMs: 60000 });
+  w.onerror(new Error('wasm crashed'));
+  const t0 = Date.now();
+  await assert.rejects(e.ready(), /wasm crashed/);
+  assert.ok(Date.now() - t0 < 1000);
+});
+
 test('ready sets the hash size', async () => {
   let w;
   const e = SF.create(() => (w = fakeWorker()), {});
