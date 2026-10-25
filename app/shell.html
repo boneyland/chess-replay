@@ -105,7 +105,6 @@ body:has(.stage-tall) .twk-panel { bottom: calc(51px + env(safe-area-inset-botto
 .dock-primary { border-color: transparent; background: var(--accent); color: var(--accent-ink); }
 .dock-items { display: contents; }
 .dock-group { display: contents; }
-.stage-short .pmenu .dock-group { display: flex; flex-direction: column; gap: 6px; }
 .dock-menu-status { display: none; }
 /* portrait layout: the dock's buttons fold into a menu at the end of the transport bar */
 /* phones: a slimmer transport bar and less padding around it, so the frame can be larger */
@@ -130,23 +129,25 @@ body:has(.stage-tall) .twk-panel { bottom: calc(51px + env(safe-area-inset-botto
   width: max-content; max-width: calc(100vw - 32px); padding: 8px; border-radius: 10px;
   background: var(--panel-glass); border: 1px solid var(--line); box-shadow: 0 12px 32px var(--shadow);
 }
-.pmenu-open .dock-items { display: flex; }
+/* never past the top of the screen: what doesn't fit scrolls */
+.pmenu-open .dock-items { display: flex; max-height: calc(100dvh - 64px); overflow-y: auto; }
 .pmenu .dock-btn { height: auto; padding: 10px 14px; text-align: left; }
 .pmenu .dock-icons { display: flex; justify-content: flex-end; gap: 6px; }
 .pmenu .dock-iconic { width: 40px; height: 40px; padding: 0; }
 .pmenu .dock-icons .dock-queen { flex: 1; text-align: center; }
-/* a phone on its side: the menu is as wide as Settings there, Explore and Play side by side, the last row under Play */
-.stage-short .pmenu-open .dock-items {
-  display: grid; grid-template-columns: 1fr 1fr; grid-template-areas: "st st" "load load" "ex pl" "ex tail"; align-items: start;
-  width: min(760px, calc(100vw - 32px)); max-height: calc(100vh - 64px); overflow-y: auto;
-}
-.stage-short .pmenu .dock-menu-status { grid-area: st; max-width: none; }
-.stage-short .pmenu .dock-primary { grid-area: load; }
-.stage-short .pmenu .dock-group-explore { grid-area: ex; }
-.stage-short .pmenu .dock-group-play { grid-area: pl; }
-.stage-short .pmenu .dock-icons { grid-area: tail; align-self: end; }
 .pmenu .dock-menu-status { display: block; max-width: 240px; padding: 2px 4px 4px; font: 500 11px/1.4 var(--mono); color: var(--dim); white-space: normal; }
 .pmenu-err .dock-menu-status { color: var(--danger); }
+/* a screen held sideways: the menu is as wide as Settings there, Explore and Play side by side, the last row under Play
+   (the folded menu shows in the wide layout too, as at 800×480, so this goes by orientation, not .stage-short) */
+@media (orientation: landscape) {
+  .pmenu-open .dock-items { display: grid; grid-template-columns: 1fr 1fr; grid-template-areas: "st st" "load load" "ex pl" "ex tail"; align-items: start; width: min(760px, calc(100vw - 32px)); }
+  .pmenu .dock-menu-status { grid-area: st; max-width: none; }
+  .pmenu .dock-primary { grid-area: load; }
+  .pmenu .dock-group { display: flex; flex-direction: column; gap: 6px; }
+  .pmenu .dock-group-explore { grid-area: ex; }
+  .pmenu .dock-group-play { grid-area: pl; }
+  .pmenu .dock-icons { grid-area: tail; align-self: end; }
+}
 /* Play/Explore: a small menu above its dock button, its items under Explore and Play labels; on a phone they sit in the folded menu */
 .dock-new { position: relative; flex: none; }
 .dock-pop {
