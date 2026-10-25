@@ -43,6 +43,7 @@ fs.mkdirSync(path.join(dir, 'out', 'site'), { recursive: true });
 const DESCRIPTION = 'Replay an annotated chess game as a broadcast-style video: move ratings, best lines, commentary and an eval graph, with Stockfish in your browser.';
 // A link preview's image needs an absolute URL: the host's own (Render sets RENDER_EXTERNAL_URL; a local build points at Render)
 const SITE_URL = (process.env.RENDER_EXTERNAL_URL || 'https://chess-replay.onrender.com').replace(/\/$/, '');
+const VENDOR = ['stockfish-19-lite-single.js', 'stockfish-19-lite-single.wasm', 'webp_enc_simd.js', 'webp_enc_simd.wasm', 'mediabunny.min.js'];
 const ICON = 'data:image/svg+xml,' + encodeURIComponent('<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 32 32"><rect width="32" height="32" rx="6" fill="#9a6a1c"/><circle cx="16" cy="9.5" r="4" fill="#fffaf2"/><path d="M12.5 14h7l1.5 9h-10z M8.5 24h15v3h-15z" fill="#fffaf2"/></svg>');
 // The document shell around the page. It doesn't zoom (maximum-scale, user-scalable): a browser set to ignore that (iPhone Safari, Chrome's Force
 // enable zoom) still lets the viewer pinch
@@ -83,11 +84,30 @@ if ('serviceWorker' in navigator) window.addEventListener('load', () => { naviga
 </body>
 </html>
 `;
-fs.writeFileSync(path.join(dir, 'out', 'site', 'chess-game-video.html'), site);
-// the engine and the WebP export's encoder, served next to the page, and the link preview's image (a
+// The page's Content-Security-Policy, as a <meta> so the build can list a hash of each of its inline scripts (no
+// 'unsafe-inline' for scripts, so an injected one doesn't run). It names every host the page talks to: React and
+// html2canvas-pro (CDNs), the fonts, Hugging Face (sign-in, the Queen Space), Lichess's tablebase, the full engine's
+// download (unpkg). The engines and the export's encoders are WebAssembly ('wasm-unsafe-eval'); the full engine and
+// Mediabunny start workers from Blob URLs, and the full engine's glue fetches its wasm from one
+const inlineHashes = [...site.matchAll(/<script>([\s\S]*?)<\/script>/g)].map((m) => `'sha256-${require('crypto').createHash('sha256').update(m[1]).digest('base64')}'`);
+const CSP = [
+  "default-src 'self'",
+  `script-src 'self' 'wasm-unsafe-eval' https://cdnjs.cloudflare.com https://cdn.jsdelivr.net ${inlineHashes.join(' ')}`,
+  "worker-src 'self' blob:",
+  "connect-src 'self' blob: data: https://huggingface.co https://boneyland-queen-pawn-8.hf.space https://tablebase.lichess.ovh https://unpkg.com https://cdnjs.cloudflare.com https://cdn.jsdelivr.net https://fonts.googleapis.com https://fonts.gstatic.com",
+  "style-src 'self' 'unsafe-inline' https://fonts.googleapis.com",
+  "font-src 'self' data: https://fonts.gstatic.com",
+  "img-src 'self' data: blob:",
+  "media-src 'self' data: blob:",
+  "object-src 'none'",
+  "base-uri 'self'",
+  "form-action 'none'",
+].join('; ');
+fs.writeFileSync(path.join(dir, 'out', 'site', 'chess-game-video.html'), site.replace('<meta charset="utf-8">\n', () => `<meta charset="utf-8">\n<meta http-equiv="Content-Security-Policy" content="${CSP}">\n`));
+// the engine, the WebP export's encoder and the MP4 export's muxer, served next to the page, and the link preview's image (a
 // 1653×944 frame from the player)
 fs.copyFileSync(path.join(app, 'og-image.png'), path.join(dir, 'out', 'site', 'og-image.png'));
-for (const f of ['stockfish-19-lite-single.js', 'stockfish-19-lite-single.wasm', 'webp_enc_simd.js', 'webp_enc_simd.wasm']) fs.copyFileSync(path.join(dir, 'vendor', f), path.join(dir, 'out', 'site', f));
+for (const f of VENDOR) fs.copyFileSync(path.join(dir, 'vendor', f), path.join(dir, 'out', 'site', f));
 // Add to Home Screen opens the page without the browser's bars (iPhone Safari has no other way to lose them).
 // The icons are the tab icon above drawn as PNGs; the maskable and Apple ones are full-bleed for the launcher to round.
 const ICONS = path.join(app, 'icons');
@@ -106,7 +126,7 @@ fs.writeFileSync(path.join(dir, 'out', 'site', 'manifest.webmanifest'), JSON.str
 // The service worker (app/sw.js) and what it keeps: the files next to the page, and the CDN files the page names (React
 // and the fonts' stylesheet in shell.html, the export's libraries in export.jsx). Its VERSION changes with any of
 // them, so a deploy that changes one replaces the kept copies; the page itself is fetched afresh on every visit.
-const SW_LOCAL = ['chess-game-video.html', 'manifest.webmanifest', ...fs.readdirSync(ICONS), 'stockfish-19-lite-single.js', 'stockfish-19-lite-single.wasm', 'webp_enc_simd.js', 'webp_enc_simd.wasm'];
+const SW_LOCAL = ['chess-game-video.html', 'manifest.webmanifest', ...fs.readdirSync(ICONS), ...VENDOR];
 const SW_REMOTE = [...new Set([read(path.join(app, 'shell.html')), read(path.join(app, 'export.jsx'))].join('\n')
   .match(/https:\/\/(?:cdnjs\.cloudflare\.com|cdn\.jsdelivr\.net|fonts\.googleapis\.com\/css2)[^'"\s]*/g))].filter((u) => !/\/$/.test(u));
 const swSrc = read(path.join(app, 'sw.js'));

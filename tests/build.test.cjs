@@ -34,9 +34,22 @@ test('every script from a CDN is pinned by an integrity hash', () => {
   const tags = page.match(/<script\b[^>]*\ssrc="https:[^"]*"[^>]*>/g) || [];
   assert.ok(tags.length >= 2);
   for (const tag of tags) assert.match(tag, /\sintegrity="sha384-[\w+/=]+"\s+crossorigin="anonymous"/, tag);
-  const importmap = JSON.parse(page.match(/<script type="importmap">([\s\S]*?)<\/script>/)[1]);
-  for (const url of page.match(/https:\/\/cdn\.jsdelivr\.net\/npm\/[^'"]+\.mjs/g)) assert.match(importmap.integrity[url] || '', /^sha384-/, url);
+  // an import() can't be pinned, so ES modules come from the site
+  assert.doesNotMatch(page, /https:\/\/[^'"\s]+\.mjs/);
   assert.match(page, /\.integrity = EXPORT_LIBS\.html2canvasHash/);
+});
+
+// an injected inline script doesn't run: the policy allows each of the page's own by its hash, and none other
+test('the page has a Content-Security-Policy listing a hash for each inline script', () => {
+  const page = fs.readFileSync(path.join(ROOT, 'out', 'site', 'chess-game-video.html'), 'utf8');
+  const csp = page.match(/<meta http-equiv="Content-Security-Policy" content="([^"]+)">/)[1];
+  assert.ok(page.indexOf(csp) < page.indexOf('<script'), 'the policy comes before any script');
+  const scriptSrc = csp.split('; ').find((d) => d.startsWith('script-src '));
+  assert.doesNotMatch(scriptSrc, /'unsafe-inline'|'unsafe-eval'/);
+  const inline = [...page.matchAll(/<script>([\s\S]*?)<\/script>/g)];
+  assert.ok(inline.length > 10);
+  for (const m of inline) assert.ok(scriptSrc.includes(`'sha256-${require('crypto').createHash('sha256').update(m[1]).digest('base64')}'`));
+  assert.doesNotMatch(page, /<script\b(?![^>]*\ssrc=)[^>]+>/, 'every inline script is a plain <script>, so its hash is listed');
 });
 
 // The Lichess sound sets travel inside the page
@@ -103,8 +116,8 @@ test('the page links a web app manifest, and its icons are written next to it', 
 });
 
 // the site serves the engine and the WebP encoder next to the page, unchanged
-test('the site carries the vendored wasm files as they are', () => {
-  for (const f of ['stockfish-19-lite-single.js', 'stockfish-19-lite-single.wasm', 'webp_enc_simd.js', 'webp_enc_simd.wasm']) {
+test('the site carries the vendored files as they are', () => {
+  for (const f of ['stockfish-19-lite-single.js', 'stockfish-19-lite-single.wasm', 'webp_enc_simd.js', 'webp_enc_simd.wasm', 'mediabunny.min.js']) {
     assert.ok(fs.readFileSync(path.join(ROOT, 'out', 'site', f)).equals(fs.readFileSync(path.join(ROOT, 'vendor', f))), f);
   }
   assert.match(fs.readFileSync(path.join(ROOT, 'app', 'export.jsx'), 'utf8'), /WEBP_LIB = \{ js: 'webp_enc_simd\.js', wasm: 'webp_enc_simd\.wasm' \}/);
@@ -118,7 +131,7 @@ test('the service worker keeps the page, its files and every CDN file the page l
   assert.match(sw, /^const VERSION = '[0-9a-f]{16}';/m);
   assert.equal(LOCAL[0], 'chess-game-video.html');
   for (const f of LOCAL) assert.ok(fs.existsSync(path.join(site, f)), f);
-  for (const f of ['stockfish-19-lite-single.js', 'stockfish-19-lite-single.wasm', 'webp_enc_simd.js', 'webp_enc_simd.wasm', 'manifest.webmanifest']) assert.ok(LOCAL.includes(f), f);
+  for (const f of ['stockfish-19-lite-single.js', 'stockfish-19-lite-single.wasm', 'webp_enc_simd.js', 'webp_enc_simd.wasm', 'mediabunny.min.js', 'manifest.webmanifest']) assert.ok(LOCAL.includes(f), f);
   const cdn = page.match(/https:\/\/(?:cdnjs\.cloudflare\.com|cdn\.jsdelivr\.net)\/[^'"\s]+\.m?js/g);
   for (const u of cdn) assert.ok(REMOTE.includes(u), u);
   assert.ok(REMOTE.some((u) => u.startsWith('https://fonts.googleapis.com/css2?')), 'the fonts');

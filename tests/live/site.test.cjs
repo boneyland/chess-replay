@@ -57,6 +57,8 @@ async function open(browser, viewport, opts) {
     const m = r.request().url().match(/\/(react|react-dom)\/18\.3\.1\/umd\/([\w.-]+)$/);
     return m ? r.fulfill({ path: path.join(cdn, m[1], 'package', 'umd', m[2]), contentType: 'text/javascript' }) : r.continue();
   });
+  // whatever the page's Content-Security-Policy blocks is an error, whether or not the browser logs it
+  await ctx.addInitScript(() => document.addEventListener('securitypolicyviolation', (e) => console.error(`CSP blocked ${e.blockedURI || 'inline'} (${e.effectiveDirective})`)));
   const page = await ctx.newPage();
   const errors = [];
   // where an error came from, so a failure in CI says which file. WebKit reports a reload that cuts off an engine worker

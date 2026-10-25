@@ -1,18 +1,22 @@
 // A static server for out/site that answers the way Render does with render.yaml's settings: `/` rewritten to the
-// page, Cache-Control on every file, nosniff, and the right types. Keep it in step with render.yaml.
+// page, render.yaml's headers on every file (read from it), and the right types. Keep the rewrite in step with it.
 //   node tests/live/serve.cjs [dir] [port]   (defaults: out/site, 8765)
 const http = require('http'), fs = require('fs'), path = require('path');
 
 const PAGE = '/chess-game-video.html';
+// render.yaml's `headers:` entries, all for every path (/*)
+const HEADERS = Object.fromEntries([...fs.readFileSync(path.join(__dirname, '..', '..', 'render.yaml'), 'utf8')
+  .matchAll(/- path: \/\*\n\s+name: (.+)\n\s+value: (.+)/g)].map((m) => [m[1].trim(), m[2].trim()]));
 const TYPES = { '.html': 'text/html; charset=utf-8', '.js': 'text/javascript; charset=utf-8', '.wasm': 'application/wasm', '.webmanifest': 'application/manifest+json', '.png': 'image/png', '.json': 'application/json' };
 
 function serve(dir, port = 0) {
   const root = path.resolve(dir);
   const server = http.createServer((req, res) => {
-    let p = decodeURIComponent(new URL(req.url, 'http://x').pathname);
+    let p;
+    try { p = decodeURIComponent(new URL(req.url, 'http://x').pathname); } catch (e) { res.writeHead(400); return res.end('bad request'); }
     if (p === '/') p = PAGE; // render.yaml's rewrite
     const file = path.join(root, path.normalize(p));
-    const head = { 'Cache-Control': 'public, max-age=0, must-revalidate', 'X-Content-Type-Options': 'nosniff' };
+    const head = { ...HEADERS };
     if (!file.startsWith(root + path.sep) || !fs.existsSync(file) || !fs.statSync(file).isFile()) {
       res.writeHead(404, { ...head, 'Content-Type': 'text/plain' });
       return res.end('not found');
