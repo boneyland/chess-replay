@@ -470,8 +470,8 @@ for (const name of BROWSERS) for (const site of SITES) {
     await t.test('desktop: the free board sets up the starting position and rates both sides\' moves', async () => {
       const nb = await open(browser, { width: 1440, height: 900 });
       const p = nb.page, label = p.locator('.plabel');
-      // a panel's text, found by its title (the title span's own text, before CSS upper-cases it)
-      const panel = (title) => p.evaluate((tt) => { const d = [...document.querySelectorAll('div')].find((e) => e.firstElementChild && e.firstElementChild.firstElementChild && e.firstElementChild.firstElementChild.textContent === tt); return d ? d.innerText : ''; }, title);
+      // a panel's text, found by its title (the title span's own text, before CSS upper-cases it; the upper-casing keeps the header's event row out)
+      const panel = (title) => p.evaluate((tt) => { const d = [...document.querySelectorAll('div')].find((e) => e.firstElementChild && e.firstElementChild.firstElementChild && e.firstElementChild.firstElementChild.textContent === tt && getComputedStyle(e.firstElementChild).textTransform === 'uppercase'); return d ? d.innerText : ''; }, title);
       // the Analysis headline: the move it rates
       const headline = () => p.evaluate(() => { const s = [...document.querySelectorAll('span')].find((e) => getComputedStyle(e).fontSize === '38px' && /^\d+(\.|…) /.test(e.textContent)); return s ? s.textContent : null; });
       const verdict = /your move · .*(stockfish’s choice|cp vs|as good as|can’t run here|stopped)/i;
@@ -757,7 +757,7 @@ for (const name of BROWSERS) for (const site of SITES) {
     await t.test('desktop: the explorer names the opening and plays a book move', async () => {
       const ex = await open(browser, { width: 1440, height: 900 });
       const p = ex.page, label = p.locator('.plabel');
-      const panel = (title) => p.evaluate((tt) => { const d = [...document.querySelectorAll('div')].find((e) => e.firstElementChild && e.firstElementChild.firstElementChild && e.firstElementChild.firstElementChild.textContent === tt); return d ? d.innerText : ''; }, title);
+      const panel = (title) => p.evaluate((tt) => { const d = [...document.querySelectorAll('div')].find((e) => e.firstElementChild && e.firstElementChild.firstElementChild && e.firstElementChild.firstElementChild.textContent === tt && getComputedStyle(e.firstElementChild).textTransform === 'uppercase'); return d ? d.innerText : ''; }, title);
       // a book move's row: its SAN first, then the opening it reaches
       const row = (pg, san) => pg.locator('.book-moves [role="button"]').filter({ hasText: new RegExp('^' + san + '(?![a-z0-9=+#])') });
       const head = p.locator('.book-head');
@@ -883,7 +883,7 @@ for (const name of BROWSERS) for (const site of SITES) {
     await t.test('desktop: Play vs human turns the board, takes back, ends in mate, and asks before leaving a game', async () => {
       const g = await open(browser, { width: 1440, height: 900 });
       const p = g.page, label = p.locator('.plabel');
-      const panel = (title) => p.evaluate((tt) => { const d = [...document.querySelectorAll('div')].find((e) => e.firstElementChild && e.firstElementChild.firstElementChild && e.firstElementChild.firstElementChild.textContent === tt); return d ? d.innerText : ''; }, title);
+      const panel = (title) => p.evaluate((tt) => { const d = [...document.querySelectorAll('div')].find((e) => e.firstElementChild && e.firstElementChild.firstElementChild && e.firstElementChild.firstElementChild.textContent === tt && getComputedStyle(e.firstElementChild).textTransform === 'uppercase'); return d ? d.innerText : ''; }, title);
       const drag = async (b, from, to, flipped) => {
         const f = square(b, from, flipped), tt = square(b, to, flipped);
         await p.mouse.move(f.x, f.y);
@@ -1042,7 +1042,7 @@ for (const name of BROWSERS) for (const site of SITES) {
     await t.test('desktop: Play vs Stockfish replies, keeps the board on the player\'s side, takes back to the player\'s turn', async () => {
       const g = await open(browser, { width: 1440, height: 900 });
       const p = g.page, label = p.locator('.plabel');
-      const panel = (title) => p.evaluate((tt) => { const d = [...document.querySelectorAll('div')].find((e) => e.firstElementChild && e.firstElementChild.firstElementChild && e.firstElementChild.firstElementChild.textContent === tt); return d ? d.innerText : ''; }, title);
+      const panel = (title) => p.evaluate((tt) => { const d = [...document.querySelectorAll('div')].find((e) => e.firstElementChild && e.firstElementChild.firstElementChild && e.firstElementChild.firstElementChild.textContent === tt && getComputedStyle(e.firstElementChild).textTransform === 'uppercase'); return d ? d.innerText : ''; }, title);
       const drag = async (b, from, to, flipped) => {
         const f = square(b, from, flipped), tt = square(b, to, flipped);
         await p.mouse.move(f.x, f.y);
@@ -1123,7 +1123,7 @@ for (const name of BROWSERS) for (const site of SITES) {
     await t.test('desktop: Play vs Stockfish flags a blunder', async () => {
       const g = await open(browser, { width: 1440, height: 900 });
       const p = g.page, label = p.locator('.plabel');
-      const panel = (title) => p.evaluate((tt) => { const d = [...document.querySelectorAll('div')].find((e) => e.firstElementChild && e.firstElementChild.firstElementChild && e.firstElementChild.firstElementChild.textContent === tt); return d ? d.innerText : ''; }, title);
+      const panel = (title) => p.evaluate((tt) => { const d = [...document.querySelectorAll('div')].find((e) => e.firstElementChild && e.firstElementChild.firstElementChild && e.firstElementChild.firstElementChild.textContent === tt && getComputedStyle(e.firstElementChild).textTransform === 'uppercase'); return d ? d.innerText : ''; }, title);
       await p.goto(base, { waitUntil: 'load' });
       await loadedOn(p);
       await p.getByRole('button', { name: 'Play/Explore' }).click();
@@ -1188,7 +1188,7 @@ for (const name of BROWSERS) for (const site of SITES) {
     await t.test('desktop: My games keeps played games, replays a finished one and resumes one in progress', async () => {
       const g = await open(browser, { width: 1440, height: 900 });
       const p = g.page, label = p.locator('.plabel');
-      const panel = (title) => p.evaluate((tt) => { const d = [...document.querySelectorAll('div')].find((e) => e.firstElementChild && e.firstElementChild.firstElementChild && e.firstElementChild.firstElementChild.textContent === tt); return d ? d.innerText : ''; }, title);
+      const panel = (title) => p.evaluate((tt) => { const d = [...document.querySelectorAll('div')].find((e) => e.firstElementChild && e.firstElementChild.firstElementChild && e.firstElementChild.firstElementChild.textContent === tt && getComputedStyle(e.firstElementChild).textTransform === 'uppercase'); return d ? d.innerText : ''; }, title);
       const drag = async (b, from, to, flipped) => {
         const f = square(b, from, flipped), tt = square(b, to, flipped);
         await p.mouse.move(f.x, f.y);

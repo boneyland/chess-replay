@@ -40,10 +40,10 @@ const LAYOUTS = {
   wide: {
     eval: 44, bx: 100, by: 88, bar: { k: 1, gap: 10 }, title: 13,
     // header and Moves/Commentary fit their contents; Analysis (long with Queen's lines) takes the rest down to the graph
-    header: { x: 916, y: 40, w: 964, h: 156, k: 1 },
-    moves: { x: 916, y: 214, w: 330, h: 322, k: 1, rows: 7 },
-    comment: { x: 1266, y: 214, w: 614, h: 322, k: 1, text: 1, gap: 18, right: 1 },
-    analysis: { x: 916, y: 554, w: 964, h: 358, k: 1, right: 1 },
+    header: { x: 916, y: 40, w: 964, h: 174, k: 1 },
+    moves: { x: 916, y: 232, w: 330, h: 322, k: 1, rows: 7 },
+    comment: { x: 1266, y: 232, w: 614, h: 322, k: 1, text: 1, gap: 18, right: 1 },
+    analysis: { x: 916, y: 572, w: 964, h: 340, k: 1, right: 1 },
     plot: { x: 44, y: 930, w: 1836, h: 120, k: 1 },
     card: { k: 1, w: 1700, stack: false },
   },
@@ -52,10 +52,10 @@ const LAYOUTS = {
 // margins, gaps and panel padding, so the frame is 1800×1040 and shows larger. The export draws it at that size.
 const COMPACT = { width: 1800, height: 1040 };
 LAYOUTS.compact = (() => {
-  const m = 20, gap = 14, x = m + 48 + BW + 20, w = COMPACT.width - m - x, py = COMPACT.height - m - 120, my = m + 156 + gap, ay = my + 322 + gap;
+  const m = 20, gap = 14, x = m + 48 + BW + 20, w = COMPACT.width - m - x, py = COMPACT.height - m - 120, my = m + 174 + gap, ay = my + 322 + gap;
   return {
     eval: m, bx: m + 48, by: m + 50, bar: { k: 1, gap: 10 }, title: 13, pad: '12px 16px', frameH: COMPACT.height, edge: m,
-    header: { x, y: m, w, h: 156, k: 1 },
+    header: { x, y: m, w, h: 174, k: 1 },
     moves: { x, y: my, w: 330, h: 322, k: 1, rows: 7 },
     comment: { x: x + 330 + gap, y: my, w: w - 330 - gap, h: 322, k: 1, text: 1, gap: 18, right: 1 },
     analysis: { x, y: ay, w, h: py - gap - ay, k: 1, right: 1 },
@@ -523,12 +523,16 @@ function Header({ M, a }) {
         <span style={{ font: `500 16px ${MONO}`, color: C.dim, paddingTop: 12 }}>vs</span>
         {person(M.black, 'b', 'flex-end')}
       </div>
-      <div style={{ marginTop: 18, paddingTop: 14, borderTop: `1px solid ${C.line}`, display: 'flex', gap: 18, font: `500 ${sm(15)}px ${MONO}`, color: C.dim, alignItems: 'center', whiteSpace: 'nowrap', minWidth: 0 }}>
-        <span style={{ color: C.ink, overflow: 'hidden', textOverflow: 'ellipsis', minWidth: 0, flexShrink: 0.1 }}>{[M.event, M.round && 'Round ' + M.round].filter(Boolean).join(' · ')}</span>
-        <span style={{ overflow: 'hidden', textOverflow: 'ellipsis', minWidth: 0, flexShrink: 0.2 }}>{[M.site, M.date].filter(Boolean).join(' · ')}</span>
-        {M.eco && <span style={{ marginLeft: 'auto', flexShrink: 0, padding: '2px 8px', border: `1px solid ${C.line}`, borderRadius: 4, color: C.ink }}>{M.eco}</span>}
-        {/* on a narrow header the opening gives way first, then the site, then the event */}
-        <span style={{ overflow: 'hidden', textOverflow: 'ellipsis', minWidth: 0, flexShrink: 1000 }}>{M.opening}</span>
+      {/* two rows, so each shows whole: event and round, then place and date on the right; the opening under them */}
+      <div style={{ marginTop: 12, paddingTop: 10, borderTop: `1px solid ${C.line}`, display: 'flex', flexDirection: 'column', gap: 6, font: `500 ${sm(15)}px ${MONO}`, color: C.dim, whiteSpace: 'nowrap', minWidth: 0 }}>
+        <div style={{ display: 'flex', gap: 18, minWidth: 0 }}>
+          <span style={{ ...line, color: C.ink, flexShrink: 0.5 }}>{[M.event, M.round && 'Round ' + M.round].filter(Boolean).join(' · ')}</span>
+          <span style={{ ...line, marginLeft: 'auto' }}>{[M.site, M.date].filter(Boolean).join(' · ')}</span>
+        </div>
+        {(M.eco || M.opening) && <div style={{ display: 'flex', alignItems: 'center', gap: 12, minWidth: 0 }}>
+          {M.eco && <span style={{ flex: 'none', padding: '0 8px', border: `1px solid ${C.line}`, borderRadius: 4, color: C.ink }}>{M.eco}</span>}
+          <span style={line}>{M.opening}</span>
+        </div>}
       </div>
     </Panel>
   );
