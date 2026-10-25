@@ -8,7 +8,7 @@ The one spec for the app: what it does now, what is planned, and the decisions b
 
 - [Principles](#principles)
 - [Built](#built): replay and browser analysis, opening names, custom starts and flip, free board and explorer, edit position, play vs human, My games, play vs Stockfish, full Stockfish download, lines (MultiPV), endgame tablebase (in game analysis too)
-- [Roadmap](#roadmap): Lichess data and multi-threaded Stockfish, player names, Chess960, typed commentary, Maia3, dead positions, background music
+- [Roadmap](#roadmap): Lichess data and multi-threaded Stockfish, player names, Chess960, typed commentary, Maia3, dead positions, chasolver, background music, peer-to-peer online play, app walk-through
 - [Known gaps](#known-gaps)
 - [Decisions log](#decisions-log)
 
@@ -288,6 +288,10 @@ Maia predicts human moves at a chosen rating, unlike Stockfish's best move. Open
 
 Games end by themselves in a dead position (no legal sequence of moves mates either side, FIDE 5.2.2), and a flag fall there is a draw (6.9). Today `PlayCore` proves only too little material (`canMate`) and pawns locked with kings and same-coloured bishops (`lockedDead`); a forced line into a dead position (the only legal move takes the last piece), or locks with knights or rooks, plays on, and the flag rule looks at material only. The fix is a helpmate search on the device (both sides cooperating, bounded in depth and nodes), as Miguel Ambrona's Chess Unwinnability Analyzer (CHA) does; Lichess uses a version of it for timeouts **verify**. The endgame tablebase can't help: its "draw" means drawn with best play (KR v KR is one, yet either side can blunder into mate), the same category as a dead position; a TB win only proves a position isn't dead. Open: the search's limits and cost per move (it runs on every move of a game), whether it also decides flag falls ("can the opponent mate by any legal sequence"), whether replays mark a dead position.
 
+### chasolver (*needs design*)
+
+[chasolver](https://github.com/miguel-ambrona/chasolver) (Miguel Ambrona, MIT, a Rust crate, v3.0.0 of 2026-06-22; site https://chasolver.org) is CHA's successor: given a position and an intended winner it finds a helpmate or proves none exists (`winnability`), and has been run on every timeout of Lichess's standard rated games. The candidate engine for Dead positions: built to WebAssembly and served next to the page like `vendor/`, loaded on a game's first move (or first flag fall), so `PlayCore` asks it rather than growing its own search. Open: its WebAssembly size and speed per move on a phone **verify**; whether it builds for `wasm32` without changes **verify**; whether it replaces `canMate`/`lockedDead` or backs them up when they can't prove a position; what a game shows while it is still loading (offline before it is kept, the flood fills alone).
+
 ### Background music
 
 Music that plays under the page, chosen from a few bundled tracks or the viewer's own file. Added 2026-10-23.
@@ -313,6 +317,14 @@ Open questions:
 2. One track looped, or play the bundled tracks in turn (with shuffle)?
 3. A quick mute in the dock or phone menu, or Settings only?
 4. Should music duck (drop in volume) under move sounds, Queen, or a game's end?
+
+### Peer-to-peer online play (*needs design*)
+
+Play vs human between two devices: one player makes a game and shares a link or code, the other joins, and moves go directly between the browsers (WebRTC data channel), with no game server of ours. Breaks the principle "no online play", so it needs the user's say on changing it. Open: signalling (a WebRTC connection needs an offer/answer exchanged somehow: copy-paste codes or a QR code, which needs no server, or a public signalling or TURN service, which puts a third party in the path and in the CSP); NAT traversal without TURN fails on some networks; who keeps the clock and how a dropped connection, a reload or a dispute (takebacks, draw offers, claims) is settled when neither side is trusted; whether the game lands in both players' My games; offline it is "not available".
+
+### App walk-through (*needs design*)
+
+A short guided tour for a first visit: steps that point at the dock, the transport bar, Analyse, Play/Explore and Settings, each with a sentence and Next/Skip, on desktop and phone layouts. Open: shown once by itself (a flag in localStorage) or only from a menu item ("Take the tour"); whether it uses a demo game (e.g. `media/demo-game.pgn`) so there is something to point at; how it keeps up with the layout (steps keyed to elements, not coordinates); whether separate short tours cover the free board, Edit position and games.
 
 ## Known gaps
 
@@ -391,3 +403,4 @@ Deferred by the per-plan reviews; each was true when recorded and may since have
 - 2026-10-26: on the free board the tablebase takes the opening explorer's place at 7 pieces or fewer (the book has nothing to say there; Lichess does the same), leaving the Analysis panel to Stockfish; the replay keeps it in the Analysis panel, its Commentary box being the game's notes.
 - 2026-10-26, after a repo audit: the page gets a Content-Security-Policy (a `<meta>` with the inline scripts' hashes) and nosniff and Referrer-Policy headers; Mediabunny is served from the site (an `import()` can't be pinned by hash); Sign in with Hugging Face is hidden on PR previews; a picked or dropped file over 50 MB is refused before it's read.
 - 2026-10-26: nothing on the page selects outside text fields (Copy FEN's note shows the FEN in a read-only field), and one page-wide handler (`app/drag-scroll.js`) scrolls any box under a mouse drag, both ways and scaled to the frame, replacing the per-panel hook of the Moves list, explorer, tablebase and game info.
+- 2026-10-26: chasolver, peer-to-peer online play and an app walk-through added to the roadmap.
