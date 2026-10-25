@@ -85,20 +85,21 @@ function shortLayout(W) {
     card: { k: 1, w: 1700, stack: false },
   };
 }
-// Square-ish screen (a desktop window near 1:1, a tablet, an unfolded foldable): 1528 wide, 1400–1720 high. The board
+// Square-ish screen (a desktop window near 1:1, a tablet, an unfolded foldable): 1520 wide, 1400–1720 high. The board
 // with the header (players stacked) and Commentary beside it; the eval graph the full width under the board, then
 // Analysis and Moves side by side, taking the extra height. Tighter margins, gaps and panel padding than the wide frame,
-// and its smallest text (15 px and under) 2 px larger.
-const SQUARE = { width: 1528, minHeight: 1400, maxHeight: 1720 };
+// its smallest text (15 px and under) 2 px larger, and Commentary's notes and the
+// hints under Analysis larger still.
+const SQUARE = { width: 1520, minHeight: 1400, maxHeight: 1720 };
 function squareLayout(H) {
-  const m = 24, gap = 14, hh = 290, cy = m + hh + gap, by = 72, py = by + BW + 10 + 40 + gap, ay = py + 120 + gap, bh = H - ay - m;
+  const m = 20, gap = 14, hh = 290, cy = m + hh + gap, by = 70, py = by + BW + 10 + 40 + gap, ay = py + 120 + gap, bh = H - ay - m;
   return {
-    eval: m, bx: m + 48, by, bar: { k: 1, gap: 10 }, title: 15, small: 2, pad: '12px 16px',
-    header: { x: 860, y: m, w: 644, h: hh, k: 1, stack: true },
-    comment: { x: 860, y: cy, w: 644, h: by + BW + 50 - cy, k: 1, text: 1, gap: 14, right: 1 },
+    eval: m, bx: m + 48, by, bar: { k: 1, gap: 10 }, title: 15, small: 2, hint: 20, pad: '12px 16px',
+    header: { x: 856, y: m, w: 644, h: hh, k: 1, stack: true },
+    comment: { x: 856, y: cy, w: 644, h: by + BW + 50 - cy, k: 1, text: 1, label: 1.25, gap: 14, right: 1 },
     plot: { x: m, y: py, w: 1480, h: 120, k: 1 },
     analysis: { x: m, y: ay, w: 976, h: bh, k: 1, scroll: true, right: 1 },
-    moves: { x: 1014, y: ay, w: 490, h: bh, k: 1, font: 26, num: 68, rows: Math.floor((bh - 53) / 38) },
+    moves: { x: 1010, y: ay, w: 490, h: bh, k: 1, font: 26, num: 68, rows: Math.floor((bh - 53) / 38) },
     card: { k: 1, w: 1440, stack: false },
   };
 }
@@ -687,7 +688,7 @@ function Analysis({ M, T, S, a, vline, onLine, paused, sf, own, onReply, deep, t
   }
   if (c < 0) return (
     <Panel box={box} a={a} title="Analysis" right={right}>
-      {paused && <span style={{ ...NO_SELECT, font: `500 17px ${MONO}`, color: C.dim }}>Press play to watch the game, or drag a piece to try your own move.</span>}
+      {paused && <span style={{ ...NO_SELECT, font: `500 ${L.hint || 17}px ${MONO}`, color: C.dim }}>Press play to watch the game, or drag a piece to try your own move.</span>}
       {sf && !M.hasAnalysis && (sf.run.state === 'running' || paused) && <div style={{ marginTop: 16 }}><EngineEmptyState M={M} sf={sf} paused={paused} compact /></div>}
       {tbEl}
     </Panel>
@@ -745,7 +746,7 @@ function Analysis({ M, T, S, a, vline, onLine, paused, sf, own, onReply, deep, t
           </span>
         )}
         {sf && !M.hasAnalysis && (sf.run.state === 'running' || paused) && <EngineEmptyState M={M} sf={sf} paused={paused} compact />}
-        {!vline && paused && M.hasEval && <FitOrHide style={{ ...NO_SELECT, font: `500 ${sm(15)}px ${MONO}`, color: C.dim }}>Tip: drag a piece on the board to try your own move.</FitOrHide>}
+        {!vline && paused && M.hasEval && <FitOrHide style={{ ...NO_SELECT, font: `500 ${L.hint || 15}px ${MONO}`, color: C.dim }}>Tip: drag a piece on the board to try your own move.</FitOrHide>}
       </div>
     </Panel>
   );

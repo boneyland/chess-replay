@@ -105,7 +105,7 @@ function StartAnalysis({ board, ev, status, onLine }) {
           : line.length > 0
           ? <LineChips name={null} tip="stockfish’s best line" accent={C.best} moves={line.map((m) => m.san)} ply0={board.start.ply0} c={0} legal={line.length} sel={null} onPick={(j) => onLine(line.slice(0, j + 1))} />
           : <span> </span>}
-        <span style={{ ...NO_SELECT, font: `500 15px ${MONO}` }}>Drag a piece to play a move, for either side; Stockfish rates every move.</span>
+        <span style={{ ...NO_SELECT, font: `500 ${L.hint || 15}px ${MONO}` }}>Drag a piece to play a move, for either side; Stockfish rates every move.</span>
       </div>
     </React.Fragment>
   );
