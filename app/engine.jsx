@@ -56,12 +56,12 @@ function Stage({ width, height, portrait, square, short, menu, top, onLayout, du
     // Each frame is judged by the room it would get: the stage less that frame's own transport bar and padding (the
     // portrait and sideways ones are slimmer), as last measured while it showed. Judged by the room the current one
     // leaves, a window at a boundary flips back and forth: the switch itself changes the room.
-    const chrome = { wide: [32, 82], tall: [16, 49], short: [32, 44] };
+    const chrome = { wide: [32, 82], tall: [16, 49], short: [32, 44], square: [16, 61] };
     const measure = () => {
-      const st = el.parentElement, cur = st.classList.contains('stage-tall') ? 'tall' : st.classList.contains('stage-short') ? 'short' : 'wide';
+      const st = el.parentElement, cur = st.classList.contains('stage-tall') ? 'tall' : st.classList.contains('stage-short') ? 'short' : st.classList.contains('stage-square') ? 'square' : 'wide';
       chrome[cur] = [st.clientWidth - el.clientWidth, st.clientHeight - el.clientHeight];
       const room = (k) => [Math.max(1, st.clientWidth - chrome[k][0]), Math.max(1, st.clientHeight - chrome[k][1])];
-      const [w, h] = room('wide'), [tw, th] = room('tall'), [kw, kh] = room('short');
+      const [w, h] = room('wide'), [tw, th] = room('tall'), [kw, kh] = room('short'), [uw, uh] = room('square');
       // The portrait frame takes over when it would show noticeably larger than the landscape one;
       // the 1.1–1.15 band keeps a window at the boundary from flipping back and forth.
       // It is as tall as the area allows (between its min and max height), so it fills a phone screen.
@@ -73,11 +73,11 @@ function Stage({ width, height, portrait, square, short, menu, top, onLayout, du
       // the area allows (between its min and max width); a desktop window keeps the 16:9 video
       const ss = short && (noWide || h < short.maxArea) ? Math.min(kw / short.minWidth, kh / short.height) : 0;
       // A square-ish area big enough not to be a phone gets the square frame when it shows noticeably larger than the
-      // landscape one and at least as large as the portrait one (judged by the room the landscape frame leaves: same bar)
-      const sq = square && (noWide || Math.min(w, h) >= 600) ? Math.min(w / square.width, h / square.minHeight) : 0;
+      // landscape one and at least as large as the portrait one (judged by the room it leaves: the landscape bar, with phone-like padding)
+      const sq = square && (noWide || Math.min(w, h) >= 600) ? Math.min(uw / square.width, uh / square.minHeight) : 0;
       const nextSq = sq > sl * (squareRef.current ? 1.05 : 1.1) && sq > sp * (squareRef.current ? 1 : 1.02) && !(noWide && ss * SQUARE_OVER_SHORT > sq);
       squareRef.current = nextSq;
-      const qh = nextSq ? clamp(Math.floor(h / sq), square.minHeight, square.maxHeight) : 0;
+      const qh = nextSq ? clamp(Math.floor(uh / sq), square.minHeight, square.maxHeight) : 0;
       const next = !nextSq && sp > sl * (tallRef.current ? 1.1 : 1.15) && !(noWide && ss > sp);
       tallRef.current = next;
       const ph = next ? clamp(Math.floor(th / sp), portrait.minHeight, portrait.maxHeight) : 0;
@@ -89,7 +89,7 @@ function Stage({ width, height, portrait, square, short, menu, top, onLayout, du
       const narrow = !next && st.clientWidth < 900;
       setFrame((f) => (f.tall === next && !!f.square === nextSq && !!f.short === nextShort && !!f.narrow === narrow && (f.height || 0) === (ph || qh) && (f.width || 0) === sw ? f
         : next ? { tall: true, height: ph } : nextSq ? { tall: false, square: true, narrow, height: qh } : nextShort ? { tall: false, short: true, narrow, width: sw } : { tall: false, narrow }));
-      setScale(Math.max(0.05, next ? sp : nextSq ? Math.min(w / square.width, h / qh) : nextShort ? Math.min(kw / sw, kh / short.height) : sl));
+      setScale(Math.max(0.05, next ? sp : nextSq ? Math.min(uw / square.width, uh / qh) : nextShort ? Math.min(kw / sw, kh / short.height) : sl));
     };
     measure();
     const ro = new ResizeObserver(measure);
@@ -157,7 +157,7 @@ function Stage({ width, height, portrait, square, short, menu, top, onLayout, du
   const ctx = React.useMemo(() => ({ time, duration, playing, setTime, setPlaying, setStart }), [time, duration, playing]);
 
   return (
-    <div className={'stage' + (tall ? ' stage-tall' : frame.short ? ' stage-short' : '')}>
+    <div className={'stage' + (tall ? ' stage-tall' : frame.short ? ' stage-short' : frame.square ? ' stage-square' : '')}>
       {top}
       <div ref={areaRef} className="stage-area">
         <div className="stage-frame" style={{ width: fw * scale, height: fh * scale }}>
