@@ -157,6 +157,13 @@ body:has(.stage-tall) .twk-panel { bottom: calc(51px + env(safe-area-inset-botto
   width: max-content; padding: 8px; border-radius: 10px; background: var(--panel-glass); border: 1px solid var(--line); box-shadow: 0 12px 32px var(--shadow);
 }
 .dock-pop .dock-btn { text-align: left; }
+/* a short screen (901×376): Explore and Play side by side, anchored to the button's right edge so the wider menu stays on
+   screen; never past the top of the screen, what doesn't fit scrolls */
+.dock-pop { max-height: calc(100dvh - 64px); overflow-y: auto; }
+@media (max-height: 480px) {
+  .dock-pop { flex-direction: row; align-items: flex-start; left: auto; right: 0; }
+  .dock-pop .dock-group { display: flex; flex-direction: column; gap: 6px; }
+}
 .dock-menu-label { padding: 6px 4px 0; font: 600 10px var(--mono); letter-spacing: 0.14em; text-transform: uppercase; color: var(--accent); }
 /* Paste FEN: a centred box over a scrim, which also keeps taps off the board */
 .fen-scrim { position: fixed; inset: 0; z-index: 85; display: grid; place-items: center; padding: 16px; background: var(--scrim); }
