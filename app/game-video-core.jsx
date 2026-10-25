@@ -38,7 +38,8 @@ const SQ = 96, BW = SQ * 8;
 // k magnifies a box's contents, so text designed for the wide frame stays readable on a small screen.
 const LAYOUTS = {
   wide: {
-    eval: 44, bx: 100, by: 88, bar: { k: 1, gap: 10 }, title: 13,
+    // the smallest text (15 px and under) 2 px larger, as in the square frame
+    eval: 44, bx: 100, by: 88, bar: { k: 1, gap: 10 }, title: 15, small: 2, hint: 17,
     // header and Moves/Commentary fit their contents; Analysis (long with Queen's lines) takes the rest down to the graph
     header: { x: 916, y: 40, w: 964, h: 174, k: 1 },
     moves: { x: 916, y: 232, w: 330, h: 322, k: 1, rows: 7 },
@@ -119,7 +120,7 @@ function squareLayout(H) {
   };
 }
 let L = LAYOUTS.wide, BX = L.bx, BY = L.by, tallH = 0, shortW = 0, squareH = 0;
-// a font size of 15 px or under, raised by the layout's small (the square frame's)
+// a font size of 15 px or under, raised by the layout's small (the wide and square frames')
 const sm = (px) => px + (L.small || 0);
 const setLayout = (frame) => {
   if (frame.tall && frame.height !== tallH) { tallH = frame.height; LAYOUTS.tall = tallLayout(tallH); }
