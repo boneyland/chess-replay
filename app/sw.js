@@ -62,6 +62,7 @@ async function page(req) {
     if (r.ok && r.type === 'basic') cache.put(PAGE, r.clone());
     return r;
   });
+  net.catch(() => {}); // when the copy has answered, a later failure has no one to tell
   const slow = new Promise((ok) => setTimeout(ok, PAGE_TIMEOUT_MS));
   try {
     const r = await Promise.race([net, slow.then(() => null)]);
