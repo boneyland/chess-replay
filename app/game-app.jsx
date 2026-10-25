@@ -458,17 +458,17 @@ function GameApp() {
         </div>
       )}
       {!board && <button ref={queenBtn} type="button" className="dock-btn dock-queen" aria-expanded={queenOpen} onClick={() => { setMenu(false); askQueen(); }}>Ask Queen</button>}
-      {/* below 1200 px wide these two show only their icons (shell.html), so the seek bar keeps some width */}
+      {/* Settings and Full screen are icons in every layout, side by side at the foot of the phone's menu */}
+      <div className="dock-icons">
       <button type="button" className="dock-btn dock-iconic" aria-label="Settings" title="Settings" aria-expanded={panel} onClick={() => { setMenu(false); setPanel((p) => !p); setQueenOpen(false); }}>
         <svg className="dock-icon" width="16" height="16" viewBox="0 0 16 16" aria-hidden="true"><path fill="currentColor" fillRule="evenodd" d={GEAR} /></svg>
-        <span className="dock-label">Settings</span>
       </button>
       {fullscreen.ok && <button type="button" className="dock-btn dock-iconic" aria-label={fsLabel} title={fsLabel} onClick={() => { setMenu(false); fullscreen.toggle(); }}>
         <svg className="dock-icon" width="16" height="16" viewBox="0 0 16 16" fill="none" aria-hidden="true">
           <path d={fullscreen.on ? 'M6 2v4H2M10 2v4h4M14 10h-4v4M2 10h4v4' : 'M2 6V2h4M10 2h4v4M14 10v4h-4M6 14H2v-4'} stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" />
         </svg>
-        <span className="dock-label">{fsLabel}</span>
       </button>}
+      </div>
     </div>
   );
   const menuEl = (
