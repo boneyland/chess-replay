@@ -1,7 +1,7 @@
 // ---------- the endgame tablebase (Settings › Online data) ----------
 // Lichess's Syzygy tables for positions of 7 pieces or fewer: the result with best play, its distances and every move
-// ranked by result. Shown in the Analysis panel and the eval bar while the replay is paused and on the free board,
-// never during a game; the stored analysis is left alone.
+// ranked by result. Shown in the eval bar, in the replay's Analysis panel while it is paused and in the free board's
+// Commentary box (in place of the opening explorer), never during a game; the stored analysis is left alone.
 const TB = window.LichessCore ? window.LichessCore.create() : null;
 const TB_DEBOUNCE_MS = 300; // after the last position change (stepping through moves sends nothing for the ones passed)
 
@@ -68,5 +68,63 @@ function TablebaseBlock({ t, onPlay }) {
         </div>
       ))}
     </div>
+  );
+}
+
+// The Commentary box on the free board at 7 pieces or fewer, in place of the opening explorer (as on Lichess): the
+// verdict, then every move by result, best first, one row each with its distances; a row plays its move as a drag
+// would. t: useTablebase's answer
+function TablebaseExplorer({ t, posKey, onPlay }) {
+  const LC = window.LichessCore, z = L.comment.label || 1;
+  const heading = (txt, dim) => <span className="tb-head" style={{ display: 'block', font: `400 ${Math.round(40 * Math.max(1, L.comment.text))}px/1.14 ${SERIF}`, color: dim ? C.dim : C.ink, textWrap: 'pretty' }}>{txt}</span>;
+  const note = (txt) => <span style={{ display: 'block', marginTop: 8, font: `500 ${Math.round(15 * z)}px ${MONO}`, color: C.dim }}>{txt}</span>;
+  const play = (e, uci) => { e.preventDefault(); e.stopPropagation(); onPlay(uci); };
+  // each position's list starts at its top, as the explorer's does
+  const top = React.useRef(null);
+  React.useLayoutEffect(() => { const box = top.current && top.current.parentElement; if (box) box.scrollTop = 0; }, [posKey]);
+  const drag = useDragScroll(() => top.current && top.current.parentElement);
+  let body, right = null;
+  if (t.state === 'loading') body = heading('Looking up…', true);
+  else if (t.state === 'none') body = <React.Fragment>{heading('Not available', true)}{note('Lichess can’t be reached: offline, or busy for a minute.')}</React.Fragment>;
+  else {
+    const tb = t.tb, white = t.turn === 'w';
+    // distances where a side is winning (a cursed win too: its DTZ says how far past the fifty moves the win lies)
+    const decided = !tb.checkmate && (['win', 'loss'].includes(LC.outcome(tb.category)) || tb.category === 'cursed-win' || tb.category === 'blessed-loss');
+    right = decided ? [tb.dtz != null && `DTZ ${Math.abs(tb.dtz)}`, tb.dtm ? `DTM ${Math.abs(tb.dtm)}` : null].filter(Boolean).join(' · ') : null;
+    // a long verdict ("Cursed win for White · drawn by the 50-move rule") is a heading and a note
+    const [say, ...why] = LC.verdict(tb, t.turn).split(' · ');
+    // what a move's row says after its SAN: the result's finer kind where it has one, then its distances
+    const KIND = { 'cursed-win': 'cursed win', 'blessed-loss': 'blessed loss', 'maybe-win': 'win, or the 50-move rule draws', 'maybe-loss': 'loss, or the 50-move rule draws' };
+    const detail = (m) => /#$/.test(m.san) ? 'checkmate' : [KIND[m.mine], m.zeroing && 'resets the 50 moves', tbDist(m)].filter(Boolean).join(' · ');
+    body = (
+      <React.Fragment>
+        {heading(say)}
+        {why.length > 0 && note(why.join(' · '))}
+        {LC.groups(tb).map((g) => (
+          <div key={g.outcome} className="tb-group" style={{ marginTop: 14 * z }}>
+            <span style={{ ...NO_SELECT, display: 'block', marginBottom: 4 * z, font: `600 ${Math.round(14 * z)}px ${MONO}`, letterSpacing: '0.08em', textTransform: 'uppercase', color: tbColor(g.outcome) }}>{TB_GROUP[g.outcome]}</span>
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 2 * z }}>
+              {g.moves.map((m) => {
+                const tip = `Play ${m.san}: ${LC.verdict({ category: m.mine, moves: [] }, t.turn)}${tbDist(m) ? ' · ' + tbDist(m) : ''}`;
+                return (
+                  <div key={m.uci} className="mv tb-move" role="button" tabIndex={0} title={tip} aria-label={tip} onClick={(e) => play(e, m.uci)}
+                    onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') play(e, m.uci); }}
+                    style={{ display: 'flex', alignItems: 'center', gap: 14 * z, minWidth: 0, padding: `${3 * z}px 6px`, borderRadius: 4, cursor: 'pointer' }}>
+                    <span style={{ flex: 'none', minWidth: 58 * z, boxSizing: 'border-box', textAlign: 'center', padding: `${2 * z}px ${8 * z}px`, borderRadius: 4, font: `600 ${Math.round(17 * z)}px ${MONO}`, background: white ? '#f1ebe1' : '#2a2320', color: white ? '#15100d' : '#efe8de', border: `1px solid ${g.outcome === 'win' || g.outcome === 'loss' ? tbColor(g.outcome) : white ? 'rgba(60,40,20,0.22)' : 'rgba(255,236,214,0.22)'}` }}>{m.san}</span>
+                    <span style={{ minWidth: 0, font: `400 ${Math.round(17 * z)}px ${SANS}`, color: C.dim, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{detail(m)}</span>
+                  </div>
+                );
+              })}
+            </div>
+          </div>
+        ))}
+        {!tb.moves.length && note('No moves from here.')}
+      </React.Fragment>
+    );
+  }
+  return (
+    <Panel box={{ ...L.comment, scroll: true }} a={1} title="Endgame tablebase" right={right}>
+      <div ref={top} {...drag}>{body}</div>
+    </Panel>
   );
 }
