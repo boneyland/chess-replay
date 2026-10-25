@@ -125,6 +125,9 @@ function useGameAnalysis(M, files, getFiles, commit, engine, settings, tbOn) {
   const ucisKey = M.plies.map((p) => p.uci).join(' ');
   const setKeyRef = React.useRef(setKey);
   setKeyRef.current = setKey;
+  // the setting as it is now: turned off during a run, the run asks the tablebase no more
+  const tbRef = React.useRef(tb);
+  tbRef.current = tb;
   // moves already analysed by a run that stopped
   const [resumeAt, setResumeAt] = React.useState(0);
   React.useEffect(() => { setResumeAt(Math.max(0, readSfPartial(M.plies.map((p) => p.uci), settings, M.start.fen, tb).length - 1)); }, [ucisKey, setKey, M.start.fen]);
@@ -140,7 +143,7 @@ function useGameAnalysis(M, files, getFiles, commit, engine, settings, tbOn) {
     const ucis = M.plies.map((p) => p.uci), sans = M.plies.map((p) => p.san), N = ucis.length;
     const S = settings, T = tb, earlier = readSfPartial(ucis, S, M.start.fen, T), d0 = Math.max(0, earlier.length - 1), prior = perPos;
     // the run's own pace: positions timed from when the engine is ready (its start-up isn't a position's cost)
-    const timed = { n: 0, sec: 0, last: 0, searched: earlier.length };
+    const timed = { n: 0, sec: 0, last: 0 };
     // { sec, at }: the latest estimate and when it was made; a timer counts it down in between
     me.eta = { sec: secondsFrom(earlier.length, prior), at: Date.now() };
     setSt({ state: 'running', done: d0, total: N, etaSec: Math.round(me.eta.sec), err: '' });
@@ -148,14 +151,14 @@ function useGameAnalysis(M, files, getFiles, commit, engine, settings, tbOn) {
       const eng = await engine.get();
       timed.last = Date.now();
       const json = await window.AnalysisCore.runAnalysis({
-        engine: eng, ucis, sans, headers: M.headers, signal: me.signal, earlier, settings: S, startFen: M.start.fen, tablebase: T ? TB : null,
-        onSearched: (R) => {
+        engine: eng, ucis, sans, headers: M.headers, signal: me.signal, earlier, settings: S, startFen: M.start.fen, tablebase: T ? TB : null, tablebaseOn: () => tbRef.current,
+        onSearched: (R, { searches = 0, tbMs = 0 } = {}) => {
           writeSfPartial(ucis, S, R, M.start.fen, T);
           if (JSON.stringify(S) + (T ? ' tablebase' : '') === setKeyRef.current) setResumeAt(Math.max(0, R.length - 1));
           const now = Date.now();
-          // the tablebase's answers say nothing of this device's pace
-          if (!R[R.length - 1].tb) { timed.sec += (now - timed.last) / 1000; timed.n += R.length - timed.searched; }
-          timed.searched = R.length; timed.last = now;
+          // the searches' time only: the tablebase's (its requests and the waits between them) says nothing of this device's pace
+          if (searches) { timed.sec += Math.max(0, now - timed.last - tbMs) / 1000; timed.n += searches; }
+          timed.last = now;
           me.eta = { sec: secondsFrom(R.length, A.blendPace(prior, timed.sec, timed.n)), at: now };
         },
         onProgress: (d, n) => { if (run.current === me && d > d0 && me.eta) setSt((s) => ({ ...s, done: d, total: n, etaSec: Math.round(me.eta.sec) })); },
