@@ -389,7 +389,7 @@ function QueenPanel({ M, Q, hf, probe, onClose, onOverlay, onSave, left }) {
         )}
         {selR && <QueenResult M={M} at={sel} r={selR} after={selAfter} afterState={selAfterState} onScoreAfter={() => scoreAfter(sel)} />}
 
-        <div className="twk-sect">Marked moves</div>
+        <div className="twk-sect q-sect">Marked moves</div>
         {marked.length === 0 ? <div className="twk-note">This game has no inaccuracies or worse, so there’s nothing to test.</div> : (
           <React.Fragment>
             <div className="twk-note">
