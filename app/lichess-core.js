@@ -1,5 +1,6 @@
 // Lichess's public data (window.LichessCore): URLs, parsers, and a client that caches answers, sends one request at a
-// time per endpoint and backs off for a minute after an HTTP 429, as Lichess asks. Only the endgame tablebase so far.
+// time per endpoint and backs off for a minute after an HTTP 429, as Lichess asks. Only the endgame tablebase so far
+// (its answer for a position, and the DTZ mainline from it for a game's analysis).
 // No React here: the page's hooks (tablebase.jsx) debounce position changes and draw the answers.
 (function () {
   const TB_URL = 'https://tablebase.lichess.ovh/standard';
@@ -19,6 +20,7 @@
   // the cache's key: the FEN without the move number, which doesn't change the answer (the fifty-move count does)
   const tbKey = (fen) => String(fen).trim().split(/\s+/).slice(0, 5).join(' ');
   const tablebaseUrl = (fen) => TB_URL + '?fen=' + encodeURIComponent(fen);
+  const mainlineUrl = (fen) => TB_URL + '/mainline?fen=' + encodeURIComponent(fen);
 
   // The answer for the side to move: { category, dtz, dtm, checkmate, stalemate, insufficient, moves }, each move
   // { uci, san, category, dtz, dtm, zeroing } as the API gives it (best first, its category from the opponent's side)
@@ -30,6 +32,12 @@
       moves: j.moves.filter((m) => m && typeof m.uci === 'string' && typeof m.san === 'string')
         .map((m) => ({ uci: m.uci, san: m.san, category: String(m.category), dtz: num(m.dtz), dtm: num(m.dtm), zeroing: !!m.zeroing })),
     };
+  }
+
+  // The DTZ mainline (both sides' best moves, to mate or past the last capture): its moves' ucis, empty for a draw
+  function parseMainline(j) {
+    if (!j || typeof j !== 'object' || !Array.isArray(j.mainline)) throw new Error('Not a tablebase mainline');
+    return j.mainline.filter((m) => m && typeof m.uci === 'string').map((m) => m.uci);
   }
 
   // a category seen from the other side (a move's category is the opponent's after it)
@@ -66,6 +74,14 @@
     const white = (o === 'win') === (turn === 'w'), n = t.dtm != null && t.dtm !== 0 ? Math.ceil(Math.abs(t.dtm) / 2) : null;
     const cp = (white ? 1 : -1) * (10000 - 10 * (n || 1));
     return { cp, txt: n ? `TB ${white ? '' : '−'}M${n}` : `TB ${white ? '1-0' : '0-1'}` };
+  }
+  // A game analysis's eval for a certain answer, from White's point of view (as the eval bar's, a checkmate as
+  // ±10000 and a stalemate as 0, as Stockfish scores them), or null where the answer isn't certain
+  function evalCp(t, turn) {
+    if (t.checkmate) return turn === 'w' ? -10000 : 10000;
+    if (t.stalemate || t.insufficient) return 0;
+    const b = bar(t, turn);
+    return b ? b.cp : null;
   }
   // The moves grouped by what they get the side to move, best first: [{ outcome, moves }] (win, draw, loss, then
   // the uncertain ones as 'unknown'), empty groups left out
@@ -110,9 +126,11 @@
       tablebase: (fen, { signal } = {}) => (pieceCount(fen) > TB_MAX_PIECES ? Promise.resolve(null) : get('tablebase', tbKey(fen), tablebaseUrl(fen), parseTablebase, signal)),
       // the cached answer, or undefined (so a position seen before shows at once, without the debounce)
       tablebaseCached: (fen) => cache.get(tbKey(fen)),
+      // the moves of the DTZ mainline (parseMainline), or null as tablebase gives it; through the same gate
+      mainline: (fen, { signal } = {}) => (pieceCount(fen) > TB_MAX_PIECES ? Promise.resolve(null) : get('tablebase', 'mainline ' + tbKey(fen), mainlineUrl(fen), parseMainline, signal)),
       backedOff: (name) => now() < gate(name).until,
     };
   }
 
-  window.LichessCore = { TB_URL, TB_MAX_PIECES, BACKOFF_MS, pieceCount, fenOf, tbKey, tablebaseUrl, parseTablebase, flip, outcome, verdict, bar, groups, create };
+  window.LichessCore = { TB_URL, TB_MAX_PIECES, BACKOFF_MS, pieceCount, fenOf, tbKey, tablebaseUrl, mainlineUrl, parseTablebase, parseMainline, flip, outcome, verdict, bar, evalCp, groups, create };
 })();
