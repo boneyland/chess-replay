@@ -935,8 +935,8 @@ for (const name of BROWSERS) for (const site of SITES) {
       assert.deepEqual(ph.errors, []);
       await ph.ctx.close();
     });
-    // the endgame tablebase (Lichess, the real service): at 7 pieces or fewer the Analysis panel and the eval bar show its
-    // result, a move from it plays on the board; more pieces, or the setting off, and nothing is sent
+    // the endgame tablebase (Lichess, the real service): at 7 pieces or fewer it takes the opening explorer's place and the
+    // eval bar shows its result, a move from it plays on the board; more pieces, or the setting off, and nothing is sent
     await t.test('desktop: the tablebase rates an endgame on the free board, and sends nothing above 7 pieces or when off', async () => {
       const tb = await open(browser, { width: 1440, height: 900 });
       const p = tb.page, sent = [];
@@ -949,28 +949,35 @@ for (const name of BROWSERS) for (const site of SITES) {
       await p.waitForTimeout(1000);
       assert.deepEqual(sent, []);
       await setUp('8/8/8/4k3/8/8/3KB3/7N w - - 0 1');
-      await p.waitForFunction(() => /Tablebase\s+White wins · DTZ 55 · DTM 55/i.test(document.body.innerText), null, { timeout: 20000 });
+      await p.waitForFunction(() => /Endgame tablebase\s+DTZ 55 · DTM 55\s+White wins/i.test(document.body.innerText), null, { timeout: 20000 });
       assert.match(await text(), /TB M28/, 'the eval bar shows the mate');
+      assert.doesNotMatch(await text(), /Opening explorer/, 'in place of the explorer');
+      // every move a button, side by side in rows, with no distances written beside them
+      assert.equal(await p.locator('.tb-move').count() > 10, true, 'every move listed');
+      const [m0, m1] = await Promise.all([0, 1].map((i) => p.locator('.tb-move').nth(i).boundingBox()));
+      assert.ok(Math.abs(m0.y - m1.y) < 2 && m1.x > m0.x, 'the moves wrap in rows');
+      assert.doesNotMatch(await p.locator('.tb-group').first().innerText(), /DTZ|DTM/);
       assert.deepEqual(sent, ['8/8/8/4k3/8/8/3KB3/7N w - - 0 1']);
       await p.screenshot({ path: path.join(OUT, host + '-tablebase.png') });
       // a move from the tablebase plays on the board, and Black's answer is a loss
-      await p.locator('.tb-move', { hasText: /^Ke3$/ }).click();
+      await p.locator('.tb-move', { hasText: /^Ke3(?![a-z0-9=+#])/ }).click();
       await assert.doesNotReject(p.locator('.plabel').filter({ hasText: /1\. Ke3/ }).waitFor({ timeout: 5000 }));
-      await p.waitForFunction(() => /Tablebase\s+White wins · DTZ 54/i.test(document.body.innerText), null, { timeout: 20000 });
+      await p.waitForFunction(() => /Endgame tablebase\s+DTZ 54/i.test(document.body.innerText), null, { timeout: 20000 });
       // back to the start: from the cache, nothing sent again
       await p.keyboard.press('ArrowLeft');
       await p.waitForFunction(() => /DTZ 55/.test(document.body.innerText), null, { timeout: 5000 });
       assert.equal(sent.length, 2);
       // the fifty-move count goes with the FEN: with 60 plies gone the same win is a cursed one
       await setUp('8/8/8/4k3/8/8/3KB3/7N w - - 60 80');
-      await p.waitForFunction(() => /Tablebase\s+Cursed win for White/i.test(document.body.innerText), null, { timeout: 20000 });
+      await p.waitForFunction(() => /Endgame tablebase[\s\S]*Cursed win for White\s+drawn by the 50-move rule/i.test(document.body.innerText), null, { timeout: 20000 });
       assert.match(await text(), /TB 0\.00/);
       assert.equal(sent.length, 3);
       assert.equal(sent[2], '8/8/8/4k3/8/8/3KB3/7N w - - 60 80');
-      // 8 pieces: no Tablebase block, nothing sent
+      // 8 pieces: the opening explorer again, nothing sent
       await setUp('8/8/8/3k4/pppp4/8/8/1N1NK3 w - - 0 1');
       await p.waitForTimeout(1500);
       assert.doesNotMatch(await text(), /Tablebase/);
+      assert.match(await text(), /Opening explorer/i);
       assert.equal(sent.length, 3);
       // the setting off: a 5-piece position sends nothing
       await p.getByRole('button', { name: 'Settings' }).click();

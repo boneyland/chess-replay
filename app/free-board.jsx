@@ -379,12 +379,13 @@ function FreeBoard({ board, onChange, tw, sf, nav, orient, book }) {
   const posBefore = upto > 0 ? steps[upto - 1].pos : board.start.pos;
   const bm = upto >= 0 && ev.before && ev.before.best ? window.ChessCore.applyUci(posBefore, ev.before.best) : null;
   const own = { ...ev, bestSan: bm ? bm.san : null };
-  // a book move from the explorer goes the way of a drag
+  // a book move from the explorer, or a tablebase move in its place, goes the way of a drag
   const onBook = (uci) => { const step = window.ChessCore.stepFromUci(pos, uci); if (step) onChange(B.play(board, step)); };
   const onReply = (replies) => { let b = board; for (const s of replies) b = B.play(b, s); onChange(b); };
   const down = sf.status === 'unavailable' || sf.status === 'stopped';
   const cp = ev.after && ev.after.cp != null ? ev.after.cp : null;
-  // the endgame tablebase for the position on the board (never in a game): its result replaces the eval in the bar
+  // the endgame tablebase for the position on the board (never in a game): it takes the explorer's place, and its
+  // result replaces the eval in the bar
   const boardFen = () => window.ChessCore.fenAfter(board.fen, steps.slice(0, upto + 1).map((s) => s.san), pos);
   const tb = useTablebase(G ? null : boardFen(), tw.tablebase !== false), tbv = tbBar(tb);
   // the running clock: redrawn ten times a second, and the game ends when it reaches zero
@@ -461,17 +462,15 @@ function FreeBoard({ board, onChange, tw, sf, nav, orient, book }) {
       </div>
       {L.header && <Header M={HM} a={1} />}
       <MoveList M={MV} T={upto + 0.999} S={S} a={1} paused onPick={live ? () => {} : go} />
-      {G ? <GameInfo board={board} /> : <OpeningExplorer board={board} book={book} onPlay={onBook} />}
-      <Panel box={tb ? { ...L.analysis, scroll: true } : L.analysis} a={1} style={G && NO_SELECT} title={G ? 'Game' : 'Analysis'} right={G || down ? null : searchStats(sf.game.name, ev.after)} extra={!G && <DeeperButton ev={ev} />}>
+      {G ? <GameInfo board={board} /> : tb ? <TablebaseExplorer t={tb} posKey={boardKey} onPlay={onBook} /> : <OpeningExplorer board={board} book={book} onPlay={onBook} />}
+      <Panel box={L.analysis} a={1} style={G && NO_SELECT} title={G ? 'Game' : 'Analysis'} right={G || down ? null : searchStats(sf.game.name, ev.after)} extra={!G && <DeeperButton ev={ev} />}>
         {G ? <GameStatus board={board} onChange={onChange} down={opponent.down} />
           : upto < 0
           ? <React.Fragment>
             <StartAnalysis board={board} ev={ev} status={sf.status} onLine={onReply} />
-            {tb && <div style={{ marginTop: 12, paddingTop: 12, borderTop: `1px solid ${C.line}` }}><TablebaseBlock t={tb} onPlay={onBook} /></div>}
           </React.Fragment>
           : <React.Fragment>
             <OwnMoveAnalysis M={MV} vline={{ at: 0, moves: steps, upto, src: 'you' }} own={own} status={sf.status} onReply={onReply} />
-            {tb && <div style={{ marginTop: 12, paddingTop: 12, borderTop: `1px solid ${C.line}` }}><TablebaseBlock t={tb} onPlay={onBook} /></div>}
             <FitOrHide style={{ ...NO_SELECT, display: 'block', marginTop: 8, font: `500 15px ${MONO}`, color: C.dim }}>← → step · <KeyCap>Home</KeyCap> the start · <KeyCap>End</KeyCap> the last move</FitOrHide>
           </React.Fragment>}
       </Panel>
