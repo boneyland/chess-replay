@@ -128,6 +128,23 @@ function boardLayout(base) {
   return BOARD_LAYOUTS.get(base);
 }
 
+// A game draws no eval bar, so its board takes the bar's room: centred on the portrait frame; on the wide frame grown
+// (zoom) to fill the height, 40 px from the top and bottom edges with its player bars, the panels moved right to make room.
+const GAME_LAYOUTS = new WeakMap();
+function gameLayout(base) {
+  if (!GAME_LAYOUTS.has(base)) {
+    if (base === LAYOUTS.tall) GAME_LAYOUTS.set(base, { ...base, bx: (PORTRAIT.width - BW) / 2 });
+    else if (base !== boardLayout(LAYOUTS.wide)) GAME_LAYOUTS.set(base, base);
+    else {
+      const bar = base.bar.gap + 40 * base.bar.k, zoom = (1080 - 80) / (BW + 2 * bar), bx = base.eval, by = 40 + zoom * bar;
+      const dx = bx + zoom * BW + 36 - base.header.x, right = base.header.x + base.header.w;
+      const move = (b) => ({ ...b, x: b.x + dx, w: b.x + b.w >= right ? b.w - dx : b.w });
+      GAME_LAYOUTS.set(base, { ...base, bx, by, zoom, header: move(base.header), moves: move(base.moves), comment: move(base.comment), analysis: move(base.analysis) });
+    }
+  }
+  return GAME_LAYOUTS.get(base);
+}
+
 // ---------- a game at the board (Play vs human, Play vs Stockfish) ----------
 // the side to move in a game: after its last move (a game always shows its last move while it goes on)
 const gameTurn = (board) => (board.steps.length ? board.steps[board.steps.length - 1].pos : board.start.pos).turn;
@@ -342,6 +359,7 @@ function GameStatus({ board, onChange, down }) {
 function FreeBoard({ board, onChange, tw, sf, nav, orient, book }) {
   setLayout(useFrame()); // before the children render, which read the layout
   L = boardLayout(L);
+  if (board.game) { L = gameLayout(L); BX = L.bx; BY = L.by; }
   const B = window.BoardCore, P = window.PlayCore, pos = B.pos(board), { steps, upto } = board, last = steps.length - 1;
   // a game: no eval, no hints; vs human the board turned to the side to move in the game's last position, against
   // Stockfish drawn from the player's side, which Stockfish's moves never change (nor Flip)
@@ -434,10 +452,13 @@ function FreeBoard({ board, onChange, tw, sf, nav, orient, book }) {
   return (
     <div style={{ position: 'absolute', inset: 0, background: C.bg, overflow: 'hidden' }}>
       {!G && (tbv ? <EvalBarView cp={tbv.cp} txt={tbv.txt} a={1} /> : <EvalBarView cp={cp == null ? 0 : cp} txt={cp == null ? (down ? '' : '…') : fmtSf(cp)} a={1} />)}
-      <FreeBar pos={pos} side="b" a={1} clock={clockOf('b')} name={G ? playerName(G, 'b') : null} />
-      <LineBoard a={1} sq={boardSquares()} v={{ upto, moves: steps, base: board.start.pos, src: 'you' }} hide={input.drag && input.drag.moved ? input.drag.from : null} arrows={!G && tw.bestArrows !== false ? lineArrows(ev.after) : null} />
-      <BoardTouch pos={pos} sel={input.sel} targets={input.targets} drag={input.drag} promo={input.promo} {...(still ? NO_INPUT : input.handlers)} />
-      <FreeBar pos={pos} side="w" a={1} clock={clockOf('w')} name={G ? playerName(G, 'w') : null} />
+      {/* zero-sized, so the zoom grows the board and its bars from the board's top-left corner without covering the panels */}
+      <div style={{ position: 'absolute', left: 0, top: 0, width: 0, height: 0, transform: L.zoom ? `scale(${L.zoom})` : null, transformOrigin: `${BX}px ${BY}px` }}>
+        <FreeBar pos={pos} side="b" a={1} clock={clockOf('b')} name={G ? playerName(G, 'b') : null} />
+        <LineBoard a={1} sq={boardSquares()} v={{ upto, moves: steps, base: board.start.pos, src: 'you' }} hide={input.drag && input.drag.moved ? input.drag.from : null} arrows={!G && tw.bestArrows !== false ? lineArrows(ev.after) : null} />
+        <BoardTouch pos={pos} sel={input.sel} targets={input.targets} drag={input.drag} promo={input.promo} {...(still ? NO_INPUT : input.handlers)} />
+        <FreeBar pos={pos} side="w" a={1} clock={clockOf('w')} name={G ? playerName(G, 'w') : null} />
+      </div>
       {L.header && <Header M={HM} a={1} />}
       <MoveList M={MV} T={upto + 0.999} S={S} a={1} paused onPick={live ? () => {} : go} />
       {G ? <GameInfo board={board} /> : <OpeningExplorer board={board} book={book} onPlay={onBook} />}
