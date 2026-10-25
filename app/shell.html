@@ -104,6 +104,8 @@ body:has(.stage-tall) .twk-panel { bottom: calc(51px + env(safe-area-inset-botto
 @media (max-width: 1199px) { .stage:not(.stage-tall) .ptime { display: none; } }
 .dock-primary { border-color: transparent; background: var(--accent); color: var(--accent-ink); }
 .dock-items { display: contents; }
+.dock-group { display: contents; }
+.stage-short .pmenu .dock-group { display: flex; flex-direction: column; gap: 6px; }
 .dock-menu-status { display: none; }
 /* portrait layout: the dock's buttons fold into a menu at the end of the transport bar */
 /* phones: a slimmer transport bar and less padding around it, so the frame can be larger */
@@ -132,6 +134,17 @@ body:has(.stage-tall) .twk-panel { bottom: calc(51px + env(safe-area-inset-botto
 .pmenu .dock-btn { height: auto; padding: 10px 14px; text-align: left; }
 .pmenu .dock-icons { display: flex; justify-content: flex-end; gap: 6px; }
 .pmenu .dock-iconic { width: 40px; height: 40px; padding: 0; }
+.pmenu .dock-icons .dock-queen { flex: 1; text-align: center; }
+/* a phone on its side: the menu is as wide as Settings there, Explore and Play side by side, the last row under Play */
+.stage-short .pmenu-open .dock-items {
+  display: grid; grid-template-columns: 1fr 1fr; grid-template-areas: "st st" "load load" "ex pl" "ex tail"; align-items: start;
+  width: min(760px, calc(100vw - 32px)); max-height: calc(100vh - 64px); overflow-y: auto;
+}
+.stage-short .pmenu .dock-menu-status { grid-area: st; max-width: none; }
+.stage-short .pmenu .dock-primary { grid-area: load; }
+.stage-short .pmenu .dock-group-explore { grid-area: ex; }
+.stage-short .pmenu .dock-group-play { grid-area: pl; }
+.stage-short .pmenu .dock-icons { grid-area: tail; align-self: end; }
 .pmenu .dock-menu-status { display: block; max-width: 240px; padding: 2px 4px 4px; font: 500 11px/1.4 var(--mono); color: var(--dim); white-space: normal; }
 .pmenu-err .dock-menu-status { color: var(--danger); }
 /* Play/Explore: a small menu above its dock button, its items under Explore and Play labels; on a phone they sit in the folded menu */

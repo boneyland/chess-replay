@@ -437,10 +437,10 @@ function GameApp() {
 
   const newGroups = [{ label: 'Explore', items: [{ label: 'Starting position', run: newBoard }, { label: 'Paste FEN…', run: pasteFen }, { label: 'Paste PGN…', run: pastePgn }, { label: 'Copy FEN', run: copyFen }] },
     { label: 'Play', items: [{ label: 'Play vs human…', run: playHuman }, { label: 'Play vs Stockfish…', run: playSf }, { label: 'My games…', run: myGames }] }];
-  const newItems = newGroups.map((g) => <React.Fragment key={g.label}>
+  const newItems = newGroups.map((g) => <div key={g.label} className={`dock-group dock-group-${g.label.toLowerCase()}`}>
     <span className="dock-menu-label">{g.label}</span>
     {g.items.map((it) => <button key={it.label} type="button" className="dock-btn" onClick={it.run}>{it.label}</button>)}
-  </React.Fragment>);
+  </div>);
   const fsLabel = fullscreen.on ? 'Exit full screen' : 'Full screen';
   const dockItems = (
     <div id="dock-items" className="dock-items">
@@ -457,9 +457,9 @@ function GameApp() {
           )}
         </div>
       )}
-      {!board && <button ref={queenBtn} type="button" className="dock-btn dock-queen" aria-expanded={queenOpen} onClick={() => { setMenu(false); askQueen(); }}>Ask Queen</button>}
-      {/* Settings and Full screen are icons in every layout, side by side at the foot of the phone's menu */}
+      {/* Settings and Full screen are icons in every layout; on the phone they share the menu's last row with Ask Queen */}
       <div className="dock-icons">
+      {!board && <button ref={queenBtn} type="button" className="dock-btn dock-queen" aria-expanded={queenOpen} onClick={() => { setMenu(false); askQueen(); }}>Ask Queen</button>}
       <button type="button" className="dock-btn dock-iconic" aria-label="Settings" title="Settings" aria-expanded={panel} onClick={() => { setMenu(false); setPanel((p) => !p); setQueenOpen(false); }}>
         <svg className="dock-icon" width="16" height="16" viewBox="0 0 16 16" aria-hidden="true"><path fill="currentColor" fillRule="evenodd" d={GEAR} /></svg>
       </button>
