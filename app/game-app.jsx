@@ -400,7 +400,7 @@ function GameApp() {
   // the whole annotation whatever the video shows: commentary even when hidden, Queen's answers even when out of the video
   const savePgn = () => saveFile(fileStem + '_annotated.pgn', window.ChessCore.annotatedPgn(withQueen(M, Q.resultAt)), 'application/x-chess-pgn');
   const saveQueen = () => saveFile(fileStem + '_queen.json', JSON.stringify(Q.saved(), null, 1), 'application/json');
-  const analysis = useGameAnalysis(M, files, () => filesRef.current, (next) => commit(next, true), engine, ES.game);
+  const analysis = useGameAnalysis(M, files, () => filesRef.current, (next) => commit(next, true), engine, ES.game, t.tablebase !== false);
   // switching engines stops a running analysis (its searches so far are kept, to resume with the engine that made them)
   const analysisStop = React.useRef(analysis.stop);
   analysisStop.current = analysis.stop;
@@ -648,7 +648,7 @@ function GameApp() {
           <div className="twk-note">{board && board.game ? (board.game.mode === 'stockfish' ? 'Stockfish 19 plays the other side at full strength (there is no strength setting) and quietly rates your moves; Analyse on the free board shows its eval once the game ends.' : 'Stockfish is off during a game; Analyse on the free board brings it back once the game ends.') : board ? 'On the free board every move is rated with the “Your moves” settings.' : <>New settings apply to the next analysis{files.analysis ? ', which replaces this one' : ''}; a stopped analysis resumes with its original settings.</>} Stockfish is free software under the GPL-3.0; <a href="https://github.com/nmrugg/stockfish.js" target="_blank" rel="noopener">source</a>.</div>
           <TweakSection label="Online data">
             <TweakToggle id="tw-tablebase" label="Endgame tablebase (7 pieces or fewer)" value={t.tablebase !== false} onChange={(v) => setTweak('tablebase', v)} />
-            <div className="twk-note">Positions with 7 pieces or fewer go to Lichess’s tablebase (tablebase.lichess.ovh) for the result with best play and every move ranked by it: in the Analysis panel and the eval bar (tagged TB), while the replay is paused and on the free board, never during a game. Nothing is sent with this off.</div>
+            <div className="twk-note">Positions with 7 pieces or fewer go to Lichess’s tablebase (tablebase.lichess.ovh) for the result with best play and every move ranked by it: in the Analysis panel and the eval bar (tagged TB), while the replay is paused and on the free board, never during a game. “Analyse with Stockfish” takes them from it too, and rates those moves by whether they keep the win or the draw. Nothing is sent with this off.</div>
           </TweakSection>
         </> },
         !board && { id: 'commentary', label: 'Commentary', body: <>
