@@ -142,6 +142,7 @@ const label = (M, i) => `${window.ChessCore.moveNo(M.ply0 + i)} ${M.plies[i].san
 const fmtEval = (p) => {
   if (!p) return '0.00';
   if (p.checkmate) return p.side === 'w' ? '1-0' : '0-1';
+  if (p.won) return p.won === 'w' ? '1-0' : '0-1'; // a tablebase win with no distance to mate
   if (p.mate != null) return (p.mate > 0 ? 'M' : '−M') + Math.abs(Math.round(p.mate));
   const v = plyCp(p) / 100; return (v > 0.004 ? '+' : v < -0.004 ? '−' : '') + Math.abs(v).toFixed(2);
 };
@@ -339,6 +340,7 @@ const engineLabel = (name) => (name || 'Stockfish').replace(/\s*\(browser\)$/, '
 const fmtNodes = (n) => (n >= 1e6 ? (n / 1e6).toFixed(1) + 'M' : n >= 1e3 ? Math.round(n / 1e3) + 'k' : String(n)) + ' nodes';
 // the portrait frame (no header panel) has room for the numbers only
 function searchStats(name, s) {
+  if (s && s.tablebase) return L.header ? 'Lichess tablebase' : 'Tablebase'; // a game analysis's position the tablebase answered
   if (!s || !s.depth) return engineLabel(name);
   return [L.header ? engineLabel(name) : '', 'depth ' + s.depth + (s.maxDepth > s.depth ? ` (${s.maxDepth} unfinished)` : ''), s.timeMs != null ? (s.timeMs / 1000).toFixed(1) + ' s' : '', s.nodes != null ? fmtNodes(s.nodes) : ''].filter(Boolean).join(' · ');
 }
@@ -434,7 +436,7 @@ function EvalBar({ M, T, S, a, tb }) {
   if (tb) return <EvalBarView cp={tb.cp} txt={tb.txt} a={a} />;
   const { c, cp } = evalNow(M, T, S);
   const shown = c >= 0 ? M.plies[c] : null;
-  const txt = !M.hasEval ? '' : shown && shown.checkmate && T > S.tp[c] + 1 ? fmtEval(shown) : shown && shown.mate != null ? fmtEval(shown) : fmtEval({ cp });
+  const txt = !M.hasEval ? '' : shown && shown.checkmate && T > S.tp[c] + 1 ? fmtEval(shown) : shown && (shown.mate != null || shown.won) ? fmtEval(shown) : fmtEval({ cp });
   return <EvalBarView cp={M.hasEval ? cp : 0} txt={txt} a={a} />;
 }
 // the bar itself: White's share from cp (White's view), and txt in the part of the bar it favours
@@ -725,7 +727,7 @@ function Analysis({ M, T, S, a, vline, onLine, paused, sf, own, onReply, deep, t
   const sfLegal = P.best ? playLineCached(M, c, P.best.line.slice(0, 8)) : [];
   const agreeLegal = cls === 'best' && P.line && P.line.length ? playLineCached(M, c, P.line.slice(0, 8)) : [];
   // name the engine (the analysis may come from another one), and say where Queen stands once it has looked
-  const engName = (M.engine || '').split(' · ')[0] || 'The engine';
+  const engName = P.tbBefore ? 'The tablebase' : (M.engine || '').split(' · ')[0] || 'The engine';
   const qPick = Qp.before && Qp.before.best ? Qp.before : null;
   const agreeText = `${engName} agrees with the move played.` + (qPick ? (qPick.best === P.uci ? ' So does Queen.' : ` Queen preferred ${qPick.bestSan || qPick.best}.`) : '');
   const qLine = Qp.before && Qp.before.line ? Qp.before.line.split(/\s+/).filter((x) => x && !/^\d+\.+$/.test(x) && !/^\d+\.\.\.$/.test(x)).map((x) => x.replace(/^\d+\.+/, '')).filter(Boolean).slice(0, 6) : [];
@@ -735,7 +737,7 @@ function Analysis({ M, T, S, a, vline, onLine, paused, sf, own, onReply, deep, t
       <div style={{ opacity: k, transform: `translateY(${(1 - k) * 8}px)` }}>
         <div style={{ display: 'flex', alignItems: 'flex-end', gap: 28 }}>
           <span style={{ font: `700 ${big}px ${MONO}`, color: col }}>{label(M, c)}</span>
-          {M.hasEval && <span style={{ marginLeft: 'auto', font: `700 ${big}px ${MONO}`, color: C.ink }}>{deeper ? fmtSf(deeper.cp) : P.mate != null && k >= 1 ? fmtEval(P) : fmtEval({ cp })}</span>}
+          {M.hasEval && <span style={{ marginLeft: 'auto', font: `700 ${big}px ${MONO}`, color: C.ink }}>{deeper ? fmtSf(deeper.cp) : (P.mate != null || P.won) && k >= 1 ? fmtEval(P) : fmtEval({ cp })}</span>}
         </div>
         {/* the verdict spans the panel under the move and the eval; spaced parts rather than " · " separators, so a
             line too long for a narrow panel breaks between them */}
@@ -1022,7 +1024,8 @@ function GameVideo({ M, tw, d, probe, queen, nav, scheme, sf, orient }) {
   // Go deeper on a move of the loaded analysis, while paused on it: from its own search (else the game settings), the
   // eval it shows only (the ratings, graph and accuracy stay the analysis's). Not on a PGN's own evals, which have no
   // best lines for it to go with: those come from analysing the game
-  const gameOn = !!(sf && M.evalSource === 'analysis' && !playing && cNow >= 0 && !(vline && vline.src === 'you'));
+  // (not on a position the tablebase answered: its result is final)
+  const gameOn = !!(sf && M.evalSource === 'analysis' && !playing && cNow >= 0 && !M.plies[cNow].tb && !(vline && vline.src === 'you'));
   const gameP = gameOn ? M.plies[cNow] : null, gameSettings = sf ? sf.game : window.AnalysisCore.ENGINE;
   // name: the engine running keys Go deeper's results, so lite and full ones never mix
   const gameBase = { name: gameSettings.name, depth: gameP && gameP.search ? gameP.search.depth : gameSettings.depth, time_limit: gameSettings.time_limit };

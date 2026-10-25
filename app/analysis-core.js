@@ -69,6 +69,19 @@
     return { evalLoss, classification, mateAdvice: advice };
   }
 
+  // One move between two tablebase positions (before, after: their { category }, each for its side to move), rated by
+  // what it does to the outcome for the mover: keeping a win, a draw or a loss loses nothing, however slow the win (as on
+  // Lichess); win → draw (a cursed win is a draw), draw → loss or win → loss is a blunder, its eval loss as rateMove's
+  const OUTCOME_RANK = { win: 2, draw: 1, loss: 0 };
+  function rateByOutcome({ bestEval, currentEval, isWhite, before, after }) {
+    const LC = window.LichessCore;
+    const had = OUTCOME_RANK[LC.outcome(before.category)], has = OUTCOME_RANK[LC.outcome(LC.flip(after.category))];
+    if (had == null || has == null) return null;
+    if (has >= had) return { evalLoss: 0, classification: 'best', mateAdvice: '' };
+    const raw = Math.max(0, isWhite ? bestEval - currentEval : currentEval - bestEval);
+    return { evalLoss: Math.min(raw, C.MAX_EVAL_LOSS_FOR_ACCURACY), classification: 'blunder', mateAdvice: '' };
+  }
+
   // "Mate in N: …" for a lost or delayed mate, from the line the mover had (pvSans starts with the mover's move)
   function mateLine(beforeEval, pvSans) {
     const n = Math.round((C.MATE_SCORE_CP - Math.abs(beforeEval)) / C.MATE_STEP_CP);
@@ -173,19 +186,31 @@
   // earlier: searches of the first positions from a run that stopped, to resume from; onSearched gets every
   // search so far after each new one, so a run that stops can be resumed
   // settings: the engine settings to search with and to record (engineSettings().game)
-  async function runAnalysis({ engine, ucis, sans, headers, signal, onProgress, earlier = [], onSearched, settings = ENGINE, startFen = window.ChessCore.START_FEN }) {
+  // tablebase: Lichess's tablebase client (LichessCore.create(), Settings › Online data › Endgame tablebase on), else
+  // null: a position of 7 pieces or fewer takes its certain answer instead of a search (tablebaseResult); an uncertain
+  // one is searched. After the first request that fails (offline, an error, a back-off) the run asks no more
+  async function runAnalysis({ engine, ucis, sans, headers, signal, onProgress, earlier = [], onSearched, settings = ENGINE, startFen = window.ChessCore.START_FEN, tablebase = null }) {
+    const CC = window.ChessCore, LC = window.LichessCore;
     const N = ucis.length, R = earlier.slice(0, N + 1);
+    const fens = tablebase && LC ? positionFens(startFen, ucis) : null;
+    let tbFailed = false;
     onProgress(Math.max(0, R.length - 1), N);
     for (let k = R.length; k <= N; k++) {
       if (signal.aborted) return null;
-      const r = await engine.search({ moves: ucis.slice(0, k), fen: startFen, depth: settings.depth, movetimeMs: settings.time_limit * 1000, priority: 'game' }).promise;
+      let r = null;
+      if (fens && !tbFailed && LC.pieceCount(fens[k]) <= LC.TB_MAX_PIECES) {
+        const got = await tablebaseResult(tablebase, fens[k]);
+        if (signal.aborted) return null;
+        if (got.failed) tbFailed = true;
+        r = got.result;
+      }
+      if (!r) r = await engine.search({ moves: ucis.slice(0, k), fen: startFen, depth: settings.depth, movetimeMs: settings.time_limit * 1000, priority: 'game' }).promise;
       if (signal.aborted) return null;
       if (!r || r.cp == null) throw new Error('Stockfish stopped before the analysis finished');
       R.push(r);
       if (onSearched) onSearched(R.slice());
       if (k > 0) onProgress(k, N);
     }
-    const CC = window.ChessCore;
     const start = CC.parseFen(startFen);
     let pos = start.pos;
     const moves = ucis.map((uci, i) => {
@@ -193,7 +218,9 @@
       const played = CC.applyUci(pos, uci);
       const san = played ? played.san : sans[i];
       const bestLine = sansOf(pos, before.pv, C.BEST_LINE_MAX_PLIES);
-      const rated = rateMove({ bestEval: before.cp, currentEval: after.cp, isWhite, playedIsBest: uci === best, isCheckmate: san.endsWith('#') });
+      // between two tablebase positions the outcome rates the move; a capture into the tablebase is rated as ever
+      const rated = (before.tb && after.tb && rateByOutcome({ bestEval: before.cp, currentEval: after.cp, isWhite, before: before.tb, after: after.tb }))
+        || rateMove({ bestEval: before.cp, currentEval: after.cp, isWhite, playedIsBest: uci === best, isCheckmate: san.endsWith('#') });
       const m = {
         ply: start.ply0 + i + 1, move_san: san, move_uci: uci, is_white_move: isWhite,
         eval_before: before.cp, eval_after: after.cp,
@@ -206,12 +233,44 @@
         search_depth: before.depth, search_depth_after: after.depth, search_lines: 1, best_line: bestLine,
         // what the search of the position after the move actually did (the Python video ignores these)
         search_maxdepth_after: after.maxDepth == null ? after.depth : after.maxDepth, search_time_after_ms: after.timeMs, search_nodes_after: after.nodes,
+        // the positions the tablebase answered (each for its side to move), their search depths 0
+        ...(before.tb ? { tb_before: before.tb } : {}), ...(after.tb ? { tb_after: after.tb } : {}),
       };
       if (played) pos = played.pos;
       return m;
     });
-    return buildAnalysisJson({ headers, moves, opening: window.Openings ? window.Openings.book().identify(ucis, startFen) : null, engine: { ...settings }, startFen });
+    const engineBlock = { ...settings, ...(R.some((r) => r.tb) ? { tablebase: true } : {}) };
+    return buildAnalysisJson({ headers, moves, opening: window.Openings ? window.Openings.book().identify(ucis, startFen) : null, engine: engineBlock, startFen });
   }
 
-  window.AnalysisCore = { C, ENGINE, ENGINE_NAMES, SEARCH_LIMITS, DEPTHS, SECONDS, HASH_MB, LINES, engineSettings, secondsPerPosition, paceFactor, blendPace, deeperSearch, canGoDeeper, bestOf, winningChances, infoToScore, infoStats, rateMove, mateLine, playerStats, buildAnalysisJson, runAnalysis };
+  // The full FEN of each position of a game (castling, en passant and the fifty-move count, which the tablebase needs)
+  function positionFens(startFen, ucis) {
+    const CC = window.ChessCore;
+    let pos = CC.parseFen(startFen).pos;
+    const sans = [], out = [CC.fenAfter(startFen, [], pos)];
+    for (const u of ucis) {
+      const r = CC.applyUci(pos, u);
+      if (!r) break;
+      sans.push(r.san); pos = r.pos;
+      out.push(CC.fenAfter(startFen, sans, pos));
+    }
+    return out;
+  }
+  // A position's tablebase answer as a search result: { result, failed }. result: { cp, depth 0, pv (the DTZ mainline,
+  // else the best move), tb: { category, dtz, dtm } } for a certain answer, else null (search it); failed: a request
+  // didn't answer (the mainline's failing keeps the answer, its line just the best move). The run's signal is a plain
+  // { aborted } (not an AbortSignal), checked after: a stopped run lets its last request finish (10 s at most)
+  async function tablebaseResult(client, fen) {
+    const LC = window.LichessCore, turn = fen.split(' ')[1] === 'b' ? 'b' : 'w';
+    const t = await client.tablebase(fen);
+    if (!t) return { result: null, failed: true };
+    const cp = LC.evalCp(t, turn);
+    if (cp == null) return { result: null, failed: false };
+    const first = t.moves.length ? t.moves[0].uci : null;
+    const line = first ? await client.mainline(fen) : [];
+    const pv = line && line.length ? line : first ? [first] : [];
+    return { result: { cp, depth: 0, pv, best: pv[0] || null, nodes: null, timeMs: null, tb: { category: t.category, dtz: t.dtz, dtm: t.dtm } }, failed: !line };
+  }
+
+  window.AnalysisCore = { C, ENGINE, ENGINE_NAMES, SEARCH_LIMITS, DEPTHS, SECONDS, HASH_MB, LINES, engineSettings, secondsPerPosition, paceFactor, blendPace, deeperSearch, canGoDeeper, bestOf, winningChances, infoToScore, infoStats, rateMove, rateByOutcome, mateLine, positionFens, playerStats, buildAnalysisJson, runAnalysis };
 })();
