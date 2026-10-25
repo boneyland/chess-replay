@@ -207,7 +207,7 @@ function useEngineOpponent(board, onChange, sf) {
 // also shows the critique: during the game the latest flagged move and why, without the better move; after it, every
 // flagged move with the better one
 function GameInfo({ board }) {
-  const G = board.game, t = window.PlayCore.parseTc(G.tc), z = L.comment.label || 1, sfGame = G.mode === 'stockfish';
+  const G = board.game, z = L.comment.label || 1, sfGame = G.mode === 'stockfish';
   const note = (txt) => <span style={{ display: 'block', marginTop: 10 * z, font: `400 ${Math.round(19 * z)}px/1.4 ${SANS}`, color: C.dim }}>{txt}</span>;
   const heading = (txt, col) => <span className="game-info-head" style={{ display: 'block', font: `400 ${Math.round(40 * Math.max(1, L.comment.text))}px/1.14 ${SERIF}`, color: col || C.ink }}>{txt}</span>;
   // scrolls with a mouse drag as the explorer does, and its text can't be selected
@@ -218,10 +218,8 @@ function GameInfo({ board }) {
     body = (
       <React.Fragment>
         {heading(from)}
-        {note('Two players at one board. It turns after each move, so the side to move plays from the bottom. Take back, Offer a draw and Resign are in the Game box.')}
+        {note('Two players at one board. The board turns after each move, so the side to move plays from the bottom.')}
         {note('A threefold repetition or fifty moves without a capture or pawn move let the side to move claim a draw there; the game is drawn by itself at a fivefold repetition or after 75 such moves.')}
-        {note(t ? `Each side has ${t.base / 60000} minutes${t.inc ? `, and ${t.inc / 1000} seconds more per move` : ''}. The clocks start with the first move.` : 'No clocks.')}
-        {note('No engine and no hints: Stockfish is off until the game ends.')}
       </React.Fragment>
     );
   } else {
@@ -230,7 +228,6 @@ function GameInfo({ board }) {
     const why = (c) => (c.text ? c.text[0].toUpperCase() + c.text.slice(1) + '.' : '');
     const bestSan = (c) => { const r = window.ChessCore.applyUci(c.j ? board.steps[c.j - 1].pos : board.start.pos, c.best); return r ? r.san : c.best; };
     const line = (txt, col) => <span style={{ display: 'block', marginTop: 6 * z, font: `400 ${Math.round(22 * z)}px/1.35 ${SANS}`, color: col || C.ink }}>{txt}</span>;
-    const clock = t ? `You and Stockfish each have ${t.base / 60000} minutes${t.inc ? `, and ${t.inc / 1000} seconds more per move` : ''}. The clocks start with the first move.` : 'No clocks.';
     if (G.result) {
       body = (
         <React.Fragment>
@@ -253,9 +250,8 @@ function GameInfo({ board }) {
       body = (
         <React.Fragment>
           {c ? <div className="game-critique">{heading(named(c), clsColor(c.cls))}{line(why(c))}</div> : heading(`You play ${side}`)}
-          {note(`${c ? `You play ${side}, ${from.toLowerCase()}` : from}. Stockfish 19 plays the other side at full strength; the board stays on your side.`)}
-          {note(clock)}
-          {note('No hints: Stockfish only says when one of your moves is an inaccuracy, a mistake or a blunder, and keeps the better move for the end of the game. Take back and Resign are in the Game box.')}
+          {note('Stockfish 19 plays at full strength.')}
+          {note('No hints: Stockfish only says when one of your moves is an inaccuracy, a mistake or a blunder.')}
         </React.Fragment>
       );
     }
