@@ -50,12 +50,13 @@ const LAYOUTS = {
   },
 };
 // Compact landscape, for windows under 1300 px wide: the wide frame's panels at their sizes, with the square frame's
-// margins, gaps and panel padding, so the frame is 1800×1040 and shows larger. The export draws it at that size.
+// margins, gaps and panel padding (its smallest text 2 px larger too), so the frame is 1800×1040 and shows larger. The
+// export draws it at that size.
 const COMPACT = { width: 1800, height: 1040 };
 LAYOUTS.compact = (() => {
   const m = 20, gap = 14, x = m + 48 + BW + 20, w = COMPACT.width - m - x, py = COMPACT.height - m - 120, my = m + 174 + gap, ay = my + 322 + gap;
   return {
-    eval: m, bx: m + 48, by: m + 50, bar: { k: 1, gap: 10 }, title: 13, pad: '12px 16px', frameH: COMPACT.height, edge: m,
+    eval: m, bx: m + 48, by: m + 50, bar: { k: 1, gap: 10 }, title: 15, small: 2, hint: 17, pad: '12px 16px', frameH: COMPACT.height, edge: m,
     header: { x, y: m, w, h: 174, k: 1 },
     moves: { x, y: my, w: 330, h: 322, k: 1, rows: 7 },
     comment: { x: x + 330 + gap, y: my, w: w - 330 - gap, h: 322, k: 1, text: 1, gap: 18, right: 1 },
@@ -120,7 +121,7 @@ function squareLayout(H) {
   };
 }
 let L = LAYOUTS.wide, BX = L.bx, BY = L.by, tallH = 0, shortW = 0, squareH = 0;
-// a font size of 15 px or under, raised by the layout's small (the wide and square frames')
+// a font size of 15 px or under, raised by the layout's small (the wide, compact and square frames')
 const sm = (px) => px + (L.small || 0);
 const setLayout = (frame) => {
   if (frame.tall && frame.height !== tallH) { tallH = frame.height; LAYOUTS.tall = tallLayout(tallH); }
