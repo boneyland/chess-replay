@@ -12,6 +12,8 @@ function readStored() {
   return SAMPLE;
 }
 const PLAYBACK = '{"mode":"loop"}';
+// a picked or dropped file is read whole into the page, so a huge one (a dropped video, a PGN database) is refused first
+const MAX_FILE_BYTES = 50e6;
 // My games (GamesCore), read afresh for each change, so games kept by another tab stay
 const GAMES = 'chess-video.games.v1';
 const readGames = () => { try { return window.GamesCore.read(localStorage.getItem(GAMES)); } catch (e) { return []; } };
@@ -345,6 +347,8 @@ function GameApp() {
   const loadFiles = async (list) => {
     const batch = {};
     try {
+      const big = Array.from(list).find((f) => f.size > MAX_FILE_BYTES);
+      if (big) { setErr(`${big.name} is too large to load (over ${MAX_FILE_BYTES / 1e6} MB).`); return; }
       for (const f of Array.from(list)) { const text = await f.text(); const kind = window.ChessCore.classifyFile(f.name, text); batch[kind] = text; batch[kind + 'Name'] = f.name; }
     } catch (e) { setErr('Could not read that file: ' + ((e && e.message) || e)); return; }
     if (batch.queen) {
