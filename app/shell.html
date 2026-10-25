@@ -45,6 +45,9 @@ html { height: 100%; box-sizing: border-box; }
 body { height: 100%; margin: 0; background: var(--bg); color: var(--ink); font: 14px/1.4 var(--sans); overflow: hidden; }
 #root { position: relative; height: 100%; }
 button { font: inherit; color: inherit; }
+/* nothing on the page selects but what's typed in a field (a mouse drag scrolls instead: drag-scroll.js) */
+body { user-select: none; -webkit-user-select: none; -webkit-touch-callout: none; }
+input, textarea, [contenteditable]:not([contenteditable="false"]) { user-select: text; -webkit-user-select: text; -webkit-touch-callout: default; }
 button:focus-visible, select:focus-visible, input:focus-visible, [role="slider"]:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
 
 .stage {
@@ -336,15 +339,16 @@ body:has(.stage-tall) .twk-panel { bottom: calc(51px + env(safe-area-inset-botto
 /* the offline note tinted with the warning colour, Back online with the ok one, so each stands out from the page */
 .net-note-off { background: color-mix(in srgb, var(--warn) 18%, var(--panel-glass)); border-color: color-mix(in srgb, var(--warn) 55%, transparent); }
 .net-note-on { background: color-mix(in srgb, var(--ok) 16%, var(--panel-glass)); border-color: color-mix(in srgb, var(--ok) 50%, transparent); }
-/* Copy FEN's note: the FEN wraps anywhere on a phone, and a click selects all of it */
+/* Copy FEN's note: the FEN in a read-only field, where a click selects all of it; it wraps anywhere on a phone, and
+   is as tall as its lines where the browser can size a field to its content */
 .fen-note { max-width: min(640px, calc(100% - 32px)); }
-.fen-note-fen { font-family: var(--mono); overflow-wrap: anywhere; user-select: all; }
+.fen-note-fen { display: block; width: min(46ch, 100%); margin-top: 4px; padding: 2px 6px; border: 1px solid var(--line); border-radius: 4px; background: var(--bg); color: inherit; font: inherit; font-family: var(--mono); overflow-wrap: anywhere; resize: none; overflow: hidden; field-sizing: content; }
 /* the offline note reads larger on a desktop's full-size page */
 body:has(.stage:not(.stage-tall):not(.stage-short)) .net-note { top: calc(64px + env(safe-area-inset-top, 0px)); gap: 14px; padding: 14px 12px 14px 20px; border-radius: 12px; font-size: 16px; }
 .net-chip::before { content: ""; width: 7px; height: 7px; border-radius: 50%; background: var(--warn); }
-.q-log pre { margin: 8px 0 0; max-height: 160px; overflow: auto; padding: 8px; border-radius: 6px; background: var(--bg); border: 1px solid var(--line); font: 500 11px/1.5 var(--mono); color: var(--ink); white-space: pre-wrap; user-select: text; }
+.q-log pre { margin: 8px 0 0; max-height: 160px; overflow: auto; padding: 8px; border-radius: 6px; background: var(--bg); border: 1px solid var(--line); font: 500 11px/1.5 var(--mono); color: var(--ink); white-space: pre-wrap; }
 .q-diag { display: flex; flex-direction: column; gap: 6px; }
-.q-diag pre { margin: 0; max-height: 180px; overflow: auto; padding: 8px; border-radius: 6px; background: var(--bg); border: 1px solid var(--line); font: 500 11px/1.5 var(--mono); color: var(--ink); white-space: pre-wrap; word-break: break-word; user-select: text; }
+.q-diag pre { margin: 0; max-height: 180px; overflow: auto; padding: 8px; border-radius: 6px; background: var(--bg); border: 1px solid var(--line); font: 500 11px/1.5 var(--mono); color: var(--ink); white-space: pre-wrap; word-break: break-word; }
 @media (prefers-reduced-motion: reduce) { .twk-seg-thumb, .twk-toggle, .twk-toggle i { transition: none; } }
 </style>
 <div id="root"></div>

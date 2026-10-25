@@ -204,6 +204,39 @@ for (const name of BROWSERS) for (const site of SITES) {
       await assert.doesNotReject(settings.waitFor({ state: 'detached', timeout: 3000 }));
     });
 
+    // any box that scrolls takes a mouse drag, as the Moves panel does, and nothing outside a text field selects
+    await t.test('desktop: Settings scrolls with a mouse drag, and a drag selects no text', async () => {
+      await page.getByRole('button', { name: 'Settings' }).click();
+      const body = page.locator('.twk-body'), tabs = page.getByRole('tablist', { name: 'Settings' }).getByRole('tab');
+      let tall = false;
+      for (const tab of await tabs.all()) {
+        await tab.click();
+        if (await body.evaluate((el) => el.scrollHeight > el.clientHeight + 40)) { tall = true; break; }
+      }
+      assert.ok(tall, 'a Settings tab overflows');
+      // pressed on text, not a control (a drag from a field or a slider is its own)
+      const at = await body.evaluate((el) => {
+        const r = el.getBoundingClientRect();
+        for (let y = r.bottom - 20; y > r.top + r.height * 0.5; y -= 6) {
+          for (const x of [r.left + 24, r.left + r.width * 0.5]) {
+            const hit = document.elementFromPoint(x, y);
+            if (hit && el.contains(hit) && !hit.closest('input, select, textarea, button, [role="slider"], [role="radio"]')) return { x, y };
+          }
+        }
+        return null;
+      });
+      assert.ok(at, 'text to press on in Settings');
+      await page.mouse.move(at.x, at.y);
+      await page.mouse.down();
+      await page.mouse.move(at.x, at.y - 200, { steps: 8 });
+      await page.mouse.up();
+      assert.ok(await body.evaluate((el) => el.scrollTop) > 40, 'the drag scrolled Settings');
+      assert.equal(await page.evaluate(() => String(window.getSelection())), '', 'no text selected');
+      assert.equal(await page.evaluate(() => getComputedStyle(document.body).userSelect), 'none');
+      await page.keyboard.press('Escape');
+      await assert.doesNotReject(body.waitFor({ state: 'detached', timeout: 3000 }));
+    });
+
     await t.test('desktop: Esc closes the Queen panel', async () => {
       await page.getByRole('button', { name: 'Ask Queen' }).click();
       const queen = page.locator('.q-panel');
@@ -598,7 +631,7 @@ for (const name of BROWSERS) for (const site of SITES) {
       await assert.doesNotReject(field.waitFor({ state: 'detached', timeout: 5000 }));
       await p.getByRole('button', { name: 'Play/Explore' }).click();
       await p.getByRole('button', { name: 'Copy FEN' }).click();
-      await assert.doesNotReject(p.locator('.fen-note-fen').filter({ hasText: '4k3/4R3/8/8/8/8/8/4K3 b - - 0 1' }).waitFor({ timeout: 5000 }));
+      await assert.doesNotReject(p.waitForFunction(() => { const f = document.querySelector('.fen-note-fen'); return f && f.value === '4k3/4R3/8/8/8/8/8/4K3 b - - 0 1'; }, null, { timeout: 5000 }));
       assert.deepEqual(ep.errors, []);
       await ep.ctx.close();
     });

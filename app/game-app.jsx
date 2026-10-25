@@ -538,7 +538,7 @@ function GameApp() {
       )}
       {fenNote && !hf.note && (
         <div className="signin-note net-note fen-note" role="status">
-          <span>{fenNote.ok ? 'FEN copied' : 'Copy this FEN'}: <span className="fen-note-fen">{fenNote.fen}</span></span>
+          <span>{fenNote.ok ? 'FEN copied' : 'Copy this FEN'}: <textarea className="fen-note-fen" readOnly rows={2} value={fenNote.fen} aria-label="FEN" onFocus={(e) => e.target.select()} /></span>
           <button type="button" className="twk-x" aria-label="Dismiss" onClick={() => setFenNote(null)}>✕</button>
         </div>
       )}

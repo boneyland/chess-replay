@@ -542,56 +542,6 @@ function Header({ M, a }) {
   );
 }
 
-// A mouse drag scrolls a list, as a finger does: past a few pixels it takes the pointer, and the click that ends it picks
-// nothing; let go while moving and the list glides on, slowing down (a press or the wheel stops it). Spread the result on
-// the list's content; box() is the element that scrolls. The text isn't selectable.
-const GLIDE_MS = 325, GLIDE_MIN = 0.03, GLIDE_MAX = 5; // the glide's decay time constant, and the speeds (px/ms) it stops at and starts at most
-function useDragScroll(box) {
-  const r = React.useRef({ drag: null, dragged: false, glide: 0 });
-  const stop = () => { cancelAnimationFrame(r.current.glide); r.current.glide = 0; };
-  React.useEffect(() => stop, []);
-  const glide = (v) => {
-    let pos = box().scrollTop, last = performance.now();
-    const step = (now) => {
-      const el = box(), dt = Math.min(now - last, 50);
-      last = now;
-      if (!el) return stop();
-      pos += v * dt; v *= Math.exp(-dt / GLIDE_MS);
-      el.scrollTop = pos;
-      if (Math.abs(v) < GLIDE_MIN || Math.abs(el.scrollTop - pos) > 1) return stop(); // slowed down, or at an end
-      r.current.glide = requestAnimationFrame(step);
-    };
-    r.current.glide = requestAnimationFrame(step);
-  };
-  return {
-    onPointerDown: (e) => { stop(); r.current.dragged = false; if (e.pointerType === 'mouse' && e.button === 0 && box()) r.current.drag = { y: e.clientY, top: box().scrollTop, moved: false, pts: [] }; },
-    onPointerMove: (e) => {
-      const d = r.current.drag;
-      if (!d) return;
-      if (!d.moved && Math.abs(e.clientY - d.y) > 4) { d.moved = true; try { e.currentTarget.setPointerCapture(e.pointerId); } catch (err) {} }
-      if (!d.moved) return;
-      box().scrollTop = d.top - (e.clientY - d.y);
-      const now = performance.now();
-      d.pts.push({ y: e.clientY, t: now });
-      while (d.pts.length > 2 && now - d.pts[0].t > 100) d.pts.shift();
-    },
-    onPointerUp: (e) => {
-      const d = r.current.drag;
-      r.current.drag = null;
-      if (!d || !d.moved) return;
-      r.current.dragged = true;
-      // the speed over the last 100 ms of the drag; none if the pointer stopped before letting go
-      const now = performance.now(), a = d.pts[0], b = d.pts[d.pts.length - 1];
-      if (a && b !== a && now - b.t < 60 && box()) glide(Math.max(-GLIDE_MAX, Math.min(GLIDE_MAX, -(b.y - a.y) / (b.t - a.t))));
-    },
-    onPointerCancel: () => { r.current.drag = null; },
-    onWheel: stop,
-    onClickCapture: (e) => { if (r.current.dragged) { r.current.dragged = false; e.preventDefault(); e.stopPropagation(); } },
-    onDragStart: (e) => e.preventDefault(),
-    style: { userSelect: 'none', WebkitUserSelect: 'none' },
-  };
-}
-
 function MoveList({ M, T, S, a, paused, onPick }) {
   const c = lastPly(T, S);
   // COLS move pairs to a row (the phone's full-width list), VIS rows in view
@@ -602,7 +552,6 @@ function MoveList({ M, T, S, a, paused, onPick }) {
   // the list scrolls (wheel, finger, a mouse drag); a new move scrolls it to that move, and leaves it where the viewer put it until the next
   const applied = React.useRef(null);
   React.useLayoutEffect(() => { const el = listRef.current; if (el && applied.current !== scroll) { el.scrollTop = scroll; applied.current = scroll; } });
-  const drag = useDragScroll(() => listRef.current);
   // one Tab stop for the whole list (the current move); the arrows move between moves, and focus follows
   const focusPly = Math.max(0, c);
   const moveKey = (e, i) => {
@@ -639,7 +588,7 @@ function MoveList({ M, T, S, a, paused, onPick }) {
   return (
     <Panel box={L.moves} a={a} title="Moves">
       <div ref={listRef} className="moves-list" style={{ position: 'relative', height: VIS * ROW, overflowY: 'auto', overscrollBehavior: 'contain', scrollbarWidth: 'thin', font: `500 ${L.moves.font || 19}px ${MONO}` }}>
-        <div {...drag}>{rows}</div>
+        <div>{rows}</div>
       </div>
     </Panel>
   );
