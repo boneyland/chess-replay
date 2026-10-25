@@ -15,6 +15,9 @@ const useTimeline = () => React.useContext(TimelineContext);
 // which frame the stage shows: { tall: false } for landscape, { tall: true, height } for the portrait one,
 // { short: true, width } for the wide, short one on a phone held sideways, { square: true, height } for the square one
 const FrameContext = React.createContext({ tall: false });
+// Where the landscape frame is ruled out, the square one beats the sideways one unless that shows over 1/0.9 as large
+// (a page near 1050 × 800 gets square, which fills its height; a short one stays sideways)
+const SQUARE_OVER_SHORT = 0.9;
 const useFrame = () => React.useContext(FrameContext);
 
 
@@ -62,21 +65,23 @@ function Stage({ width, height, portrait, square, short, menu, top, onLayout, du
       // The portrait frame takes over when it would show noticeably larger than the landscape one;
       // the 1.1–1.15 band keeps a window at the boundary from flipping back and forth.
       // It is as tall as the area allows (between its min and max height), so it fills a phone screen.
-      const sl = Math.min(w / width, h / height);
+      // A page under 1050 × 650 never gets the landscape frame: it takes the largest of the others
+      const noWide = (portrait || square || short) && (st.clientWidth < 1050 || st.clientHeight < 650);
+      const sl = noWide ? 0 : Math.min(w / width, h / height);
       const sp = portrait ? Math.min(tw / portrait.width, th / portrait.minHeight) : 0;
-      // A square-ish area big enough not to be a phone gets the square frame when it shows noticeably larger than the
-      // landscape one and at least as large as the portrait one (judged by the room the landscape frame leaves: same bar)
-      const sq = square && Math.min(w, h) >= 600 ? Math.min(w / square.width, h / square.minHeight) : 0;
-      const nextSq = sq > sl * (squareRef.current ? 1.05 : 1.1) && sq > sp * (squareRef.current ? 1 : 1.02);
-      squareRef.current = nextSq;
-      const qh = nextSq ? clamp(Math.floor(h / sq), square.minHeight, square.maxHeight) : 0;
-      const next = !nextSq && sp > sl * (tallRef.current ? 1.1 : 1.15);
-      tallRef.current = next;
-      const ph = next ? clamp(Math.floor(th / sp), portrait.minHeight, portrait.maxHeight) : 0;
       // A short landscape area (a phone held sideways) gets a wider frame whose board fills the height, as wide as
       // the area allows (between its min and max width); a desktop window keeps the 16:9 video
-      const ss = short && !next && !nextSq && h < short.maxArea ? Math.min(kw / short.minWidth, kh / short.height) : 0;
-      const nextShort = ss > sl * (shortRef.current ? 1.05 : 1.1);
+      const ss = short && (noWide || h < short.maxArea) ? Math.min(kw / short.minWidth, kh / short.height) : 0;
+      // A square-ish area big enough not to be a phone gets the square frame when it shows noticeably larger than the
+      // landscape one and at least as large as the portrait one (judged by the room the landscape frame leaves: same bar)
+      const sq = square && (noWide || Math.min(w, h) >= 600) ? Math.min(w / square.width, h / square.minHeight) : 0;
+      const nextSq = sq > sl * (squareRef.current ? 1.05 : 1.1) && sq > sp * (squareRef.current ? 1 : 1.02) && !(noWide && ss * SQUARE_OVER_SHORT > sq);
+      squareRef.current = nextSq;
+      const qh = nextSq ? clamp(Math.floor(h / sq), square.minHeight, square.maxHeight) : 0;
+      const next = !nextSq && sp > sl * (tallRef.current ? 1.1 : 1.15) && !(noWide && ss > sp);
+      tallRef.current = next;
+      const ph = next ? clamp(Math.floor(th / sp), portrait.minHeight, portrait.maxHeight) : 0;
+      const nextShort = !next && !nextSq && ss > sl * (shortRef.current ? 1.05 : 1.1);
       shortRef.current = nextShort;
       const sw = nextShort ? clamp(Math.floor(kw / ss), short.minWidth, short.maxWidth) : 0;
       // narrow: a landscape or square frame under 900 px wide, too little room beside the track for the page's buttons,
