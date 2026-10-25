@@ -10,7 +10,7 @@ A browser app for replaying and playing chess games, at https://chess-replay.onr
 - **Analysis in the browser**: Stockfish 19 analyses games that come without evals; drag a piece to try your own move from any position. The 1.8 MB lite engine runs by default; Settings › Engine offers the full engine (99 MB, downloaded once and kept in the browser)
 - **Opening explorer**: the book moves from each position (Lichess's opening tables)
 - **Endgame tablebase**: with 7 pieces or fewer, the result with best play and every move ranked by it, from Lichess's tablebase (needs a connection; Settings › Engine › Online data turns it off)
-- **Play/Explore**: an empty board from the starting position or a pasted FEN, where Stockfish rates every move
+- **Play/Explore**: a board from the starting position or a position set up by hand (or from a FEN) in Edit position, where Stockfish rates every move
 - **Play vs human**: a game for two at one screen, from the starting position or a pasted one. The board turns to the side to move, moves can be taken back, and the game ends on mate, a draw by the rules or by agreement, or resignation, with optional clocks. Stockfish stays off until it ends
 - **Play vs Stockfish**: a game against Stockfish at full strength, as White, Black or a random side, with Take back and optional clocks. Nothing hints at a move; Stockfish quietly flags inaccuracies, mistakes and blunders, and the better move shows once the game is over
 - **My games**: every game is kept in the browser from its first move; the 50 most recent are listed, to resume one in progress or replay a finished one like a loaded game (analysis, PGN and video export included)

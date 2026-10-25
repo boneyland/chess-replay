@@ -7,7 +7,7 @@ The one spec for the app: what it does now, what is planned, and the decisions b
 ## Contents
 
 - [Principles](#principles)
-- [Built](#built): replay and browser analysis, opening names, custom starts and flip, free board and explorer, play vs human, My games, play vs Stockfish, full Stockfish download, lines (MultiPV), endgame tablebase
+- [Built](#built): replay and browser analysis, opening names, custom starts and flip, free board and explorer, edit position, play vs human, My games, play vs Stockfish, full Stockfish download, lines (MultiPV), endgame tablebase
 - [Roadmap](#roadmap): Lichess data and multi-threaded Stockfish, player names, Chess960, typed commentary, Maia3, dead positions, background music
 - [Known gaps](#known-gaps)
 - [Decisions log](#decisions-log)
@@ -97,15 +97,27 @@ Full searches about half the nodes a second of lite in a middlegame (0.25 M agai
 
 ### Free board and explorer
 
-A plain board with Stockfish, separate from the replay (`app/free-board.jsx`, state in `BoardCore`), reached from the dock's **Play/Explore** menu (and the phone menu), in two labelled groups: Explore (Starting position, Paste FEN…, Paste PGN…, Copy FEN) and Play (Play vs human, Play vs Stockfish, My games).
+A plain board with Stockfish, separate from the replay (`app/free-board.jsx`, state in `BoardCore`), reached from the dock's **Play/Explore** menu (and the phone menu), in two labelled groups: Explore (Starting position, Edit position…, Paste PGN…, Copy FEN) and Play (Play vs human, Play vs Stockfish, My games).
 
 - **Explore**: every move by either side gets Stockfish's verdict, as own moves do; the eval bar follows; Stockfish's eval and best line show before the first move too. Moves are numbered correctly from a FEN. Undo/redo with ← →.
-- **Paste FEN**: one text field; the first two fields required, castling, en passant and counters used when present. Malformed or illegal FENs (including the side not to move in check) get a plain message and change nothing.
+- **Edit position** (below; it replaced Paste FEN on 2026-10-25).
 - **Paste PGN**: a multi-line box; Load or Ctrl+Enter opens the text as a loaded game, as Load game… does with a file (tags, comments, evals, a `[FEN]` start; the first game of several). A PGN that doesn't build gets ChessCore's message and changes nothing. Ctrl+V on the page doesn't load a PGN (decided: too easy to set off). Under Explore for now, though the result is a loaded game.
 - **Copy FEN**: copies the six-field FEN of the position on the board, in the replay (a line being shown included) or on the free board; the half-move clock and move number count on from the start's. A note shows the FEN for 4 s; where the clipboard is refused it stays up, the FEN selectable with one click.
 - **Opening explorer** in the Commentary box: the opening's name and the book moves that continue from the position (`openings-core.js` continuations), each clickable; a short note once out of book. No win rates or game counts (that is the Lichess explorer on the roadmap).
 - **Replay these moves as a game** (Settings) opens the board's moves as a loaded game for replay, analysis and MP4/WebP export, with "Back to the free board" to return.
 - The board (start FEN, moves, position in the line) survives a reload: `{ board: { fen, moves, upto } }` in the stored files.
+
+### Edit position
+
+The viewer sees a position or puzzle somewhere (a book diagram, a screen, someone's game) and wants it on the board, to analyse it or play on from it. Modelled on en-croissant's editor; the view is `EditBoard` (`app/edit-board.jsx`), its rules `EditCore` (`app/edit-core.js`), and `GameApp` swaps it in for the free board or the loaded game while its `editing` state is set (neither stays mounted, so no search, Stockfish reply or clock runs meanwhile).
+
+- **Entry**: Play/Explore › Explore › **Edit position…**, under Starting position (the phone menu too). It opens on an **empty board**, White to move, no castling. From a game in progress it asks first (`guard`); the game is paused and kept in My games.
+- **Layout**: the board where the free board draws it, centred where no eval bar stands beside it; the editor in the panels' room beside it (wide, compact, square and sideways frames), with the piece tray in the panel. On the portrait (phone) frame the tray's two rows sit right under the board and the panel under them.
+- **The panel**: a FEN field updated live, which sets up any well-formed FEN at once, legal or not (a `[FEN "…"]` tag too); only malformed text is refused, with a message under it, the board unchanged. **Start**, **Empty**, White/Black to move. Castling boxes (White and Black, O-O and O-O-O), each enabled only while its king and rook stand on their home squares; moving either off unticks it, and a pasted FEN's unsupported rights are dropped. The tray (White's six pieces, then Black's). A status line. **Cancel** and **Done**.
+- **Editing**: drag a tray piece onto a square; or click/tap a tray piece to hold it (again, or Esc, lets it go) and tap squares to drop copies, a tap on the same piece taking it off. Drag a piece on the board to move it, or off the board to take it away. Squares through `view()`, so a flipped board works. Any edit drops en passant; the move number stays.
+- **Checks** (each a line in the status line, `EditCore.problems`): "White has no king." / "Black has 2 kings."; "The pawn on a8 can't stand on the first or last rank."; "Black is in check, but it's White's turn."; "White is in check from 3 pieces, which no move can give." / "… from two pieces in a line, …" (chessops' impossible-check rule, without its en passant cases). An empty board shows a hint instead ("Drag pieces from the tray, or tap one and then tap squares."). Done is disabled while any line shows; a setup with none is one `ChessCore.parseFen` accepts.
+- **Done** opens the free board at the position (`commitBoard(BoardCore.fromFen(…))`). **Cancel** or Esc goes back to what showed before; a game left for the editor resumes, its clock running from then (the time spent editing isn't charged). A reload while editing drops the unfinished edit.
+- Copy FEN copies the editor's FEN.
 
 ### Play vs human
 
@@ -166,42 +178,6 @@ Positions of 7 pieces or fewer get Lichess's Syzygy tablebase (`https://tablebas
 ## Roadmap
 
 Planned, roughly in this order; each item gets its own PR(s) on a `claude/<topic>` branch. Items marked *needs design* have open questions to settle with the user before a plan.
-
-### Edit position
-
-Designed 2026-10-25. **Why:** the viewer sees a position or puzzle somewhere (a book diagram, a screen, someone's game) and wants it on the board, to analyse it or play on from it. Today the only way in is typing or pasting a FEN, which nobody has for a book diagram. Modelled on en-croissant's position editor (its checks are chessops': FEN syntax, empty board, kings, pawns on the back rank, the side not to move in check, impossible checks).
-
-**Goal:** setting up a 6–15 piece position quickly, by hand, on desktop and phone, then handing it to the free board. **Non-goals:** editing a loaded game's positions; en passant or move-number controls; Chess960 castling (its own roadmap item). **Anti-goals:** a position the free board can't take reaching it; an illegal position that doesn't say what's wrong; an editor that blocks editing while the position is illegal.
-
-**Entry.** Play/Explore › Explore gets **Edit position…** right under Starting position (the phone menu too). **Paste FEN…** leaves the menu: its job moves into the editor's FEN field. Copy FEN stays. Opening the editor from a game in progress asks first, as Starting position does (`guard`): leaving keeps the game in My games, paused, as today.
-
-**The view.** A view of its own, like the free board (not `GameVideo`): the board on the left as on the free board, and the editor in place of the right-hand panels (mockup A). It starts on an **empty board**, White to move, no castling. The panel, top to bottom:
-
-- **FEN field**: shows the position's FEN, updated live as the board changes. Typing or pasting a FEN sets up the board at once when it is well-formed (8 ranks of pieces, valid side, castling, en passant and counter fields; a PGN's `[FEN "…"]` tag unwrapped as `BoardCore.fenFromInput` does), **even when the position breaks the rules**: a half-built position copied out and pasted back, or a partial one to finish by hand, must load, and the status line then says what's wrong (my call, from the anti-goal: never block editing). Only a malformed FEN leaves the board as it was, with a message under the field saying why. Castling rights a pasted FEN gives that the pieces don't support are dropped, as the boxes would untick them.
-- **Start** (the standard position, all four castling rights), **Empty**, and **White to move / Black to move**.
-- **Castling**: White O-O, O-O-O, Black O-O, O-O-O. A box can be ticked only while its king and rook stand on their home squares (e1/h1, e1/a1, e8/h8, e8/a8); moving either off unticks it. So castling never fails a check.
-- **Piece tray**: two rows of six, White's pawn, knight, bishop, rook, queen, king, then Black's, drawn in the board's piece set.
-- **Status line**: what's wrong, in plain words (below), or nothing when the position is fine.
-- **Cancel** and **Done**. Done is disabled while the position is illegal.
-
-**Editing.** Drag a tray piece onto a square (it replaces what stands there). Or click/tap a tray piece to select it (highlighted; again to deselect), then click/tap squares to drop copies; a click on a square holding that same piece removes it. Drag a piece on the board to another square to move it, or off the board to remove it. Real pointer input through the board's existing input layer, flipped boards included (`view()`). On the phone, tap-then-tap is the main way; drag works too.
-
-**Checks** (all of them shown, one line each, from a new checker beside `ChessCore.parseFen`, which keeps its own messages for pasted FENs):
-
-- each side has exactly one king: "White has no king." / "Black has 2 kings."
-- no pawn on the first or last rank: "The pawn on a8 can't stand on the last rank." (one line per pawn, or a plural line; builder's choice)
-- the side not to move isn't in check: "Black is in check, but it's White's turn."
-- no impossible check (new; `parseFen` lacks it): more than two pieces giving check, or two that no single move could give at once (chessops' rule: two checkers on one line with the king, and its en passant cases): "White is in check from 3 pieces, which no move can give."
-
-An **empty board** shows a quiet hint instead of red lines ("Drag pieces from the tray, or tap one and then tap squares."); the missing-king lines appear once any piece is on the board.
-
-**Done** opens the free board at that position (`commitBoard(BoardCore.fromFen(fen))`), exactly as Paste FEN's Set up does today: Explore, Stockfish, the explorer, Play vs human / vs Stockfish from the board's position all follow as they already do. **Cancel** (or Esc) returns to whatever was showing before, unchanged: a loaded game or free board as it was; a game in progress that was left on entry is resumed as My games resumes one, its clock running again from then (the time spent editing isn't charged) (my call). The editor replaces the view rather than covering it, so no engine search, Stockfish reply or clock runs while editing.
-
-**FEN details.** En passant and the half-move clock and move number come only from a pasted FEN; any edit to the board drops en passant and keeps the move number. The FEN in the field is always one `parseFen` accepts once the status line is clear.
-
-**Phone** (the tall frame): board on top, both tray rows right under it, then the panel's other controls (FEN, Start/Empty/side to move, castling, status, Cancel/Done) (phone mockup A).
-
-**Left to the builder:** where the editor's state lives (a reload may drop an unfinished edit; my call); how the editor fits the compact and square frames (in the panels' place, as in the wide frame); exact wording and styling, in the app's existing panel and button styles; how the dock's transport bar looks (as the free board's `still` mode); keyboard access to the tray and castling boxes.
 
 ### Lichess data and multi-threaded Stockfish
 
@@ -393,6 +369,6 @@ Deferred by the per-plan reviews; each was true when recorded and may since have
 - 2026-10-24: the claude.ai artifact dropped, with what only it used: Claude-written commentary (the `sample` capability), saving through `downloads`, Queen through the Hugging Face connector, the inline engine.
 - 2026-10-24: tablebase draws never end a game: a tablebase "draw" is a draw with best play (KR v KR is one), not a dead position; dead positions stay `PlayCore`'s, a helpmate search being the open idea (Dead positions).
 - 2026-10-25: no depth limit by default: every search (game analysis, your moves, the Stockfish opponent and its "before" search) runs for its time limit alone, `go movetime` without `depth`. A capped depth ended endgame searches in no time, short of deep mates (KBN v K: depth 24 read +1.91 after 1 s, depth 30 +1.89 after 2.6 s, no limit reached depth 44 and a winning score in 5 s). The depth sliders keep 16–30 below a top stop, No limit (`AnalysisCore.DEPTHS`, depth `null`); Go deeper then doubles only the time; a run with no limit leaves the pace estimate alone (every position takes its time limit). Viewers who changed any setting keep their stored depth until they move the slider.
-- 2026-10-25: Edit position designed (Roadmap): Play/Explore › Edit position… under Starting position replaces Paste FEN…; starts empty; the tray in the side panel on desktop, under the board on the phone; an illegal position says what's wrong and disables Done but never blocks editing.
+- 2026-10-25: Edit position designed and built: Play/Explore › Edit position… under Starting position replaces Paste FEN…; starts empty; the tray in the side panel on desktop, under the board on the phone; an illegal position says what's wrong and disables Done but never blocks editing.
 - 2026-10-25, an experiment: a page under 1050 px wide or 650 px high never gets the 16:9 landscape frame, which left a small window mostly empty; it takes the largest of the others, the square frame where its board is within 10% of the sideways one's (`SQUARE_OVER_SHORT`, `app/engine.jsx`: a page near 1050 × 800 gets square, which fills its height), else the sideways frame.
 - 2026-10-25: a page under 1300 px wide gets the compact landscape frame (`LAYOUTS.compact`, `COMPACT` in `app/game-video-core.jsx`): the wide frame's panels at their sizes with the square frame's 20 px margins, 14 px gaps and panel padding, 1800×1040 instead of 1920×1080, so it shows ~4% larger; its stage padding is slimmer too (`.stage-compact`). An export from it is 1800×1040.
