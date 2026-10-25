@@ -28,6 +28,8 @@ const ROOT = path.join(__dirname, '..', '..');
 const OUT = path.join(ROOT, 'tests', 'out', 'live');
 const SITES = (process.env.LIVE_URLS || 'https://chess-replay.onrender.com/').split(',').map((u) => u.trim()).map((u) => (u === 'local' ? u : u.replace(/\/?$/, '/')));
 const BROWSERS = (process.env.LIVE_BROWSERS || 'chromium,firefox').split(',').map((b) => b.trim());
+// LIVE_ONLY: a regular expression; only the subtests whose names match it run (node's name patterns can't reach them)
+const ONLY = process.env.LIVE_ONLY ? new RegExp(process.env.LIVE_ONLY) : null;
 const PAGE = 'chess-game-video.html';
 const SF = 'stockfish-19-lite-single';
 const PROXY_CA = !!process.env.CCR_AGENT_PROXY_ENABLED;
@@ -76,14 +78,23 @@ const wider = (page) => page.evaluate(() => {
   }
   return [`scrollWidth ${document.documentElement.scrollWidth} > ${w}`, ...out.slice(0, 8)];
 });
-// A FEN typed into the Paste FEN field with the keyboard, as a person would: with locator.fill(), Set up left the dialog
-// open in GitHub Actions' stock Firefox (WebDriver BiDi), as if the page never saw the text
+// A FEN typed into Edit position's FEN field with the keyboard, as a person would: with locator.fill(), the Paste FEN
+// dialog this replaced stayed open in GitHub Actions' stock Firefox (WebDriver BiDi), as if the page never saw the text
 async function typeFen(field, fen) {
   await field.click();
   await field.press('ControlOrMeta+a');
   await field.press('Backspace');
   await field.pressSequentially(fen);
   assert.equal(await field.inputValue(), fen, 'the FEN is in the field');
+}
+// Play/Explore › Edit position…, a FEN typed in, Done: the free board at that position
+async function setUpFen(page, fen) {
+  await page.getByRole('button', { name: 'Play/Explore' }).click();
+  await page.getByRole('button', { name: 'Edit position…' }).click();
+  const field = page.getByRole('textbox', { name: 'FEN' });
+  await typeFen(field, fen);
+  await page.getByRole('button', { name: 'Done' }).click();
+  await field.waitFor({ state: 'detached', timeout: 5000 });
 }
 
 for (const name of BROWSERS) for (const site of SITES) {
@@ -92,6 +103,7 @@ for (const name of BROWSERS) for (const site of SITES) {
     // a phone's context options: Firefox has no mobile emulation in Playwright, so there it gets `other`
     const phone = (other) => (name === 'firefox' ? other : { isMobile: true, hasTouch: true, ...(name === 'webkit' ? IPHONE : {}) });
     // one browser at a time, closed before the next starts
+    if (ONLY) { const sub = t.test.bind(t); t.test = (n, fn) => (ONLY.test(n) ? sub(n, fn) : sub(n, { skip: 'LIVE_ONLY' }, fn)); }
     const browser = await LAUNCH[name]();
     t.after(() => browser.close());
     const { ctx, page, errors } = await open(browser, { width: 1440, height: 900 });
@@ -549,87 +561,178 @@ for (const name of BROWSERS) for (const site of SITES) {
       assert.deepEqual(ph.errors, []);
       await ph.ctx.close();
     });
-    // Paste FEN: a bad FEN gets a plain message and changes nothing; a good one sets up the board, Black to move here
-    await t.test('desktop: Paste FEN sets up a position, and says what\'s wrong with a bad one', async () => {
-      const pf = await open(browser, { width: 1440, height: 900 });
-      const p = pf.page, label = p.locator('.plabel');
-      // the piece at the board's top left: a flip would put another there
-      const corner = () => p.evaluate(() => { const i = [...document.querySelectorAll('img')].filter((e) => e.getBoundingClientRect().width > 40).sort((a, b) => (a.getBoundingClientRect().top - b.getBoundingClientRect().top) || (a.getBoundingClientRect().left - b.getBoundingClientRect().left))[0]; return i ? i.getAttribute('src').slice(0, 120) : null; });
+    // Edit position: a typed FEN sets up the board, even an illegal one, whose problems the status line names; a
+    // malformed one changes nothing; Done opens the free board at that position
+    await t.test('desktop: Edit position sets up a pasted FEN, says what\'s wrong, and Done opens the free board', async () => {
+      const ep = await open(browser, { width: 1440, height: 900 });
+      const p = ep.page, status = p.getByRole('status').filter({ hasText: /king|turn|tray|check|pawn/ }), done = p.getByRole('button', { name: 'Done' });
+      // the pieces on the board: the tray's are buttons
+      const onBoard = () => p.evaluate(() => [...document.querySelectorAll('img')].filter((i) => !i.closest('button') && i.getBoundingClientRect().width > 10).length);
       await p.goto(base, { waitUntil: 'load' });
       await loadedOn(p);
-      // the sample's board gives the squares: the free board stands in the same place, and three pieces can't give it
-      const b = await boardBox(p), top = await corner();
       await p.getByRole('button', { name: 'Play/Explore' }).click();
-      await p.getByRole('button', { name: 'Paste FEN…' }).click();
-      const dialog = p.getByRole('dialog', { name: 'Paste FEN' }), field = dialog.getByRole('textbox', { name: 'FEN' });
-      await assert.doesNotReject(dialog.waitFor({ timeout: 5000 }));
-      assert.equal(await field.evaluate((el) => el === document.activeElement), true, 'the field is focused on open');
-      // keys typed in the field stay there: F doesn't flip, the arrows, Home and End don't step
-      await p.keyboard.type('f');
-      await p.keyboard.press('ArrowLeft');
-      await p.keyboard.press('Home');
-      await p.keyboard.press('End');
-      await p.keyboard.press('Backspace');
-      await p.keyboard.type('8/8/8/8/8/8/8/4K3 w - - 0 1');
-      await p.keyboard.press('Enter');
-      await assert.doesNotReject(dialog.getByRole('alert').filter({ hasText: /king/i }).waitFor({ timeout: 5000 }));
-      assert.equal(await dialog.isVisible(), true, 'a bad FEN keeps the dialog open');
-      assert.equal(await field.inputValue(), '8/8/8/8/8/8/8/4K3 w - - 0 1', 'and its text');
-      assert.match(await label.innerText(), /^Start$/);
-      assert.equal(await p.getByRole('button', { name: 'Play (space)' }).count(), 1, 'still the sample game');
-      assert.equal((await boardBox(p)).n, 32);
-      assert.equal(await corner(), top, 'F typed in the field left the board unflipped');
-      await p.screenshot({ path: path.join(OUT, host + '-fen-dialog.png') });
-      // Tab goes round the dialog (field, Cancel, Set up) and never reaches the page behind it
-      const inDialog = () => p.evaluate(() => !!document.activeElement.closest('[role="dialog"]'));
-      for (let i = 0; i < 3; i++) {
-        await p.keyboard.press('Tab');
-        assert.equal(await inDialog(), true, `focus stays in the dialog after ${i + 1} Tab${i ? 's' : ''}`);
-      }
-      await p.keyboard.press('Shift+Tab');
-      assert.equal(await inDialog(), true, 'and after Shift+Tab');
-      // a press on the dialog's title keeps focus on a control, so Tab still goes round
-      await dialog.getByText('Paste FEN', { exact: true }).click();
-      await p.keyboard.press('Shift+Tab');
-      assert.equal(await inDialog(), true, 'after a click on the title and Shift+Tab');
-      // Esc closes it and gives focus back to Play/Explore
-      await p.keyboard.press('Escape');
-      await assert.doesNotReject(dialog.waitFor({ state: 'detached', timeout: 5000 }));
-      assert.equal(await p.evaluate(() => document.activeElement.textContent), 'Play/Explore', 'focus back on Play/Explore');
+      await p.getByRole('button', { name: 'Edit position…' }).click();
+      const field = p.getByRole('textbox', { name: 'FEN' });
+      await assert.doesNotReject(field.waitFor({ timeout: 5000 }));
+      assert.equal(await field.inputValue(), '8/8/8/8/8/8/8/8 w - - 0 1', 'an empty board');
+      assert.match(await status.innerText(), /Drag pieces from the tray, or tap one and then tap squares\./);
+      assert.equal(await done.isDisabled(), true);
+      await p.screenshot({ path: path.join(OUT, host + '-edit-empty.png') });
+      await typeFen(field, '4k3/4R3/8/8/8/8/8/4K3 w - - 0 1');
+      await assert.doesNotReject(status.filter({ hasText: "Black is in check, but it's White's turn." }).waitFor({ timeout: 5000 }));
+      assert.equal(await done.isDisabled(), true);
+      assert.equal(await onBoard(), 3, 'the illegal position is on the board');
+      await p.screenshot({ path: path.join(OUT, host + '-edit-illegal.png') });
+      await p.getByRole('combobox', { name: 'Side to move' }).selectOption('b');
+      await p.waitForFunction(() => !/turn\./.test(document.body.innerText), null, { timeout: 5000 });
+      assert.equal(await done.isDisabled(), false);
+      assert.equal(await field.inputValue(), '4k3/4R3/8/8/8/8/8/4K3 b - - 0 1');
+      // malformed text: a message, the board as it was
+      await field.click();
+      await field.press('ControlOrMeta+a');
+      await field.pressSequentially('nonsense');
+      await assert.doesNotReject(p.getByRole('alert').filter({ hasText: /isn't a FEN/ }).waitFor({ timeout: 5000 }));
+      assert.equal(await onBoard(), 3);
+      await typeFen(field, '4k3/4R3/8/8/8/8/8/4K3 b - - 0 1');
+      await done.click();
+      await assert.doesNotReject(field.waitFor({ state: 'detached', timeout: 5000 }));
       await p.getByRole('button', { name: 'Play/Explore' }).click();
-      await p.getByRole('button', { name: 'Paste FEN…' }).click();
-      await assert.doesNotReject(dialog.waitFor({ timeout: 5000 }));
-      await typeFen(field, '4k3/8/8/8/8/8/4P3/4K3 b - - 0 40');
-      await dialog.getByRole('button', { name: 'Set up' }).click();
-      await assert.doesNotReject(dialog.waitFor({ state: 'detached', timeout: 5000 }));
+      await p.getByRole('button', { name: 'Copy FEN' }).click();
+      await assert.doesNotReject(p.locator('.fen-note-fen').filter({ hasText: '4k3/4R3/8/8/8/8/8/4K3 b - - 0 1' }).waitFor({ timeout: 5000 }));
+      assert.deepEqual(ep.errors, []);
+      await ep.ctx.close();
+    });
+    await t.test('desktop: Edit position Start, Empty and castling boxes', async () => {
+      const ep = await open(browser, { width: 1440, height: 900 });
+      const p = ep.page;
+      await p.goto(base, { waitUntil: 'load' });
+      await loadedOn(p);
+      await p.getByRole('button', { name: 'Play/Explore' }).click();
+      await p.getByRole('button', { name: 'Edit position…' }).click();
+      const field = p.getByRole('textbox', { name: 'FEN' }), box = (n) => p.getByRole('checkbox', { name: n, exact: true });
+      await p.getByRole('button', { name: 'Start', exact: true }).click();
+      assert.equal(await field.inputValue(), 'rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1');
+      for (const n of ['White O-O', 'White O-O-O', 'Black O-O', 'Black O-O-O']) assert.equal(await box(n).isChecked(), true, n);
+      await box('White O-O-O').uncheck();
+      assert.equal(await field.inputValue(), 'rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w Kkq - 0 1');
+      await typeFen(field, 'rnbqkbn1/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w Kkq - 0 1');
+      assert.equal(await box('Black O-O').isChecked(), false);
+      assert.equal(await box('Black O-O').isDisabled(), true);
+      assert.equal(await field.inputValue(), 'rnbqkbn1/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w Kkq - 0 1', 'the field keeps what was typed');
+      await p.getByRole('button', { name: 'Empty', exact: true }).click();
+      assert.equal(await field.inputValue(), '8/8/8/8/8/8/8/8 w - - 0 1');
+      assert.deepEqual(ep.errors, []);
+      await ep.ctx.close();
+    });
+    // Cancel after leaving a game in progress: the game comes back with the time it had, the time away not charged
+    await t.test('desktop: Cancel in Edit position returns to a timed game with its time left', async () => {
+      const ep = await open(browser, { width: 1440, height: 900 });
+      const p = ep.page;
+      await p.goto(base, { waitUntil: 'load' });
+      await loadedOn(p);
+      await p.getByRole('button', { name: 'Play/Explore' }).click();
+      await p.getByRole('button', { name: 'Play vs human…' }).click();
+      const dialog = p.getByRole('dialog', { name: 'Play vs human' });
+      await dialog.getByRole('radiogroup', { name: 'Time control' }).getByRole('radio', { name: '5+3' }).click();
+      await dialog.getByRole('button', { name: 'Start game' }).click();
       await assert.doesNotReject(p.getByRole('button', { name: 'Play (space)' }).waitFor({ state: 'detached', timeout: 5000 }));
-      assert.match(await label.innerText(), /^Start$/);
-      assert.equal((await boardBox(p)).n, 3, 'pieces on the board');
-      const f = square(b, 'e8'), tt = square(b, 'd7');
-      await p.mouse.move(f.x, f.y);
-      await p.mouse.down();
-      await p.mouse.move(tt.x, tt.y, { steps: 8 });
-      await p.mouse.up();
-      await assert.doesNotReject(label.filter({ hasText: /40… Kd7/ }).waitFor({ timeout: 5000 }));
-      assert.deepEqual(pf.errors, []);
-      await pf.ctx.close();
-      // the phone: the item is in the folded menu, the dialog fits the width, Esc cancels
+      const b = await boardBox(p), f = square(b, 'e2'), tt = square(b, 'e4');
+      await p.mouse.move(f.x, f.y); await p.mouse.down(); await p.mouse.move(tt.x, tt.y, { steps: 8 }); await p.mouse.up();
+      await p.waitForTimeout(1500);
+      await p.getByRole('button', { name: 'Play/Explore' }).click();
+      await p.getByRole('button', { name: 'Edit position…' }).click();
+      await p.getByRole('button', { name: 'Leave' }).click();
+      const clocks = async () => (await p.locator('.game-clock').allInnerTexts()).join(' ');
+      const field = p.getByRole('textbox', { name: 'FEN' });
+      await assert.doesNotReject(field.waitFor({ timeout: 5000 }));
+      await p.waitForTimeout(2500);
+      await p.keyboard.press('Escape');
+      await assert.doesNotReject(field.waitFor({ state: 'detached', timeout: 5000 }));
+      const back = await clocks();
+      // Black had thought about 1.5 s before Edit position; 2.5 s more in the editor would read 4:5x or less
+      assert.match(back, /5:0[0-3] 4:5[7-9]|4:5[7-9] 5:0[0-3]/, back);
+      assert.deepEqual(ep.errors, []);
+      await ep.ctx.close();
+    });
+    // the phone: Edit position in the folded menu, the tray right under the board and above the FEN field
+    await t.test('phone: Edit position\'s tray sits under the board, and Done sets up the board', async () => {
       const ph = await open(browser, { width: 390, height: 844 }, phone({}));
-      await ph.page.goto(base, { waitUntil: 'load' });
-      await loadedOn(ph.page);
-      await ph.page.getByRole('button', { name: 'Menu' }).click();
-      await ph.page.getByRole('button', { name: 'Paste FEN…' }).click();
-      const pd = ph.page.getByRole('dialog', { name: 'Paste FEN' });
-      await assert.doesNotReject(pd.waitFor({ timeout: 5000 }));
-      await typeFen(pd.getByRole('textbox', { name: 'FEN' }), '4k3/8/8/8/8/8/4P3/4K3 b - - 0 40');
-      assert.deepEqual(await wider(ph.page), [], 'no sideways scroll');
-      const box = await pd.boundingBox();
-      assert.ok(box.x >= 8 && box.x + box.width <= 390 - 8, 'the dialog fits the width');
-      await ph.page.screenshot({ path: path.join(OUT, host + '-fen-dialog-phone.png') });
-      await ph.page.keyboard.press('Escape');
-      await assert.doesNotReject(pd.waitFor({ state: 'detached', timeout: 5000 }));
-      assert.equal(await ph.page.getByRole('button', { name: 'Play (space)' }).count(), 1, 'Esc changes nothing');
-      assert.equal(await ph.page.evaluate(() => document.activeElement.getAttribute('aria-label')), 'Menu', 'focus back on Menu');
+      const p = ph.page;
+      await p.goto(base, { waitUntil: 'load' });
+      await loadedOn(p);
+      const b = await boardBox(p);
+      await p.getByRole('button', { name: 'Menu' }).click();
+      await p.getByRole('button', { name: 'Edit position…' }).click();
+      const field = p.getByRole('textbox', { name: 'FEN' });
+      await assert.doesNotReject(field.waitFor({ timeout: 5000 }));
+      const tray = await p.getByRole('group', { name: 'Pieces' }).boundingBox(), fb = await field.boundingBox();
+      assert.ok(tray.y >= b.y0 + b.h - 2 && tray.y + tray.height <= fb.y, `tray ${tray.y}–${tray.y + tray.height}, board bottom ${b.y0 + b.h}, field ${fb.y}`);
+      assert.deepEqual(await wider(p), [], 'no sideways scroll');
+      await typeFen(field, '4k3/8/8/8/8/8/8/4K3 w - - 0 1');
+      await p.screenshot({ path: path.join(OUT, host + '-edit-phone.png') });
+      await p.getByRole('button', { name: 'Done' }).click();
+      await assert.doesNotReject(field.waitFor({ state: 'detached', timeout: 5000 }));
+      assert.equal((await boardBox(p)).n, 2);
+      assert.deepEqual(ph.errors, []);
+      await ph.ctx.close();
+    });
+    // editing by pointer, with real mouse input: tray pieces tapped then squares tapped, a tray piece dragged on, a piece
+    // dragged off the board; Esc lets a held piece go before it cancels; a flipped board drops on the square under the pointer
+    await t.test('desktop: Edit position places pieces by drag and by tap, removes them by dragging off', async () => {
+      for (const flip of [false, true]) {
+        const ep = await open(browser, { width: 1440, height: 900 });
+        const p = ep.page;
+        if (flip) await p.addInitScript(() => { try { localStorage.setItem('chess-video.tweaks.v1', JSON.stringify({ flip: true })); } catch (e) {} });
+        await p.goto(base, { waitUntil: 'load' });
+        await loadedOn(p);
+        // the sample's board gives the squares (flipped too): the editor's board stands in the same place
+        const b = await boardBox(p), sqAt = (s) => square(b, s, flip);
+        await p.getByRole('button', { name: 'Play/Explore' }).click();
+        await p.getByRole('button', { name: 'Edit position…' }).click();
+        const field = p.getByRole('textbox', { name: 'FEN' }), tray = (n) => p.getByRole('button', { name: n, exact: true });
+        await assert.doesNotReject(field.waitFor({ timeout: 5000 }));
+        const tap = async (s) => { const c = sqAt(s); await p.mouse.click(c.x, c.y); };
+        const dragTo = async (from, to) => { await p.mouse.move(from.x, from.y); await p.mouse.down(); await p.mouse.move(to.x, to.y, { steps: 10 }); await p.mouse.up(); };
+        const centre = async (loc) => { const r = await loc.boundingBox(); return { x: r.x + r.width / 2, y: r.y + r.height / 2 }; };
+        await tray('White king').click(); await tap('e1');
+        await tray('Black king').click(); await tap('e8');
+        assert.equal(await tray('Black king').getAttribute('aria-pressed'), 'true');
+        await p.keyboard.press('Escape');
+        assert.equal(await tray('Black king').getAttribute('aria-pressed'), 'false', 'Esc lets the held piece go');
+        assert.equal(await field.isVisible(), true, 'and the editor stays');
+        await dragTo(await centre(tray('White rook')), sqAt('a1'));
+        assert.equal(await field.inputValue(), '4k3/8/8/8/8/8/8/R3K3 w - - 0 1');
+        // off the board, past its left edge
+        const a1 = sqAt('a1');
+        await dragTo(a1, { x: b.x0 - 30, y: a1.y });
+        assert.equal(await field.inputValue(), '4k3/8/8/8/8/8/8/4K3 w - - 0 1', 'dragged off, the rook is gone');
+        // a piece on the board dragged to another square moves
+        await dragTo(sqAt('e1'), sqAt('d2'));
+        assert.equal(await field.inputValue(), '4k3/8/8/8/8/8/3K4/8 w - - 0 1');
+        // a held piece tapped on its own kind takes it away
+        await tray('White king').click(); await tap('d2');
+        assert.equal(await field.inputValue(), '4k3/8/8/8/8/8/8/8 w - - 0 1');
+        await p.keyboard.press('Escape');
+        await p.keyboard.press('Escape');
+        await assert.doesNotReject(field.waitFor({ state: 'detached', timeout: 5000 }));
+        assert.deepEqual(ep.errors, []);
+        await ep.ctx.close();
+      }
+    });
+    await t.test('phone: Edit position places pieces by tap', async () => {
+      const ph = await open(browser, { width: 390, height: 844 }, phone({}));
+      const p = ph.page;
+      await p.goto(base, { waitUntil: 'load' });
+      await loadedOn(p);
+      await p.getByRole('button', { name: 'Menu' }).click();
+      await p.getByRole('button', { name: 'Edit position…' }).click();
+      const field = p.getByRole('textbox', { name: 'FEN' });
+      await assert.doesNotReject(field.waitFor({ timeout: 5000 }));
+      // the editor's board is centred (no eval bar): its squares from its own box, the board's touch layer
+      const eb = await p.locator('[title="Drag a piece to move it, or off the board to take it away"]').boundingBox();
+      await p.getByRole('button', { name: 'White king', exact: true }).click();
+      await p.mouse.click(eb.x + 4.5 * eb.width / 8, eb.y + 7.5 * eb.height / 8);
+      assert.equal(await field.inputValue(), '8/8/8/8/8/8/8/4K3 w - - 0 1');
       assert.deepEqual(ph.errors, []);
       await ph.ctx.close();
     });
@@ -704,14 +807,7 @@ for (const name of BROWSERS) for (const site of SITES) {
       const p = tb.page, sent = [];
       tb.ctx.on('request', (r) => { if (r.url().startsWith('https://tablebase.lichess.ovh/')) sent.push(decodeURIComponent(r.url().split('fen=')[1])); });
       const text = () => p.evaluate(() => document.body.innerText);
-      const setUp = async (fen) => {
-        await p.getByRole('button', { name: 'Play/Explore' }).click();
-        await p.getByRole('button', { name: 'Paste FEN…' }).click();
-        const dialog = p.getByRole('dialog', { name: 'Paste FEN' });
-        await typeFen(dialog.getByRole('textbox', { name: 'FEN' }), fen);
-        await p.keyboard.press('Enter');
-        await dialog.waitFor({ state: 'detached', timeout: 5000 });
-      };
+      const setUp = (fen) => setUpFen(p, fen);
       await p.goto(base, { waitUntil: 'load' });
       await loadedOn(p);
       // the sample's opening has 32 pieces: nothing asked
@@ -822,11 +918,7 @@ for (const name of BROWSERS) for (const site of SITES) {
       await p.waitForFunction(() => /Out of book/.test(document.body.innerText), null, { timeout: 5000 });
       assert.match(await panel('Opening explorer'), /last book position: /);
       // a pasted FEN that is a book position is named itself; its rows take Enter
-      await p.getByRole('button', { name: 'Play/Explore' }).click();
-      await p.getByRole('button', { name: 'Paste FEN…' }).click();
-      const dialog = p.getByRole('dialog', { name: 'Paste FEN' });
-      await typeFen(dialog.getByRole('textbox', { name: 'FEN' }), 'rnbqkbnr/pppppppp/8/8/4P3/8/PPPP1PPP/RNBQKBNR b KQkq e3 0 1');
-      await dialog.getByRole('button', { name: 'Set up' }).click();
+      await setUpFen(p, 'rnbqkbnr/pppppppp/8/8/4P3/8/PPPP1PPP/RNBQKBNR b KQkq e3 0 1');
       await assert.doesNotReject(head.filter({ hasText: /King.s Pawn Game/ }).waitFor({ timeout: 5000 }));
       assert.match(await panel('Opening explorer'), /B00/);
       await row(p, 'e5').focus();
@@ -1126,12 +1218,7 @@ for (const name of BROWSERS) for (const site of SITES) {
       const panel = (title) => p.evaluate((tt) => { const d = [...document.querySelectorAll('div')].find((e) => e.firstElementChild && e.firstElementChild.firstElementChild && e.firstElementChild.firstElementChild.textContent === tt && getComputedStyle(e.firstElementChild).textTransform === 'uppercase'); return d ? d.innerText : ''; }, title);
       await p.goto(base, { waitUntil: 'load' });
       await loadedOn(p);
-      await p.getByRole('button', { name: 'Play/Explore' }).click();
-      await p.getByRole('button', { name: 'Paste FEN…' }).click();
-      const fen = p.getByRole('dialog', { name: 'Paste FEN' });
-      await typeFen(fen.getByRole('textbox', { name: 'FEN' }), '6k1/5ppp/8/3p4/8/8/4QPPP/6K1 w - - 0 1');
-      await fen.getByRole('button', { name: 'Set up' }).click();
-      await assert.doesNotReject(fen.waitFor({ state: 'detached', timeout: 3000 }));
+      await setUpFen(p, '6k1/5ppp/8/3p4/8/8/4QPPP/6K1 w - - 0 1');
       await p.getByRole('button', { name: 'Play/Explore' }).click();
       await p.getByRole('button', { name: 'Play vs Stockfish…' }).click();
       const dialog = p.getByRole('dialog', { name: 'Play vs Stockfish' });
