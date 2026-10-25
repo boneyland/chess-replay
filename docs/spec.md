@@ -16,7 +16,7 @@ The one spec for the app: what it does now, what is planned, and the decisions b
 
 These hold across every feature; a change that breaks one is a failure even if it works.
 
-- **Nothing leaves the browser** unless the viewer turns it on (Ask Queen, and the planned Lichess features, each behind a toggle or button). No accounts of our own, no online play.
+- **Nothing leaves the browser** unless the viewer turns it on (Ask Queen, and the planned Lichess features, each behind a toggle or button). No accounts of our own (online play, when built, is between two browsers with no account or game server of ours).
 - **The playing video stays clean.** Buttons, progress lines and engine controls are for the paused page; the frames of a playing video look as they always have.
 - **Nothing heavy starts by itself.** The engine (1.8 MB) loads on first use; the full engine (99 MB) downloads only when the viewer asks; whole-game analysis runs only when asked.
 - **No hints in a game.** During Play vs human or Play vs Stockfish no eval bar, arrows, verdicts, book moves or engine lines show.
@@ -320,7 +320,7 @@ Open questions:
 
 ### Peer-to-peer online play (*needs design*)
 
-Play vs human between two devices: one player makes a game and shares a link or code, the other joins, and moves go directly between the browsers (WebRTC data channel), with no game server of ours. Breaks the principle "no online play", so it needs the user's say on changing it. Open: signalling (a WebRTC connection needs an offer/answer exchanged somehow: copy-paste codes or a QR code, which needs no server, or a public signalling or TURN service, which puts a third party in the path and in the CSP); NAT traversal without TURN fails on some networks; who keeps the clock and how a dropped connection, a reload or a dispute (takebacks, draw offers, claims) is settled when neither side is trusted; whether the game lands in both players' My games; offline it is "not available".
+Play vs human between two devices: one player makes a game and shares a link or code, the other joins, and moves go directly between the browsers (WebRTC data channel), with no game server of ours. The user dropped "no online play" from the principles on 2026-10-26; still no accounts of our own. Known risks, to weigh in the design: each player's IP address is visible to the other (WebRTC connects them directly; a TURN relay hides it but is a third party); nothing stops either player consulting an engine, so it suits friends, not strangers, and there is no matchmaking; a modified page can send any move, clock time or result, so each side checks the other's moves with `PlayCore` and treats the clock as a matter of trust; joining by link means the link is the only key to the game. Open: signalling (a WebRTC connection needs an offer/answer exchanged somehow: copy-paste codes or a QR code, which needs no server, or a public signalling or TURN service, which puts a third party in the path and in the CSP); NAT traversal without TURN fails on some networks; who keeps the clock and how a dropped connection, a reload or a dispute (takebacks, draw offers, claims) is settled when neither side is trusted; whether the game lands in both players' My games; offline it is "not available".
 
 ### App walk-through (*needs design*)
 
@@ -404,3 +404,4 @@ Deferred by the per-plan reviews; each was true when recorded and may since have
 - 2026-10-26, after a repo audit: the page gets a Content-Security-Policy (a `<meta>` with the inline scripts' hashes) and nosniff and Referrer-Policy headers; Mediabunny is served from the site (an `import()` can't be pinned by hash); Sign in with Hugging Face is hidden on PR previews; a picked or dropped file over 50 MB is refused before it's read.
 - 2026-10-26: nothing on the page selects outside text fields (Copy FEN's note shows the FEN in a read-only field), and one page-wide handler (`app/drag-scroll.js`) scrolls any box under a mouse drag, both ways and scaled to the frame, replacing the per-panel hook of the Moves list, explorer, tablebase and game info.
 - 2026-10-26: chasolver, peer-to-peer online play and an app walk-through added to the roadmap.
+- 2026-10-26: "no online play" dropped from the principles (no accounts of our own stays), for peer-to-peer play between two browsers.
