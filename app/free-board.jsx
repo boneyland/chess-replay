@@ -53,7 +53,6 @@ function OpeningExplorer({ board, book, onPlay }) {
   // each position's list starts at its top, not where the last one was scrolled to (the panel's box stays the same node)
   const top = React.useRef(null), posKey = board.fen + '|' + ucis.join(' ');
   React.useLayoutEffect(() => { const box = top.current && top.current.parentElement; if (box) box.scrollTop = 0; }, [posKey]);
-  const drag = useDragScroll(() => top.current && top.current.parentElement);
   let body;
   if (!book) body = <span style={{ font: `italic 400 30px/1.25 ${SERIF}`, color: C.dim }}>Loading the opening book…</span>;
   else if (inBook) {
@@ -79,7 +78,7 @@ function OpeningExplorer({ board, book, onPlay }) {
   } else body = <span style={{ font: `italic 400 30px/1.25 ${SERIF}`, color: C.dim }}>This position isn’t in the opening book.</span>;
   return (
     <Panel box={{ ...L.comment, scroll: true }} a={1} title="Opening explorer" right={named ? `${named.eco} ${named.name}` : null}>
-      <div ref={top} {...drag}>{body}</div>
+      <div ref={top}>{body}</div>
     </Panel>
   );
 }
@@ -227,8 +226,6 @@ function GameInfo({ board }) {
   const G = board.game, z = L.comment.label || 1, sfGame = G.mode === 'stockfish';
   const note = (txt) => <span style={{ display: 'block', marginTop: 10 * z, font: `400 ${Math.round(19 * z)}px/1.4 ${SANS}`, color: C.dim }}>{txt}</span>;
   const heading = (txt, col) => <span className="game-info-head" style={{ display: 'block', font: `400 ${Math.round(40 * Math.max(1, L.comment.text))}px/1.14 ${SERIF}`, color: col || C.ink }}>{txt}</span>;
-  // scrolls with a mouse drag as the explorer does, and its text can't be selected
-  const top = React.useRef(null), drag = useDragScroll(() => top.current && top.current.parentElement);
   const from = board.fen === window.ChessCore.START_FEN ? 'From the starting position' : 'From a set-up position';
   let body;
   if (!sfGame) {
@@ -275,7 +272,7 @@ function GameInfo({ board }) {
   }
   return (
     <Panel box={{ ...L.comment, scroll: true }} a={1} title={sfGame ? 'Play vs Stockfish' : 'Play vs human'} right={G.tc || 'No clock'}>
-      <div ref={top} {...drag}>{body}</div>
+      <div>{body}</div>
     </Panel>
   );
 }

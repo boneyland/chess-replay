@@ -82,7 +82,6 @@ function TablebaseExplorer({ t, posKey, onPlay }) {
   // each position's list starts at its top, as the explorer's does
   const top = React.useRef(null);
   React.useLayoutEffect(() => { const box = top.current && top.current.parentElement; if (box) box.scrollTop = 0; }, [posKey]);
-  const drag = useDragScroll(() => top.current && top.current.parentElement);
   let body, right = null;
   if (t.state === 'loading') body = heading('Looking up…', true);
   else if (t.state === 'none') body = <React.Fragment>{heading('Not available', true)}{note('Lichess can’t be reached: offline, or busy for a minute.')}</React.Fragment>;
@@ -118,7 +117,7 @@ function TablebaseExplorer({ t, posKey, onPlay }) {
   }
   return (
     <Panel box={{ ...L.comment, scroll: true }} a={1} title="Endgame tablebase" right={right}>
-      <div ref={top} {...drag}>{body}</div>
+      <div ref={top}>{body}</div>
     </Panel>
   );
 }
