@@ -24,7 +24,7 @@ https://github.com/user-attachments/assets/d15445d0-b356-4954-b791-e700a717ab14
 
 ## Lichess data
 
-With Settings › Engine › Online data › Endgame tablebase on (the default), the position on the board, as a FEN and nothing else (no account, no game), goes to Lichess's tablebase at `https://tablebase.lichess.ovh/standard` whenever it has 7 pieces or fewer: while a replay is paused, and on the free board, never during a game. "Analyse with Stockfish" sends the game's positions of 7 pieces or fewer one by one as the run reaches them, each to `/standard` and `/standard/mainline` (the best line), a second apart. Answers are kept in memory for the page's lifetime only.
+With Settings › Engine › Online data › Endgame tablebase on (the default), the position on the board, as a FEN and nothing else (no account, no game), goes to Lichess's tablebase at `https://tablebase.lichess.ovh/standard` whenever it has 7 pieces or fewer: while a replay is paused, and on the free board, never during a game. "Analyse with Stockfish" sends the game's positions of 7 pieces or fewer one by one as the run reaches them, to `/standard`, 4 s apart. Answers are kept in memory for the page's lifetime only.
 
 ## Build
 
