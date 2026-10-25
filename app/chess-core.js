@@ -72,6 +72,17 @@
   }
   const kingIdx = (b, color) => b.findIndex((p) => p === (color === 'w' ? 'K' : 'k'));
   const inCheck = (b, color) => { const k = kingIdx(b, color); return k >= 0 && attacked(b, k, color === 'w' ? 'b' : 'w'); };
+  // the squares of the pieces giving check to color's king (none without a king)
+  function checkers(b, color) {
+    const k = kingIdx(b, color), by = color === 'w' ? 'b' : 'w', out = [];
+    if (k < 0) return out;
+    for (let i = 0; i < 64; i++) {
+      const p = b[i]; if (!p || colorOf(p) !== by) continue;
+      const t = p.toLowerCase();
+      if (t === 'p' ? fy(k) - fy(i) === (by === 'w' ? -1 : 1) && Math.abs(fx(k) - fx(i)) === 1 : geo(b, i, k, t)) out.push(i);
+    }
+    return out;
+  }
   function hasLegal(pos) {
     for (let i = 0; i < 64; i++) {
       const p = pos.b[i]; if (!p || colorOf(p) !== pos.turn) continue;
@@ -632,5 +643,5 @@
     for (let m = step; 2 * m - ply0 <= N; m += step) if (2 * (m - 1) - ply0 >= 0) ticks.push({ m, at: 2 * (m - 1) - ply0 });
     return ticks;
   }
-  window.ChessCore = { START_FEN, fmtDate, hasLegal, inCheck, evalTicks, parseFen, fenAfter, moveNo, sqIndex: sqIdx, applySan, applyUci, stepFromUci, toFen, playLine, posFromFen, legalTargets, isPromotion, userMove, buildGame, withCommentary, commentarySources, classifyFile, plan, timing, schedule, cues, clipRange, winChance, plyCp, MARK_CLASS, annotatedPgn };
+  window.ChessCore = { START_FEN, fmtDate, hasLegal, inCheck, checkers, evalTicks, parseFen, fenAfter, moveNo, sqIndex: sqIdx, applySan, applyUci, stepFromUci, toFen, playLine, posFromFen, legalTargets, isPromotion, userMove, buildGame, withCommentary, commentarySources, classifyFile, plan, timing, schedule, cues, clipRange, winChance, plyCp, MARK_CLASS, annotatedPgn };
 })();

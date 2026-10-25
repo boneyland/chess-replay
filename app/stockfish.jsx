@@ -179,11 +179,11 @@ function useGameAnalysis(M, files, getFiles, commit, engine, settings) {
 }
 
 // A button inside the video frame (frame pixels, theme colours)
-function FrameButton({ primary, color, onClick, children, label }) {
+function FrameButton({ primary, color, onClick, children, label, disabled }) {
   const c = color || C.best;
   return (
-    <button type="button" aria-label={label} onClick={(e) => { e.stopPropagation(); onClick(); }} onPointerDown={(e) => e.stopPropagation()}
-      style={{ whiteSpace: 'nowrap', font: `600 ${primary ? 20 : 15}px ${MONO}`, letterSpacing: primary ? '0.02em' : '0.1em', textTransform: primary ? 'none' : 'uppercase', padding: primary ? '12px 22px' : '5px 12px', borderRadius: 8, cursor: 'pointer', userSelect: 'none', WebkitUserSelect: 'none', border: `1.5px solid ${c}`, background: primary ? c : 'transparent', color: primary ? C.bg : c }}>
+    <button type="button" aria-label={label} disabled={disabled} onClick={(e) => { e.stopPropagation(); onClick(); }} onPointerDown={(e) => e.stopPropagation()}
+      style={{ whiteSpace: 'nowrap', font: `600 ${primary ? 20 : 15}px ${MONO}`, letterSpacing: primary ? '0.02em' : '0.1em', textTransform: primary ? 'none' : 'uppercase', padding: primary ? '12px 22px' : '5px 12px', borderRadius: 8, cursor: disabled ? 'default' : 'pointer', opacity: disabled ? 0.4 : 1, userSelect: 'none', WebkitUserSelect: 'none', border: `1.5px solid ${c}`, background: primary ? c : 'transparent', color: primary ? C.bg : c }}>
       {children}
     </button>
   );

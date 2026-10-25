@@ -479,48 +479,6 @@ function FreeBoard({ board, onChange, tw, sf, nav, orient, book }) {
   );
 }
 
-// Paste FEN: one field, Enter sets up, Esc cancels. A FEN that doesn't parse gets BoardCore's plain message and leaves
-// the board and the field as they were. Keys pressed in the dialog stop here, so the board's keys (F, the arrows, Home,
-// End) and the panels' Esc never see them; its scrim covers the board's touch layer.
-function FenDialog({ onSet, onClose }) {
-  const [text, setText] = React.useState(''), [msg, setMsg] = React.useState('');
-  const field = React.useRef(null);
-  React.useEffect(() => { if (field.current) field.current.focus(); }, []);
-  const setUp = () => {
-    let fen;
-    try { fen = window.BoardCore.fenFromInput(text); } catch (e) { setMsg((e && e.message) || 'That isn’t a FEN this board can set up.'); return; }
-    onSet(fen);
-  };
-  // Tab and Shift+Tab go round the field and the two buttons, so focus never reaches the page behind the scrim
-  const onKey = (e) => {
-    e.stopPropagation();
-    if (e.key === 'Escape') { e.preventDefault(); onClose(); } else if (e.key === 'Enter' && e.target === field.current) { e.preventDefault(); setUp(); }
-    else if (e.key === 'Tab') {
-      const stops = [...e.currentTarget.querySelectorAll('input, button')], i = stops.indexOf(document.activeElement);
-      e.preventDefault();
-      stops[(i + (e.shiftKey ? -1 : 1) + stops.length) % stops.length].focus();
-    }
-  };
-  return (
-    <div className="fen-scrim" onPointerDown={(e) => { if (e.target === e.currentTarget) onClose(); }}>
-      {/* a press on the box's text keeps focus on its control: focus left on the page would escape the Tab loop */}
-      <div className="fen-box" role="dialog" aria-modal="true" aria-label="Paste FEN" onKeyDown={onKey} onMouseDown={(e) => { if (!e.target.closest('input, button')) e.preventDefault(); }}>
-        <div className="fen-title">Paste FEN</div>
-        <input ref={field} className="twk-field fen-field" type="text" aria-label="FEN" aria-describedby="fen-msg" spellCheck={false} autoComplete="off" autoCapitalize="off" autoCorrect="off"
-          placeholder="rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1" value={text} onChange={(e) => { setText(e.target.value); setMsg(''); }} />
-        <div className="fen-info">
-          <div id="fen-msg" className="fen-msg" role="alert">{msg}</div>
-          {!msg && <div className="fen-note">The pieces and the side to move are needed; castling, en passant and the move number are used when given. A PGN’s [FEN "…"] tag works too.</div>}
-        </div>
-        <div className="fen-btns">
-          <button type="button" className="twk-btn secondary" onClick={onClose}>Cancel</button>
-          <button type="button" className="twk-btn" onClick={setUp}>Set up</button>
-        </div>
-      </div>
-    </div>
-  );
-}
-
 // Paste PGN: a box for a whole PGN, Ctrl+Enter (or Load) opens it as a loaded game, Esc cancels. A PGN that doesn't
 // build gets ChessCore's message and changes nothing; Enter in the box is a new line, as in any text area
 function PgnDialog({ onLoad, onClose }) {
@@ -547,7 +505,7 @@ function PgnDialog({ onLoad, onClose }) {
   );
 }
 
-// A small dialog over a scrim, as Paste FEN's: Esc or a press on the scrim closes it, Enter on `enter` runs onEnter,
+// A small dialog over a scrim: Esc or a press on the scrim closes it, Enter on `enter` runs onEnter,
 // and Tab goes round its controls; keys stop here, so the board's keys never see them
 function DialogBox({ label, onClose, children }) {
   const box = React.useRef(null);
@@ -586,15 +544,18 @@ function DialogChoice({ label, value, options, onChange }) {
 // Play vs human or vs Stockfish (mode): where the game starts (the starting position, or the open board's set-up position
 // when it has one), the clock, and against Stockfish the side the player takes (side: 'w', 'b' or 'random', resolved when
 // the game starts). onStart({ fen, tc, you })
-function PlayDialog({ mode = 'human', setUpFen, clock, side, onStart, onClose }) {
+// Start from: the starting position, or a set-up one: the board's, or with none set up, one set up in the editor first
+// (onSetUp, with the dialog's choices). initial: the choices to open with (back from the editor), else the defaults
+function PlayDialog({ mode = 'human', setUpFen, clock, side, initial, onStart, onSetUp, onClose }) {
   const sfGame = mode === 'stockfish';
-  const [from, setFrom] = React.useState(setUpFen ? 'setup' : 'start');
-  const [tc, setTc] = React.useState(window.PlayCore.TIME_CONTROLS.includes(clock) ? clock : null);
-  const [you, setYou] = React.useState(['w', 'b', 'random'].includes(side) ? side : 'w');
-  const start = () => onStart({ fen: from === 'setup' ? setUpFen : window.ChessCore.START_FEN, tc, you: sfGame ? you : null });
+  const [from, setFrom] = React.useState(initial ? initial.from : setUpFen ? 'setup' : 'start');
+  const [tc, setTc] = React.useState(initial ? initial.tc : window.PlayCore.TIME_CONTROLS.includes(clock) ? clock : null);
+  const [you, setYou] = React.useState(initial ? initial.you : ['w', 'b', 'random'].includes(side) ? side : 'w');
+  const editFirst = from === 'setup' && !setUpFen;
+  const start = () => (editFirst ? onSetUp({ tc, you: sfGame ? you : null }) : onStart({ fen: from === 'setup' ? setUpFen : window.ChessCore.START_FEN, tc, you: sfGame ? you : null }));
   return (
     <DialogBox label={sfGame ? 'Play vs Stockfish' : 'Play vs human'} onClose={onClose}>
-      {setUpFen && <DialogChoice label="Start from" value={from} options={[{ label: 'Starting position', value: 'start' }, { label: 'Set-up position', value: 'setup' }]} onChange={setFrom} />}
+      <DialogChoice label="Start from" value={from} options={[{ label: 'Starting position', value: 'start' }, { label: 'Set-up position', value: 'setup' }]} onChange={setFrom} />
       {sfGame && <DialogChoice label="You play" value={you} options={[{ label: 'White', value: 'w' }, { label: 'Black', value: 'b' }, { label: 'Random', value: 'random' }]} onChange={setYou} />}
       <DialogChoice label="Time control" value={tc} options={[{ label: 'Off', value: null }].concat(window.PlayCore.TIME_CONTROLS.map((x) => ({ label: x, value: x })))} onChange={setTc} />
       <div className="fen-note">{sfGame
@@ -602,7 +563,7 @@ function PlayDialog({ mode = 'human', setUpFen, clock, side, onStart, onClose })
         : 'Two players at this screen. The board turns after each move, so the side to move plays from the bottom; Take back is a button by Resign. Stockfish stays off until the game ends.'}</div>
       <div className="fen-btns">
         <button type="button" className="twk-btn secondary" onClick={onClose}>Cancel</button>
-        <button type="button" className="twk-btn" data-autofocus onClick={start}>Start game</button>
+        <button type="button" className="twk-btn" data-autofocus onClick={start}>{editFirst ? 'Set up position…' : 'Start game'}</button>
       </div>
     </DialogBox>
   );

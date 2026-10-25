@@ -148,7 +148,10 @@ function GameApp() {
   React.useEffect(() => { if (!tall) setMenu(false); }, [tall]);
   // the dock's Play/Explore menu (landscape); on a phone its items sit in the folded menu instead
   const [newMenu, setNewMenu] = React.useState(false);
-  const [fenOpen, setFenOpen] = React.useState(false), [pgnOpen, setPgnOpen] = React.useState(false);
+  const [pgnOpen, setPgnOpen] = React.useState(false);
+  // Edit position…: { setup, text, msg, resume } while the editor shows in place of the board or the loaded game; text is
+  // the FEN field's, msg why it doesn't parse, resume the paused game in progress left to open it (Cancel goes back to it)
+  const [editing, setEditing] = React.useState(null);
   const [fenNote, setFenNote] = React.useState(null); // { fen, ok } after Copy FEN; a copy that failed stays up to select
 
   // the Play dialog's mode while it is open: 'human' or 'stockfish'
@@ -201,7 +204,8 @@ function GameApp() {
   gameRef.current = !!(board && board.game);
   // a game with moves and no result yet is thrown away only after asking
   const playing = !!(board && window.PlayCore.inProgress(board) && board.steps.length);
-  const guard = (run) => { if (playing) setLeave({ run }); else run(); };
+  // (a game left to open the editor was kept then, and isn't asked about again)
+  const guard = (run) => { if (playing && !editing) setLeave({ run }); else run(); };
   const guardRef = React.useRef(guard);
   guardRef.current = guard;
   const M = built.M || lastGood.current || window.ChessCore.buildGame(SAMPLE);
@@ -236,9 +240,10 @@ function GameApp() {
   React.useEffect(() => { setQueenArrow(null); }, [M]);
 
   // false when it couldn't be remembered (the error says so)
-  const commit = (next) => {
+  // keep: the editor stays open (an analysis finishing in the background isn't the viewer leaving it)
+  const commit = (next, keep) => {
     if (!next.board) try { window.ChessCore.buildGame(next); } catch (e) { setErr(e.message); return false; }
-    setErr(''); setFiles(next);
+    setErr(''); setFiles(next); if (!keep) setEditing(null);
     try { if (next.sample && !next.evalSource) localStorage.removeItem(STORE); else localStorage.setItem(STORE, JSON.stringify(next)); } catch (e) { setErr(next.board ? 'The board couldn’t be remembered after reload: the browser’s storage is full.' : 'Loaded, but the files are too large to remember after reload.'); return false; }
     return true;
   };
@@ -267,7 +272,32 @@ function GameApp() {
     return () => window.removeEventListener('pagehide', hide);
   }, []);
   const newBoard = () => { setNewMenu(false); setMenu(false); guard(() => { setQueenOpen(false); commitBoard(window.BoardCore.fromFen()); }); };
-  const pasteFen = () => { setNewMenu(false); setMenu(false); setPanel(false); guard(() => setFenOpen(true)); };
+  // the editor opens on an empty board; a game in progress is paused for it (and kept, when it has moves, by guard's
+  // Leave). play: the Play dialog's { mode, tc, you } when its Set-up position opened the editor, whose Done starts that game
+  const openEditor = (play) => {
+    // the board as it is now: Stockfish may have replied, or a flag fallen, while the Leave dialog was up
+    const E = window.EditCore, P = window.PlayCore, s = E.empty(), b = boardRef.current;
+    const resume = editing ? editing.resume : b && P.inProgress(b) ? P.pause(b, Date.now()) : null;
+    if (resume && !editing) commitBoard(resume);
+    setQueenOpen(false); setEditing({ setup: s, text: E.toFen(s), msg: '', resume, play: play || null });
+  };
+  const editPosition = () => { setNewMenu(false); setMenu(false); setPanel(false); guard(() => openEditor()); };
+  const editTo = (setup) => setEditing((e) => e && { ...e, setup, text: window.EditCore.toFen(setup), msg: '' });
+  // a typed FEN sets up the board as soon as it is well-formed, legal or not; until then the board stays as it was
+  const editText = (text) => setEditing((e) => { if (!e) return e; const r = window.EditCore.fromFen(text); return r.setup ? { ...e, setup: r.setup, text, msg: '' } : { ...e, text, msg: r.error }; });
+  const editDone = () => {
+    const fen = window.EditCore.toFen(editing.setup), play = editing.play;
+    if (play) startGame(play.mode, { fen, tc: play.tc, you: play.you });
+    else { setQueenOpen(false); commitBoard(window.BoardCore.fromFen(fen)); }
+  };
+  // Cancel goes back to what showed before: a game left for the editor resumes, its clock running from now, and the Play
+  // dialog that opened it comes back as it was
+  const editCancel = () => {
+    const { resume: r, play } = editing || {};
+    setEditing(null);
+    if (r) commitBoard(window.PlayCore.runClock(r, Date.now()));
+    if (play) { setPlayInit({ from: 'setup', tc: play.tc, you: play.you }); setPlayOpen(play.mode); }
+  };
   const pastePgn = () => { setNewMenu(false); setMenu(false); setPanel(false); guard(() => setPgnOpen(true)); };
   // the position on the board, whichever view it's in; where the clipboard is refused the note shows it to select
   const copyFen = () => {
@@ -278,16 +308,20 @@ function GameApp() {
     try { navigator.clipboard.writeText(fen).then(() => shown(true), () => shown(false)); } catch (e) { shown(false); }
   };
   React.useEffect(() => { if (fenNote && fenNote.ok) { const id = setTimeout(() => setFenNote(null), 4000); return () => clearTimeout(id); } }, [fenNote]);
-  const playIn = (mode) => () => { setNewMenu(false); setMenu(false); setPanel(false); guard(() => setPlayOpen(mode)); };
+  // the Play dialog's choices to open with (after the editor's Cancel), else its defaults
+  const [playInit, setPlayInit] = React.useState(null);
+  const playIn = (mode) => () => { setNewMenu(false); setMenu(false); setPanel(false); guard(() => { setPlayInit(null); setPlayOpen(mode); }); };
   const playHuman = playIn('human'), playSf = playIn('stockfish');
   // against Stockfish the side is remembered as picked, and Random resolved here, for this game
-  const playStart = ({ fen, tc, you }) => {
-    const mode = playOpen;
-    setPlayOpen(null); setQueenOpen(false); setTweak('playClock', tc || 'Off');
+  const startGame = (mode, { fen, tc, you }) => {
+    setQueenOpen(false); setTweak('playClock', tc || 'Off');
     if (mode === 'stockfish') setTweak('playSide', you);
     const side = you === 'random' ? (Math.random() < 0.5 ? 'w' : 'b') : you;
     commitBoard(window.PlayCore.start(window.BoardCore.fromFen(fen), tc, null, mode === 'stockfish' ? { mode, you: side } : undefined));
   };
+  const playStart = (choice) => { const mode = playOpen; setPlayOpen(null); startGame(mode, choice); };
+  // Set-up position with no position set up: the editor first, keeping the dialog's choices
+  const playSetUp = ({ tc, you }) => { const mode = playOpen; setPlayOpen(null); openEditor({ mode, tc, you }); };
   const closePlay = React.useCallback(() => setPlayOpen(null), []);
   const myGames = () => { setNewMenu(false); setMenu(false); setPanel(false); setGamesOpen(readGames()); };
   const closeGames = React.useCallback(() => setGamesOpen(null), []);
@@ -297,15 +331,13 @@ function GameApp() {
   const resumeGame = (e) => { setGamesOpen(null); guard(() => { const b = window.BoardCore.restore(e.board); if (!b) return; setQueenOpen(false); commitBoard(window.PlayCore.runClock(b, Date.now())); }); };
   const deleteGame = (id) => { const next = updateGames((list) => window.GamesCore.remove(list, id), 'The game couldn’t be deleted: the browser’s storage is full.'); if (next) setGamesOpen(next); };
   const loadGame = () => guard(() => inputRef.current.click());
-  const fenSet = (fen) => { setFenOpen(false); setQueenOpen(false); commitBoard(window.BoardCore.fromFen(fen)); };
-  const closeFen = React.useCallback(() => setFenOpen(false), []);
   // a pasted PGN is a loaded game, as a picked file; the dialog has checked it builds
   const pgnLoad = (text) => { setPgnOpen(false); setQueenOpen(false); commit({ pgn: text, pgnName: 'pasted.pgn', gameIndex: 0 }); };
   const closePgn = React.useCallback(() => setPgnOpen(false), []);
   // the board's moves as a loaded game (replay, Analyse with Stockfish, PGN and video export); the board is kept with it, to go back to
   const boardAsGame = () => { commit({ pgn: window.BoardCore.pgn(board), pgnName: 'free-board.pgn', gameIndex: 0, fromBoard: files.board }); };
   // a dialog closed (Esc, Cancel, Set up, Start game): focus goes back to what opened it, Play/Explore or the phone's Menu
-  const newBtn = React.useRef(null), menuBtn = React.useRef(null), fenWasOpen = React.useRef(false), dialogOpen = fenOpen || pgnOpen || !!playOpen || !!gamesOpen;
+  const newBtn = React.useRef(null), menuBtn = React.useRef(null), fenWasOpen = React.useRef(false), dialogOpen = pgnOpen || !!playOpen || !!gamesOpen;
   React.useEffect(() => {
     if (fenWasOpen.current && !dialogOpen) { const b = tall ? menuBtn.current : newBtn.current; if (b) b.focus(); }
     fenWasOpen.current = dialogOpen;
@@ -368,7 +400,7 @@ function GameApp() {
   // the whole annotation whatever the video shows: commentary even when hidden, Queen's answers even when out of the video
   const savePgn = () => saveFile(fileStem + '_annotated.pgn', window.ChessCore.annotatedPgn(withQueen(M, Q.resultAt)), 'application/x-chess-pgn');
   const saveQueen = () => saveFile(fileStem + '_queen.json', JSON.stringify(Q.saved(), null, 1), 'application/json');
-  const analysis = useGameAnalysis(M, files, () => filesRef.current, commit, engine, ES.game);
+  const analysis = useGameAnalysis(M, files, () => filesRef.current, (next) => commit(next, true), engine, ES.game);
   // switching engines stops a running analysis (its searches so far are kept, to resume with the engine that made them)
   const analysisStop = React.useRef(analysis.stop);
   analysisStop.current = analysis.stop;
@@ -435,7 +467,7 @@ function GameApp() {
   const status = boardStatus || `${M.white.short} – ${M.black.short} · ${M.plies.length} plies` + (M.evalSource === 'analysis' ? ' · analysis evals' : M.evalSource === 'pgn' ? ' · PGN evals' : '') + (M.hasNotes ? ' · notes' : '') + (files.sample ? ' (sample)' : '') + ' · ' + fmtLen(TM.total);
   const shownErr = err || built.error;
 
-  const newGroups = [{ label: 'Explore', items: [{ label: 'Starting position', run: newBoard }, { label: 'Paste FEN…', run: pasteFen }, { label: 'Paste PGN…', run: pastePgn }, { label: 'Copy FEN', run: copyFen }] },
+  const newGroups = [{ label: 'Explore', items: [{ label: 'Starting position', run: newBoard }, { label: 'Edit position…', run: editPosition }, { label: 'Paste PGN…', run: pastePgn }, { label: 'Copy FEN', run: copyFen }] },
     { label: 'Play', items: [{ label: 'Play vs human…', run: playHuman }, { label: 'Play vs Stockfish…', run: playSf }, { label: 'My games…', run: myGames }] }];
   const newItems = newGroups.map((g) => <div key={g.label} className={`dock-group dock-group-${g.label.toLowerCase()}`}>
     <span className="dock-menu-label">{g.label}</span>
@@ -493,8 +525,10 @@ function GameApp() {
 
   return (
     <React.Fragment>
-      <CompositionStage nav={nav} width={1920} height={1080} compact={COMPACT} portrait={PORTRAIT} square={SQUARE} short={SHORT} top={!net.online && <span className="net-chip" role="status" title={OFFLINE_NOTE}>Offline</span>} menu={<React.Fragment><SoundButton on={t.sound !== false} onChange={(v) => setTweak('sound', v)} />{tall ? menuEl : deskDock}</React.Fragment>} onLayout={onLayout} scenes={scenes} playback={PLAYBACK} bg={C.bg} still={!!board}>
-        {board
+      <CompositionStage nav={nav} width={1920} height={1080} compact={COMPACT} portrait={PORTRAIT} square={SQUARE} short={SHORT} top={!net.online && <span className="net-chip" role="status" title={OFFLINE_NOTE}>Offline</span>} menu={<React.Fragment><SoundButton on={t.sound !== false} onChange={(v) => setTweak('sound', v)} />{tall ? menuEl : deskDock}</React.Fragment>} onLayout={onLayout} scenes={scenes} playback={PLAYBACK} bg={C.bg} still={!!board || !!editing}>
+        {editing
+          ? <EditBoard setup={editing.setup} onChange={editTo} onDone={editDone} onCancel={editCancel} fenText={editing.text} onFenText={editText} fenMsg={editing.msg} doneLabel={editing.play ? 'Start game' : 'Done'} orient={t.flip ? 'b' : 'w'} nav={nav} overlay={panel || newMenu || menu || queenOpen} />
+          : board
           ? <FreeBoard board={board} onChange={commitBoard} tw={t} sf={sf} nav={nav} orient={t.flip ? 'b' : 'w'} book={book && !board.game ? window.Openings.book() : null} />
           : <GameVideo M={MV} tw={video.busy ? { ...t, cameraPush: false, exporting: true } : t} d={TM.d} probe={probe} queen={queenArrow} nav={nav} scheme={scheme} sf={sf} orient={t.flip ? 'b' : 'w'} />}
       </CompositionStage>
@@ -517,9 +551,8 @@ function GameApp() {
         </div>
       )}
       <ExportOverlay x={video} />
-      {fenOpen && <FenDialog onSet={fenSet} onClose={closeFen} />}
       {pgnOpen && <PgnDialog onLoad={pgnLoad} onClose={closePgn} />}
-      {playOpen && <PlayDialog key={playOpen} mode={playOpen} setUpFen={board && board.fen !== window.ChessCore.START_FEN ? board.fen : null} clock={t.playClock} side={t.playSide} onStart={playStart} onClose={closePlay} />}
+      {playOpen && <PlayDialog key={playOpen} mode={playOpen} setUpFen={board && board.fen !== window.ChessCore.START_FEN ? board.fen : null} clock={t.playClock} side={t.playSide} initial={playInit} onStart={playStart} onSetUp={playSetUp} onClose={closePlay} />}
       {gamesOpen && <MyGamesDialog games={gamesOpen} current={board && window.PlayCore.inProgress(board) ? board.game.id : null} onReplay={replayGame} onResume={resumeGame} onDelete={deleteGame} onClose={closeGames} />}
       {leave && <LeaveDialog onStay={() => setLeave(null)} onLeave={() => { const run = leave.run; setLeave(null); keepLeft(board); run(); }} />}
       {queenOpen && !board && <QueenPanel M={M} Q={Q} hf={hf} probe={probe} onClose={closeQueen} onOverlay={setQueenArrow} onSave={saveQueen} left={queenLeft} />}
