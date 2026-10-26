@@ -565,6 +565,7 @@ function MoveList({ M, T, S, a, paused, onPick }) {
 }
 
 function Commentary({ M, T, S, a, book, line }) {
+  const video = useFrame().video;
   const c = lastPly(T, S);
   // the book name of this position while the game is in book (before the book loads: the game's opening, early on)
   const bookAt = line ? line.book : c < 0 ? null : book ? book[c] : c < 12 && M.opening ? { eco: M.eco, name: M.opening } : null;
@@ -574,7 +575,8 @@ function Commentary({ M, T, S, a, book, line }) {
   // one typewriter across the comment, then Queen's sentence
   const total = txt.length + qtxt.length;
   const avail = (c + 1 < S.N ? S.tp[c + 1] : t0 + 8) - t0;
-  const n = total ? Math.floor(cl01((T - t0) / Math.max(0.4, Math.min(total / 60, avail * 0.45))) * total) : 0;
+  // the typewriter is a video touch: a paused or stepped page shows the whole text
+  const n = !video ? total : total ? Math.floor(cl01((T - t0) / Math.max(0.4, Math.min(total / 60, avail * 0.45))) * total) : 0;
   const nh = Math.min(n, txt.length), nq = Math.max(0, n - txt.length);
   // about 22–27 px: smaller for a long comment, or one that shares the box with Queen's sentence
   const size = tx(qtxt ? (txt.length > 90 ? 26 : 30) : txt.length > 140 ? 28 : 34);
