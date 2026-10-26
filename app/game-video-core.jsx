@@ -315,7 +315,7 @@ function AnalysisPanel({ box, a, depth, deep, paused, style, children }) {
   );
   return (
     <Panel box={shown ? { ...box, scroll: true } : box} a={a} style={style} head={head} progress={!shown && deep && deep.pending ? deep.progress || 0 : null}>
-      {shown ? <div className="an-engine" style={{ zoom: TEXT }} onClick={stopHere} onPointerDown={stopHere}><div className="twk-flow">{E.body}</div></div> : children}
+      {shown ? <div className="an-engine" onClick={stopHere} onPointerDown={stopHere}><div className="twk-flow">{E.body}</div></div> : children}
     </Panel>
   );
 }
@@ -488,7 +488,7 @@ function Header({ M, a }) {
   const person = (P, side, align) => (
     <div style={{ display: 'flex', alignItems: 'baseline', gap: tx(10), minWidth: 0, justifyContent: align }}>
       <span style={{ alignSelf: 'center', width: tx(14), height: tx(14), borderRadius: 3, background: side === 'w' ? '#f1ebe1' : '#1c1613', border: `1.5px solid ${C.dim}`, flex: 'none' }} />
-      <span title={P.name} style={{ font: `400 ${tx(wide ? 28 : 26)}px/1.1 ${SERIF}`, color: C.ink, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis', minWidth: 0 }}>{wide ? P.name : P.short || P.name}</span>
+      <span title={P.name} style={{ font: `400 ${tx(wide ? 28 : 26)}px/1.25 ${SERIF}`, color: C.ink, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis', minWidth: 0 }}>{wide ? P.name : P.short || P.name}</span>
       {sub(P) && <span style={{ flex: 'none', font: `500 ${tx(15)}px ${MONO}`, color: C.dim, whiteSpace: 'nowrap' }}>{sub(P)}</span>}
     </div>
   );

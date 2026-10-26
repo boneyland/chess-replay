@@ -80,6 +80,18 @@ const wider = (page) => page.evaluate(() => {
   }
   return [`scrollWidth ${document.documentElement.scrollWidth} > ${w}`, ...out.slice(0, 8)];
 });
+// elements inside the stage that clip their content (overflow hidden/clip) while it is bigger than the box; boxes that
+// scroll (overflow-y auto) and the SideScroll strips (overflow-x auto) are meant to hold more than they show
+const overflowing = (page) => page.evaluate(() => {
+  const out = [];
+  for (const el of document.querySelectorAll('.stage-frame, .stage-frame *')) {
+    const cs = getComputedStyle(el);
+    if (cs.overflowY === 'auto' || cs.overflowY === 'scroll' || cs.overflowX === 'auto' || cs.overflowX === 'scroll') continue;
+    if (cs.overflowX !== 'hidden' && cs.overflowX !== 'clip' && cs.overflowY !== 'hidden' && cs.overflowY !== 'clip') continue;
+    if (el.scrollWidth > el.clientWidth + 1 || el.scrollHeight > el.clientHeight + 1) out.push(`${el.tagName.toLowerCase()}${el.className && typeof el.className === 'string' ? '.' + el.className.trim().split(/\s+/).join('.') : ''} ${el.scrollWidth}x${el.scrollHeight} in ${el.clientWidth}x${el.clientHeight}`);
+  }
+  return out.slice(0, 8);
+});
 // A FEN typed into Edit position's FEN field with the keyboard, as a person would: with locator.fill(), the Paste FEN
 // dialog this replaced stayed open in GitHub Actions' stock Firefox (WebDriver BiDi), as if the page never saw the text
 async function typeFen(field, fen) {
@@ -194,6 +206,24 @@ for (const name of BROWSERS) for (const site of SITES) {
       await page.reload({ waitUntil: 'load' });
       await loaded();
       assert.equal(await page.evaluate(() => document.documentElement.getAttribute('data-scheme')), 'dark');
+    });
+
+    await t.test('desktop: Text size Larger grows the text and keeps it in its boxes', async () => {
+      await page.setViewportSize({ width: 1440, height: 900 });
+      await page.goto(base, { waitUntil: 'load' });
+      await loaded();
+      const size = (sel) => page.locator(sel).first().evaluate((el) => parseFloat(getComputedStyle(el).fontSize));
+      await page.getByRole('button', { name: 'Settings' }).click();
+      await page.getByRole('tab', { name: 'View' }).click();
+      const mv = await size('.mv'), hd = await size('.twk-hd b');
+      await page.locator('#tw-text-size').selectOption('Larger');
+      await page.waitForFunction((was) => parseFloat(getComputedStyle(document.querySelector('.mv')).fontSize) > was * 1.1, mv);
+      assert.ok(Math.abs((await size('.mv')) - mv * 1.3) <= 0.2, `.mv grew 1.3x from ${mv} to ${await size('.mv')}`);
+      assert.ok(Math.abs((await size('.twk-hd b')) - hd * 1.3) <= 0.2, 'the Settings heading grew');
+      assert.deepEqual(await overflowing(page), []);
+      await page.screenshot({ path: path.join(OUT, host + '-text-larger.png') });
+      await page.locator('#tw-text-size').selectOption('Default');
+      await page.getByRole('button', { name: 'Close settings' }).click();
     });
 
     await t.test('desktop: Space presses a focused button rather than playing, and Esc closes the panel', async () => {

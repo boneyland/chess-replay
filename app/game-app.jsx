@@ -422,6 +422,8 @@ function GameApp() {
   const webpWidths = [0].concat(WEBP_WIDTHS.filter((x) => x < frameW && x !== halfW), 'Half').sort((a, b) => wPx(b) - wPx(a));
   const webpWidth = webpWidths.includes(t.webpWidth) ? t.webpWidth : webpWidths.includes(+t.webpWidth) ? +t.webpWidth : 'Half';
   // the old setting was a ratio, 'Full' or 'Half': carry it over once
+  // the page's rem is 16 px × this, so the overlays (dock, bars, Settings, menus, dialogs) follow the Text size setting; the panels get it through Stage's text
+  React.useEffect(() => { document.documentElement.style.setProperty('--text', String(LayoutCore.textScale(t.textSize))); }, [t.textSize]);
   React.useEffect(() => { if (t.webpSize !== undefined) { setTweak('webpWidth', t.webpSize === 'Full' ? 0 : 'Half'); setTweak('webpSize', undefined); } }, []);
   const webpQuality = Math.min(WEBP_QUALITY.max, Math.max(WEBP_QUALITY.min, +t.webpQuality || 75));
   const video = useVideoExport({ fps: exportFps, format: exportFormat, webp: { width: wPx(webpWidth), quality: webpQuality }, stem: fileStem, save: (name, blob) => saveFile(name, blob, blob.type) });
@@ -633,6 +635,7 @@ function GameApp() {
         { id: 'view', label: 'View', body: <>
           <TweakSection label="Appearance">
             <TweakRadio id="tw-scheme" label="Theme" value={t.scheme || 'Auto'} options={['Auto', 'Light', 'Dark']} onChange={(v) => setTweak('scheme', v)} />
+            <TweakRadio id="tw-text-size" label="Text size" value={t.textSize || 'Default'} options={Object.keys(LayoutCore.TEXT_SIZES)} onChange={(v) => setTweak('textSize', v)} />
           </TweakSection>
           <TweakSection label="Board">
             {board && board.game ? (
