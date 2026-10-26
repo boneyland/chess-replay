@@ -1044,14 +1044,17 @@ for (const name of BROWSERS) for (const site of SITES) {
       await p.waitForFunction(() => /Kxc4/.test(document.body.innerText), null, { timeout: 10000 });
       const t0 = Date.now();
       await p.getByRole('button', { name: /^Analyse with Stockfish/ }).first().click();
-      // on 2. Bc4+ the run's rating shows once it ends, the title row saying "Tablebase" in place of a depth
-      await p.locator('[data-ply="2"]').click();
-      await assert.doesNotReject(p.locator('.plabel').filter({ hasText: /2\. Bc4\+/ }).waitFor({ timeout: 5000 }));
-      await p.waitForFunction(() => /Blunder/i.test(document.body.innerText), null, { timeout: 19000 });
+      // the run ends (its progress and the Analyse button gone) before a move is picked: the panel's own tablebase
+      // lookup of a picked position would otherwise race the run's for the same position
+      await p.waitForFunction(() => !/Analysing \d|Starting Stockfish|Analyse with Stockfish/i.test(document.body.innerText), null, { timeout: 19000 });
       assert.ok(Date.now() - t0 < 19000, 'no 20 s search');
-      assert.match(await p.evaluate(() => document.body.innerText), /Tablebase/i);
       assert.equal(sent.filter((u) => u.includes('/standard?')).length, 5, 'each position asked once');
       assert.equal(sent.length, 5, 'nothing else asked');
+      // on 2. Bc4+ the title row says "Tablebase" in place of a depth
+      await p.locator('[data-ply="2"]').click();
+      await assert.doesNotReject(p.locator('.plabel').filter({ hasText: /2\. Bc4\+/ }).waitFor({ timeout: 5000 }));
+      await p.waitForFunction(() => /Blunder/i.test(document.body.innerText), null, { timeout: 5000 });
+      assert.match(await p.evaluate(() => document.body.innerText), /Tablebase/i);
       await p.screenshot({ path: path.join(OUT, host + '-tablebase-analysis.png') });
       await p.locator('[data-ply="0"]').click();
       await p.waitForFunction(() => /The tablebase agrees/.test(document.body.innerText) || /Best line/.test(document.body.innerText), null, { timeout: 5000 });
