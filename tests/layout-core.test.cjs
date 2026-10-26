@@ -28,8 +28,11 @@ test('boxes stay inside and never overlap', () => {
       all.push(['board', b]);
       if (L.eval) all.push(['eval', { x: L.eval.x, y: b.y, w: L.eval.w, h: b.h }]);
       all.push(['top bar', { x: b.x, y: b.y - L.bars.gap - L.bars.h, w: b.w, h: L.bars.h }], ['bottom bar', { x: b.x, y: b.y + b.h + L.bars.gap, w: b.w, h: L.bars.h }]);
-      for (const [k, x] of all) assert.ok(x.x >= -0.5 && x.y >= -0.5 && x.x + x.w <= w + 0.5 && x.y + x.h <= L.h + 0.5, `${id}: ${k} outside ${JSON.stringify(x)} (h ${L.h})`);
-      for (let i = 0; i < all.length; i++) for (let j = i + 1; j < all.length; j++) assert.ok(!overlap(all[i][1], all[j][1]), `${id}: ${all[i][0]} overlaps ${all[j][0]}`);
+      // a flowing box's height is its contents' (the view lays the column out), so only its width and start are checked
+      for (const [k, x] of all) assert.ok(x.x >= -0.5 && x.y >= -0.5 && x.x + x.w <= w + 0.5 && (x.flow || x.y + x.h <= L.h + 0.5), `${id}: ${k} outside ${JSON.stringify(x)} (h ${L.h})`);
+      const fixed = all.filter(([, x]) => !x.flow);
+      for (let i = 0; i < fixed.length; i++) for (let j = i + 1; j < fixed.length; j++) assert.ok(!overlap(fixed[i][1], fixed[j][1]), `${id}: ${fixed[i][0]} overlaps ${fixed[j][0]}`);
+      if (L.flow) for (const [k, x] of all.filter(([, x]) => x.flow)) assert.ok(x.y >= L.flow.top - 0.5 && Math.abs(x.x - L.flow.x) < 0.5 && Math.abs(x.w - L.flow.w) < 0.5, `${id}: ${k} off the flowing column`);
       if (video) assert.equal(L.h, h, id);
     }
   }
@@ -55,6 +58,18 @@ test('stacking thresholds', () => {
   assert.ok(s.plot === null || s.plot.x >= s.board.x + s.board.size);
 });
 
+test('device tiers: smaller screens are tighter', () => {
+  const d = LC.compute({ w: 1440, h: 818 }), t = LC.compute({ w: 768, h: 950 }), f = LC.compute({ w: 840, h: 900 }), p = LC.compute({ w: 390, h: 770 });
+  assert.deepEqual([d.tier, t.tier, f.tier, p.tier], ['desktop', 'tablet', 'foldable', 'phone']);
+  assert.equal(LC.compute({ w: 844, h: 340 }).tier, 'phone'); // held sideways
+  assert.ok(p.eval.w < t.eval.w && t.eval.w < d.eval.w);
+  assert.ok(p.text < t.text && t.text < d.text);
+  assert.ok(p.board.x - p.eval.w < d.board.x - d.eval.w, 'phone margins are thinner');
+  // an unfolded foldable keeps the sidebar where a tablet of the same width stacks
+  assert.equal(f.cols, 2);
+  assert.equal(t.cols, 1);
+});
+
 test('larger text stacks sooner', () => {
   let found = false;
   for (let w = 700; w <= 1100; w++) if (LC.compute({ w, h: 800, text: 1 }).cols === 2 && LC.compute({ w, h: 800, text: 1.3 }).cols === 1) found = true;
@@ -71,7 +86,8 @@ test('video fits the screen', () => {
   const v = LC.compute({ w: 390, h: 770, video: true });
   assert.equal(v.h, 770);
   for (const [k, x] of boxes(v)) assert.ok(x.y + x.h <= 770, k);
-  assert.ok(LC.compute({ w: 390, h: 770 }).h > 770);
+  // paused, the panels flow under the board and the page scrolls
+  assert.ok(LC.compute({ w: 390, h: 770 }).flow);
 });
 
 test('game and edit views', () => {
@@ -88,10 +104,11 @@ test('game and edit views', () => {
 });
 
 test('hysteresis, by width and by aspect', () => {
-  // width rule: the board beside the sidebar is 370 px (eval bar, margins and gap come off the width)
-  const w = 370 + 36 + 24 + 10 + 320;
-  assert.equal(LC.compute({ w, h: w * 0.8, prevCols: 2 }).cols, 2);
-  assert.equal(LC.compute({ w, h: w * 0.8, prevCols: 1 }).cols, 1);
+  // width rule, on a tablet: the board beside the sidebar is 370 px (its eval bar, margins and gap, and the sidebar at
+  // the tablet's 0.95 text, come off the width)
+  const w = 370 + 22 + 16 + 8 + 320 * 0.95;
+  assert.equal(LC.compute({ w, h: w * 0.7, prevCols: 2 }).cols, 2);
+  assert.equal(LC.compute({ w, h: w * 0.7, prevCols: 1 }).cols, 1);
   // aspect rule: a window 1.15 times as tall as wide
   const h = Math.round(1.17 * 1200); // over 1.15, under 1.2
   assert.equal(LC.compute({ w: 1200, h, prevCols: null }).cols, 1);
@@ -120,10 +137,11 @@ test('video one column: board shrinks first, panels keep a floor', () => {
 test('cols override and moves rows', () => {
   assert.equal(LC.compute({ w: 1440, h: 818, cols: 1 }).cols, 1);
   const L = LC.compute({ w: 1440, h: 818 });
-  // rows: what fits under the title at MoveList's 38 px rows, the panel's padding (2 × 16), title row (15 × 1.4), its margin (12) and borders (2)
-  assert.equal(L.moves.rows, Math.floor((L.moves.h - (2 * 16 + 15 * 1.4 + 12 + 2)) / 38));
+  // rows: what fits under the title at MoveList's sizes, which are tx() sizes (0.8 × the text): 38 px rows, the panel's
+  // padding (2 × 16), title row (15 × 1.4) and its margin (12), and the borders (2, not scaled)
+  assert.equal(L.moves.rows, Math.floor((L.moves.h - (0.8 * (2 * 16 + 15 * 1.4 + 12) + 2)) / (38 * 0.8)));
   const big = LC.compute({ w: 1440, h: 818, text: 1.3 });
-  assert.equal(big.moves.rows, Math.floor((big.moves.h - (1.3 * (2 * 16 + 15 * 1.4 + 12) + 2)) / (38 * 1.3)));
+  assert.equal(big.moves.rows, Math.floor((big.moves.h - (0.8 * 1.3 * (2 * 16 + 15 * 1.4 + 12) + 2)) / (38 * 0.8 * 1.3)));
   assert.equal(LC.columns({ w: 1440, h: 818 }), 2);
 });
 
@@ -133,8 +151,8 @@ test('the sidebar keeps room for the moves and commentary', () => {
   for (const [w, h, text] of [[1024, 690, 1], [1024, 690, 1.3], [1100, 900, 1], [960, 800, 1]]) {
     const L = LC.compute({ w, h, text });
     assert.equal(L.cols, 2, `${w}x${h}`);
-    assert.equal(L.moves.w, 230 * text, `${w}x${h} moves`);
-    assert.ok(L.comment.w >= 150 * text - 0.5, `${w}x${h} comment ${L.comment.w}`);
+    assert.equal(L.moves.w, 230 * L.text, `${w}x${h} moves`);
+    assert.ok(L.comment.w >= 150 * L.text - 0.5, `${w}x${h} comment ${L.comment.w}`);
   }
   for (let w = 700; w <= 1200; w += 5) {
     const L = LC.compute({ w, h: 800 });

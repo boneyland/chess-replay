@@ -2,18 +2,36 @@
 // or two. Pure numbers in, plain boxes { x, y, w, h, scroll } out (null where a view or size has none), so the views
 // only place what this says. columns() makes the one decision that depends on the size alone; compute() lays a view out.
 (function () {
-  const MARGIN = 12, GAP = 10, BAR_GAP = 4;
-  const EVAL_W = 28, EVAL_GAP = 8, EVAL_TOTAL = EVAL_W + EVAL_GAP;
+  // Device tiers, by the window's size (the @media rules in shell.html use the same breakpoints): a phone (under 600 px
+  // wide, or under 500 px high when held sideways), a foldable or square-ish window (600–1023 wide, between 0.8 and 1.2
+  // times as tall as wide: an unfolded foldable), a tablet (600–1023 otherwise) and a desktop (1024 up). Smaller devices
+  // are tighter, not just rearranged: thinner margins, gaps and panel padding, a thinner eval bar, and text a little
+  // smaller (scale multiplies the viewer's text size). A foldable keeps the sidebar where a tablet would stack
+  const TIERS = {
+    phone: { margin: 6, gap: 6, evalW: 14, evalGap: 4, pad: [10, 13], scale: 0.9, tall: 1.15 },
+    foldable: { margin: 8, gap: 8, evalW: 16, evalGap: 6, pad: [12, 16], scale: 0.95, tall: 1.3 },
+    tablet: { margin: 8, gap: 8, evalW: 16, evalGap: 6, pad: [12, 16], scale: 0.95, tall: 1.15 },
+    desktop: { margin: 12, gap: 10, evalW: 20, evalGap: 8, pad: [16, 22], scale: 1, tall: 1.15 },
+  };
+  const tierOf = (w, h) => (w < 600 || h < 500 ? 'phone' : w >= 1024 ? 'desktop' : h >= 0.8 * w && h <= 1.2 * w ? 'foldable' : 'tablet');
+  let MARGIN = 12, GAP = 10, EVAL_W = 20, EVAL_GAP = 8, EVAL_TOTAL = 28, PAD = [16, 22];
+  const BAR_GAP = 4;
+  // the tier's spacing, for the layout being worked out (compute and columns are called one at a time)
+  const useTier = (w, h) => {
+    const t = TIERS[tierOf(w, h)];
+    MARGIN = t.margin; GAP = t.gap; EVAL_W = t.evalW; EVAL_GAP = t.evalGap; EVAL_TOTAL = EVAL_W + EVAL_GAP; PAD = t.pad;
+    return t;
+  };
   const BOARD_MAX = 900, BOARD_MIN = 200, BOARD_OK = 360, BOARD_BACK = 380;
   const SIDEBAR_MIN = 320, MOVES_W = 230, COMMENT_MIN = 150;
   const HEADER_H = 64, PLOT_H = 110, PLOT_SIDE_H = 80, PLOT_BELOW_MIN_H = 700;
   const ONE_COL = { comment: 200, analysis: 260, moves: 240, panel: 260 }; // paused heights, times text
   const VIDEO_PREF = [96, 120, 96], PANEL_FLOOR = 48; // comment, analysis, moves under a video's board, times text
-  // MoveList's chrome at text 1, as it draws it (game-video-core.jsx): a move row, and the panel's padding, title row
-  // and its margin and the borders around the rows. All but the borders grow with the text
-  const MOVE_ROW = 38, MOVE_CHROME = 2 * 16 + 15 * 1.4 + 12, MOVE_BORDER = 2;
-  const moveRow = (text) => MOVE_ROW * text;
-  const moveChrome = (text) => MOVE_CHROME * text + MOVE_BORDER;
+  // MoveList's chrome as it draws it (game-video-core.jsx, whose tx() sizes are 0.8 × the text size): a move row, and
+  // the panel's padding, title row and its margin and the borders around the rows. All but the borders grow with the text
+  const MOVE_ROW = 38, MOVE_BORDER = 2, FLOW_ROWS = 10, TX = 0.8;
+  const moveRow = (text) => MOVE_ROW * TX * text;
+  const moveChrome = (text) => (2 * PAD[0] + 15 * 1.4 + 12) * TX * text + MOVE_BORDER;
 
   const TEXT_SIZES = { Small: 0.9, Default: 1, Large: 1.15, Larger: 1.3 };
   const textScale = (name) => (Object.prototype.hasOwnProperty.call(TEXT_SIZES, name) ? TEXT_SIZES[name] : 1);
@@ -22,15 +40,18 @@
   const barsTotal = (text) => 2 * barH(text) + 2 * BAR_GAP;
   const box = (x, y, w, h) => ({ x, y, w: Math.max(0, w), h: Math.max(0, h), scroll: true });
 
-  // 1 or 2 columns. One column when the window is tall for its width (switching at 1.2 wide, back at 1.1 wide) or the
+  // 1 or 2 columns. One column when the window is tall for its width (over 1.15 times as tall as wide, 1.3 on a foldable;
+  // 0.05 more to leave two columns and 0.05 less to come back) or the
   // board beside the sidebar would be under 360 px (380 to come back): by the room left, not by device. A window too
   // short for the one-column layout (board, bars and three panels at their floors) keeps two columns where they still
   // fit a 200 px board beside the sidebar (a phone held sideways at Larger text), and always for a video, which must
   // fit; a paused page in a narrow short window (a phone with its keyboard up) takes one column, which scrolls.
   function columns({ w, h, text = 1, prevCols = null, video = false }) {
+    const tier = useTier(w, h);
+    text *= tier.scale;
     const boardW = w - 2 * MARGIN - GAP - SIDEBAR_MIN * text - EVAL_TOTAL;
-    const aspect = prevCols === 2 ? 1.2 : prevCols === 1 ? 1.1 : 1.15;
-    const tall = prevCols === 1 ? h >= 1.1 * w : h > aspect * w;
+    const aspect = tier.tall + (prevCols === 2 ? 0.05 : prevCols === 1 ? -0.05 : 0);
+    const tall = prevCols === 1 ? h >= aspect * w : h > aspect * w;
     const narrow = boardW < (prevCols === 1 ? BOARD_BACK : BOARD_OK);
     const short = h < 2 * MARGIN + barsTotal(text) + BOARD_MIN + GAP + 3 * PANEL_FLOOR + 2 * GAP;
     const keepTwo = short && (video || boardW >= BOARD_MIN);
@@ -136,18 +157,28 @@
       header: null, moves: null, comment: null, analysis: null, plot: null, tray: null, panel: null,
     };
     let y = MARGIN + bars + size + GAP;
+    // A paused page flows: the panels stack under the board in a column, each as tall as its contents (Moves up to
+    // FLOW_ROWS rows, then it scrolls), and the page scrolls. The boxes keep their order and width; the heights here are
+    // only the paused defaults, which the views don't use. L.flow says where the column starts
+    if (!video) L.flow = { top: y, x: px, w: pw, gap: GAP, bottom: MARGIN };
     if (fixed) { L.tray = box(px, y, pw, trayH); y += trayH + GAP; }
     sized.forEach((p, i) => { L[p[0]] = box(px, y, pw, heights[i]); y += heights[i] + GAP; });
     withMoves(L.moves, text);
-    if (!video) L.h = Math.max(h, y - GAP + MARGIN);
+    if (L.flow) {
+      parts.forEach((p, i) => { if (L[p[0]]) Object.assign(L[p[0]], { flow: true, order: i, scroll: false }); });
+      if (L.moves) L.moves.maxRows = FLOW_ROWS;
+    }
     return L;
   }
 
   // view: 'replay' | 'free' | 'game' | 'edit'. video: playing or recording, when the page must fit the screen exactly.
   // cols overrides columns()'s choice; otherwise prevCols gives it hysteresis.
+  // L.text is the text size the boxes were sized for (the viewer's, times the tier's scale); L.pad the panels' padding
+  // at text 1 (the views scale it with their text).
   function compute({ w, h, text = 1, view = 'replay', video = false, prevCols = null, cols = null }) {
     const c = cols || columns({ w, h, text, prevCols, video });
-    return (c === 1 ? oneColumn : twoColumns)({ w, h, text, view, video });
+    const tier = useTier(w, h), t = text * tier.scale;
+    return Object.assign((c === 1 ? oneColumn : twoColumns)({ w, h, text: t, view, video }), { text: t, tier: tierOf(w, h), pad: PAD });
   }
 
   // The export's pixel scale for a w × h page: the screen's density, held so the longer side stays within 1920 px

@@ -20,7 +20,7 @@ function FreeBar({ pos, side, a, clock, name }) {
       <span style={{ font: `600 ${tx(20)}px ${SANS}`, color: C.ink, whiteSpace: 'nowrap' }}>{name || (side === 'w' ? 'White' : 'Black')}</span>
       <span style={{ display: 'flex', alignItems: 'center', marginLeft: tx(6) }}>{shown}</span>
       {pts > 0 && <span style={{ font: `600 ${tx(16)}px ${MONO}`, color: C.dim, marginLeft: tx(8) }}>+{pts}</span>}
-      {clock && <span className="game-clock" style={{ marginLeft: 'auto', minWidth: tx(96), textAlign: 'center', padding: `${tx(2)}px ${tx(10)}px`, borderRadius: 5, font: `600 ${tx(22)}px ${MONO}`, background: clock.active ? (clock.s < 60 ? C.blunder : '#f1ebe1') : C.off, color: clock.active ? '#15100d' : C.dim, boxShadow: clock.active ? `0 0 0 1px ${C.line}` : 'none' }}>{fmtClock(clock.s)}</span>}
+      {clock && <span className="game-clock" style={{ marginLeft: 'auto', minWidth: tx(72), textAlign: 'center', padding: `${tx(1)}px ${tx(7)}px`, borderRadius: 5, font: `600 ${tx(17)}px ${MONO}`, background: clock.active ? (clock.s < 60 ? C.blunder : '#f1ebe1') : C.off, color: clock.active ? '#15100d' : C.dim, boxShadow: clock.active ? `0 0 0 1px ${C.line}` : 'none' }}>{fmtClock(clock.s)}</span>}
     </div>
   );
 }
@@ -78,7 +78,7 @@ function OpeningExplorer({ board, book, onPlay }) {
     body = <React.Fragment>{heading('Out of book', true)}{named && note(`last book position: ${named.eco} ${named.name}`)}</React.Fragment>;
   } else body = <span style={{ font: `italic 400 ${tx(30)}px/1.25 ${SERIF}`, color: C.dim }}>This position isn’t in the opening book.</span>;
   return (
-    <Panel box={{ ...L.comment, scroll: true }} a={1} title="Opening explorer" right={named ? `${named.eco} ${named.name}` : null}>
+    <Panel box={{ ...L.comment, scroll: !L.comment.flow }} a={1} title="Opening explorer" right={named ? `${named.eco} ${named.name}` : null}>
       <div ref={top}>{body}</div>
     </Panel>
   );
@@ -94,8 +94,8 @@ function StartAnalysis({ board, ev, status, onLine }) {
     <React.Fragment>
       {/* a narrow panel puts the eval under Start, at the right */}
       <div style={{ display: 'flex', flexWrap: 'wrap', alignItems: 'flex-end', columnGap: tx(28) }}>
-        <span style={{ font: `700 ${tx(38)}px ${MONO}`, color: C.last }}>Start</span>
-        <span style={{ marginLeft: 'auto', font: `700 ${tx(38)}px ${MONO}`, color: C.ink }}>{down && !(after && !after.partial) ? '—' : fmtSf(after && after.cp)}</span>
+        <span style={{ font: `700 ${tx(HEADLINE)}px ${MONO}`, color: C.last }}>Start</span>
+        <span style={{ marginLeft: 'auto', font: `700 ${tx(HEADLINE)}px ${MONO}`, color: C.ink }}>{down && !(after && !after.partial) ? '—' : fmtSf(after && after.cp)}</span>
       </div>
       {/* under the move and the eval, spanning the panel, as in OwnMoveAnalysis */}
       <div style={{ marginTop: tx(6), font: `600 ${tx(16)}px ${MONO}`, letterSpacing: '0.08em', textTransform: 'uppercase', color: C.last }}>
@@ -239,7 +239,7 @@ function GameInfo({ board }) {
     }
   }
   return (
-    <Panel box={{ ...L.comment, scroll: true }} a={1} title={sfGame ? 'Play vs Stockfish' : 'Play vs human'} right={G.tc || 'No clock'}>
+    <Panel box={{ ...L.comment, scroll: !L.comment.flow }} a={1} title={sfGame ? 'Play vs Stockfish' : 'Play vs human'} right={G.tc || 'No clock'}>
       <div>{body}</div>
     </Panel>
   );
@@ -255,7 +255,7 @@ function GameStatus({ board, onChange, down }) {
   // the question waiting on an answer: 'resign' or 'draw'; another position or result drops it
   const [ask, setAsk] = React.useState(null);
   React.useEffect(() => { setAsk(null); }, [board.steps.length, !!G.result]);
-  const big = (txt, col) => <span style={{ font: `700 ${tx(38)}px ${MONO}`, color: col }}>{txt}</span>;
+  const big = (txt, col) => <span style={{ font: `700 ${tx(HEADLINE)}px ${MONO}`, color: col }}>{txt}</span>;
   const small = (txt, col) => <span style={{ font: `600 ${tx(16)}px ${MONO}`, letterSpacing: '0.08em', textTransform: 'uppercase', color: col }}>{txt}</span>;
   const hint = (txt) => <FitOrHide style={{ ...NO_SELECT, display: 'block', marginTop: tx(14), font: `500 ${tx(15)}px ${MONO}`, color: C.dim }}>{txt}</FitOrHide>;
   // the button rows can't be selected: quick clicks on the buttons would otherwise highlight their text and the question's
@@ -325,7 +325,8 @@ function FreeBoard({ board, onChange, tw, sf, nav, orient, book }) {
   const frame = useFrame();
   setLayout(frame, board.game ? 'game' : 'free'); // before the children render, which read the layout
   // a paused one-column page is as tall as its panels; the stage scrolls it
-  React.useLayoutEffect(() => { frame.setContentH(L.h); }, [L.h]);
+  const flowRef = React.useRef(null);
+  useFlowHeight(frame, flowRef);
   const B = window.BoardCore, P = window.PlayCore, pos = B.pos(board), { steps, upto } = board, last = steps.length - 1;
   // a game: no eval, no hints; vs human the board turned to the side to move in the game's last position, against
   // Stockfish drawn from the player's side, which Stockfish's moves never change (nor Flip)
@@ -417,7 +418,7 @@ function FreeBoard({ board, onChange, tw, sf, nav, orient, book }) {
   const HM = G ? { white: { name: playerName(G, 'w') }, black: { name: playerName(G, 'b') }, event: sfGame ? 'Play vs Stockfish' : 'Play vs human', site: `${G.tc || 'no clock'} · ${from}` }
     : { white: { name: 'White' }, black: { name: 'Black' }, event: 'Free board', site: from, eco: named && named.eco, opening: named && named.name };
   return (
-    <div style={{ position: 'absolute', inset: 0, background: C.bg, overflow: 'hidden' }}>
+    <div ref={flowRef} style={{ position: 'absolute', inset: 0, background: C.bg, overflow: 'hidden', ...flowStyle() }}>
       {!G && (tbv ? <EvalBarView cp={tbv.cp} txt={tbv.txt} a={1} /> : <EvalBarView cp={cp == null ? 0 : cp} txt={cp == null ? (down ? '' : '…') : fmtSf(cp)} a={1} />)}
       <FreeBar pos={pos} side="b" a={1} clock={clockOf('b')} name={G ? playerName(G, 'b') : null} />
       <BoardSpace>

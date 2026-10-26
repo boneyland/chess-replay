@@ -131,7 +131,8 @@ function EditBoard({ setup, onChange, onDone, onCancel, fenText, onFenText, fenM
   const frame = useFrame();
   setLayout(frame, 'edit'); // before the children render, which read the layout
   // a paused one-column page is as tall as its panels; the stage scrolls it
-  React.useLayoutEffect(() => { frame.setContentH(L.h); }, [L.h]);
+  const flowRef = React.useRef(null);
+  useFlowHeight(frame, flowRef);
   setOrient(orient);
   const E = window.EditCore, problems = E.problems(setup), empty = E.isEmpty(setup), P = L.panel;
   // the transport bar has no moves to step through; Copy FEN copies the setup's FEN
@@ -157,7 +158,7 @@ function EditBoard({ setup, onChange, onDone, onCancel, fenText, onFenText, fenM
   const ring = (i, color, inset) => { const [x, y] = idxXY(i); return <div style={{ position: 'absolute', left: x * SQ, top: y * SQ, width: SQ, height: SQ, boxShadow: `inset 0 0 0 ${inset}px ${color}`, pointerEvents: 'none' }} />; };
   const label = (t) => <div style={{ font: `600 ${tx(13)}px ${MONO}`, letterSpacing: '0.1em', textTransform: 'uppercase', color: C.dim, marginBottom: tx(6) }}>{t}</div>;
   return (
-    <div style={{ position: 'absolute', inset: 0, background: C.bg, overflow: 'hidden' }}>
+    <div ref={flowRef} style={{ position: 'absolute', inset: 0, background: C.bg, overflow: 'hidden', ...flowStyle() }}>
       <BoardSpace lift={!!(drag && drag.moved)}>
       <LineBoard a={1} sq={boardSquares()} v={{ upto: -1, moves: [], base: { b: setup.b }, src: 'you' }} hide={drag && drag.moved && drag.from != null ? drag.from : null} arrows={null} />
       <div ref={input.boardEl} data-no-drag-scroll onPointerDown={H.onDown} onPointerMove={H.onMove} onPointerUp={H.onUp} onPointerCancel={H.onCancel} onDragStart={(e) => e.preventDefault()}
@@ -175,7 +176,7 @@ function EditBoard({ setup, onChange, onDone, onCancel, fenText, onFenText, fenM
           style={{ position: 'absolute', left: drag.x - SQ * 0.55, top: drag.y - SQ * 0.55, width: SQ * 1.1, height: SQ * 1.1, pointerEvents: 'none', filter: 'drop-shadow(0 10px 12px rgba(0,0,0,0.45))', zIndex: 10 }} />
       )}
       </BoardSpace>
-      {L.tray && <Tray size={Math.min(112, Math.floor((L.tray.w - 20) / 6), Math.floor((L.tray.h - 4) / 2))} held={held} trayHandlers={trayHandlers} style={{ position: 'absolute', left: L.tray.x, top: L.tray.y, width: L.tray.w }} />}
+      {L.tray && <Tray size={Math.min(112, Math.floor((L.tray.w - 20) / 6), Math.floor((L.tray.h - 4) / 2))} held={held} trayHandlers={trayHandlers} style={L.tray.flow ? { order: L.tray.order, flex: 'none', height: L.tray.h } : { position: 'absolute', left: L.tray.x, top: L.tray.y, width: L.tray.w }} />}
       <Panel box={P} a={1} title="Edit position">
         <div style={{ display: 'flex', flexDirection: 'column', gap: tx(16) }}>
           <div>

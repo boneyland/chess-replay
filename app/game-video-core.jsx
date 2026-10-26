@@ -40,11 +40,33 @@ const SQ = 96, BW = SQ * 8;
 let L = window.LayoutCore.compute({ w: 1440, h: 900 }), TX = 0.8, TEXT = 1;
 const setLayout = (frame, view = 'replay') => {
   L = window.LayoutCore.compute({ w: frame.w, h: frame.h, text: frame.text, view, video: frame.video, cols: frame.cols });
-  TEXT = frame.text || 1; TX = 0.8 * TEXT;
+  TEXT = L.text; TX = 0.8 * TEXT; // the viewer's text size, times the device tier's (smaller on phones and tablets)
 };
 const tx = (px) => Math.round(px * TX * 10) / 10;
-// the text-bearing padding inside every panel
-const panelPad = () => `${tx(16)}px ${tx(22)}px`;
+// the text-bearing padding inside every panel: the device tier's (tighter on phones and tablets)
+const panelPad = () => `${tx(L.pad[0])}px ${tx(L.pad[1])}px`;
+// the move and eval headline in Analysis (and the free board's and a game's)
+const HEADLINE = 28;
+// A paused one-column page flows (L.flow): the panels stack under the board as a column, each as tall as its contents,
+// and the page scrolls. flowStyle() makes a view's container that column (its absolutely placed board and bars stay
+// out of it); useFlowHeight reports how tall it came out, so the stage can scroll that far.
+const flowStyle = () => (L.flow ? { display: 'flex', flexDirection: 'column', gap: L.flow.gap, padding: `${L.flow.top}px ${L.flow.x}px 0`, boxSizing: 'border-box' } : null);
+function useFlowHeight(frame, ref) {
+  const flow = !!L.flow, h = L.h, bottom = L.flow ? L.flow.bottom : 0;
+  React.useLayoutEffect(() => {
+    const el = ref.current;
+    if (!flow || !el) { frame.setContentH(h); return; }
+    const measure = () => {
+      let end = 0;
+      for (const c of el.children) if (getComputedStyle(c).position !== 'absolute') end = Math.max(end, c.offsetTop + c.offsetHeight);
+      frame.setContentH(Math.ceil(end + bottom));
+    };
+    measure();
+    const ro = new ResizeObserver(measure);
+    for (const c of el.children) ro.observe(c);
+    return () => ro.disconnect();
+  });
+}
 // The board's own 768 px space, scaled to L.board: the board, its touch layer, arrows and badges position from 0,0 in it
 // lift: the board's space paints over the panels and tray (a piece dragged from the tray must stay on top)
 function BoardSpace({ children, lift }) {
@@ -118,7 +140,7 @@ function SideScroll({ style, children }) {
   const fade = more ? `linear-gradient(to right, ${more.includes('l') ? 'transparent, #000 32px' : '#000'}, ${more.includes('r') ? '#000 calc(100% - 32px), transparent' : '#000'})` : 'none';
   return (
     <span ref={ref} onScroll={check}
-      style={{ ...style, whiteSpace: 'nowrap', overflowX: 'auto', overflowY: 'hidden', scrollbarWidth: 'none', touchAction: 'pan-x', WebkitMaskImage: fade, maskImage: fade }}>{children}</span>
+      style={{ ...style, whiteSpace: 'nowrap', overflowX: 'auto', overflowY: 'hidden', scrollbarWidth: 'none', touchAction: 'pan-x pan-y', WebkitMaskImage: fade, maskImage: fade }}>{children}</span>
   );
 }
 // extra: a node after right that never scrolls with it (Analysis: Go deeper beside the search's depth)
@@ -126,21 +148,31 @@ function SideScroll({ style, children }) {
 // progress: 0–1, drawn along the top border (the Analysis panel's while Stockfish searches); null draws none
 function Panel({ box, title, right, extra, head, a, style, progress, children }) {
   const { x, y, w, h } = box;
-  // the entrance slide only while it fades in (a video's): a settled panel has no transform
-  const place = { position: 'absolute', left: x, top: y, width: w, height: h, boxSizing: 'border-box', borderRadius: 8, opacity: a, ...(a < 1 && { transform: `translateY(${(1 - a) * 18}px)` }), overflow: 'hidden' };
+  // the entrance slide only while it fades in (a video's): a settled panel has no transform. A flowing panel (a paused
+  // one-column page) takes its place in the view's column, as tall as its contents
+  const place = box.flow ? { position: 'relative', order: box.order, flex: 'none', boxSizing: 'border-box', borderRadius: 8, overflow: 'hidden' }
+    : { position: 'absolute', left: x, top: y, width: w, height: h, boxSizing: 'border-box', borderRadius: 8, opacity: a, ...(a < 1 && { transform: `translateY(${(1 - a) * 18}px)` }), overflow: 'hidden' };
+  // the progress line goes over the panel's top edge: beside a placed panel, inside a flowing one
+  const over = box.flow ? { position: 'absolute', left: 0, right: 0, top: 0, height: 3, pointerEvents: 'none' } : { ...place, pointerEvents: 'none' };
+  // a box whose contents can outgrow it scrolls, and hands the wheel or finger on to the page at its ends
   return (
     <>
-    <div style={{ ...place, background: C.panel, border: `1px solid ${C.line}`, padding: panelPad(), ...(box.scroll && { overflowY: 'auto', overscrollBehavior: 'contain', scrollbarWidth: 'thin' }), ...style }}>
+    <div style={{ ...place, background: C.panel, border: `1px solid ${C.line}`, padding: panelPad(), ...(box.scroll && { overflowY: 'auto', scrollbarWidth: 'thin' }), ...style }}>
       {(title || head) && (
         <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: tx(16), font: `600 ${tx(15)}px ${MONO}`, letterSpacing: '0.12em', textTransform: 'uppercase', color: C.dim, marginBottom: tx(12) }}>
           {head || <><span style={{ flex: '0 1 auto', minWidth: 0, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{title}</span><SideScroll style={{ minWidth: 0, flex: 1, textAlign: 'right', letterSpacing: '0.04em' }}>{right}</SideScroll>{extra}</>}
         </div>
       )}
       {children}
+      {box.flow && progress != null && (
+        <div style={over}>
+          <div style={{ height: 3, width: `${(cl01(progress) * 100).toFixed(1)}%`, background: C.best, transition: progress > 0 ? 'width 0.3s linear' : 'none' }} />
+        </div>
+      )}
     </div>
     {/* over the panel rather than in it, so it covers the border and never scrolls with the contents */}
-    {progress != null && (
-      <div style={{ ...place, pointerEvents: 'none' }}>
+    {!box.flow && progress != null && (
+      <div style={over}>
         <div style={{ height: 3, width: `${(cl01(progress) * 100).toFixed(1)}%`, background: C.best, transition: progress > 0 ? 'width 0.3s linear' : 'none' }} />
       </div>
     )}
@@ -317,7 +349,7 @@ function AnalysisPanel({ box, a, depth, deep, paused, style, children }) {
     </span>
   );
   return (
-    <Panel box={shown ? { ...box, scroll: true } : box} a={a} style={style} head={head} progress={!shown && deep && deep.pending ? deep.progress || 0 : null}>
+    <Panel box={shown && !box.flow ? { ...box, scroll: true } : box} a={a} style={style} head={head} progress={!shown && deep && deep.pending ? deep.progress || 0 : null}>
       {shown ? <div className="an-engine" onClick={stopHere} onPointerDown={stopHere}><div className="twk-flow">{E.body}</div></div> : children}
     </Panel>
   );
@@ -422,12 +454,12 @@ function EvalBarView({ cp, txt, a }) {
   const f = (winChance(cp) + 1) / 2;
   const flip = ORIENT === 'b', inWhite = cp >= 0, top = inWhite === flip; // the number sits in the part of the bar it favours
   if (!L.eval) return null;
-  const H = L.board.size;
+  const H = L.board.size, ef = Math.round(L.eval.w * 0.62 * 10) / 10; // the number, sized to the bar's width
   return (
     <div style={{ ...NO_SELECT, position: 'absolute', left: L.eval.x, top: L.board.y, width: L.eval.w, height: H, borderRadius: 4, overflow: 'hidden', background: '#2a2320', boxShadow: `0 0 0 1px ${C.line}`, opacity: a }}>
       <div style={{ position: 'absolute', left: 0, right: 0, [flip ? 'top' : 'bottom']: 0, height: f * H, background: '#ffffff' }} />
       <div style={{ position: 'absolute', left: 0, right: 0, top: H / 2 - 1, height: 2, background: C.last, opacity: 0.5 }} />
-      <div style={{ position: 'absolute', left: 0, right: 0, [top ? 'top' : 'bottom']: tx(8), height: tx(104), display: 'flex', alignItems: 'center', justifyContent: 'center', font: `700 ${tx(22)}px ${MONO}`, color: inWhite ? '#2a2320' : '#f1ebe1' }}>
+      <div style={{ position: 'absolute', left: 0, right: 0, [top ? 'top' : 'bottom']: ef / 2, height: ef * 5, display: 'flex', alignItems: 'center', justifyContent: 'center', font: `700 ${ef}px ${MONO}`, color: inWhite ? '#2a2320' : '#f1ebe1' }}>
         {/* a rotated line rather than writing-mode, which the video export's html2canvas lays out wrongly */}
         <span style={{ flex: 'none', whiteSpace: 'nowrap', transform: 'rotate(-90deg)' }}>{txt}</span>
       </div>
@@ -469,7 +501,7 @@ function PlayerBar({ M, T, S, side, a, pieces }) {
   const low = clk && clk.s < 60, short = L.board.size < 480 && !!P.short;
   // beside a very small board (a phone held sideways at large text) the captures go when they would leave the name no
   // room: the bar's width less the colour square, about five letters of name and the clock
-  const room = L.board.size - 2 * tx(14) - 5 * tx(11) - (clk ? tx(96) + tx(20) + tx(14) : 0);
+  const room = L.board.size - 2 * tx(14) - 5 * tx(11) - (clk ? tx(72) + tx(20) + tx(14) : 0);
   const capsW = shown.length ? tx(20) + tx(30) + (shown.length - 1) * tx(22) + (pts > 0 ? tx(22) + tx(10) * (String(pts).length + 1) : 0) : 0;
   const caps = capsW <= room;
   return (
@@ -481,7 +513,7 @@ function PlayerBar({ M, T, S, side, a, pieces }) {
       {L.board.size >= 360 && <span style={{ font: `500 ${tx(16)}px ${MONO}`, color: C.dim, whiteSpace: 'nowrap' }}>{[P.title, P.elo].filter(Boolean).join(' ')}</span>}
       {caps && <span style={{ display: 'flex', alignItems: 'center', marginLeft: tx(6) }}>{shown}</span>}
       {caps && pts > 0 && <span style={{ font: `600 ${tx(16)}px ${MONO}`, color: C.dim, marginLeft: tx(8) }}>+{pts}</span>}
-      {clk && <span style={{ marginLeft: 'auto', minWidth: tx(96), textAlign: 'center', padding: `${tx(2)}px ${tx(10)}px`, borderRadius: 5, font: `600 ${tx(22)}px ${MONO}`, background: clk.active ? (low ? C.blunder : '#f1ebe1') : C.off, color: clk.active ? '#15100d' : C.dim, boxShadow: clk.active ? `0 0 0 1px ${C.line}` : 'none' }}>{fmtClock(clk.s)}</span>}
+      {clk && <span style={{ marginLeft: 'auto', minWidth: tx(72), textAlign: 'center', padding: `${tx(1)}px ${tx(7)}px`, borderRadius: 5, font: `600 ${tx(17)}px ${MONO}`, background: clk.active ? (low ? C.blunder : '#f1ebe1') : C.off, color: clk.active ? '#15100d' : C.dim, boxShadow: clk.active ? `0 0 0 1px ${C.line}` : 'none' }}>{fmtClock(clk.s)}</span>}
     </div>
   );
 }
@@ -524,7 +556,11 @@ function MoveList({ M, T, S, a, paused, onPick }) {
   // COLS move pairs to a row (two in a list 480 px wide or more), VIS rows in view: as many as fit under the title
   // (LayoutCore counts them from the panel's chrome), at least one
   const ROW = tx(38), COLS = L.moves.cols || 1, NUM = tx(50); // NUM: the move number's column
-  const VIS = Math.max(1, L.moves.rows);
+  const pairRows = Math.ceil((Math.ceil((S.N + M.ply0 % 2) / 2)) / COLS);
+  // a flowing list shows every row up to maxRows; a placed one as many as fit
+  const VIS = L.moves.flow ? clamp(pairRows, 1, L.moves.maxRows) : Math.max(1, L.moves.rows);
+  // a placed list takes all the box's height under its title (the part of a row past the last whole one too), a flowing one its rows
+  const listH = L.moves.flow ? VIS * ROW : Math.max(ROW, L.moves.h - 2 * tx(L.pad[0]) - tx(15) * 1.4 - tx(12) - 2);
   const odd = M.ply0 % 2, scrollFor = (i) => Math.max(0, Math.floor((Math.max(i, 0) + odd) / (2 * COLS)) - Math.max(0, VIS - (COLS > 1 ? 2 : 3))) * ROW;
   const k = c >= 0 ? MOTION.move(cl01((T - S.tp[c]) / 0.35)) : 1;
   const scroll = lerp(scrollFor(c - 1), scrollFor(c), k), listRef = React.useRef(null);
@@ -566,7 +602,7 @@ function MoveList({ M, T, S, a, paused, onPick }) {
   }
   return (
     <Panel box={L.moves} a={a} title="Moves">
-      <div ref={listRef} className="moves-list" style={{ position: 'relative', height: VIS * ROW, overflowY: 'auto', overscrollBehavior: 'contain', scrollbarWidth: 'thin', font: `500 ${tx(19)}px ${MONO}` }}>
+      <div ref={listRef} className="moves-list" style={{ position: 'relative', height: listH, overflowY: 'auto', scrollbarWidth: 'thin', font: `500 ${tx(19)}px ${MONO}` }}>
         <div>{rows}</div>
       </div>
     </Panel>
@@ -619,7 +655,7 @@ function Commentary({ M, T, S, a, book, line }) {
 function Analysis({ M, T, S, a, vline, onLine, paused, sf, own, onReply, deep, tb, onTb }) {
   const c = lastPly(T, S);
   // the Tablebase block goes under the lines; the panel scrolls to it where it doesn't fit
-  const box = tb ? { ...L.analysis, scroll: true } : L.analysis;
+  const box = tb && !L.analysis.flow ? { ...L.analysis, scroll: true } : L.analysis;
   const tbEl = tb && <div style={{ marginTop: tx(12), paddingTop: tx(12), borderTop: `1px solid ${C.line}` }}><TablebaseBlock t={tb} onPlay={onTb} /></div>;
   // Go deeper's search of this move, once it has passed the analysis's (deep: useMoveEval's)
   const deeper = paused && deep && deep.after && !deep.after.stored ? deep.after : null;
@@ -650,7 +686,7 @@ function Analysis({ M, T, S, a, vline, onLine, paused, sf, own, onReply, deep, t
   const k = cl01((T - S.tp[c] - S.md[c]) / 0.25);
   const { cp } = evalNow(M, T, S);
   const col = cls === 'none' ? C.ink : clsColor(cls);
-  const big = tx(38); // the move and eval headline
+  const big = tx(HEADLINE);
   // Queen's line from before this move (its scores are left out: often off, and they squeezed the move's labels onto more lines)
   const Qp = P.queen || {};
   // P.best: the engine preferred another move (a mistake, or an equally good move rated best with 0 cp lost)
@@ -905,7 +941,8 @@ function GameVideo({ M, tw, d, probe, queen, nav, scheme, sf, orient }) {
   const frame = useFrame(), video = frame.video;
   setLayout(frame); // before the children render, which read the layout
   // a paused one-column page is as tall as its panels; the stage scrolls it
-  React.useLayoutEffect(() => { frame.setContentH(L.h); }, [L.h]);
+  const flowRef = React.useRef(null);
+  useFlowHeight(frame, flowRef);
   setOrient(orient);
   const S = useSchedule(M, CUES, d);
   // When the schedule changes (a Queen answer lengthens a move's hold, a commentary source is turned off), keep the
@@ -1038,7 +1075,7 @@ function GameVideo({ M, tw, d, probe, queen, nav, scheme, sf, orient }) {
   return (
     <div data-screen-label={'t=' + Math.floor(T) + 's'} style={{ position: 'absolute', inset: 0, background: C.bg, overflow: 'hidden' }}>
       <div style={{ position: 'absolute', inset: 0, opacity: fade }}>
-        <div style={{ position: 'absolute', inset: 0, transformOrigin: '0 0', ...(f > 0 && { transform: `translate(${cx}px,${cy}px) scale(${sc}) translate(${-cx}px,${-cy}px)` }) }}>
+        <div ref={flowRef} style={{ position: 'absolute', inset: 0, transformOrigin: '0 0', ...flowStyle(), ...(f > 0 && { transform: `translate(${cx}px,${cy}px) scale(${sc}) translate(${-cx}px,${-cy}px)` }) }}>
           <EvalBar M={M} T={T} S={S} a={enter(1)} tb={tbBar(tb)} />
           <PlayerBar M={M} T={T} S={S} side="b" a={enter(1)} pieces={pieces} />
           <BoardSpace>
