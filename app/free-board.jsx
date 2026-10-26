@@ -444,7 +444,7 @@ function FreeBoard({ board, onChange, tw, sf, nav, orient, book }) {
   const MV = React.useMemo(() => ({ ply0: board.start.ply0, plies: steps.map((s) => ({ san: s.san, cls: 'none' })) }), [steps, board.start.ply0]);
   const S = React.useMemo(() => ({ N: steps.length, tp: steps.map((_, i) => i) }), [steps.length]);
   const named = boardOpening(board, book);
-  const from = board.fen === window.ChessCore.START_FEN ? 'from the starting position' : 'from a FEN';
+  const from = board.fen === window.ChessCore.START_FEN ? 'from the starting position' : 'from a set-up position';
   const HM = G ? { white: { name: playerName(G, 'w') }, black: { name: playerName(G, 'b') }, event: sfGame ? 'Play vs Stockfish' : 'Play vs human', site: `${G.tc || 'no clock'} · ${from}` }
     : { white: { name: 'White' }, black: { name: 'Black' }, event: 'Free board', site: from, eco: named && named.eco, opening: named && named.name };
   return (
