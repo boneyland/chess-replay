@@ -81,17 +81,52 @@ const wider = (page) => page.evaluate(() => {
   return [`scrollWidth ${document.documentElement.scrollWidth} > ${w}`, ...out.slice(0, 8)];
 });
 // elements inside the stage that clip their content (overflow hidden/clip) while it is bigger than the box; boxes that
-// scroll (overflow-y auto) and the SideScroll strips (overflow-x auto) are meant to hold more than they show
+// scroll (overflow-y auto) and the SideScroll strips (overflow-x auto) are meant to hold more than they show, but a box
+// that scrolls up and down mustn't scroll sideways. Also the placed boxes (panels, bars, the board) reaching past the
+// stage frame, which clips them
 const overflowing = (page) => page.evaluate(() => {
-  const out = [];
+  const out = [], frame = document.querySelector('.stage-frame'), fr = frame.getBoundingClientRect();
+  const name = (el) => `${el.tagName.toLowerCase()}${el.className && typeof el.className === 'string' ? '.' + el.className.trim().split(/\s+/).join('.') : ''} "${(el.value || el.textContent || '').trim().slice(0, 30)}"`;
+  const scrolls = (cs) => cs.overflowY === 'auto' || cs.overflowY === 'scroll' || cs.overflowX === 'auto' || cs.overflowX === 'scroll';
   for (const el of document.querySelectorAll('.stage-frame, .stage-frame *')) {
     const cs = getComputedStyle(el);
-    if (cs.overflowY === 'auto' || cs.overflowY === 'scroll' || cs.overflowX === 'auto' || cs.overflowX === 'scroll') continue;
+    // a box that scrolls up and down (a panel) scrolling sideways too: something in it is wider than the panel
+    if ((cs.overflowY === 'auto' || cs.overflowY === 'scroll') && el.tagName !== 'TEXTAREA' && el.scrollWidth > el.clientWidth + 1) out.push(`${name(el)} scrolls sideways ${el.scrollWidth} in ${el.clientWidth}`);
+    if (scrolls(cs)) continue;
     if (cs.overflowX !== 'hidden' && cs.overflowX !== 'clip' && cs.overflowY !== 'hidden' && cs.overflowY !== 'clip') continue;
-    if (el.scrollWidth > el.clientWidth + 1 || el.scrollHeight > el.clientHeight + 1) out.push(`${el.tagName.toLowerCase()}${el.className && typeof el.className === 'string' ? '.' + el.className.trim().split(/\s+/).join('.') : ''} ${el.scrollWidth}x${el.scrollHeight} in ${el.clientWidth}x${el.clientHeight}`);
+    // text cut with an ellipsis (names, by design) says it is cut; a 1 px box is text for screen readers only; a text
+    // field scrolls its own text
+    if (cs.textOverflow === 'ellipsis' || (el.clientWidth <= 1 && el.clientHeight <= 1) || el.tagName === 'INPUT' || el.tagName === 'TEXTAREA') continue;
+    if (el.scrollWidth > el.clientWidth + 1 || el.scrollHeight > el.clientHeight + 1) out.push(`${name(el)} ${el.scrollWidth}x${el.scrollHeight} in ${el.clientWidth}x${el.clientHeight}`);
+  }
+  // absolutely placed boxes not inside a box that scrolls (whose contents may be scrolled out of it on purpose)
+  for (const el of frame.querySelectorAll('*')) {
+    if (getComputedStyle(el).position !== 'absolute') continue;
+    let a = el.parentElement, inScroll = false;
+    for (; a && a !== frame; a = a.parentElement) if (scrolls(getComputedStyle(a))) { inScroll = true; break; }
+    if (inScroll) continue;
+    const r = el.getBoundingClientRect();
+    if (r.width === 0 || r.height === 0) continue;
+    if (r.left < fr.left - 1 || r.top < fr.top - 1 || r.right > fr.right + 1 || r.bottom > fr.bottom + 1) out.push(`${name(el)} ${Math.round(r.left - fr.left)},${Math.round(r.top - fr.top)} ${Math.round(r.width)}x${Math.round(r.height)} past the frame ${Math.round(fr.width)}x${Math.round(fr.height)}`);
   }
   return out.slice(0, 8);
 });
+// the player bars' names matching re, top first: the leaf text over the board's own column (the header's names sit in
+// the sidebar beside it, or under it in one column, so they are kept out by being past the bars)
+const barNames = async (page, re) => {
+  const b = await boardBox(page);
+  return page.evaluate(({ src, b }) => {
+    const re = new RegExp(src), right = b.x0 + 8 * b.sq;
+    return [...document.querySelectorAll('span')].filter((e) => e.children.length === 0 && re.test(e.textContent)).map((e) => ({ text: e.textContent, r: e.getBoundingClientRect() }))
+      .filter(({ r }) => r.width > 0 && r.left < right && r.right > b.x0 && r.bottom > b.y0 - 2 * b.sq && r.top < b.y0 + b.h + 2 * b.sq && (r.bottom <= b.y0 + 1 || r.top >= b.y0 + b.h - 1))
+      .sort((x, y) => x.r.top - y.r.top).map(({ text, r }) => ({ text, top: r.top }));
+  }, { src: re.source, b });
+};
+// Edit position's board: its touch layer's box (centred, no eval bar, so not where the replay's board stands)
+const editBox = async (page) => {
+  const r = await page.locator('[title="Drag a piece to move it, or off the board to take it away"], [title="Tap squares to place the piece"]').boundingBox();
+  return { n: 0, x0: r.x, y0: r.y, sq: r.width / 8, h: r.height };
+};
 // A FEN typed into Edit position's FEN field with the keyboard, as a person would: with locator.fill(), the Paste FEN
 // dialog this replaced stayed open in GitHub Actions' stock Firefox (WebDriver BiDi), as if the page never saw the text
 async function typeFen(field, fen) {
@@ -413,11 +448,9 @@ for (const name of BROWSERS) for (const site of SITES) {
       const after = await kings();
       assert.ok(wk(before) > bk(before), 'white king at the bottom by default');
       assert.ok(wk(after) < bk(after), 'white king above the black king when flipped');
-      // the sample game's players; the player bars' names are the 20 px ones (the header's are 40 px)
-      const bars = await fl.page.evaluate(() => {
-        const t = (re) => [...document.querySelectorAll('span')].filter((e) => re.test(e.textContent) && e.children.length === 0 && getComputedStyle(e).fontSize === '20px').map((e) => e.getBoundingClientRect().top);
-        return { white: t(/^Carlsen/), black: t(/^Nepomniachtchi/) };
-      });
+      // the sample game's players, in the bars over and under the board
+      const barTops = async (re) => (await barNames(fl.page, re)).map((x) => x.top);
+      const bars = { white: await barTops(/^Carlsen/), black: await barTops(/^Nepomniachtchi/) };
       assert.ok(bars.white.length && bars.black.length, 'player bars found: ' + JSON.stringify(bars));
       const bt = await boardBox(fl.page);
       assert.ok(Math.min(...bars.white) < bt.y0, 'the White bar is above the board');
@@ -502,27 +535,77 @@ for (const name of BROWSERS) for (const site of SITES) {
       assert.deepEqual(fp.errors, []);
       await fp.ctx.close();
     });
-    // a landscape window under 1300 px wide gets the compact frame (1800×1040, slimmer stage padding); 1300 and up the 1920×1080 one
-    await t.test('desktop: under 1300 px wide the landscape frame is the compact one', async () => {
-      const cp = await open(browser, { width: 1280, height: 800 });
-      await cp.page.goto(base, { waitUntil: 'load' });
-      await cp.page.locator('.dock-primary').waitFor({ state: 'attached' });
-      await cp.page.waitForFunction(() => document.querySelectorAll('img').length >= 32);
-      const frame = () => cp.page.evaluate(() => {
-        const st = document.querySelector('.stage'), f = document.querySelector('.stage-frame'), r = f.getBoundingClientRect();
-        return { compact: st.classList.contains('stage-compact'), size: f.firstElementChild.style.width + ' ' + f.firstElementChild.style.height, fits: r.left >= 0 && r.right <= innerWidth && r.top >= 0 && r.bottom <= innerHeight };
-      });
-      assert.deepEqual(await frame(), { compact: true, size: '1800px 1040px', fits: true });
-      assert.deepEqual(await wider(cp.page), []);
-      const b = await boardBox(cp.page);
-      assert.equal(b.n, 32);
-      assert.ok(Math.abs(b.h - 8 * b.sq) < 4, 'the board is square');
-      await cp.page.screenshot({ path: path.join(OUT, host + '-compact.png') });
-      await cp.page.setViewportSize({ width: 1300, height: 800 });
-      await assert.doesNotReject(cp.page.waitForFunction(() => !document.querySelector('.stage').classList.contains('stage-compact'), null, { timeout: 5000 }));
-      assert.deepEqual(await frame(), { compact: false, size: '1920px 1080px', fits: true });
-      assert.deepEqual(cp.errors, []);
-      await cp.ctx.close();
+    // every view at every size, Default and Larger text: nothing clipped, no panel past the stage, the transport bar on
+    // screen. 390×400 is a phone with its keyboard up: too short for the one-column page to fit, too narrow for two
+    await t.test('layout: nothing cut off at any size', { timeout: 600000 }, async () => {
+      const SIZES = [[1920, 1080], [1440, 900], [1280, 600], [1024, 768], [768, 1024], [844, 390], [390, 844], [320, 568], [2560, 1080], [390, 400]];
+      const fails = [];
+      for (const [w, h] of SIZES) for (const text of ['Default', 'Larger']) {
+        const lc = await open(browser, { width: w, height: h });
+        const p = lc.page;
+        if (text !== 'Default') await p.addInitScript((v) => { try { localStorage.setItem('chess-video.tweaks.v1', JSON.stringify({ textSize: v })); } catch (e) {} }, text);
+        await p.goto(base, { waitUntil: 'load' });
+        await loadedOn(p);
+        // the folded menu on a phone layout, Play/Explore otherwise
+        const pick = async (item) => {
+          const menu = p.getByRole('button', { name: 'Menu' });
+          await ((await menu.isVisible()) ? menu : p.getByRole('button', { name: 'Play/Explore' })).click();
+          await p.getByRole('button', { name: item }).click();
+        };
+        const check = async (view) => {
+          await p.waitForTimeout(300);
+          const at = `${w}x${h} ${view} ${text}`;
+          for (const o of await overflowing(p)) fails.push(`${at}: ${o}`);
+          const vp = { w, h };
+          const inside = async (loc, what) => {
+            const r = await loc.boundingBox();
+            if (!r || r.x < -0.5 || r.y < -0.5 || r.x + r.width > vp.w + 0.5 || r.y + r.height > vp.h + 0.5) fails.push(`${at}: ${what} not inside the window ${JSON.stringify(r)}`);
+          };
+          await inside(p.locator('.pbar'), 'transport bar');
+          const play = p.getByRole('button', { name: 'Play (space)' });
+          if (await play.count()) await inside(play, 'play button');
+          // the one-column page from its top (picking the move scrolled it)
+          await p.locator('.stage-area').evaluate((a) => { a.scrollTop = 0; });
+          await p.screenshot({ path: path.join(OUT, `${host}-layout-${w}x${h}-${view}-${text}.png`) });
+        };
+        // the sample game paused at move 20
+        await p.locator('[data-ply="38"]').click();
+        await p.locator('.plabel').filter({ hasText: /^20\. / }).waitFor({ state: 'attached', timeout: 5000 });
+        await check('replay');
+        await pick('Starting position');
+        await p.getByRole('button', { name: 'Play (space)' }).waitFor({ state: 'detached', timeout: 5000 });
+        await check('free');
+        await pick('Edit position…');
+        await p.getByRole('textbox', { name: 'FEN' }).waitFor({ timeout: 5000 });
+        await check('edit');
+        for (const e of lc.errors) fails.push(`${w}x${h} ${text}: ${e}`);
+        await lc.ctx.close();
+      }
+      assert.deepEqual(fails, []);
+    });
+    // a piece selected on the free board stays selected while the window crosses from two columns to one and back
+    await t.test('layout: a selection survives a resize across the column switch', async () => {
+      const rs = await open(browser, { width: 1100, height: 800 });
+      const p = rs.page;
+      await p.goto(base, { waitUntil: 'load' });
+      await loadedOn(p);
+      await p.getByRole('button', { name: 'Play/Explore' }).click();
+      await p.getByRole('button', { name: 'Starting position' }).click();
+      await p.getByRole('button', { name: 'Play (space)' }).waitFor({ state: 'detached', timeout: 5000 });
+      const e2 = square(await boardBox(p), 'e2');
+      await p.mouse.click(e2.x, e2.y);
+      // the selection: the touch layer's square with the thick border
+      const selected = () => p.evaluate(() => [...document.querySelectorAll('[data-no-drag-scroll] > div')].some((d) => getComputedStyle(d).borderTopWidth === '5px'));
+      const cols = () => p.evaluate(() => (document.querySelector('.stage').classList.contains('stage-one') ? 1 : 2));
+      assert.equal(await selected(), true, 'e2 selected');
+      assert.equal(await cols(), 2);
+      for (const [width, want] of [[700, 1], [1100, 2]]) {
+        await p.setViewportSize({ width, height: 800 });
+        await p.waitForFunction((c) => document.querySelector('.stage').classList.contains('stage-one') === (c === 1), want, { timeout: 5000 });
+        assert.equal(await selected(), true, `still selected at ${width} px`);
+      }
+      assert.deepEqual(rs.errors, []);
+      await rs.ctx.close();
     });
     // Play/Explore → Starting position: no game, every move (either side's) rated by Stockfish; it survives a reload
     // Analysis › ☰ › Lines 3: the free board's Analysis lists three lines, each with its arrow
@@ -554,8 +637,8 @@ for (const name of BROWSERS) for (const site of SITES) {
       const p = nb.page, label = p.locator('.plabel');
       // a panel's text, found by its title (the title span's own text, before CSS upper-cases it; the upper-casing keeps the header's event row out)
       const panel = (title) => p.evaluate((tt) => { const d = [...document.querySelectorAll('div')].find((e) => e.firstElementChild && e.firstElementChild.firstElementChild && e.firstElementChild.firstElementChild.textContent === tt && getComputedStyle(e.firstElementChild).textTransform === 'uppercase'); return d ? d.innerText : ''; }, title);
-      // the Analysis headline: the move it rates
-      const headline = () => p.evaluate(() => { const s = [...document.querySelectorAll('span')].find((e) => getComputedStyle(e).fontSize === '38px' && /^\d+(\.|…) /.test(e.textContent)); return s ? s.textContent : null; });
+      // the Analysis headline: the move it rates, the largest move text on the page
+      const headline = () => p.evaluate(() => { const s = [...document.querySelectorAll('span')].filter((e) => /^\d+(\.|…) /.test(e.textContent)).sort((a, b) => parseFloat(getComputedStyle(b).fontSize) - parseFloat(getComputedStyle(a).fontSize))[0]; return s ? s.textContent : null; });
       const verdict = /your move · .*(stockfish’s choice|cp vs|as good as|can’t run here|stopped)/i;
       const drag = async (b, from, to) => {
         const f = square(b, from), tt = square(b, to);
@@ -755,12 +838,12 @@ for (const name of BROWSERS) for (const site of SITES) {
         if (flip) await p.addInitScript(() => { try { localStorage.setItem('chess-video.tweaks.v1', JSON.stringify({ flip: true })); } catch (e) {} });
         await p.goto(base, { waitUntil: 'load' });
         await loadedOn(p);
-        // the sample's board gives the squares (flipped too): the editor's board stands in the same place
-        const b = await boardBox(p), sqAt = (s) => square(b, s, flip);
         await p.getByRole('button', { name: 'Play/Explore' }).click();
         await p.getByRole('button', { name: 'Edit position…' }).click();
         const field = p.getByRole('textbox', { name: 'FEN' }), tray = (n) => p.getByRole('button', { name: n, exact: true });
         await assert.doesNotReject(field.waitFor({ timeout: 5000 }));
+        // the editor's own board gives the squares (flipped too)
+        const b = await editBox(p), sqAt = (s) => square(b, s, flip);
         const tap = async (s) => { const c = sqAt(s); await p.mouse.click(c.x, c.y); };
         const dragTo = async (from, to) => { await p.mouse.move(from.x, from.y); await p.mouse.down(); await p.mouse.move(to.x, to.y, { steps: 10 }); await p.mouse.up(); };
         const centre = async (loc) => { const r = await loc.boundingBox(); return { x: r.x + r.width / 2, y: r.y + r.height / 2 }; };
@@ -836,10 +919,11 @@ for (const name of BROWSERS) for (const site of SITES) {
       await p.getByRole('button', { name: 'Edit position…' }).click();
       const field = p.getByRole('textbox', { name: 'FEN' });
       await assert.doesNotReject(field.waitFor({ timeout: 5000 }));
-      // the editor's board is centred (no eval bar): its squares from its own box, the board's touch layer
-      const eb = await p.locator('[title="Drag a piece to move it, or off the board to take it away"]').boundingBox();
+      // the editor's board is centred (no eval bar): its squares from its own box, measured after the tray's click,
+      // which can scroll the page (Playwright's Firefox scrolled it ~29 px)
       await p.getByRole('button', { name: 'White king', exact: true }).click();
-      await p.mouse.click(eb.x + 4.5 * eb.width / 8, eb.y + 7.5 * eb.height / 8);
+      const e1 = square(await editBox(p), 'e1');
+      await p.mouse.click(e1.x, e1.y);
       assert.equal(await field.inputValue(), '8/8/8/8/8/8/8/4K3 w - - 0 1');
       assert.deepEqual(ph.errors, []);
       await ph.ctx.close();
@@ -1393,8 +1477,8 @@ for (const name of BROWSERS) for (const site of SITES) {
         const text = await p.locator('body').innerText();
         assert.doesNotMatch(text, /[+−]\d+\.\d\d|depth|cp vs|best line|stockfish replies|stockfish’s choice|opening explorer|book|better was/i);
       };
-      // the bars' names from the top of the board down (the header's are larger)
-      const bars = () => p.evaluate(() => [...document.querySelectorAll('span')].filter((e) => /^(You|Stockfish 19)$/.test(e.textContent) && getComputedStyle(e).fontSize === '20px').sort((a, b) => a.getBoundingClientRect().top - b.getBoundingClientRect().top).map((e) => e.textContent));
+      // the bars' names from the top of the board down
+      const bars = async () => (await barNames(p, /^(You|Stockfish 19)$/)).map((x) => x.text);
       const start = async (you) => {
         await p.getByRole('button', { name: 'Play/Explore' }).click();
         await p.getByRole('button', { name: 'Play vs Stockfish…' }).click();
@@ -1699,8 +1783,12 @@ for (const name of BROWSERS) for (const site of SITES) {
       };
       const engineSelect = p.getByRole('combobox', { name: 'Engine', exact: true });
       // the explanation behind the Analyse button's ⓘ (its tooltip on hover) names the engine running
+      // (scrolled into view first: a hover that scrolls the panel closes the tip it opens, as any scroll does)
       const runs = async (name) => {
-        await p.getByRole('button', { name: /^About (Analyse|Resume)/ }).hover();
+        const about = p.getByRole('button', { name: /^About (Analyse|Resume)/ });
+        await about.scrollIntoViewIfNeeded();
+        await p.waitForTimeout(200);
+        await about.hover();
         await p.getByRole('tooltip').filter({ hasText: new RegExp('^' + name + ' runs in your browser') }).waitFor({ timeout: 3000 });
         await p.mouse.move(0, 0);
       };
@@ -1886,7 +1974,11 @@ for (const name of BROWSERS) for (const site of SITES) {
       assert.deepEqual(await wider(ph.page), [], 'no sideways scroll');
       const b = await boardBox(ph.page);
       assert.equal(b.n, 32);
-      assert.ok(b.h > 260, `board ${Math.round(b.h)} px high`);
+      // the slim transport bar, and the board as tall as the area leaves it: its margins (12 px) and the two player bars
+      // (32 px and a 4 px gap each, at Default text) above and below it
+      const area = await ph.page.evaluate(() => ({ h: document.querySelector('.stage-area').clientHeight, short: document.querySelector('.stage').classList.contains('stage-short') }));
+      assert.ok(area.short, 'the slim bar');
+      assert.ok(b.h >= area.h - 2 * 12 - 2 * 36 - 2 && b.h > 245, `board ${Math.round(b.h)} px high in an area ${area.h} px high`);
       await ph.page.screenshot({ path: path.join(OUT, host + '-phone-sideways.png') });
       assert.deepEqual(ph.errors, []);
       await ph.ctx.close();
