@@ -467,7 +467,7 @@ function GameApp() {
 
   const gameName = (g) => (g.mode === 'stockfish' ? `Play vs Stockfish · you play ${g.you === 'w' ? 'White' : 'Black'}` : 'Play vs human');
   const boardStatus = board && board.game ? `${gameName(board.game)} · ${board.game.tc || 'no clock'} · ${board.steps.length} move${board.steps.length === 1 ? '' : 's'}${board.game.result ? ' · ' + window.PlayCore.resultText(board.game.result).score : ''}`
-    : board && `Free board · ${board.fen === window.ChessCore.START_FEN ? 'from the starting position' : 'from a FEN'} · ${board.steps.length} move${board.steps.length === 1 ? '' : 's'}`;
+    : board && `Free board · ${board.fen === window.ChessCore.START_FEN ? 'from the starting position' : 'from a set-up position'} · ${board.steps.length} move${board.steps.length === 1 ? '' : 's'}`;
   const status = boardStatus || `${M.white.short} – ${M.black.short} · ${M.plies.length} plies` + (M.evalSource === 'analysis' ? ' · analysis evals' : M.evalSource === 'pgn' ? ' · PGN evals' : '') + (M.hasNotes ? ' · notes' : '') + (files.sample ? ' (sample)' : '') + ' · ' + fmtLen(TM.total);
   const shownErr = err || built.error;
 
@@ -633,12 +633,17 @@ function GameApp() {
               </> : <TweakButton secondary label={`Remove the full engine download · ${sfMB(window.SFFull.TOTAL)} MB`} onClick={() => setAskRemove(true)} />}
             </>}
           </>}
-          <TweakSlider id="tw-sf-depth" label="Game analysis: depth" value={ES.game.depth} stops={window.AnalysisCore.DEPTHS} format={depthText} onChange={(v) => setTweak('sfDepth', v)} />
-          <TweakSlider id="tw-sf-time" label="Game analysis: time limit per position" value={ES.game.time_limit} stops={window.AnalysisCore.SECONDS} unit="s" onChange={(v) => setTweak('sfTime', v)} />
-          <TweakSlider id="tw-sf-odepth" label="Your moves: depth" value={ES.own.depth} stops={window.AnalysisCore.DEPTHS} format={depthText} onChange={(v) => setTweak('sfOwnDepth', v)} />
-          <TweakSlider id="tw-sf-otime" label="Your moves: time limit per position" value={ES.own.time_limit} stops={window.AnalysisCore.SECONDS} unit="s" onChange={(v) => setTweak('sfOwnTime', v)} />
-          <TweakSelect id="tw-sf-lines" label="Your moves: lines" value={String(ES.own.lines)} options={window.AnalysisCore.LINES.map(String)} onChange={(v) => setTweak('sfLines', parseInt(v, 10))} />
-          {ES.own.lines > 1 && <div className="twk-note">Stockfish shows its {ES.own.lines} best moves with an arrow each. Every line takes its share of the search, so each one goes less deep in the same time.</div>}
+          {/* the game-analysis limits apply only to a loaded game; the own-move ones only where moves are rated (not during a game) */}
+          {!board && <>
+            <TweakSlider id="tw-sf-depth" label="Game analysis: depth" value={ES.game.depth} stops={window.AnalysisCore.DEPTHS} format={depthText} onChange={(v) => setTweak('sfDepth', v)} />
+            <TweakSlider id="tw-sf-time" label="Game analysis: time limit per position" value={ES.game.time_limit} stops={window.AnalysisCore.SECONDS} unit="s" onChange={(v) => setTweak('sfTime', v)} />
+          </>}
+          {!(board && board.game) && <>
+            <TweakSlider id="tw-sf-odepth" label="Your moves: depth" value={ES.own.depth} stops={window.AnalysisCore.DEPTHS} format={depthText} onChange={(v) => setTweak('sfOwnDepth', v)} />
+            <TweakSlider id="tw-sf-otime" label="Your moves: time limit per position" value={ES.own.time_limit} stops={window.AnalysisCore.SECONDS} unit="s" onChange={(v) => setTweak('sfOwnTime', v)} />
+            <TweakSelect id="tw-sf-lines" label="Your moves: lines" value={String(ES.own.lines)} options={window.AnalysisCore.LINES.map(String)} onChange={(v) => setTweak('sfLines', parseInt(v, 10))} />
+            {ES.own.lines > 1 && <div className="twk-note">Stockfish shows its {ES.own.lines} best moves with an arrow each. Every line takes its share of the search, so each one goes less deep in the same time.</div>}
+          </>}
           <TweakSelect id="tw-sf-hash" label="Hash table (helps long searches; a phone may run out of memory)" value={ES.game.hash_mb + ' MB'} options={window.AnalysisCore.HASH_MB.map((x) => x + ' MB')} onChange={(v) => setTweak('sfHash', parseInt(v, 10))} />
           {sfChanged && <TweakButton secondary label="Reset engine settings" onClick={() => SF_KEYS.forEach((k) => setTweak(k, window.TWEAK_DEFAULTS[k]))} />}
           {!board && (analysis.state === 'running'

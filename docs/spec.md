@@ -332,12 +332,10 @@ Deferred by the per-plan reviews; each was true when recorded and may since have
 
 **Custom starts and flip** (2026-10-19)
 - The player bars' "+N" counts captures during the game only, so a FEN start with a material edge shows none.
-- `LineChips` numbers moves itself rather than through `ChessCore.moveNo`.
 - Untested by the live suite: the sideways phone layout flipped, flipped arrows and line board, a flipped or FEN-start video export, and the F key's guards.
 
 **Free board** (2026-10-19)
 - A Stockfish reply played from the reply chips is labelled "Your move" after a reload: the stored board keeps UCI moves only, not who played them.
-- On the free board Settings still shows the "Game analysis" sliders, which apply only to loaded games.
 - Desktop board mode leaves empty space under the board where the eval graph was.
 - After Enter plays an explorer row, focus drops to the page; the next Tab lands on the new list's first row.
 - Playwright's Firefox drops mouse drags when `hasTouch` is on, so the phone parts of the free-board live tests tap or check layout only.
@@ -357,8 +355,6 @@ Deferred by the per-plan reviews; each was true when recorded and may since have
 - Playing Black, if the engine dies before Stockfish's first move there is nothing to take back: only Resign or a reload restarts it.
 - A move played before the "before" search reaches depth 15 (just after the engine loads), and the move before a reload, go unrated.
 - On the phone the Commentary box cuts the how-it-works text short (it scrolls).
-- The header's site line says "from a FEN" where the Commentary box says "From a set-up position" (vs human too).
-- Settings still shows the "Your moves" sliders during a Stockfish game, where they don't apply.
 - No draw offers against Stockfish; the player can resign while Stockfish thinks.
 
 **Endgame tablebase** (2026-10-24)
