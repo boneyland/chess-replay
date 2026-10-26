@@ -348,7 +348,6 @@ const lineLabel = (M, c, j, san) => `${window.ChessCore.moveNo(M.ply0 + c + j)} 
 
 // What a search actually did: "Stockfish 19 lite · depth 22 (23 unfinished) · 3.0 s · 1.5M nodes" (the eval is from depth 22)
 const engineLabel = (name) => (name || 'Stockfish').replace(/\s*\(browser\)$/, '');
-// the portrait frame (no header panel) has room for the numbers only
 // the Analysis title row's word on a search: the depth it reached, or the tablebase that answered it
 function searchDepth(s) {
   if (s && s.tablebase) return 'Tablebase'; // a game analysis's position the tablebase answered
@@ -372,13 +371,15 @@ function AnalysisPanel({ box, a, depth, deep, paused, style, children }) {
   const head = (
     <>
       <span style={{ flex: 'none' }}>Analysis</span>
-      <span style={{ flex: 1 }} />
-      {/* the engine stays put, next to the menu; Go deeper and the depth come and go to its left */}
+      {/* the engine stays put, next to the menu; Go deeper and the depth come and go to its left. Spaced as the
+          desktop's heading whatever the layout's title gap (the phone's wide one left the depth no room) */}
+      <span style={{ flex: 1, minWidth: 0, display: 'flex', alignItems: 'center', justifyContent: 'flex-end', gap: 16 / box.k }}>
       {!shown && paused && <DeeperButton ev={deep} />}
-      {!shown && depth && <SideScroll style={{ minWidth: 0, flex: '0 1 auto', letterSpacing: '0.04em', fontSize: `${box.right || 0.85}em` }}>{depth}</SideScroll>}
+      {!shown && depth && <span style={{ flex: 'none', whiteSpace: 'nowrap', letterSpacing: '0.04em', fontSize: `${box.right || 0.85}em` }}>{depth}</span>}
+      {/* smaller on the phone, where the row is tight */}
       {pick
         ? <select aria-label="Engine" value={pick.value} onChange={(e) => { const go = pick.onChange(e.target.value); if (go) setOpen(true); }} onClick={stopHere} onPointerDown={stopHere}
-            style={{ ...headCtl(), padding: '0 0.4em', font: 'inherit', fontSize: '1.15em', height: '1.6em', textTransform: 'none', background: C.panel }}>
+            style={{ ...headCtl(), padding: '0 0.4em', font: 'inherit', fontSize: L.header ? '1.15em' : '1em', height: '1.6em', textTransform: 'none', background: C.panel }}>
             {pick.options.map((o) => <option key={o.value} value={o.value}>{o.label}</option>)}
           </select>
         : <span style={{ flex: 'none', textTransform: 'none', letterSpacing: '0.04em', color: C.ink }}>{name}</span>}
@@ -388,6 +389,7 @@ function AnalysisPanel({ box, a, depth, deep, paused, style, children }) {
           <svg viewBox="0 0 16 16" width="60%" height="60%" aria-hidden="true"><path d="M2 3.5h12M2 8h12M2 12.5h12" stroke="currentColor" strokeWidth="2" strokeLinecap="round" /></svg>
         </button>
       )}
+      </span>
     </>
   );
   return (
