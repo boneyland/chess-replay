@@ -530,44 +530,14 @@ function PlayerBar({ M, T, S, side, a, pieces }) {
 }
 
 // ---------- right column ----------
-// The game's players and where it was played, in the header's two lines: the players with their ratings (a narrow
-// header: their short names, the ratings moving to the second line), then event, teams, place, date and opening on one
-// line that scrolls sideways when it's long
+// Where the game was played, in three lines: event, round and teams, then place and date, then the opening; each
+// scrolls sideways when it's long. The players, titles and ratings are the player bars'
 function Header({ M, a }) {
-  const wide = L.header.w >= 560;
-  const rating = (P) => [P.title, P.elo].filter(Boolean).join(' '), sub = (P) => (wide ? rating(P) : '');
-  const person = (P, side, align) => (
-    <div style={{ display: 'flex', alignItems: 'baseline', gap: tx(10), minWidth: 0, justifyContent: align }}>
-      <span style={{ alignSelf: 'center', width: tx(14), height: tx(14), borderRadius: 2, background: side === 'w' ? '#f1ebe1' : '#1c1613', border: `1.5px solid ${C.dim}`, flex: 'none' }} />
-      <span title={P.name} style={{ font: `400 ${tx(wide ? 28 : 26)}px/1.25 ${SERIF}`, color: C.ink, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis', minWidth: 0 }}>{wide ? P.name : P.short || P.name}</span>
-      {sub(P) && <span style={{ flex: 'none', font: `500 ${tx(15)}px ${MONO}`, color: C.dim, whiteSpace: 'nowrap' }}>{sub(P)}</span>}
-    </div>
-  );
   const teams = M.white.team && M.black.team ? `${M.white.team} vs ${M.black.team}` : M.white.team || M.black.team;
-  // a narrow header's ratings go on its second line
-  const ratings = !wide && (rating(M.white) || rating(M.black)) ? `${rating(M.white) || '?'} vs ${rating(M.black) || '?'}` : null;
-  const about = [[M.event, M.round && 'Round ' + M.round].filter(Boolean).join(' · '), ratings, teams, M.site, M.date, [M.eco, M.opening].filter(Boolean).join(' ')].filter(Boolean);
-  // under the board (one column: a phone or tablet), whose player bars already name the players with their ratings: the
-  // rest in three lines, event, place and date, opening
-  if (L.cols === 1) {
-    const lines = [[M.event, M.round && 'Round ' + M.round, teams].filter(Boolean).join(' · '), [M.site, M.date].filter(Boolean).join(' · '), [M.eco, M.opening].filter(Boolean).join(' ')].filter(Boolean);
-    return (
-      <Panel box={L.header} a={a} style={{ padding: `${tx(10)}px ${tx(L.pad[1])}px`, display: 'flex', flexDirection: 'column', gap: tx(4), font: `500 ${tx(15)}px/1.35 ${MONO}`, color: C.dim }}>
-        {lines.map((t, i) => <SideScroll key={i} style={{ display: 'block', color: i === 0 ? C.ink : undefined }}>{t}</SideScroll>)}
-      </Panel>
-    );
-  }
+  const lines = [[M.event, M.round && 'Round ' + M.round, teams].filter(Boolean).join(' · '), [M.site, M.date].filter(Boolean).join(' · '), [M.eco, M.opening].filter(Boolean).join(' ')].filter(Boolean);
   return (
-    <Panel box={L.header} a={a} style={{ padding: `${tx(8)}px ${tx(16)}px`, display: 'flex', flexDirection: 'column', justifyContent: 'center', gap: tx(4) }}>
-      {/* each name takes its own width, so a long one has the room a short one leaves */}
-      <div style={{ display: 'grid', gridTemplateColumns: 'minmax(0,auto) auto minmax(0,auto)', justifyContent: 'space-between', gap: tx(12), alignItems: 'baseline' }}>
-        {person(M.white, 'w', 'flex-start')}
-        <span style={{ font: `italic 400 ${tx(20)}px ${SERIF}`, color: C.dim }}>vs</span>
-        {person(M.black, 'b', 'flex-end')}
-      </div>
-      <SideScroll style={{ display: 'block', font: `500 ${tx(15)}px ${MONO}`, color: C.dim }}>
-        {about.map((t, i) => <React.Fragment key={i}>{i > 0 && ' · '}<span style={{ color: i === 0 ? C.ink : undefined }}>{t}</span></React.Fragment>)}
-      </SideScroll>
+    <Panel box={L.header} a={a} style={{ padding: `${tx(10)}px ${tx(L.pad[1])}px`, display: 'flex', flexDirection: 'column', justifyContent: 'center', gap: tx(4), font: `500 ${tx(15)}px/1.35 ${MONO}`, color: C.dim }}>
+      {lines.map((t, i) => <SideScroll key={i} style={{ display: 'block', color: i === 0 ? C.ink : undefined }}>{t}</SideScroll>)}
     </Panel>
   );
 }

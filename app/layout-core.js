@@ -6,12 +6,13 @@
   // wide, or under 500 px high when held sideways), a foldable or square-ish window (600–1023 wide, between 0.8 and 1.2
   // times as tall as wide: an unfolded foldable), a tablet (600–1023 otherwise) and a desktop (1024 up). Smaller devices
   // are tighter, not just rearranged: thinner margins, gaps and panel padding, a thinner eval bar, and text a little
-  // smaller (scale multiplies the viewer's text size). A foldable keeps the sidebar where a tablet would stack
+  // smaller (scale multiplies the viewer's text size). A foldable is spaced as a tablet; whether either keeps the sidebar
+  // is columns()'s call, by the room
   const TIERS = {
-    phone: { margin: 6, gap: 6, evalW: 14, evalGap: 4, pad: [10, 13], scale: 0.9, tall: 1.15 },
-    foldable: { margin: 8, gap: 8, evalW: 16, evalGap: 6, pad: [12, 16], scale: 0.95, tall: 1.3 },
-    tablet: { margin: 8, gap: 8, evalW: 16, evalGap: 6, pad: [12, 16], scale: 0.95, tall: 1.15 },
-    desktop: { margin: 12, gap: 10, evalW: 20, evalGap: 8, pad: [16, 22], scale: 1, tall: 1.15 },
+    phone: { margin: 6, gap: 6, evalW: 14, evalGap: 4, pad: [10, 13], scale: 0.9 },
+    foldable: { margin: 8, gap: 8, evalW: 16, evalGap: 6, pad: [12, 16], scale: 0.95 },
+    tablet: { margin: 8, gap: 8, evalW: 16, evalGap: 6, pad: [12, 16], scale: 0.95 },
+    desktop: { margin: 12, gap: 10, evalW: 20, evalGap: 8, pad: [16, 22], scale: 1 },
   };
   const tierOf = (w, h) => (w < 600 || h < 500 ? 'phone' : w >= 1024 ? 'desktop' : h >= 0.8 * w && h <= 1.2 * w ? 'foldable' : 'tablet');
   let MARGIN = 12, GAP = 10, EVAL_W = 20, EVAL_GAP = 8, EVAL_TOTAL = 28, PAD = [16, 22];
@@ -26,7 +27,7 @@
   // the board is never more than half the viewport's longer side (its height upright, its width held sideways), nor 900 px
   let boardMax = BOARD_MAX;
   const SIDEBAR_MIN = 320, MOVES_W = 230, COMMENT_MIN = 150;
-  const HEADER_H = 64, PLOT_H = 110, PLOT_SIDE_H = 80, PLOT_BELOW_MIN_H = 700;
+  const HEADER_H = 76, PLOT_H = 110, PLOT_SIDE_H = 80, PLOT_BELOW_MIN_H = 700, PLOT_MIN_H = 500; // no eval graph under 500 px high
   const ONE_COL = { comment: 200, analysis: 260, moves: 240, panel: 260 }; // paused heights, times text
   const VIDEO_PREF = [96, 120, 96], PANEL_FLOOR = 48; // comment, analysis, moves under a video's board, times text
   // MoveList's chrome as it draws it (game-video-core.jsx, whose tx() sizes are 0.8 × the text size): a move row, and
@@ -42,9 +43,10 @@
   const barsTotal = (text) => 2 * barH(text) + 2 * BAR_GAP;
   const box = (x, y, w, h) => ({ x, y, w: Math.max(0, w), h: Math.max(0, h), scroll: true });
 
-  // 1 or 2 columns. One column when the window is tall for its width (over 1.15 times as tall as wide, 1.3 on a foldable;
-  // 0.05 more to leave two columns and 0.05 less to come back) or the
-  // board beside the sidebar would be under 360 px (380 to come back): by the room left, not by device. A window too
+  // 1 or 2 columns. One column when the window is tall for its width (over 1.15 times as tall as wide; 0.05 more to leave
+  // two columns and 0.05 less to come back), or the board beside the sidebar would be under 360 px (380 to come back),
+  // or it would be held small by the width and leave over 30% of the height empty under it (25% to come back: a
+  // squarish window such as 772×965, where the board under the panels is the larger one). By the room left, not by device. A window too
   // short for the one-column layout (board, bars and three panels at their floors) keeps two columns where they still
   // fit a 200 px board beside the sidebar (a phone held sideways at Larger text), and always for a video, which must
   // fit; a paused page in a narrow short window (a phone with its keyboard up) takes one column, which scrolls.
@@ -52,12 +54,17 @@
     const tier = useTier(w, h);
     text *= tier.scale;
     const boardW = w - 2 * MARGIN - GAP - SIDEBAR_MIN * text - EVAL_TOTAL;
-    const aspect = tier.tall + (prevCols === 2 ? 0.05 : prevCols === 1 ? -0.05 : 0);
+    const aspect = 1.15 + (prevCols === 2 ? 0.05 : prevCols === 1 ? -0.05 : 0);
     const tall = prevCols === 1 ? h >= aspect * w : h > aspect * w;
     const narrow = boardW < (prevCols === 1 ? BOARD_BACK : BOARD_OK);
+    // the two-column board as twoColumns() sizes it by the width (the sidebar's share), against the height it could have
+    const side = Math.max(SIDEBAR_MIN * text, Math.min((MOVES_W + COMMENT_MIN) * text + GAP, w - 2 * MARGIN - GAP - EVAL_TOTAL - BOARD_OK));
+    const byWidth = Math.min(BOARD_MAX, w - 2 * MARGIN - GAP - side - EVAL_TOTAL);
+    const hLimit = h - 2 * MARGIN - barsTotal(text) - (h >= PLOT_BELOW_MIN_H ? GAP + PLOT_H : 0);
+    const wasted = byWidth < BOARD_MAX && (hLimit - byWidth) / h > (prevCols === 1 ? 0.25 : 0.3);
     const short = h < 2 * MARGIN + barsTotal(text) + BOARD_MIN + GAP + 3 * PANEL_FLOOR + 2 * GAP;
     const keepTwo = short && (video || boardW >= BOARD_MIN);
-    return !keepTwo && (tall || narrow) ? 1 : 2;
+    return !keepTwo && (tall || narrow || wasted) ? 1 : 2;
   }
 
   // moves.cols / moves.rows: the list shows two columns of moves from 480 px wide; rows is how many fit under its title
@@ -97,7 +104,7 @@
     L.header = box(sx, top, sw, HEADER_H * text);
     let rest = bottom - top - L.header.h - GAP; // under the header
     let plotSide = false;
-    if (view === 'replay' && !plotBelow && rest - GAP - PLOT_SIDE_H >= 190 * text) { plotSide = true; rest -= GAP + PLOT_SIDE_H; }
+    if (view === 'replay' && !plotBelow && h >= PLOT_MIN_H && rest - GAP - PLOT_SIDE_H >= 190 * text) { plotSide = true; rest -= GAP + PLOT_SIDE_H; }
     const analysisH = Math.max(0, Math.round((rest - GAP) * 0.45));
     const rowH = Math.max(0, rest - GAP - analysisH);
     const rowY = top + L.header.h + GAP;

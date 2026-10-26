@@ -32,15 +32,8 @@
   color-scheme: dark;
 }
 html { height: 100%; box-sizing: border-box; font-size: calc(16px * var(--text, 1)); }
-/* a phone held upright in full screen: the status bar is gone but the camera's punch hole isn't. Browsers report only the
-   whole cut-out strip (the page's safe-area padding, more than the hole needs), so the gap is that strip held to 24 px,
-   enough to clear the player row; a screen with no cut-out reports none and gets no gap */
-@media (pointer: coarse) and (orientation: portrait) {
-  :root:fullscreen { padding-top: min(24px, env(safe-area-inset-top, 0px)); }
-}
-@media (pointer: coarse) and (orientation: portrait) and (display-mode: fullscreen) {
-  :root { padding-top: min(24px, env(safe-area-inset-top, 0px)); }
-}
+/* a phone in full screen: the page runs under the camera's cut-out (viewport-fit=cover), with no gap kept for it; the
+   cut-out sits over the top player bar's middle, between the name and the clock */
 *, *::before, *::after { box-sizing: inherit; }
 body { height: 100%; margin: 0; background: var(--bg); color: var(--ink); font: 0.875rem/1.4 var(--sans); overflow: hidden; }
 #root { position: relative; height: 100%; }

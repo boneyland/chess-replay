@@ -59,15 +59,25 @@ test('stacking thresholds', () => {
 });
 
 test('device tiers: smaller screens are tighter', () => {
-  const d = LC.compute({ w: 1440, h: 818 }), t = LC.compute({ w: 768, h: 950 }), f = LC.compute({ w: 840, h: 900 }), p = LC.compute({ w: 390, h: 770 });
+  const d = LC.compute({ w: 1440, h: 818 }), t = LC.compute({ w: 768, h: 950 }), f = LC.compute({ w: 900, h: 860 }), p = LC.compute({ w: 390, h: 770 });
   assert.deepEqual([d.tier, t.tier, f.tier, p.tier], ['desktop', 'tablet', 'foldable', 'phone']);
   assert.equal(LC.compute({ w: 844, h: 340 }).tier, 'phone'); // held sideways
   assert.ok(p.eval.w < t.eval.w && t.eval.w < d.eval.w);
   assert.ok(p.text < t.text && t.text < d.text);
   assert.ok(p.board.x - p.eval.w < d.board.x - d.eval.w, 'phone margins are thinner');
-  // an unfolded foldable keeps the sidebar where a tablet of the same width stacks
+  // a square foldable keeps the sidebar; a tablet upright stacks
   assert.equal(f.cols, 2);
   assert.equal(t.cols, 1);
+});
+
+// a squarish window whose sidebar would hold the board small by the width, with the height empty under it, stacks
+test('a sidebar that would waste the height stacks', () => {
+  const L = LC.compute({ w: 772, h: 905 });
+  assert.equal(L.cols, 1);
+  assert.ok(L.board.size > 400, `board ${L.board.size}`);
+  // a window just as tall but wide enough for a big board keeps the sidebar
+  assert.equal(LC.compute({ w: 1440, h: 818 }).cols, 2);
+  assert.equal(LC.compute({ w: 1024, h: 690 }).cols, 2);
 });
 
 test('larger text stacks sooner', () => {
@@ -110,12 +120,13 @@ test('hysteresis, by width and by aspect', () => {
   assert.equal(LC.compute({ w, h: w * 0.7, prevCols: 2 }).cols, 2);
   assert.equal(LC.compute({ w, h: w * 0.7, prevCols: 1 }).cols, 1);
   // aspect rule: a window 1.15 times as tall as wide
-  const h = Math.round(1.17 * 1200); // over 1.15, under 1.2
-  assert.equal(LC.compute({ w: 1200, h, prevCols: null }).cols, 1);
-  assert.equal(LC.compute({ w: 1200, h, prevCols: 2 }).cols, 2);
-  const h2 = 1.05 * 1200; // under 1.1 w
-  assert.equal(LC.compute({ w: 1200, h: Math.round(1.12 * 1200), prevCols: 1 }).cols, 1);
-  assert.equal(LC.compute({ w: 1200, h: h2, prevCols: 1 }).cols, 2);
+  // (a window wide enough for the 900 px board beside the sidebar, so the empty-height rule stays out of it)
+  const h = Math.round(1.17 * 1600); // over 1.15, under 1.2
+  assert.equal(LC.compute({ w: 1600, h, prevCols: null }).cols, 1);
+  assert.equal(LC.compute({ w: 1600, h, prevCols: 2 }).cols, 2);
+  const h2 = 1.05 * 1600; // under 1.1 w
+  assert.equal(LC.compute({ w: 1600, h: Math.round(1.12 * 1600), prevCols: 1 }).cols, 1);
+  assert.equal(LC.compute({ w: 1600, h: h2, prevCols: 1 }).cols, 2);
 });
 
 test('video one column: board shrinks first, panels keep a floor', () => {
