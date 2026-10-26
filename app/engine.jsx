@@ -13,10 +13,9 @@ const clamp = (v, min, max) => Math.max(min, Math.min(max, v));
 const TimelineContext = React.createContext({ time: 0, duration: 10, playing: false });
 const useTimeline = () => React.useContext(TimelineContext);
 // what the stage gives its view: the area's size (w, h), the column count the page lays out in (1 or 2), whether it is
-// a video (playing, or an export drawing) rather than a paused page, the text size multiplier, and narrow (under 900 px
-// wide, where the page's buttons fold into a menu). A view calls setContentH(h) with the height its layout needs, so a
-// paused one-column page can scroll when it is taller than the area.
-const FrameContext = React.createContext({ w: 1440, h: 900, cols: 2, video: false, text: 1, narrow: false, setContentH: () => {} });
+// a video (playing, or an export drawing) rather than a paused page, and the text size multiplier.
+// A view calls setContentH(h) with the height its layout needs, so a paused one-column page can scroll when it is taller than the area.
+const FrameContext = React.createContext({ w: 1440, h: 900, cols: 2, video: false, text: 1, setContentH: () => {} });
 const useFrame = () => React.useContext(FrameContext);
 
 
@@ -126,7 +125,7 @@ function Stage({ menu, top, onLayout, duration, background, playback, nav, still
     return () => window.removeEventListener('chess-video:seek', onSeek);
   }, [duration]);
 
-  const frame = React.useMemo(() => ({ w, h, cols, video, text, narrow, setContentH }), [w, h, cols, video, text, narrow]);
+  const frame = React.useMemo(() => ({ w, h, cols, video, text, setContentH }), [w, h, cols, video, text]);
   const ctx = React.useMemo(() => ({ time, duration, playing, setTime, setPlaying, setStart }), [time, duration, playing]);
   // a video fills the area; so does a two-column page; a paused one-column page is as tall as its content (the area scrolls)
   const scrolls = !video && cols === 1;
@@ -136,7 +135,7 @@ function Stage({ menu, top, onLayout, duration, background, playback, nav, still
   const fh = scrolls ? Math.max(h, contentH) : h;
 
   return (
-    <div className={'stage' + (cols === 1 ? ' stage-one' : '') + (narrow ? ' stage-narrow' : '') + (short ? ' stage-short' : '')}>
+    <div className={'stage' + (cols === 1 ? ' stage-one' : '') + (short ? ' stage-short' : '')}>
       {top}
       <div ref={areaRef} className="stage-area" style={{ overflowY: scrolls ? 'auto' : 'hidden', scrollbarGutter: cols === 1 ? 'stable' : undefined }}>
         <div className="stage-frame" style={{ width: w, height: fh, background, position: 'relative' }}>
