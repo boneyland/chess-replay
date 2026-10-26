@@ -16,6 +16,7 @@ const units = [
   ['openings-core.js', read(path.join(app, 'openings-core.js'))],
   ['board-core.js', read(path.join(app, 'board-core.js'))],
   ['edit-core.js', read(path.join(app, 'edit-core.js'))],
+  ['layout-core.js', read(path.join(app, 'layout-core.js'))],
   ['play-core.js', read(path.join(app, 'play-core.js'))],
   ['games-core.js', read(path.join(app, 'games-core.js'))],
   ['sf-engine.js', read(path.join(app, 'sf-engine.js'))],
