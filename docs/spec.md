@@ -8,7 +8,7 @@ The one spec for the app: what it does now, what is planned, and the decisions b
 
 - [Principles](#principles)
 - [Built](#built): replay and browser analysis, opening names, custom starts and flip, free board and explorer, edit position, play vs human, My games, play vs Stockfish, full Stockfish download, lines (MultiPV), endgame tablebase (in game analysis too)
-- [Roadmap](#roadmap): Lichess data and multi-threaded Stockfish, player names, Chess960, typed commentary, Maia3, dead positions, chasolver, background music, peer-to-peer online play, app walk-through
+- [Roadmap](#roadmap): responsive layout, Lichess data and multi-threaded Stockfish, player names, Chess960, typed commentary, Maia3, dead positions, chasolver, background music, peer-to-peer online play, app walk-through
 - [Known gaps](#known-gaps)
 - [Decisions log](#decisions-log)
 
@@ -190,6 +190,57 @@ Positions of 7 pieces or fewer get Lichess's Syzygy tablebase (`https://tablebas
 ## Roadmap
 
 Planned, roughly in this order; each item gets its own PR(s) on a `claude/<topic>` branch. Items marked *needs design* have open questions to settle with the user before a plan.
+
+### Responsive layout
+
+Designed 2026-10-26. The app today is one fixed-size video frame (1920×1080 `LAYOUTS.wide`, or the compact, square, sideways and 840-wide portrait frames in `app/game-video-core.jsx`) laid out in absolute pixels and scaled as a whole to fit the window (`Stage` in `app/engine.jsx`). So text shrinks and grows with the window, and whatever the frame's shape doesn't cover is left empty. The user finds it looks odd, wastes space, and makes text too small. This replaces the frames with a normal responsive page.
+
+**Goals (the user's)**
+
+- **A normal responsive page, for any window size** on desktop, tablet and phone, in either orientation.
+- **Text stays one comfortable size.** It never scales with the window. Panel text, headings and labels have fixed CSS sizes.
+- **Extra room is shared, and it should feel balanced.** In a bigger window the board gets bigger *and* the panels (Moves, Commentary, Analysis) get more room at the same text size.
+- **Arrangement: board + sidebar** (mockup A, chosen over a Lichess-style three-column layout):
+  - *Landscape / wide*: the board (with eval bar and player bars) on the left. On the right a column with the game info (header) at the top, Moves beside Commentary under it, and Analysis under those. The eval graph and the transport bar run full width along the bottom.
+  - *Portrait / narrow*: one column. The board fills the width, then the game info, Commentary, Analysis and Moves under it, then the transport bar.
+- **Exports show the page as it is.** An MP4 or WebP export records the stage at the window's current size and shape: a desktop window's shape on a desktop, portrait on a phone held upright, landscape on a phone held sideways. The fixed 1920×1080 / 840-wide export sizes go away.
+- **A text size setting** (asked for 2026-10-26) lets viewers make the text larger or smaller if they need to. Details are under My calls.
+- **A video is screen-sized.** Playback and export lay the page out to fit the window exactly: in the one-column layout the panels shrink to fit under the board and each scrolls inside itself, rather than the page scrolling. The recording is the screen (the title and end cards drawn over it), so the frame size never changes mid-video.
+- **Long text in a video may be clipped.** During playback panels auto-scroll to keep the current part in view (as Moves already follows the current move); the rest of a very long comment or Queen line can be out of frame for that moment.
+- **Video touches only while playing.** The title card, the end card, the panels' fade-in (`enter()`), the blunder glow and the camera push (`cameraPush`, `S.blunders` in `GameVideo`) show only during playback, which stays as a preview of the export. Stepping through moves, clicking a move, exploring your own moves and analysing show a plain, still page. The Play button stays.
+
+**Anti-goal (the user's).** It is worse than before if any text or element is cut off, missing or doesn't work, at any window size. The user expects to find and fix such issues after building, so this is a test target, not a reason to hold back.
+
+**Constraints**
+
+- **Every view moves to the new layout**, not just the replay: the free board and opening explorer (`app/free-board.jsx`), Play vs human and Play vs Stockfish (the free board with `board.game`), and Edit position (`app/edit-board.jsx`, its piece tray included). They all read `L` today, so they all go when the frames go.
+- **The principles still hold**, with one rewritten: "the playing video stays clean" now means a playing video looks like the page, without the paused page's controls (buttons, progress lines, engine controls). It no longer means it looks as it always has. "Replay doesn't regress" keeps everything but the fixed frame: the title card, timeline, export and own-move exploration all still work.
+- **Overlays stay overlays**: the dock, Settings, menus and dialogs float over the page as now. Their existing `.stage-tall` / `body:has(...)` rules in `app/shell.html` need new hooks once the frame classes go.
+- **Phones**: safe-area insets, the 390×844 phone check viewport and the sideways phone (e.g. 844×390, where the board fills the height and the sidebar sits beside it) all keep working.
+- **Both browsers**: Chromium and Firefox (the user's), screenshotted at desktop 1440×900 and phone 390×844 per CLAUDE.md, plus a few in-between and extreme sizes (1920×1080, 1024×768, 1280×600, 768×1024, 844×390, 320×568, an ultrawide 2560×1080).
+- **Export draws the DOM with html2canvas-pro** (`app/export.jsx`), so whatever the new layout uses must still be drawn correctly by it (e.g. CSS grid, `aspect-ratio`, container queries, `clamp()`); check before relying on one. Exported width and height are rounded down to even numbers, as now.
+
+**My calls (to confirm when reading)**
+
+- **Text sizes**: body/panel text about 15–16 px, small labels about 12–13 px, and the commentary's serif heading about 22–26 px, matching the dock and Settings' sizes. Same sizes on phone and desktop.
+- **Text size setting**: Settings › Appearance › **Text size**, a radio beside Theme: Small, Default, Large, Larger (about 90 %, 100 %, 115 %, 130 %). `TWEAK_DEFAULTS.textSize = 'Default'`, persisted like other settings. It scales one root size (e.g. a CSS variable or the root `font-size`, with every text size in `rem`), so it reaches the panels, the player bars, the board's coordinates and badges, the transport bar, the dock, Settings, menus and dialogs. Widths that hold text (the sidebar's minimum, the one-column switch, the transport bar's buttons) grow with it, so a larger size gives the panels more room and stacks sooner rather than cutting text off. The board's pieces don't scale with it. Exports record the chosen size, as they record the page. The browser's own zoom (Ctrl +) keeps working as well, since the page is now a normal page.
+- **Board size**: the board takes the height left after the player bars, the graph and the transport bar, but never so much that the sidebar drops below about 320 px wide. Past roughly 900 px it stops growing, so a very large or ultrawide window gives the panels the extra room instead of a huge board.
+- **When to stack**: the page switches to one column when the board beside a 320 px sidebar would be smaller than about 360 px, i.e. by the room left, not by device. A square-ish window keeps the sidebar while it fits (so 1024×768 keeps it; 768×1024 stacks).
+- **Eval graph**: hidden in the one-column layout, as on phones today (the eval bar stays). In the sidebar layout, a fixed height (about 100–120 px) full width at the bottom; on a short landscape window (under about 700 px high, e.g. a sideways phone) it moves into the sidebar under Analysis, or hides if the sidebar has no room for it, so the board keeps the height.
+- **Transport bar**: in the one-column layout it stays pinned to the bottom of the screen (it holds the phone's step and play controls and the folded dock menu), not at the end of the scrolling page.
+- **Panel overflow**: each panel scrolls inside itself when its content doesn't fit (as Analysis does now on phones), so nothing is ever cut off. On the paused one-column page the page itself scrolls and panels take their natural height, with a sensible maximum for Moves; while playing, see "A video is screen-sized".
+- **Export resolution**: drawn at the screen's pixel density (html2canvas `scale` = `devicePixelRatio`), capped so the long side is at most 1920 px, so a phone's export isn't a 390×844 video. The WebP width options become fractions of that (full, half, …) rather than fixed widths larger than most windows.
+- **Piece and arrow motion stays outside playback too**: a piece sliding to its square when you step or play a move is normal app behaviour, not a video touch.
+- **What playback shows**: the same touches the export shows. The camera push stays a Settings toggle that applies only during playback. Whether the export includes it stays as today (off, per the export note), so preview and export differ only there.
+
+**Left to the builder**
+
+- How to build it: CSS grid/flex in `shell.html` versus layout computed in JS, and how far to unpick the absolute-pixel boxes (`box={{ x, y, w, h, k }}` on `Panel`). One reasonable path is to draw the board as a fixed 768 px (`SQ = 96`) graphic scaled to its box, since a board is a picture and pieces, arrows and badges are positioned in board pixels through `view()`, and to make only the panels and text real responsive layout.
+- What happens to `LAYOUTS`, `tallLayout`, `squareLayout`, `shortLayout`, `COMPACT`/`PORTRAIT`/`SQUARE`/`SHORT`, the `k` magnifiers, `sm()` and the `small`/`hint` sizes (they should all go), and the frame props on `Stage`/`CompositionStage`.
+- How the title and end cards lay out on any shape, as long as nothing is cut off on a phone.
+- How to split the work into PRs, e.g. replay first, then free board/games, then Edit position, then export. Each must leave the site working, so a temporary old-frame path for views not yet moved is fine.
+- Test updates: unit tests that assert frame sizes and the live tests' layout checks (`tests/live/site.test.cjs`, `tests/live/android.test.cjs`) change with it. Add a live check that no panel's text overflows its box at the sizes above.
+- Updating the docs this touches: the Gotchas in CLAUDE.md about `LAYOUTS.wide`/`tallLayout`/`.stage-tall`, LAYOUT.md if it describes frames, and the Known gaps here.
 
 ### Lichess data and multi-threaded Stockfish
 
@@ -403,3 +454,4 @@ Deferred by the per-plan reviews; each was true when recorded and may since have
 - 2026-10-26: chasolver, peer-to-peer online play and an app walk-through added to the roadmap.
 - 2026-10-26: the engine settings move from Settings › Engine into the Analysis panel (its ☰ menu turns the panel into them; the explanations behind ⓘ), the engine itself a drop-down in the panel's title row, Go deeper and the depth reached to its left (so the drop-down never moves); the Engine tab becomes **Online** (the tablebase toggle now, online features later).
 - 2026-10-26: "no online play" dropped from the principles (no accounts of our own stays), for peer-to-peer play between two browsers.
+- 2026-10-26: responsive layout designed and approved: a normal responsive page (board + sidebar, one column when narrow) replaces the scaled fixed frames, text at fixed sizes with a Text size setting, exports record the screen-sized page, video touches only while playing.
