@@ -1855,7 +1855,7 @@ for (const name of BROWSERS) for (const site of SITES) {
     // Export at screen size: the saved WebP is the stage area's size at the screen's density (held to 1920 px on its
     // longer side), whatever the page was scrolled to. Two moves, at the full width, to keep the canvas small
     const exportSize = async (p, tag) => {
-      const area = await p.locator('.stage-area').evaluate((el) => ({ w: el.offsetWidth, h: el.offsetHeight })); // offset: a paused page's scrollbar (Firefox) isn't in the video's width
+      const area = await p.locator('.stage-area').evaluate((el) => ({ w: el.clientWidth, h: el.clientHeight })); // client: a classic scrollbar's gutter (Firefox) is in neither the page's width nor the video's
       const dpr = await p.evaluate(() => window.devicePixelRatio), s = Math.min(dpr, 1920 / Math.max(area.w, area.h));
       const even = (v) => 2 * Math.floor(v / 2);
       const settings = p.getByRole('button', { name: 'Settings' });
