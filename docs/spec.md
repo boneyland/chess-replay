@@ -8,7 +8,7 @@ The one spec for the app: what it does now, what is planned, and the decisions b
 
 - [Principles](#principles)
 - [Built](#built): replay and browser analysis, opening names, custom starts and flip, free board and explorer, edit position, play vs human, My games, play vs Stockfish, full Stockfish download, lines (MultiPV), endgame tablebase (in game analysis too), responsive layout
-- [Roadmap](#roadmap): Lichess data and multi-threaded Stockfish, player names, Chess960, typed commentary, Maia3, dead positions, chasolver, background music, peer-to-peer online play, app walk-through
+- [Roadmap](#roadmap): square layouts and breakpoints, Lichess data and multi-threaded Stockfish, player names, Chess960, typed commentary, Maia3, dead positions, chasolver, background music, peer-to-peer online play, app walk-through
 - [Known gaps](#known-gaps)
 - [Decisions log](#decisions-log)
 
@@ -206,6 +206,10 @@ Built 2026-10-26 (designed the same day), replacing the fixed video frames (1920
 ## Roadmap
 
 Planned, roughly in this order; each item gets its own PR(s) on a `claude/<topic>` branch. Items marked *needs design* have open questions to settle with the user before a plan.
+
+### Square layouts and breakpoints (*needs design*)
+
+The responsive layout's squarish windows (near 1:1, such as an unfolded foldable or a tablet-sized window around 772×965) get either a sidebar that holds the board small or one column that scrolls; neither is designed for that shape. Open: a layout of its own for square screens (the board with the panels in a band under or beside it, sized for both); whether the device tiers' breakpoints (phone under 600 px wide or 500 px high, tablet and foldable 600–1023, desktop from 1024) and the stacking rules hold up on real devices (iPhone Duo's viewports per WebKit: 382–951 wide, 368–902 high); whether a half-folded screen (`device-posture: folded`, viewport segments, in preview in Safari 27.1) puts the board and the panels on separate halves. Asked for 2026-10-27.
 
 ### Lichess data and multi-threaded Stockfish
 
