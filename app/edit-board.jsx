@@ -26,7 +26,7 @@ function TrayPiece({ p, size, held, handlers }) {
 
 function Tray({ size, held, trayHandlers, style }) {
   return (
-    <div role="group" aria-label="Pieces" style={{ display: 'grid', gridTemplateColumns: `repeat(6, ${size}px)`, justifyContent: 'space-between', rowGap: 4, ...style }}>
+    <div role="group" aria-label="Pieces" style={{ display: 'grid', gridTemplateColumns: `repeat(6, ${size}px)`, justifyContent: 'space-between', rowGap: tx(4), ...style }}>
       {TRAY.map((p) => <TrayPiece key={p} p={p} size={size} held={held} handlers={trayHandlers ? trayHandlers(p) : {}} />)}
     </div>
   );
@@ -202,7 +202,7 @@ function EditBoard({ setup, onChange, onDone, onCancel, fenText, onFenText, fenM
               </div>
             ))}
           </div>
-          {!L.tray && <Tray size={Math.min(84, Math.floor((P.w - 60) / 6))} held={held} trayHandlers={trayHandlers} style={{ borderTop: `1px solid ${C.line}`, paddingTop: 14 }} />}
+          {!L.tray && <Tray size={Math.min(84, Math.floor((P.w - 60) / 6))} held={held} trayHandlers={trayHandlers} style={{ borderTop: `1px solid ${C.line}`, paddingTop: tx(14) }} />}
           <div role="status" style={{ display: 'flex', flexDirection: 'column', gap: 4, font: `500 ${tx(15)}px ${MONO}`, minHeight: tx(22) }}>
             {empty ? <span style={{ color: C.dim }}>{EDIT_HINT}</span> : problems.map((t) => <span key={t} style={{ color: C.blunder }}>{t}</span>)}
             {kbFocus && <span style={{ color: C.dim }}>{EDIT_KEYS}</span>}

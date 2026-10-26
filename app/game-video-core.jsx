@@ -357,7 +357,7 @@ const promoPieces = (pr) => PROMO_PIECES.map((t, k) => ({ t, sq: pr.to + (pr.whi
 function BoardTouch({ pos, sel, targets, drag, promo, onDown, onMove, onUp, onCancel }) {
   const dragged = drag && drag.moved ? pos.b[drag.from] : null;
   return (
-    <div onPointerDown={onDown} onPointerMove={onMove} onPointerUp={onUp} onPointerCancel={onCancel}
+    <div data-no-drag-scroll onPointerDown={onDown} onPointerMove={onMove} onPointerUp={onUp} onPointerCancel={onCancel}
       onDragStart={(e) => e.preventDefault()} title="Drag a piece to try your own move"
       style={{ ...NO_SELECT, position: 'absolute', left: 0, top: 0, width: BW, height: BW, cursor: drag && drag.moved ? 'grabbing' : 'grab', touchAction: 'none' }}>
       {sel != null && <div style={{ position: 'absolute', left: idxXY(sel)[0] * SQ, top: idxXY(sel)[1] * SQ, width: SQ, height: SQ, boxSizing: 'border-box', border: `5px solid ${BOARD.last}`, background: 'rgba(255,255,255,0.12)', pointerEvents: 'none' }} />}
