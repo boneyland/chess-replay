@@ -216,14 +216,17 @@ for (const name of BROWSERS) for (const site of SITES) {
       await page.getByRole('button', { name: 'Settings' }).click();
       await page.getByRole('tab', { name: 'View' }).click();
       const mv = await size('.mv'), hd = await size('.twk-hd b');
-      await page.locator('#tw-text-size').selectOption('Larger');
-      await page.waitForFunction((was) => parseFloat(getComputedStyle(document.querySelector('.mv')).fontSize) > was * 1.1, mv);
-      assert.ok(Math.abs((await size('.mv')) - mv * 1.3) <= 0.2, `.mv grew 1.3x from ${mv} to ${await size('.mv')}`);
-      assert.ok(Math.abs((await size('.twk-hd b')) - hd * 1.3) <= 0.2, 'the Settings heading grew');
-      assert.deepEqual(await overflowing(page), []);
-      await page.screenshot({ path: path.join(OUT, host + '-text-larger.png') });
-      await page.locator('#tw-text-size').selectOption('Default');
-      await page.getByRole('button', { name: 'Close settings' }).click();
+      try {
+        await page.locator('#tw-text-size').selectOption('Larger');
+        await page.waitForFunction((was) => parseFloat(getComputedStyle(document.querySelector('.mv')).fontSize) > was * 1.1, mv);
+        assert.ok(Math.abs((await size('.mv')) - mv * 1.3) <= 0.2, `.mv grew 1.3x from ${mv} to ${await size('.mv')}`);
+        assert.ok(Math.abs((await size('.twk-hd b')) - hd * 1.3) <= 0.2, 'the Settings heading grew');
+        assert.deepEqual(await overflowing(page), []);
+        await page.screenshot({ path: path.join(OUT, host + '-text-larger.png') });
+      } finally {
+        await page.locator('#tw-text-size').selectOption('Default');
+        await page.getByRole('button', { name: 'Close settings' }).click();
+      }
     });
 
     await t.test('desktop: Space presses a focused button rather than playing, and Esc closes the panel', async () => {
