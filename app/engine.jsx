@@ -42,6 +42,7 @@ function Stage({ menu, top, onLayout, duration, background, playback, nav, still
   const colsRef = React.useRef(null); // the last column count, for the switch's hysteresis
   React.useEffect(() => { if (still) setPlaying(false); }, [still]);
   const areaRef = React.useRef(null);
+  const video = playing || !!forceVideo;
   const lastTsRef = React.useRef(null);
   const passesRef = React.useRef(0);
 
@@ -53,7 +54,7 @@ function Stage({ menu, top, onLayout, duration, background, playback, nav, still
     if (!el) return;
     const measure = () => {
       const w = el.clientWidth, h = el.clientHeight;
-      const cols = LayoutCore.columns({ w, h, text, prevCols: colsRef.current });
+      const cols = LayoutCore.columns({ w, h, text, video, prevCols: colsRef.current });
       colsRef.current = cols;
       setArea((a) => (a.w === w && a.h === h && a.cols === cols ? a : { w, h, cols }));
     };
@@ -61,9 +62,9 @@ function Stage({ menu, top, onLayout, duration, background, playback, nav, still
     const ro = new ResizeObserver(measure);
     ro.observe(el);
     return () => ro.disconnect();
-  }, [text]);
+  }, [text, video]);
   const { w, h, cols } = area;
-  const video = playing || !!forceVideo, narrow = w < 900, phone = cols === 1 || narrow;
+  const narrow = w < 900, phone = cols === 1 || narrow;
   // the export's pixel width: the area's size at the device's pixel ratio, held to 1920 on its longer side
   const exportW = LayoutCore.exportPx(w, LayoutCore.exportScale(w, h, window.devicePixelRatio));
   // onLayout(true, w): a phone layout (one column, or under 900 px wide), where the page folds its buttons into a menu; w is the export's width

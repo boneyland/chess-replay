@@ -20,14 +20,17 @@
 
   // 1 or 2 columns. One column when the window is tall for its width (switching at 1.2 wide, back at 1.1 wide) or the
   // board beside the sidebar would be under 360 px (380 to come back): by the room left, not by device. A window too
-  // short for the one-column page (board, bars and three panels at their floors) keeps two columns.
-  function columns({ w, h, text = 1, prevCols = null }) {
+  // short for the one-column layout (board, bars and three panels at their floors) keeps two columns where they still
+  // fit a 200 px board beside the sidebar (a phone held sideways at Larger text), and always for a video, which must
+  // fit; a paused page in a narrow short window (a phone with its keyboard up) takes one column, which scrolls.
+  function columns({ w, h, text = 1, prevCols = null, video = false }) {
     const boardW = w - 2 * MARGIN - GAP - SIDEBAR_MIN * text - EVAL_TOTAL;
     const aspect = prevCols === 2 ? 1.2 : prevCols === 1 ? 1.1 : 1.15;
     const tall = prevCols === 1 ? h >= 1.1 * w : h > aspect * w;
     const narrow = boardW < (prevCols === 1 ? BOARD_BACK : BOARD_OK);
-    const fits = h >= 2 * MARGIN + barsTotal(text) + BOARD_MIN + GAP + 3 * PANEL_FLOOR + 2 * GAP;
-    return fits && (tall || narrow) ? 1 : 2;
+    const short = h < 2 * MARGIN + barsTotal(text) + BOARD_MIN + GAP + 3 * PANEL_FLOOR + 2 * GAP;
+    const keepTwo = short && (video || boardW >= BOARD_MIN);
+    return !keepTwo && (tall || narrow) ? 1 : 2;
   }
 
   // moves.cols / moves.rows: the list shows two columns of moves from 480 px wide; rows is how many fit in its height
@@ -128,7 +131,7 @@
   // view: 'replay' | 'free' | 'game' | 'edit'. video: playing or recording, when the page must fit the screen exactly.
   // cols overrides columns()'s choice; otherwise prevCols gives it hysteresis.
   function compute({ w, h, text = 1, view = 'replay', video = false, prevCols = null, cols = null }) {
-    const c = cols || columns({ w, h, text, prevCols });
+    const c = cols || columns({ w, h, text, prevCols, video });
     return (c === 1 ? oneColumn : twoColumns)({ w, h, text, view, video });
   }
 

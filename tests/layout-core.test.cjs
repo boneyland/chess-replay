@@ -105,6 +105,17 @@ test('cols override and moves rows', () => {
   assert.equal(LC.columns({ w: 1440, h: 818 }), 2);
 });
 
+// a narrow, short window (a phone with its keyboard up): paused, the one-column page scrolls, as two columns would
+// leave no sidebar; a video, which must fit, keeps two columns there. A phone held sideways at Larger text has room
+// for both columns, and keeps them
+test('a short window keeps two columns when they fit, or for a video', () => {
+  assert.equal(LC.columns({ w: 390, h: 400 }), 1);
+  assert.equal(LC.compute({ w: 390, h: 400 }).cols, 1);
+  assert.equal(LC.columns({ w: 390, h: 400, video: true }), 2);
+  assert.equal(LC.compute({ w: 390, h: 400, video: true }).cols, 2);
+  assert.equal(LC.columns({ w: 844, h: 346, text: 1.3 }), 2);
+});
+
 test('textScale', () => {
   assert.equal(LC.textScale('Larger'), 1.3);
   assert.equal(LC.textScale('Huge'), 1);
