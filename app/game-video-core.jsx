@@ -416,10 +416,10 @@ function LineChips({ name, nameColor, accent, moves, ply0, c, legal, sel, onPick
     <div style={{ display: 'flex', flexWrap: 'wrap', alignItems: 'center', columnGap: 6, rowGap: 6 }}>
       {name != null && <span style={{ color: nameColor, marginRight: 8 }}>{name}</span>}
       {moves.map((m, j) => {
-        const ply = ply0 + c + j, white = ply % 2 === 0, num = Math.floor(ply / 2) + 1, ok = j < legal, on = sel === j;
+        const ply = ply0 + c + j, white = ply % 2 === 0, ok = j < legal, on = sel === j;
         return (
           <span key={j} style={{ display: 'flex', alignItems: 'center', gap: 5 }}>
-            {(white || j === 0) && <span style={{ color: C.dim, marginLeft: j ? 6 : 0, font: `500 ${sm(15)}px ${MONO}` }}>{num}{white ? '.' : '…'}</span>}
+            {(white || j === 0) && <span style={{ color: C.dim, marginLeft: j ? 6 : 0, font: `500 ${sm(15)}px ${MONO}` }}>{window.ChessCore.moveNo(ply)}</span>}
             <span className={ok ? 'mv' : undefined} role={ok ? 'button' : undefined} title={ok ? `Show ${what} on the board up to ${m}` : 'Not a legal move in this line'}
               onClick={ok ? (e) => { e.stopPropagation(); onPick(j); } : undefined} tabIndex={ok ? 0 : undefined}
               onKeyDown={ok ? (e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); e.stopPropagation(); onPick(j); } } : undefined}
