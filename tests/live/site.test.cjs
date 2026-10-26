@@ -186,7 +186,7 @@ for (const name of BROWSERS) for (const site of SITES) {
       await page.getByRole('button', { name: 'Settings' }).click();
       // the tabs, and the arrow keys moving between them
       const tabs = page.getByRole('tablist', { name: 'Settings' }).getByRole('tab');
-      assert.deepEqual(await tabs.allInnerTexts(), ['Game', 'View', 'Engine', 'Commentary', 'Export', 'Sound']);
+      assert.deepEqual(await tabs.allInnerTexts(), ['Game', 'View', 'Online', 'Commentary', 'Export', 'Sound']);
       await tabs.first().focus();
       await page.keyboard.press('ArrowRight');
       assert.equal(await page.getByRole('tab', { name: 'View' }).getAttribute('aria-selected'), 'true');
@@ -207,7 +207,9 @@ for (const name of BROWSERS) for (const site of SITES) {
     });
 
     // any box that scrolls takes a mouse drag, as the Moves panel does, and nothing outside a text field selects
+    // (640 px tall: at 900 no tab overflows since the engine settings moved to the Analysis panel)
     await t.test('desktop: Settings scrolls with a mouse drag, and a drag selects no text', async () => {
+      await page.setViewportSize({ width: 1440, height: 640 });
       await page.getByRole('button', { name: 'Settings' }).click();
       const body = page.locator('.twk-body'), tabs = page.getByRole('tablist', { name: 'Settings' }).getByRole('tab');
       let tall = false;
@@ -237,6 +239,7 @@ for (const name of BROWSERS) for (const site of SITES) {
       assert.equal(await page.evaluate(() => getComputedStyle(document.body).userSelect), 'none');
       await page.keyboard.press('Escape');
       await assert.doesNotReject(body.waitFor({ state: 'detached', timeout: 3000 }));
+      await page.setViewportSize({ width: 1440, height: 900 });
     });
 
     await t.test('desktop: Esc closes the Queen panel', async () => {
@@ -489,7 +492,7 @@ for (const name of BROWSERS) for (const site of SITES) {
       await cp.ctx.close();
     });
     // Play/Explore → Starting position: no game, every move (either side's) rated by Stockfish; it survives a reload
-    // Settings › Engine › Lines 3: the free board's Analysis lists three lines, each with its arrow
+    // Analysis › ☰ › Lines 3: the free board's Analysis lists three lines, each with its arrow
     await t.test('desktop: Lines 3 shows three engine lines and three arrows on the free board', async () => {
       const nb = await open(browser, { width: 1440, height: 900 });
       const p = nb.page;
@@ -507,8 +510,7 @@ for (const name of BROWSERS) for (const site of SITES) {
       await p.waitForFunction(() => (document.body.innerText.match(/^[+−]?\d+\.\d\d( d\d+)?\s+1…/gm) || []).length === 3 && document.querySelectorAll('svg polygon').length === 3, null, { timeout: 45000 });
       assert.equal(await rows(), 3);
       await p.screenshot({ path: path.join(OUT, host + '-board-lines.png') });
-      await p.getByRole('button', { name: 'Settings' }).click();
-      await p.getByRole('tab', { name: 'Engine' }).click();
+      await p.getByRole('button', { name: 'Engine options' }).click();
       assert.equal(await p.locator('#tw-sf-lines').inputValue(), '3');
       assert.deepEqual(nb.errors, []);
       await nb.ctx.close();
@@ -1016,7 +1018,7 @@ for (const name of BROWSERS) for (const site of SITES) {
       assert.equal(sent.length, 3);
       // the setting off: a 5-piece position sends nothing
       await p.getByRole('button', { name: 'Settings' }).click();
-      await p.getByRole('tab', { name: 'Engine' }).click();
+      await p.getByRole('tab', { name: 'Online' }).click();
       await p.getByRole('switch', { name: /Endgame tablebase/ }).click();
       await p.keyboard.press('Escape');
       await setUp('4k3/8/8/8/8/8/3RK3/7r w - - 0 1');
@@ -1042,13 +1044,17 @@ for (const name of BROWSERS) for (const site of SITES) {
       await p.waitForFunction(() => /Kxc4/.test(document.body.innerText), null, { timeout: 10000 });
       const t0 = Date.now();
       await p.getByRole('button', { name: /^Analyse with Stockfish/ }).first().click();
-      await p.waitForFunction(() => /Lichess tablebase/i.test(document.body.innerText), null, { timeout: 19000 });
+      // the run ends (its progress and the Analyse button gone) before a move is picked: the panel's own tablebase
+      // lookup of a picked position would otherwise race the run's for the same position
+      await p.waitForFunction(() => !/Analysing \d|Starting Stockfish|Analyse with Stockfish/i.test(document.body.innerText), null, { timeout: 19000 });
       assert.ok(Date.now() - t0 < 19000, 'no 20 s search');
       assert.equal(sent.filter((u) => u.includes('/standard?')).length, 5, 'each position asked once');
       assert.equal(sent.length, 5, 'nothing else asked');
+      // on 2. Bc4+ the title row says "Tablebase" in place of a depth
       await p.locator('[data-ply="2"]').click();
       await assert.doesNotReject(p.locator('.plabel').filter({ hasText: /2\. Bc4\+/ }).waitFor({ timeout: 5000 }));
       await p.waitForFunction(() => /Blunder/i.test(document.body.innerText), null, { timeout: 5000 });
+      assert.match(await p.evaluate(() => document.body.innerText), /Tablebase/i);
       await p.screenshot({ path: path.join(OUT, host + '-tablebase-analysis.png') });
       await p.locator('[data-ply="0"]').click();
       await p.waitForFunction(() => /The tablebase agrees/.test(document.body.innerText) || /Best line/.test(document.body.innerText), null, { timeout: 5000 });
@@ -1644,7 +1650,7 @@ for (const name of BROWSERS) for (const site of SITES) {
       await off.ctx.close();
     });
 
-    // Settings › Engine › Full: stockfish.js's full engine (99 MB) from unpkg, kept in its own cache, run from there, removed.
+    // Analysis › engine drop-down › Full: stockfish.js's full engine (99 MB) from unpkg, kept in its own cache, run from there, removed.
     // The real download (a route can't answer with a body this big: Chromium drops Playwright's connection)
     await t.test('desktop: the full engine downloads once, runs from its kept copy, and can be removed', { timeout: 420000 }, async (tt) => {
       const fe = await open(browser, { width: 1440, height: 900 });
@@ -1653,9 +1659,17 @@ for (const name of BROWSERS) for (const site of SITES) {
       fe.ctx.on('request', (r) => { if (r.url().startsWith('https://unpkg.com/stockfish@19.0.1/bin/')) hits++; });
       await p.goto(base, { waitUntil: 'load' });
       await loadedOn(p);
+      // the Analysis panel's engine menu (☰), opened if it isn't
       const openEngine = async () => {
-        await p.getByRole('button', { name: 'Settings' }).click();
-        await p.getByRole('tab', { name: 'Engine' }).click();
+        const menu = p.getByRole('button', { name: 'Engine options' });
+        if (await menu.getAttribute('aria-expanded') !== 'true') await menu.click();
+      };
+      const engineSelect = p.getByRole('combobox', { name: 'Engine', exact: true });
+      // the explanation behind the Analyse button's ⓘ (its tooltip on hover) names the engine running
+      const runs = async (name) => {
+        await p.getByRole('button', { name: /^About (Analyse|Resume)/ }).hover();
+        await p.getByRole('tooltip').filter({ hasText: new RegExp('^' + name + ' runs in your browser') }).waitFor({ timeout: 3000 });
+        await p.mouse.move(0, 0);
       };
       // an own move, rated by Lite first
       const b = await boardBox(p);
@@ -1666,9 +1680,10 @@ for (const name of BROWSERS) for (const site of SITES) {
       await p.mouse.up();
       const rated = /your move · .*(stockfish’s choice|cp vs|as good as|can’t run here|stopped)/i;
       await p.waitForFunction((re) => new RegExp(re, 'i').test(document.body.innerText), rated.source, { timeout: 60000 });
-      assert.match(await p.evaluate(() => document.body.innerText), /Stockfish 19 lite · depth \d+/i);
-      await openEngine();
-      await p.getByRole('radiogroup', { name: 'Engine' }).getByRole('radio', { name: /^Full · 99 MB/ }).click();
+      assert.match(await p.evaluate(() => document.body.innerText), /depth \d+/i);
+      assert.equal(await engineSelect.inputValue(), 'Lite');
+      // picking Full before it is downloaded opens the engine menu, at its Download button
+      await engineSelect.selectOption('Full');
       const remove = p.getByRole('button', { name: /^Remove the full engine download/ }), failed = p.getByText(/^Download failed: /);
       // unpkg is a third party: a download that fails (a stalled connection is given up after 30 s) is tried once more,
       // and a failure says how far it got
@@ -1687,12 +1702,13 @@ for (const name of BROWSERS) for (const site of SITES) {
       // a failed try may have fetched one file or both
       if (tries === 1) assert.equal(hits, 2, 'both files fetched once');
       const fetched = hits;
-      await assert.doesNotReject(p.getByText(/^Stockfish 19 runs in your browser/).waitFor({ timeout: 3000 }));
+      await assert.doesNotReject(runs('Stockfish 19'));
       await p.screenshot({ path: path.join(OUT, host + '-engine-full.png') });
       // the same move is searched again by the full engine once it is kept, with no move played and Settings still open
       // (Escape would leave the line too): the panels' search once got the lite engine being quit, and stayed on
-      // "thinking". The Analysis header names the engine
-      await p.waitForFunction(() => /Stockfish 19 · depth \d+/i.test(document.body.innerText), null, { timeout: 60000 });
+      // "thinking"
+      await p.getByRole('button', { name: 'Engine options' }).click();
+      await p.waitForFunction(() => /depth \d+/i.test(document.body.innerText), null, { timeout: 60000 });
       await p.waitForFunction((re) => new RegExp(re, 'i').test(document.body.innerText), rated.source, { timeout: 60000 });
       assert.doesNotMatch(await p.getByText(/your move ·/i).innerText(), /can’t run here|stopped/i);
       // a reload finds the kept copy: nothing fetched again
@@ -1709,7 +1725,7 @@ for (const name of BROWSERS) for (const site of SITES) {
       await assert.doesNotReject(p.getByText(/^Remove the full engine\? You’d need to download 99 MB again/).waitFor({ timeout: 3000 }));
       await p.getByRole('button', { name: 'Remove', exact: true }).click();
       await assert.doesNotReject(p.getByRole('button', { name: /^Download full Stockfish/ }).waitFor({ timeout: 5000 }));
-      await assert.doesNotReject(p.getByText(/^Stockfish 19 lite runs in your browser/).waitFor({ timeout: 3000 }));
+      await assert.doesNotReject(runs('Stockfish 19 lite'));
       assert.equal(await p.evaluate(async () => (await caches.keys()).includes('stockfish-full-19')), false, 'the copy is gone');
       assert.deepEqual(fe.errors, []);
       await fe.ctx.close();

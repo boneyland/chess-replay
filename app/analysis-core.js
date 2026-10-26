@@ -139,7 +139,7 @@
   // to about 10 requests in a minute
   const TB_GAP_MS = 4000;
 
-  // the browser engines (Settings › Engine): the vendored lite one, or the full one the viewer downloaded (sf-full.js)
+  // the browser engines (the Analysis panel's engine drop-down): the vendored lite one, or the full one the viewer downloaded (sf-full.js)
   const ENGINE_NAMES = { lite: 'Stockfish 19 lite (browser)', full: 'Stockfish 19 (browser)' };
   const ENGINE = { name: ENGINE_NAMES.lite, depth: null, time_limit: 3, lines: 1, threads: 1, hash_mb: 64 };
   // The engine settings a viewer can change (Settings → Engine), from the saved tweaks, kept in range; anything
