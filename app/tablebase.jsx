@@ -61,7 +61,7 @@ function TablebaseBlock({ t, onPlay }) {
                 <span key={m.uci} className="mv tb-move" role="button" tabIndex={0} title={tip} aria-label={tip}
                   onClick={(e) => { e.stopPropagation(); onPlay(m.uci); }} onPointerDown={(e) => e.stopPropagation()}
                   onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); e.stopPropagation(); onPlay(m.uci); } }}
-                  style={{ flex: 'none', cursor: 'pointer', padding: `${tx(2)}px ${tx(8)}px`, borderRadius: 4, font: `600 ${tx(16)}px ${MONO}`, background: white ? '#f1ebe1' : '#2a2320', color: white ? '#15100d' : '#efe8de', border: `1px solid ${g.outcome === 'win' || g.outcome === 'loss' ? tbColor(g.outcome) : white ? 'rgba(60,40,20,0.22)' : 'rgba(255,236,214,0.22)'}` }}>{m.san}</span>
+                  style={{ flex: 'none', cursor: 'pointer', padding: `${tx(2)}px ${tx(8)}px`, borderRadius: 2, font: `600 ${tx(16)}px ${MONO}`, background: white ? '#f1ebe1' : '#2a2320', color: white ? '#15100d' : '#efe8de', border: `1px solid ${g.outcome === 'win' || g.outcome === 'loss' ? tbColor(g.outcome) : white ? 'rgba(60,40,20,0.22)' : 'rgba(255,236,214,0.22)'}` }}>{m.san}</span>
               );
             })}
           </SideScroll>
@@ -105,7 +105,7 @@ function TablebaseExplorer({ t, posKey, onPlay }) {
                 return (
                   <span key={m.uci} className="mv tb-move" role="button" tabIndex={0} title={tip} aria-label={tip} onClick={(e) => play(e, m.uci)}
                     onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') play(e, m.uci); }}
-                    style={{ flex: 'none', minWidth: tx(58), boxSizing: 'border-box', textAlign: 'center', cursor: 'pointer', padding: `${tx(2)}px ${tx(8)}px`, borderRadius: 4, font: `600 ${tx(17)}px ${MONO}`, background: white ? '#f1ebe1' : '#2a2320', color: white ? '#15100d' : '#efe8de', border: `1px solid ${g.outcome === 'win' || g.outcome === 'loss' ? tbColor(g.outcome) : white ? 'rgba(60,40,20,0.22)' : 'rgba(255,236,214,0.22)'}` }}>{m.san}</span>
+                    style={{ flex: 'none', minWidth: tx(58), boxSizing: 'border-box', textAlign: 'center', cursor: 'pointer', padding: `${tx(2)}px ${tx(8)}px`, borderRadius: 2, font: `600 ${tx(17)}px ${MONO}`, background: white ? '#f1ebe1' : '#2a2320', color: white ? '#15100d' : '#efe8de', border: `1px solid ${g.outcome === 'win' || g.outcome === 'loss' ? tbColor(g.outcome) : white ? 'rgba(60,40,20,0.22)' : 'rgba(255,236,214,0.22)'}` }}>{m.san}</span>
                 );
               })}
             </div>

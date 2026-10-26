@@ -23,6 +23,8 @@
     return t;
   };
   const BOARD_MAX = 900, BOARD_MIN = 200, BOARD_OK = 360, BOARD_BACK = 380;
+  // the board is never more than half the viewport's longer side (its height upright, its width held sideways), nor 900 px
+  let boardMax = BOARD_MAX;
   const SIDEBAR_MIN = 320, MOVES_W = 230, COMMENT_MIN = 150;
   const HEADER_H = 64, PLOT_H = 110, PLOT_SIDE_H = 80, PLOT_BELOW_MIN_H = 700;
   const ONE_COL = { comment: 200, analysis: 260, moves: 240, panel: 260 }; // paused heights, times text
@@ -76,7 +78,7 @@
     const side = Math.max(SIDEBAR_MIN * text, Math.min((MOVES_W + COMMENT_MIN) * text + GAP, w - 2 * MARGIN - GAP - EVAL_TOTAL - BOARD_OK));
     const wLimit = w - 2 * MARGIN - GAP - side;
     // 200 px at least by width; a window too short for that (a video in a phone held sideways at its smallest) shrinks the board to the height
-    const size = Math.max(40, Math.min(Math.max(BOARD_MIN, Math.min(BOARD_MAX, wLimit - EVAL_TOTAL)), hLimit));
+    const size = Math.max(40, Math.min(Math.max(BOARD_MIN, Math.min(boardMax, wLimit - EVAL_TOTAL)), hLimit));
     const left = size + EVAL_TOTAL; // same sidebar position whether or not the view draws an eval bar
     const boardX = hasEval ? MARGIN + EVAL_TOTAL : MARGIN + (left - size) / 2;
     const boardY = MARGIN + bar + BAR_GAP;
@@ -114,7 +116,7 @@
     const bar = barH(text), bars = barsTotal(text);
     const pw = Math.min(w - 2 * MARGIN, BOARD_MAX + ev); // panels' width; the board and eval bar sit centred in it
     const px = (w - pw) / 2;
-    const natural = Math.min(BOARD_MAX, w - 2 * MARGIN - ev);
+    const natural = Math.min(boardMax, w - 2 * MARGIN - ev);
     // what goes under the board, top to bottom, with its paused height and, in a video, its preferred one
     let parts;
     // [name, paused height, preferred in a video, floor in a video]; the Moves box never gets less than its title and one row
@@ -175,8 +177,10 @@
   // cols overrides columns()'s choice; otherwise prevCols gives it hysteresis.
   // L.text is the text size the boxes were sized for (the viewer's, times the tier's scale); L.pad the panels' padding
   // at text 1 (the views scale it with their text).
-  function compute({ w, h, text = 1, view = 'replay', video = false, prevCols = null, cols = null }) {
+  // vw, vh: the viewport's size (the stage area's when not given), which caps the board
+  function compute({ w, h, text = 1, view = 'replay', video = false, prevCols = null, cols = null, vw = w, vh = h }) {
     const c = cols || columns({ w, h, text, prevCols, video });
+    boardMax = Math.max(BOARD_MIN, Math.min(BOARD_MAX, 0.5 * Math.max(vw, vh)));
     const tier = useTier(w, h), t = text * tier.scale;
     return Object.assign((c === 1 ? oneColumn : twoColumns)({ w, h, text: t, view, video }), { text: t, tier: tierOf(w, h), pad: PAD });
   }

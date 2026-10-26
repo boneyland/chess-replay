@@ -177,3 +177,12 @@ test('textScale', () => {
   assert.equal(LC.textScale(undefined), 1);
   assert.equal(LC.textScale('toString'), 1);
 });
+
+// the board is never more than half the viewport's longer side: a tablet upright leaves the panels room under it
+test('the board stays within half the viewport', () => {
+  for (const [w, h, vw, vh] of [[768, 975, 768, 1024], [1440, 818, 1440, 900], [390, 795, 390, 844], [844, 346, 844, 390], [2560, 1300, 2560, 1440]]) {
+    const L = LC.compute({ w, h, vw, vh });
+    assert.ok(L.board.size <= 0.5 * Math.max(vw, vh) + 0.5, `${vw}x${vh}: board ${L.board.size}`);
+  }
+  assert.equal(LC.compute({ w: 768, h: 975, vw: 768, vh: 1024 }).board.size, 512);
+});

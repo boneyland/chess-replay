@@ -39,10 +39,15 @@ const SQ = 96, BW = SQ * 8;
 // sizes, times 0.8 and the viewer's text size, through tx().
 let L = window.LayoutCore.compute({ w: 1440, h: 900 }), TX = 0.8, TEXT = 1;
 const setLayout = (frame, view = 'replay') => {
-  L = window.LayoutCore.compute({ w: frame.w, h: frame.h, text: frame.text, view, video: frame.video, cols: frame.cols });
+  L = window.LayoutCore.compute({ w: frame.w, h: frame.h, text: frame.text, view, video: frame.video, cols: frame.cols, vw: frame.vw, vh: frame.vh });
   TEXT = L.text; TX = 0.8 * TEXT; // the viewer's text size, times the device tier's (smaller on phones and tablets)
 };
 const tx = (px) => Math.round(px * TX * 10) / 10;
+// a text's width in px in a CSS font, measured on a canvas (in the page's fonts once they've loaded), to fit text to a box
+const textWidth = (() => {
+  let cx = null;
+  return (txt, font) => { cx = cx || document.createElement('canvas').getContext('2d'); cx.font = font; return cx.measureText(txt).width; };
+})();
 // the text-bearing padding inside every panel: the device tier's (tighter on phones and tablets)
 const panelPad = () => `${tx(L.pad[0])}px ${tx(L.pad[1])}px`;
 // the move and eval headline in Analysis (and the free board's and a game's)
@@ -150,8 +155,8 @@ function Panel({ box, title, right, extra, head, a, style, progress, children })
   const { x, y, w, h } = box;
   // the entrance slide only while it fades in (a video's): a settled panel has no transform. A flowing panel (a paused
   // one-column page) takes its place in the view's column, as tall as its contents
-  const place = box.flow ? { position: 'relative', order: box.order, flex: 'none', boxSizing: 'border-box', borderRadius: 8, overflow: 'hidden' }
-    : { position: 'absolute', left: x, top: y, width: w, height: h, boxSizing: 'border-box', borderRadius: 8, opacity: a, ...(a < 1 && { transform: `translateY(${(1 - a) * 18}px)` }), overflow: 'hidden' };
+  const place = box.flow ? { position: 'relative', order: box.order, flex: 'none', boxSizing: 'border-box', borderRadius: 4, overflow: 'hidden' }
+    : { position: 'absolute', left: x, top: y, width: w, height: h, boxSizing: 'border-box', borderRadius: 4, opacity: a, ...(a < 1 && { transform: `translateY(${(1 - a) * 18}px)` }), overflow: 'hidden' };
   // the progress line goes over the panel's top edge: beside a placed panel, inside a flowing one
   const over = box.flow ? { position: 'absolute', left: 0, right: 0, top: 0, height: 3, pointerEvents: 'none' } : { ...place, pointerEvents: 'none' };
   // a box whose contents can outgrow it scrolls, and hands the wheel or finger on to the page at its ends
@@ -277,7 +282,7 @@ function Board({ M, T, S, a, arrows, pieces, queen, vline, hide, lines }) {
     }
   }
   return (
-    <div onDragStart={(e) => e.preventDefault()} style={{ ...NO_SELECT, position: 'absolute', left: 0, top: 0, width: BW, height: BW, borderRadius: 4, overflow: 'hidden', boxShadow: '0 4px 12px rgba(0,0,0,0.28)', opacity: a, transform: `scale(${lerp(0.96, 1, a)})` }}>
+    <div onDragStart={(e) => e.preventDefault()} style={{ ...NO_SELECT, position: 'absolute', left: 0, top: 0, width: BW, height: BW, borderRadius: 2, overflow: 'hidden', boxShadow: '0 4px 12px rgba(0,0,0,0.28)', opacity: a, transform: `scale(${lerp(0.96, 1, a)})` }}>
       {sq}{over}
       {pieces.map((p) => <Piece key={p.id} p={p} T={T} S={S} />)}
       <svg width={BW} height={BW} style={{ position: 'absolute', left: 0, top: 0, zIndex: 6, pointerEvents: 'none' }}>
@@ -311,7 +316,7 @@ function searchDepth(s) {
 // Lite/Full choice ({ value, options: [{ value, label }], onChange }) where the full engine is offered; body, the
 // engine settings, which take the panel's place while its menu is open
 const EngineMenuContext = React.createContext(null);
-const headCtl = () => ({ ...NO_SELECT, flex: 'none', height: '1.8em', margin: '-0.4em 0', borderRadius: 5, cursor: 'pointer', border: `1.5px solid ${C.ctlLine}`, background: 'transparent', color: C.ink, letterSpacing: 0 }); // C changes with the colour scheme; ctlLine stands out more than the panels' line
+const headCtl = () => ({ ...NO_SELECT, flex: 'none', height: '1.8em', margin: '-0.4em 0', borderRadius: 3, cursor: 'pointer', border: `1.5px solid ${C.ctlLine}`, background: 'transparent', color: C.ink, letterSpacing: 0 }); // C changes with the colour scheme; ctlLine stands out more than the panels' line
 const stopHere = (e) => e.stopPropagation();
 // The Analysis panel's title row (on the right: Go deeper, the search's depth, the engine, the engine menu) and, while the menu is
 // open, the engine settings in place of the panel's contents. Only a paused replay offers them; playing (an export
@@ -321,8 +326,10 @@ function AnalysisPanel({ box, a, depth, deep, paused, style, children }) {
   const [open, setOpen] = React.useState(false);
   const live = !!E && paused, shown = open && live, pick = live && E.pick;
   const name = E ? E.name : 'Stockfish';
-  // a narrow panel (a laptop's sidebar, a phone) leaves out the depth, so the title and the controls share one line
+  // a narrow panel (a laptop's sidebar, a phone) shortens the depth to D22 (the tablebase to TB), so the title and the
+  // controls share one line
   const roomy = box.w >= 440 * TEXT;
+  const depthText = !depth || roomy ? depth : depth.startsWith('depth ') ? 'D' + depth.slice(6) : 'TB';
   const head = (
     // the controls go under the title rather than over it where even then they don't fit (a small phone, large text)
     <span style={{ flex: 1, minWidth: 0, display: 'flex', flexWrap: 'wrap', alignItems: 'center', justifyContent: 'space-between', columnGap: tx(16), rowGap: tx(8) }}>
@@ -331,7 +338,7 @@ function AnalysisPanel({ box, a, depth, deep, paused, style, children }) {
           desktop's heading whatever the layout's title gap (the phone's wide one left the depth no room) */}
       <span style={{ flex: '1 1 auto', minWidth: 0, display: 'flex', alignItems: 'center', justifyContent: 'flex-end', gap: tx(16) }}>
       {!shown && paused && <DeeperButton ev={deep} />}
-      {!shown && depth && roomy && <span style={{ flex: 'none', whiteSpace: 'nowrap', letterSpacing: '0.04em' }}>{depth}</span>}
+      {!shown && depthText && <span title={depth} style={{ flex: 'none', whiteSpace: 'nowrap', letterSpacing: '0.04em' }}>{depthText}</span>}
       {/* smaller on the phone, where the row is tight */}
       {pick
         ? <select aria-label="Engine" value={pick.value} onChange={(e) => { const go = pick.onChange(e.target.value); if (go) setOpen(true); }} onClick={stopHere} onPointerDown={stopHere}
@@ -375,7 +382,7 @@ function LineBoard({ a, sq, v, hide, arrows }) {
   ) : null));
   return (
     // drawing only: taps and drags go to BoardTouch (without this its pieces sit above it and swallow them)
-    <div style={{ ...NO_SELECT, position: 'absolute', left: 0, top: 0, width: BW, height: BW, borderRadius: 4, overflow: 'hidden', boxShadow: `0 0 0 4px ${accent}, 0 4px 12px rgba(0,0,0,0.28)`, opacity: a, pointerEvents: 'none' }}>
+    <div style={{ ...NO_SELECT, position: 'absolute', left: 0, top: 0, width: BW, height: BW, borderRadius: 2, overflow: 'hidden', boxShadow: `0 0 0 4px ${accent}, 0 4px 12px rgba(0,0,0,0.28)`, opacity: a, pointerEvents: 'none' }}>
       {sq}{over}{pieces}
       {arrows && (
         <svg width={BW} height={BW} style={{ position: 'absolute', left: 0, top: 0, zIndex: 6, pointerEvents: 'none' }}>
@@ -433,7 +440,7 @@ function LineChips({ name, nameColor, accent, moves, ply0, c, legal, sel, onPick
             <span className={ok ? 'mv' : undefined} role={ok ? 'button' : undefined} title={ok ? `Show ${what} on the board up to ${m}` : 'Not a legal move in this line'}
               onClick={ok ? (e) => { e.stopPropagation(); onPick(j); } : undefined} tabIndex={ok ? 0 : undefined}
               onKeyDown={ok ? (e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); e.stopPropagation(); onPick(j); } } : undefined}
-              style={{ cursor: ok ? 'pointer' : 'default', opacity: ok ? 1 : 0.4, padding: `${tx(2)}px ${tx(8)}px`, borderRadius: 4, font: `${j === 0 || on ? 700 : 600} ${tx(16)}px ${MONO}`, background: white ? '#f1ebe1' : '#2a2320', color: white ? '#15100d' : '#efe8de', boxShadow: on ? `0 0 0 3px ${C.last}` : 'none', border: j === 0 ? `2px solid ${accent}` : `1px solid ${white ? 'rgba(60,40,20,0.22)' : 'rgba(255,236,214,0.22)'}` }}>{m}</span>
+              style={{ cursor: ok ? 'pointer' : 'default', opacity: ok ? 1 : 0.4, padding: `${tx(2)}px ${tx(8)}px`, borderRadius: 2, font: `${j === 0 || on ? 700 : 600} ${tx(16)}px ${MONO}`, background: white ? '#f1ebe1' : '#2a2320', color: white ? '#15100d' : '#efe8de', boxShadow: on ? `0 0 0 3px ${C.last}` : 'none', border: j === 0 ? `2px solid ${accent}` : `1px solid ${white ? 'rgba(60,40,20,0.22)' : 'rgba(255,236,214,0.22)'}` }}>{m}</span>
           </span>
         );
       })}
@@ -456,7 +463,7 @@ function EvalBarView({ cp, txt, a }) {
   if (!L.eval) return null;
   const H = L.board.size, ef = Math.round(L.eval.w * 0.62 * 10) / 10; // the number, sized to the bar's width
   return (
-    <div style={{ ...NO_SELECT, position: 'absolute', left: L.eval.x, top: L.board.y, width: L.eval.w, height: H, borderRadius: 4, overflow: 'hidden', background: '#2a2320', boxShadow: `0 0 0 1px ${C.line}`, opacity: a }}>
+    <div style={{ ...NO_SELECT, position: 'absolute', left: L.eval.x, top: L.board.y, width: L.eval.w, height: H, borderRadius: 2, overflow: 'hidden', background: '#2a2320', boxShadow: `0 0 0 1px ${C.line}`, opacity: a }}>
       <div style={{ position: 'absolute', left: 0, right: 0, [flip ? 'top' : 'bottom']: 0, height: f * H, background: '#ffffff' }} />
       <div style={{ position: 'absolute', left: 0, right: 0, top: H / 2 - 1, height: 2, background: C.last, opacity: 0.5 }} />
       <div style={{ position: 'absolute', left: 0, right: 0, [top ? 'top' : 'bottom']: ef / 2, height: ef * 5, display: 'flex', alignItems: 'center', justifyContent: 'center', font: `700 ${ef}px ${MONO}`, color: inWhite ? '#2a2320' : '#f1ebe1' }}>
@@ -498,22 +505,26 @@ function PlayerBar({ M, T, S, side, a, pieces }) {
     for (let i = 0; i < n; i++) shown.push(<img key={t + i} src={img(opp, t)} alt="" style={{ width: tx(30), height: tx(30), flex: 'none', marginLeft: shown.length ? -tx(8) : 0, filter: opp === 'b' ? C.rim : 'none' }} />);
   });
   const clk = M.hasClock ? clockOf(M, side, T, S) : null;
-  const low = clk && clk.s < 60, short = L.board.size < 480 && !!P.short;
-  // beside a very small board (a phone held sideways at large text) the captures go when they would leave the name no
-  // room: the bar's width less the colour square, about five letters of name and the clock
-  const room = L.board.size - 2 * tx(14) - 5 * tx(11) - (clk ? tx(72) + tx(20) + tx(14) : 0);
-  const capsW = shown.length ? tx(20) + tx(30) + (shown.length - 1) * tx(22) + (pts > 0 ? tx(22) + tx(10) * (String(pts).length + 1) : 0) : 0;
-  const caps = capsW <= room;
+  const low = clk && clk.s < 60;
+  // the full name, title and rating always; where the bar is too narrow (a phone's) their text gets smaller, down to 0.6
+  // of its size, then the captures go, then the name ends in an ellipsis
+  const rating = [P.title, P.elo].filter(Boolean).join(' ');
+  const capsW = shown.length ? tx(6) + tx(30) + (shown.length - 1) * tx(22) + (pts > 0 ? tx(8) + textWidth('+' + pts, `600 ${tx(16)}px ${MONO}`) : 0) : 0;
+  const fixedW = tx(14) + (clk ? tx(72) + tx(14) + 2 * tx(7) : 0);
+  const needW = textWidth(P.name, `600 ${tx(20)}px ${SANS}`) + (rating ? tx(10) + textWidth(rating, `500 ${tx(16)}px ${MONO}`) : 0) + tx(14);
+  const fit = (caps) => Math.min(1, (L.board.size - fixedW - (caps ? capsW + tx(14) : 0)) / needW);
+  const caps = fit(true) >= 0.6 || !shown.length;
+  const k = Math.max(0.6, fit(caps));
   return (
     <div style={{ ...barPlace(side), gap: tx(14), opacity: a }}>
-      <span style={{ width: tx(14), height: tx(14), borderRadius: 3, background: side === 'w' ? '#f1ebe1' : '#1c1613', border: `1.5px solid ${C.dim}`, flex: 'none' }} />
-      {/* beside a small board (a phone's) the short name, so the rating, captures and clock leave it room */}
-      <span title={P.name} style={{ font: `600 ${tx(20)}px ${SANS}`, color: C.ink, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis', minWidth: 0 }}>{short ? P.short : P.name}</span>
-      {/* not beside a phone's board, where the clock and captures need the room (the header's second line has it) */}
-      {L.board.size >= 360 && <span style={{ font: `500 ${tx(16)}px ${MONO}`, color: C.dim, whiteSpace: 'nowrap' }}>{[P.title, P.elo].filter(Boolean).join(' ')}</span>}
+      <span style={{ width: tx(14), height: tx(14), borderRadius: 2, background: side === 'w' ? '#f1ebe1' : '#1c1613', border: `1.5px solid ${C.dim}`, flex: 'none' }} />
+      <span style={{ display: 'flex', alignItems: 'baseline', gap: tx(10) * k, minWidth: 0, whiteSpace: 'nowrap' }}>
+        <span title={P.name} style={{ font: `600 ${tx(20) * k}px ${SANS}`, color: C.ink, overflow: 'hidden', textOverflow: 'ellipsis', minWidth: 0 }}>{P.name}</span>
+        {rating && <span style={{ flex: 'none', font: `500 ${tx(16) * k}px ${MONO}`, color: C.dim }}>{rating}</span>}
+      </span>
       {caps && <span style={{ display: 'flex', alignItems: 'center', marginLeft: tx(6) }}>{shown}</span>}
       {caps && pts > 0 && <span style={{ font: `600 ${tx(16)}px ${MONO}`, color: C.dim, marginLeft: tx(8) }}>+{pts}</span>}
-      {clk && <span style={{ marginLeft: 'auto', minWidth: tx(72), textAlign: 'center', padding: `${tx(1)}px ${tx(7)}px`, borderRadius: 5, font: `600 ${tx(17)}px ${MONO}`, background: clk.active ? (low ? C.blunder : '#f1ebe1') : C.off, color: clk.active ? '#15100d' : C.dim, boxShadow: clk.active ? `0 0 0 1px ${C.line}` : 'none' }}>{fmtClock(clk.s)}</span>}
+      {clk && <span style={{ marginLeft: 'auto', minWidth: tx(72), textAlign: 'center', padding: `${tx(1)}px ${tx(7)}px`, borderRadius: 3, font: `600 ${tx(17)}px ${MONO}`, background: clk.active ? (low ? C.blunder : '#f1ebe1') : C.off, color: clk.active ? '#15100d' : C.dim, boxShadow: clk.active ? `0 0 0 1px ${C.line}` : 'none' }}>{fmtClock(clk.s)}</span>}
     </div>
   );
 }
@@ -527,7 +538,7 @@ function Header({ M, a }) {
   const rating = (P) => [P.title, P.elo].filter(Boolean).join(' '), sub = (P) => (wide ? rating(P) : '');
   const person = (P, side, align) => (
     <div style={{ display: 'flex', alignItems: 'baseline', gap: tx(10), minWidth: 0, justifyContent: align }}>
-      <span style={{ alignSelf: 'center', width: tx(14), height: tx(14), borderRadius: 3, background: side === 'w' ? '#f1ebe1' : '#1c1613', border: `1.5px solid ${C.dim}`, flex: 'none' }} />
+      <span style={{ alignSelf: 'center', width: tx(14), height: tx(14), borderRadius: 2, background: side === 'w' ? '#f1ebe1' : '#1c1613', border: `1.5px solid ${C.dim}`, flex: 'none' }} />
       <span title={P.name} style={{ font: `400 ${tx(wide ? 28 : 26)}px/1.25 ${SERIF}`, color: C.ink, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis', minWidth: 0 }}>{wide ? P.name : P.short || P.name}</span>
       {sub(P) && <span style={{ flex: 'none', font: `500 ${tx(15)}px ${MONO}`, color: C.dim, whiteSpace: 'nowrap' }}>{sub(P)}</span>}
     </div>
@@ -536,6 +547,16 @@ function Header({ M, a }) {
   // a narrow header's ratings go on its second line
   const ratings = !wide && (rating(M.white) || rating(M.black)) ? `${rating(M.white) || '?'} vs ${rating(M.black) || '?'}` : null;
   const about = [[M.event, M.round && 'Round ' + M.round].filter(Boolean).join(' · '), ratings, teams, M.site, M.date, [M.eco, M.opening].filter(Boolean).join(' ')].filter(Boolean);
+  // under the board (one column: a phone or tablet), whose player bars already name the players with their ratings: the
+  // rest in three lines, event, place and date, opening
+  if (L.cols === 1) {
+    const lines = [[M.event, M.round && 'Round ' + M.round, teams].filter(Boolean).join(' · '), [M.site, M.date].filter(Boolean).join(' · '), [M.eco, M.opening].filter(Boolean).join(' ')].filter(Boolean);
+    return (
+      <Panel box={L.header} a={a} style={{ padding: `${tx(10)}px ${tx(L.pad[1])}px`, display: 'flex', flexDirection: 'column', gap: tx(4), font: `500 ${tx(15)}px/1.35 ${MONO}`, color: C.dim }}>
+        {lines.map((t, i) => <SideScroll key={i} style={{ display: 'block', color: i === 0 ? C.ink : undefined }}>{t}</SideScroll>)}
+      </Panel>
+    );
+  }
   return (
     <Panel box={L.header} a={a} style={{ padding: `${tx(8)}px ${tx(16)}px`, display: 'flex', flexDirection: 'column', justifyContent: 'center', gap: tx(4) }}>
       {/* each name takes its own width, so a long one has the room a short one leaves */}
@@ -587,7 +608,7 @@ function MoveList({ M, T, S, a, paused, onPick }) {
     return (
       <span key={i} className="mv" role="button" data-ply={i} tabIndex={i === focusPly ? 0 : -1} title={`Go to ${label(M, i)}`} onClick={(e) => { e.stopPropagation(); onPick(i); }}
         onKeyDown={(e) => moveKey(e, i)}
-        style={{ opacity: paused ? 1 : shown, padding: `${tx(3)}px ${tx(8)}px`, borderRadius: 4, justifySelf: 'start', cursor: 'pointer', boxShadow: cur ? `inset 0 0 0 2px ${C.last}` : 'none', color: ahead ? C.dim : P.cls === 'none' ? C.ink : clsColor(P.cls), fontWeight: cur ? 700 : 500 }}>{P.san}{P.mark || ''}</span>
+        style={{ opacity: paused ? 1 : shown, padding: `${tx(3)}px ${tx(8)}px`, borderRadius: 2, justifySelf: 'start', cursor: 'pointer', boxShadow: cur ? `inset 0 0 0 2px ${C.last}` : 'none', color: ahead ? C.dim : P.cls === 'none' ? C.ink : clsColor(P.cls), fontWeight: cur ? 700 : 500 }}>{P.san}{P.mark || ''}</span>
     );
   };
   const pairs = Math.ceil((S.N + odd) / 2), rows = [], first = Math.floor(M.ply0 / 2);
@@ -624,8 +645,10 @@ function Commentary({ M, T, S, a, book, line }) {
   const n = !video ? total : total ? Math.floor(cl01((T - t0) / Math.max(0.4, Math.min(total / 60, avail * 0.45))) * total) : 0;
   const nh = Math.min(n, txt.length), nq = Math.max(0, n - txt.length);
   // about 22–27 px: smaller for a long comment, or one that shares the box with Queen's sentence
-  const size = tx(qtxt ? (txt.length > 90 ? 26 : 30) : txt.length > 140 ? 28 : 34);
-  const qsize = tx(qtxt.length > 200 ? 20 : 22);
+  // a phone's comments a size smaller
+  const ph = L.tier === 'phone' ? 0.88 : 1;
+  const size = tx(qtxt ? (txt.length > 90 ? 26 : 30) : txt.length > 140 ? 28 : 34) * ph;
+  const qsize = tx(qtxt.length > 200 ? 20 : 22) * ph;
   return (
     <Panel box={L.comment} a={a} title="Commentary" right={bookAt ? `${bookAt.eco} ${bookAt.name}` : null}>
       {total ? (
@@ -762,7 +785,7 @@ function EvalPlot({ M, T, S, a, paused, onPick }) {
   const area = `${line} L${last[0].toFixed(1)},${mid} L0,${mid} Z`;
   const ticks = window.ChessCore.evalTicks(M.ply0, N);
   return (
-    <div style={{ ...NO_SELECT, position: 'absolute', left: PLOT.x, top: PLOT.y, width: PLOT.w, height: PLOT.h, boxSizing: 'border-box', background: C.panel, border: `1px solid ${C.line}`, borderRadius: 8, padding: '10px 20px', opacity: a }}>
+    <div style={{ ...NO_SELECT, position: 'absolute', left: PLOT.x, top: PLOT.y, width: PLOT.w, height: PLOT.h, boxSizing: 'border-box', background: C.panel, border: `1px solid ${C.line}`, borderRadius: 4, padding: '10px 20px', opacity: a }}>
       <svg width={W} height={H + 14} style={{ display: 'block', overflow: 'visible', cursor: 'pointer', touchAction: 'none' }}
         onPointerDown={(e) => { try { e.currentTarget.setPointerCapture(e.pointerId); } catch (err) {} down.current = true; clearTimeout(fade.current); setHover(plyAt(e)); }}
         onPointerMove={(e) => { if (down.current || e.pointerType === 'mouse') setHover(plyAt(e)); }}
@@ -860,7 +883,7 @@ function EndCard({ M, T, CUES }) {
     return (
       <div style={{ ...st(d), display: 'grid', gridTemplateColumns: card.stack ? '190px 300px 100px' : '320px 520px 110px', alignItems: 'center', gap: 24 }}>
         <span style={{ font: `500 24px ${SANS}`, color: C.ink, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{P.name}</span>
-        <div style={{ height: 12, borderRadius: 6, background: C.off, overflow: 'hidden' }}><div style={{ width: `${P.acc * g}%`, height: '100%', background: C.best }} /></div>
+        <div style={{ height: 12, borderRadius: 3, background: C.off, overflow: 'hidden' }}><div style={{ width: `${P.acc * g}%`, height: '100%', background: C.best }} /></div>
         <span style={{ font: `700 24px ${MONO}`, color: C.ink, textAlign: 'right' }}>{(P.acc * g).toFixed(1)}%</span>
       </div>
     );

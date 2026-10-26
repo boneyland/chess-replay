@@ -18,7 +18,7 @@ function TrayPiece({ p, size, held, handlers }) {
   return (
     <button type="button" data-no-drag-scroll aria-label={trayLabel(p)} aria-pressed={held === p} {...handlers}
       onDragStart={(e) => e.preventDefault()}
-      style={{ ...NO_SELECT, width: size, height: size, padding: 0, border: 'none', borderRadius: 8, cursor: 'grab', touchAction: 'none', background: held === p ? 'rgba(255,255,255,0.12)' : 'transparent', boxShadow: held === p ? `inset 0 0 0 4px ${BOARD.last}` : 'none' }}>
+      style={{ ...NO_SELECT, width: size, height: size, padding: 0, border: 'none', borderRadius: 4, cursor: 'grab', touchAction: 'none', background: held === p ? 'rgba(255,255,255,0.12)' : 'transparent', boxShadow: held === p ? `inset 0 0 0 4px ${BOARD.last}` : 'none' }}>
       <img src={img(p === p.toUpperCase() ? 'w' : 'b', p.toLowerCase())} alt="" draggable={false} style={{ width: size * 0.9, height: size * 0.9, display: 'block', margin: 'auto', pointerEvents: 'none', filter: p === p.toLowerCase() ? C.rim : 'none' }} />
     </button>
   );
@@ -33,7 +33,7 @@ function Tray({ size, held, trayHandlers, style }) {
 }
 
 // a function: C follows the theme, which can change after load
-const editField = () => ({ boxSizing: 'border-box', width: '100%', font: `500 ${tx(17)}px ${MONO}`, padding: `${tx(8)}px ${tx(10)}px`, borderRadius: 6, border: `1px solid ${C.line}`, background: C.bg, color: C.ink });
+const editField = () => ({ boxSizing: 'border-box', width: '100%', font: `500 ${tx(17)}px ${MONO}`, padding: `${tx(8)}px ${tx(10)}px`, borderRadius: 3, border: `1px solid ${C.line}`, background: C.bg, color: C.ink });
 
 function CastleBox({ setup, right, label, onChange }) {
   const E = window.EditCore, can = E.canCastle(setup, right);

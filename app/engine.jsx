@@ -36,7 +36,7 @@ function Stage({ menu, top, onLayout, duration, background, playback, nav, still
     freshRef.current = null;
     setPlaying((p) => !p);
   };
-  const [area, setArea] = React.useState({ w: 1440, h: 900, cols: 2, sh: 900 });
+  const [area, setArea] = React.useState({ w: 1440, h: 900, cols: 2, sh: 900, vw: 1440, vh: 900 });
   const [contentH, setContentH] = React.useState(0);
   const colsRef = React.useRef(null); // the last column count, for the switch's hysteresis
   React.useEffect(() => { if (still) setPlaying(false); }, [still]);
@@ -54,9 +54,11 @@ function Stage({ menu, top, onLayout, duration, background, playback, nav, still
     const measure = () => {
       // sh: the whole stage's height, which the slim bar doesn't change (the area's does), so it can decide the bar
       const w = el.clientWidth, h = el.clientHeight, sh = el.parentElement.clientHeight;
+      // the viewport, which caps the board's size (LayoutCore)
+      const vw = document.documentElement.clientWidth, vh = document.documentElement.clientHeight;
       const cols = LayoutCore.columns({ w, h, text, video, prevCols: colsRef.current });
       colsRef.current = cols;
-      setArea((a) => (a.w === w && a.h === h && a.cols === cols && a.sh === sh ? a : { w, h, cols, sh }));
+      setArea((a) => (a.w === w && a.h === h && a.cols === cols && a.sh === sh && a.vw === vw && a.vh === vh ? a : { w, h, cols, sh, vw, vh }));
     };
     measure();
     const ro = new ResizeObserver(measure);
@@ -125,7 +127,7 @@ function Stage({ menu, top, onLayout, duration, background, playback, nav, still
     return () => window.removeEventListener('chess-video:seek', onSeek);
   }, [duration]);
 
-  const frame = React.useMemo(() => ({ w, h, cols, video, text, setContentH }), [w, h, cols, video, text]);
+  const frame = React.useMemo(() => ({ w, h, cols, video, text, vw: area.vw, vh: area.vh, setContentH }), [w, h, cols, video, text, area.vw, area.vh]);
   const ctx = React.useMemo(() => ({ time, duration, playing, setTime, setPlaying, setStart }), [time, duration, playing]);
   // a video fills the area; so does a two-column page; a paused one-column page is as tall as its content (the area scrolls)
   const scrolls = !video && cols === 1;

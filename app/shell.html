@@ -33,13 +33,13 @@
 }
 html { height: 100%; box-sizing: border-box; font-size: calc(16px * var(--text, 1)); }
 /* a phone held upright in full screen: the status bar is gone but the camera's punch hole isn't. Browsers report only the
-   whole cut-out strip (the page's safe-area padding, more than the hole needs), so it takes this fixed gap instead,
-   enough to clear the player row */
+   whole cut-out strip (the page's safe-area padding, more than the hole needs), so the gap is that strip held to 24 px,
+   enough to clear the player row; a screen with no cut-out reports none and gets no gap */
 @media (pointer: coarse) and (orientation: portrait) {
-  :root:fullscreen { padding-top: 24px; }
+  :root:fullscreen { padding-top: min(24px, env(safe-area-inset-top, 0px)); }
 }
 @media (pointer: coarse) and (orientation: portrait) and (display-mode: fullscreen) {
-  :root { padding-top: 24px; }
+  :root { padding-top: min(24px, env(safe-area-inset-top, 0px)); }
 }
 *, *::before, *::after { box-sizing: inherit; }
 body { height: 100%; margin: 0; background: var(--bg); color: var(--ink); font: 0.875rem/1.4 var(--sans); overflow: hidden; }
@@ -62,11 +62,11 @@ button:focus-visible, select:focus-visible, input:focus-visible, [role="slider"]
 
 .pbar {
   flex: none; display: flex; align-items: center; gap: 10px; width: 100%; max-width: 720px;
-  padding: 6px 12px; border-radius: 8px; background: var(--panel); border: 1px solid var(--line); user-select: none;
+  padding: 6px 12px; border-radius: 4px; background: var(--panel); border: 1px solid var(--line); user-select: none;
 }
 .pbtn {
   flex: none; width: 34px; height: 34px; display: grid; place-items: center; padding: 0; cursor: pointer;
-  border-radius: 6px; border: 1px solid var(--line); background: var(--raise); color: var(--ink);
+  border-radius: 3px; border: 1px solid var(--line); background: var(--raise); color: var(--ink);
 }
 .pbtn:hover:not(:disabled) { border-color: var(--line-strong); }
 .pbtn:disabled { opacity: 0.35; cursor: default; }
@@ -90,14 +90,14 @@ button:focus-visible, select:focus-visible, input:focus-visible, [role="slider"]
 .pdock { position: relative; flex: none; display: flex; align-items: center; gap: 6px; padding-left: 10px; border-left: 1px solid var(--line); }
 .dock-status {
   position: absolute; z-index: 50; right: -6px; bottom: calc(100% + 12px); width: max-content; max-width: min(640px, calc(100vw - 32px));
-  padding: 6px 10px; border-radius: 8px; background: var(--panel-glass); border: 1px solid var(--line); box-shadow: 0 8px 24px var(--shadow);
+  padding: 6px 10px; border-radius: 4px; background: var(--panel-glass); border: 1px solid var(--line); box-shadow: 0 8px 24px var(--shadow);
   font: 500 0.75rem var(--mono); color: var(--danger); white-space: normal; overflow: hidden; pointer-events: none;
 }
 /* landscape: panels open above the transport bar, so they leave its buttons uncovered */
 body:has(.stage:not(.stage-one)) .twk-panel { bottom: calc(70px + env(safe-area-inset-bottom, 0px)); max-height: calc(100% - 86px); }
 /* portrait: the same above its slimmer bar */
 body:has(.stage-one) .twk-panel { bottom: calc(51px + env(safe-area-inset-bottom, 0px)); max-height: calc(100% - 67px); }
-.dock-btn { flex: none; font: 600 0.75rem var(--mono); padding: 0 10px; height: 34px; border-radius: 6px; cursor: pointer; white-space: nowrap; border: 1px solid var(--line); background: var(--raise); color: var(--ink); }
+.dock-btn { flex: none; font: 600 0.75rem var(--mono); padding: 0 10px; height: 34px; border-radius: 3px; cursor: pointer; white-space: nowrap; border: 1px solid var(--line); background: var(--raise); color: var(--ink); }
 /* Settings and Full screen: square icon buttons in every layout */
 .dock-icons { display: contents; }
 .dock-iconic { display: inline-flex; align-items: center; justify-content: center; width: 34px; padding: 0; }
@@ -112,7 +112,7 @@ body:has(.stage-one) .twk-panel { bottom: calc(51px + env(safe-area-inset-bottom
 /* one column: a slimmer transport bar and less padding around it, so the page gets the room; smaller buttons (the same
    icons) and gaps, so the seek bar keeps a usable width; below 360 px the first and last move buttons go, rather than
    the seek bar */
-.stage-one { padding-block: 2px 5px; gap: 6px; padding-left: max(8px, env(safe-area-inset-left, 0px)); padding-right: max(8px, env(safe-area-inset-right, 0px)); }
+.stage-one { padding-block: 2px 5px; gap: 6px; padding-left: max(4px, env(safe-area-inset-left, 0px)); padding-right: max(4px, env(safe-area-inset-right, 0px)); }
 .stage-one .pbar { padding: 3px 6px; gap: 4px; padding-block: 2px; }
 .stage-one .pbtn { width: 30px; height: 30px; }
 .stage-one .ptrack { min-width: 96px; }
@@ -141,7 +141,7 @@ body:has(.stage-one) .twk-panel { bottom: calc(51px + env(safe-area-inset-bottom
 .pmenu-err .dock-menu { border-color: var(--danger); color: var(--danger); }
 .pmenu .dock-items {
   position: absolute; z-index: 60; bottom: calc(100% + 12px); right: -6px; display: none; flex-direction: column; align-items: stretch; gap: 6px;
-  width: max-content; max-width: calc(100vw - 32px); padding: 8px; border-radius: 10px;
+  width: max-content; max-width: calc(100vw - 32px); padding: 8px; border-radius: 5px;
   background: var(--panel-glass); border: 1px solid var(--line); box-shadow: 0 12px 32px var(--shadow);
 }
 /* never past the top of the screen: what doesn't fit scrolls */
@@ -167,7 +167,7 @@ body:has(.stage-one) .twk-panel { bottom: calc(51px + env(safe-area-inset-bottom
 .dock-new { position: relative; flex: none; }
 .dock-pop {
   position: absolute; z-index: 60; bottom: calc(100% + 12px); left: 0; display: flex; flex-direction: column; align-items: stretch; gap: 6px;
-  width: max-content; padding: 8px; border-radius: 10px; background: var(--panel-glass); border: 1px solid var(--line); box-shadow: 0 12px 32px var(--shadow);
+  width: max-content; padding: 8px; border-radius: 5px; background: var(--panel-glass); border: 1px solid var(--line); box-shadow: 0 12px 32px var(--shadow);
 }
 .dock-pop .dock-btn { text-align: left; }
 /* a short screen (901×376): Explore and Play side by side, anchored to the button's right edge so the wider menu stays on
@@ -181,7 +181,7 @@ body:has(.stage-one) .twk-panel { bottom: calc(51px + env(safe-area-inset-bottom
 /* the dialogs (Paste PGN, Play, My games…): a centred box over a scrim, which also keeps taps off the board */
 .fen-scrim { position: fixed; inset: 0; z-index: 85; display: grid; place-items: center; padding: 16px; background: var(--scrim); }
 .fen-box {
-  width: min(560px, 100%); display: flex; flex-direction: column; gap: 12px; padding: 16px 18px 18px; border-radius: 12px;
+  width: min(560px, 100%); display: flex; flex-direction: column; gap: 12px; padding: 16px 18px 18px; border-radius: 6px;
   background: var(--panel-glass); color: var(--ink); border: 1px solid var(--line); box-shadow: 0 16px 48px var(--shadow);
 }
 .fen-title { font: 600 0.75rem var(--mono); letter-spacing: 0.12em; text-transform: uppercase; color: var(--dim); }
@@ -209,11 +209,11 @@ body:has(.stage-one) .twk-panel { bottom: calc(51px + env(safe-area-inset-bottom
 @media (max-width: 480px) { .games-row { flex-wrap: wrap; gap: 8px; } .games-text { flex-basis: 100%; } .games-btns { margin-left: auto; } }
 
 .drop { position: fixed; inset: 0; z-index: 60; display: grid; place-items: center; background: var(--scrim); pointer-events: none; }
-.drop-box { padding: 40px 60px; margin: 0 16px; border: 2px dashed var(--accent); border-radius: 12px; text-align: center; font: 500 1.25rem/1.6 var(--mono); color: var(--ink); }
+.drop-box { padding: 40px 60px; margin: 0 16px; border: 2px dashed var(--accent); border-radius: 6px; text-align: center; font: 500 1.25rem/1.6 var(--mono); color: var(--ink); }
 .export { position: fixed; inset: 0; z-index: 90; display: grid; place-items: center; background: var(--scrim); }
-.export-box { width: min(420px, calc(100% - 32px)); box-sizing: border-box; display: flex; flex-direction: column; gap: 10px; padding: 20px; border-radius: 12px; background: var(--panel); border: 1px solid var(--line); box-shadow: 0 10px 30px var(--shadow); }
+.export-box { width: min(420px, calc(100% - 32px)); box-sizing: border-box; display: flex; flex-direction: column; gap: 10px; padding: 20px; border-radius: 6px; background: var(--panel); border: 1px solid var(--line); box-shadow: 0 10px 30px var(--shadow); }
 .export-title { font: 600 1rem var(--sans); color: var(--ink); }
-.export-bar { height: 6px; border-radius: 3px; background: var(--raise); overflow: hidden; }
+.export-bar { height: 6px; border-radius: 2px; background: var(--raise); overflow: hidden; }
 .export-bar div { height: 100%; background: var(--accent); transition: width 0.2s; }
 .export-line { font: 500 0.8125rem var(--mono); color: var(--ink); font-variant-numeric: tabular-nums; }
 .export-err { color: var(--danger); font-family: var(--sans); }
@@ -224,12 +224,12 @@ body:has(.stage-one) .twk-panel { bottom: calc(51px + env(safe-area-inset-bottom
 .twk-panel {
   position: fixed; z-index: 70; right: max(16px, env(safe-area-inset-right, 0px)); bottom: calc(16px + env(safe-area-inset-bottom, 0px));
   width: min(18.75rem, calc(100% - 32px)); max-height: calc(100% - 72px); display: flex; flex-direction: column; overflow: hidden;
-  background: var(--panel-glass); color: var(--ink); border: 1px solid var(--line); border-radius: 12px;
+  background: var(--panel-glass); color: var(--ink); border: 1px solid var(--line); border-radius: 6px;
   box-shadow: 0 16px 48px var(--shadow); font: 0.75rem/1.4 var(--sans);
 }
 .twk-hd { display: flex; align-items: center; justify-content: space-between; padding: 10px 8px 8px 14px; }
 .twk-hd b { font: 600 0.75rem var(--mono); letter-spacing: 0.12em; text-transform: uppercase; color: var(--dim); }
-.twk-x { width: 26px; height: 26px; border: 0; border-radius: 6px; background: transparent; color: var(--dim); cursor: pointer; }
+.twk-x { width: 26px; height: 26px; border: 0; border-radius: 3px; background: transparent; color: var(--dim); cursor: pointer; }
 .twk-x:hover { background: var(--raise); color: var(--ink); }
 .twk-body { display: flex; flex-direction: column; padding: 2px 14px 14px; overflow-y: auto; min-height: 0; scrollbar-width: thin; }
 .twk-flow { display: flex; flex-direction: column; gap: 10px; }
@@ -241,8 +241,8 @@ body:has(.stage-one) .twk-panel { bottom: calc(51px + env(safe-area-inset-bottom
 /* Settings: one size in every layout and on every tab, so a tab reads the same on a phone as on a desktop and switching
    tabs doesn't move the panel; the tabs sit in a fixed grid, three a row when there are five or six */
 .twk-tabbed { width: min(380px, calc(100% - 32px)); height: min(720px, calc(100% - 72px)); }
-.twk-tabs { flex: none; display: grid; grid-template-columns: repeat(var(--twk-tab-cols), 1fr); gap: 2px; margin: 0 14px 12px; padding: 2px; border-radius: 8px; background: var(--raise); }
-.twk-tabs button { min-height: 28px; padding: 4px 6px; border: 0; border-radius: 6px; background: transparent; color: var(--dim); font: 600 0.75rem var(--sans); cursor: pointer; }
+.twk-tabs { flex: none; display: grid; grid-template-columns: repeat(var(--twk-tab-cols), 1fr); gap: 2px; margin: 0 14px 12px; padding: 2px; border-radius: 4px; background: var(--raise); }
+.twk-tabs button { min-height: 28px; padding: 4px 6px; border: 0; border-radius: 3px; background: transparent; color: var(--dim); font: 600 0.75rem var(--sans); cursor: pointer; }
 .twk-tabs button:hover { color: var(--ink); }
 .twk-tabs button[aria-selected="true"] { color: var(--ink); background: color-mix(in srgb, var(--accent) 22%, transparent); box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--accent) 50%, transparent); }
 .twk-tabs button:focus-visible { outline: 2px solid var(--accent); outline-offset: 1px; }
@@ -270,18 +270,18 @@ body:has(.stage-one) .twk-panel { bottom: calc(51px + env(safe-area-inset-bottom
 .twk-val { color: var(--dim); font: 500 0.6875rem var(--mono); font-variant-numeric: tabular-nums; }
 .twk-note { color: var(--dim); }
 .twk-err { color: var(--danger); }
-.twk-progress { height: 6px; border-radius: 3px; background: var(--raise); overflow: hidden; }
+.twk-progress { height: 6px; border-radius: 2px; background: var(--raise); overflow: hidden; }
 .twk-progress > i { display: block; height: 100%; background: var(--accent); }
-.twk-field { width: 100%; height: 28px; padding: 0 8px; border: 1px solid var(--line); border-radius: 7px; background: var(--raise); color: var(--ink); font: inherit; }
+.twk-field { width: 100%; height: 28px; padding: 0 8px; border: 1px solid var(--line); border-radius: 4px; background: var(--raise); color: var(--ink); font: inherit; }
 .twk-slider { width: 100%; margin: 4px 0; accent-color: var(--accent); }
-.twk-seg { position: relative; display: flex; padding: 2px; border-radius: 8px; background: var(--raise); }
-.twk-seg-thumb { position: absolute; top: 2px; bottom: 2px; border-radius: 6px; background: color-mix(in srgb, var(--accent) 22%, transparent); box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--accent) 50%, transparent); transition: left 0.15s, width 0.15s; }
-.twk-seg button { position: relative; z-index: 1; flex: 1; min-height: 24px; padding: 4px 6px; border: 0; border-radius: 6px; background: transparent; font-weight: 500; cursor: pointer; }
+.twk-seg { position: relative; display: flex; padding: 2px; border-radius: 4px; background: var(--raise); }
+.twk-seg-thumb { position: absolute; top: 2px; bottom: 2px; border-radius: 3px; background: color-mix(in srgb, var(--accent) 22%, transparent); box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--accent) 50%, transparent); transition: left 0.15s, width 0.15s; }
+.twk-seg button { position: relative; z-index: 1; flex: 1; min-height: 24px; padding: 4px 6px; border: 0; border-radius: 3px; background: transparent; font-weight: 500; cursor: pointer; }
 .twk-toggle { position: relative; flex: none; width: 34px; height: 20px; padding: 0; border: 0; border-radius: 999px; background: var(--track); cursor: pointer; transition: background 0.15s; }
 .twk-toggle[data-on="1"] { background: var(--ok); }
 .twk-toggle i { position: absolute; top: 3px; left: 3px; width: 14px; height: 14px; border-radius: 50%; background: #fff; transition: transform 0.15s; }
 .twk-toggle[data-on="1"] i { transform: translateX(14px); }
-.twk-btn { min-height: 30px; padding: 4px 12px; border: 0; border-radius: 7px; background: var(--accent); color: var(--accent-ink); font-weight: 600; cursor: pointer; text-align: center; }
+.twk-btn { min-height: 30px; padding: 4px 12px; border: 0; border-radius: 4px; background: var(--accent); color: var(--accent-ink); font-weight: 600; cursor: pointer; text-align: center; }
 .twk-btn.secondary { background: var(--raise); color: var(--ink); border: 1px solid var(--line); }
 .twk-btn.danger { background: var(--danger); color: var(--panel); }
 .twk-btn:disabled { opacity: 0.6; cursor: progress; }
@@ -292,12 +292,12 @@ body:has(.stage-one) .twk-panel { bottom: calc(51px + env(safe-area-inset-bottom
 .q-panel { left: max(16px, env(safe-area-inset-left, 0px)); right: auto; width: min(400px, calc(100% - 32px)); }
 .q-panel .twk-hd b { color: var(--queen); }
 .q-hd { display: flex; align-items: center; gap: 8px; }
-.q-exp { padding: 1px 6px; border-radius: 4px; border: 1px solid color-mix(in srgb, var(--queen) 55%, transparent); color: var(--queen); font: 600 0.5625rem var(--mono); letter-spacing: 0.1em; text-transform: uppercase; }
+.q-exp { padding: 1px 6px; border-radius: 2px; border: 1px solid color-mix(in srgb, var(--queen) 55%, transparent); color: var(--queen); font: 600 0.5625rem var(--mono); letter-spacing: 0.1em; text-transform: uppercase; }
 .twk-note a { color: var(--accent); }
 .twk-info { flex: none; width: 15px; height: 15px; margin-left: 6px; padding: 0; vertical-align: 1px; border: 1px solid var(--line); border-radius: 50%; background: transparent; color: var(--dim); font: italic 600 0.625rem/13px Georgia, serif; cursor: help; }
 .twk-info:hover, .twk-info[aria-expanded="true"] { color: var(--ink); border-color: var(--dim); }
 .twk-btn-row { display: flex; align-items: center; gap: 4px; }
-.twk-tip { position: fixed; z-index: 100; max-width: min(280px, calc(100vw - 16px)); padding: 7px 10px; border: 1px solid var(--line); border-radius: 8px; background: var(--panel); color: var(--ink); box-shadow: 0 8px 24px var(--shadow); font: 0.75rem/1.4 var(--sans); pointer-events: none; }
+.twk-tip { position: fixed; z-index: 100; max-width: min(280px, calc(100vw - 16px)); padding: 7px 10px; border: 1px solid var(--line); border-radius: 4px; background: var(--panel); color: var(--ink); box-shadow: 0 8px 24px var(--shadow); font: 0.75rem/1.4 var(--sans); pointer-events: none; }
 .twk-btn-row > .twk-btn { flex: 1; min-width: 0; }
 /* the engine settings in the Analysis panel (its ☰ menu): the Settings panel's controls, zoomed 1.3 to read at the frame's text size and sized by the Text size setting (rem) like
    the rest of the overlays, in as many columns as fit */
@@ -309,15 +309,15 @@ body:has(.stage-one) .twk-panel { bottom: calc(51px + env(safe-area-inset-bottom
 .q-busy { display: flex; align-items: center; gap: 8px; color: var(--ink); font: 500 0.75rem var(--mono); }
 .q-dot { width: 8px; height: 8px; border-radius: 50%; background: var(--queen); animation: q-pulse 1.2s ease-in-out infinite; }
 @keyframes q-pulse { 50% { opacity: 0.25; } }
-.q-stop { margin-left: auto; padding: 2px 8px; border-radius: 5px; border: 1px solid var(--line); background: var(--raise); cursor: pointer; font: 500 0.6875rem var(--mono); }
-.q-result { display: flex; flex-direction: column; gap: 8px; padding: 10px 12px; border-radius: 8px; background: var(--raise); border: 1px solid var(--line); }
+.q-stop { margin-left: auto; padding: 2px 8px; border-radius: 3px; border: 1px solid var(--line); background: var(--raise); cursor: pointer; font: 500 0.6875rem var(--mono); }
+.q-result { display: flex; flex-direction: column; gap: 8px; padding: 10px 12px; border-radius: 4px; background: var(--raise); border: 1px solid var(--line); }
 .q-pos { font: 600 0.6875rem var(--mono); letter-spacing: 0.1em; text-transform: uppercase; color: var(--dim); }
 .q-grid { display: grid; grid-template-columns: auto minmax(0, 1fr); gap: 4px 12px; margin: 0; font: 500 0.75rem var(--mono); }
 .q-grid dt { color: var(--dim); }
 .q-grid dd { margin: 0; min-width: 0; display: flex; flex-wrap: wrap; align-items: center; gap: 6px; }
 .q-queen { color: var(--queen); font-size: 0.875rem; }
 .q-line { color: var(--dim); }
-.q-tag { padding: 1px 6px; border-radius: 4px; font: 600 0.625rem var(--mono); letter-spacing: 0.04em; }
+.q-tag { padding: 1px 6px; border-radius: 2px; font: 600 0.625rem var(--mono); letter-spacing: 0.04em; }
 .q-tag.q-ok { background: rgba(98, 196, 131, 0.16); }
 .q-tag.q-no { background: rgba(236, 148, 66, 0.16); }
 .q-ok { color: var(--ok); }
@@ -331,7 +331,7 @@ body:has(.stage-one) .twk-panel { bottom: calc(51px + env(safe-area-inset-bottom
 .q-evals td.q-evalv { color: var(--queen); }
 .q-evals tr.q-change th, .q-evals tr.q-change td { border-top: 1px solid var(--line); padding-top: 5px; font-size: 0.8125rem; }
 .q-sr { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); }
-.q-mini { padding: 1px 8px; border-radius: 5px; border: 1px solid color-mix(in srgb, var(--queen) 55%, transparent); background: transparent; color: var(--queen); font: 600 0.6875rem var(--mono); cursor: pointer; }
+.q-mini { padding: 1px 8px; border-radius: 3px; border: 1px solid color-mix(in srgb, var(--queen) 55%, transparent); background: transparent; color: var(--queen); font: 600 0.6875rem var(--mono); cursor: pointer; }
 .q-evalnote { font: 500 0.625rem/1.4 var(--mono); color: var(--dim); }
 .q-evaltext span { font: 600 0.625rem var(--mono); letter-spacing: 0.08em; text-transform: uppercase; font-style: normal; color: var(--dim); }
 .q-evalv { color: var(--queen); }
@@ -349,9 +349,9 @@ body:has(.stage-one) .twk-panel { bottom: calc(51px + env(safe-area-inset-bottom
 .q-fail { color: var(--danger); }
 .q-via-box { display: flex; flex-direction: column; gap: 8px; }
 .q-via { color: var(--ink); }
-.signin-note { position: fixed; z-index: 80; top: calc(56px + env(safe-area-inset-top, 0px)); left: 50%; transform: translateX(-50%); max-width: calc(100% - 32px); display: flex; align-items: center; gap: 10px; padding: 10px 8px 10px 14px; border-radius: 10px; background: var(--panel-glass); border: 1px solid var(--line); box-shadow: 0 10px 30px var(--shadow); font: 500 0.8125rem/1.4 var(--sans); color: var(--ink); }
+.signin-note { position: fixed; z-index: 80; top: calc(56px + env(safe-area-inset-top, 0px)); left: 50%; transform: translateX(-50%); max-width: calc(100% - 32px); display: flex; align-items: center; gap: 10px; padding: 10px 8px 10px 14px; border-radius: 5px; background: var(--panel-glass); border: 1px solid var(--line); box-shadow: 0 10px 30px var(--shadow); font: 500 0.8125rem/1.4 var(--sans); color: var(--ink); }
 /* no connection: a warning-tinted tag at the top of the page, above the frame, while it lasts */
-.net-chip { flex: none; display: inline-flex; align-items: center; gap: 6px; height: 24px; padding: 0 10px; border-radius: 12px; border: 1px solid color-mix(in srgb, var(--warn) 55%, transparent); background: color-mix(in srgb, var(--warn) 16%, var(--bg)); font: 600 0.6875rem var(--mono); letter-spacing: 0.06em; color: var(--warn); white-space: nowrap; }
+.net-chip { flex: none; display: inline-flex; align-items: center; gap: 6px; height: 24px; padding: 0 10px; border-radius: 6px; border: 1px solid color-mix(in srgb, var(--warn) 55%, transparent); background: color-mix(in srgb, var(--warn) 16%, var(--bg)); font: 600 0.6875rem var(--mono); letter-spacing: 0.06em; color: var(--warn); white-space: nowrap; }
 /* the note sits centred from the middle of the page, which would wrap it at half the width: it takes its text's width, up to the page's */
 .net-note { width: max-content; box-sizing: border-box; }
 /* the offline note tinted with the warning colour, Back online with the ok one, so each stands out from the page */
@@ -360,13 +360,13 @@ body:has(.stage-one) .twk-panel { bottom: calc(51px + env(safe-area-inset-bottom
 /* Copy FEN's note: the FEN in a read-only field, where a click selects all of it; it wraps anywhere on a phone, and
    is as tall as its lines where the browser can size a field to its content */
 .fen-note { max-width: min(640px, calc(100% - 32px)); }
-.fen-note-fen { display: block; width: min(46ch, 100%); margin-top: 4px; padding: 2px 6px; border: 1px solid var(--line); border-radius: 4px; background: var(--bg); color: inherit; font: inherit; font-family: var(--mono); overflow-wrap: anywhere; resize: none; overflow: hidden; field-sizing: content; }
+.fen-note-fen { display: block; width: min(46ch, 100%); margin-top: 4px; padding: 2px 6px; border: 1px solid var(--line); border-radius: 2px; background: var(--bg); color: inherit; font: inherit; font-family: var(--mono); overflow-wrap: anywhere; resize: none; overflow: hidden; field-sizing: content; }
 /* the offline note reads larger on a desktop's full-size page */
-body:has(.stage:not(.stage-one)) .net-note { top: calc(64px + env(safe-area-inset-top, 0px)); gap: 14px; padding: 14px 12px 14px 20px; border-radius: 12px; font-size: 1rem; }
+body:has(.stage:not(.stage-one)) .net-note { top: calc(64px + env(safe-area-inset-top, 0px)); gap: 14px; padding: 14px 12px 14px 20px; border-radius: 6px; font-size: 1rem; }
 .net-chip::before { content: ""; width: 7px; height: 7px; border-radius: 50%; background: var(--warn); }
-.q-log pre { margin: 8px 0 0; max-height: 160px; overflow: auto; padding: 8px; border-radius: 6px; background: var(--bg); border: 1px solid var(--line); font: 500 0.6875rem/1.5 var(--mono); color: var(--ink); white-space: pre-wrap; }
+.q-log pre { margin: 8px 0 0; max-height: 160px; overflow: auto; padding: 8px; border-radius: 3px; background: var(--bg); border: 1px solid var(--line); font: 500 0.6875rem/1.5 var(--mono); color: var(--ink); white-space: pre-wrap; }
 .q-diag { display: flex; flex-direction: column; gap: 6px; }
-.q-diag pre { margin: 0; max-height: 180px; overflow: auto; padding: 8px; border-radius: 6px; background: var(--bg); border: 1px solid var(--line); font: 500 0.6875rem/1.5 var(--mono); color: var(--ink); white-space: pre-wrap; word-break: break-word; }
+.q-diag pre { margin: 0; max-height: 180px; overflow: auto; padding: 8px; border-radius: 3px; background: var(--bg); border: 1px solid var(--line); font: 500 0.6875rem/1.5 var(--mono); color: var(--ink); white-space: pre-wrap; word-break: break-word; }
 @media (prefers-reduced-motion: reduce) { .twk-seg-thumb, .twk-toggle, .twk-toggle i { transition: none; } }
 </style>
 <div id="root"></div>
