@@ -143,8 +143,7 @@ function useVideoExport({ fps, format, webp, save, stem }) {
       const W = LayoutCore.exportPx(cssW, scale), H = LayoutCore.exportPx(cssH, scale);
       const cv = document.createElement('canvas'); cv.width = W; cv.height = H;
       const cx = cv.getContext('2d', { willReadFrequently: format === 'WebP' }); // the WebP encoder reads every frame back
-      // Full (0) and Half are taken against the canvas drawn now: Settings' widths were worked out from the paused page,
-      // which can be a scrollbar narrower than the video layout
+      // Full (0) and Half are taken against the canvas drawn now, whatever Settings' widths were worked out from
       const wpx = webp.width === 'Half' ? Math.round(W / 2) : webp.width;
       enc = format === 'WebP' ? await webpEncoder(cv, W, H, fps, { ...webp, width: wpx }) : await mp4Encoder(cv, W, H, fps, audio);
       // html2canvas copies the whole document every frame: leave out the scripts (the page inlines its sounds

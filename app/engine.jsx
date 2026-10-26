@@ -130,12 +130,15 @@ function Stage({ menu, top, onLayout, duration, background, playback, nav, still
   const ctx = React.useMemo(() => ({ time, duration, playing, setTime, setPlaying, setStart }), [time, duration, playing]);
   // a video fills the area; so does a two-column page; a paused one-column page is as tall as its content (the area scrolls)
   const scrolls = !video && cols === 1;
+  // one column keeps room for a classic scrollbar whether or not it shows: the page's height depends on its width, so a
+  // width that changed when the bar came and went flipped the bar on and off near the edge (and a video, which has no bar,
+  // is as wide as the paused page, which the export's widths assume)
   const fh = scrolls ? Math.max(h, contentH) : h;
 
   return (
     <div className={'stage' + (cols === 1 ? ' stage-one' : '') + (narrow ? ' stage-narrow' : '') + (short ? ' stage-short' : '')}>
       {top}
-      <div ref={areaRef} className="stage-area" style={{ overflowY: scrolls ? 'auto' : 'hidden' }}>
+      <div ref={areaRef} className="stage-area" style={{ overflowY: scrolls ? 'auto' : 'hidden', scrollbarGutter: cols === 1 ? 'stable' : undefined }}>
         <div className="stage-frame" style={{ width: w, height: fh, background, position: 'relative' }}>
           <FrameContext.Provider value={frame}>
             <TimelineContext.Provider value={ctx}>{children}</TimelineContext.Provider>

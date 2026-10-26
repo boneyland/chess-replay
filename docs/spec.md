@@ -348,9 +348,7 @@ A short guided tour for a first visit: steps that point at the dock, the transpo
 Deferred by the per-plan reviews; each was true when recorded and may since have been fixed.
 
 **Responsive layout** (2026-10-26)
-- Settings' WebP "N px (full)" label can be off by a scrollbar's width in Firefox's one-column page (it comes from the paused page's width; the file itself is right).
 - The Analysis panel hides the search depth when narrower than 440·text px (at 1024×768, for one).
-- A classic scrollbar narrows the one-column page by its width in Firefox when the page starts to scroll.
 - `tests/live/android.test.cjs` wasn't run locally for this change (no device); GitHub Actions' `android` job covers it.
 
 **Custom starts and flip** (2026-10-19)
