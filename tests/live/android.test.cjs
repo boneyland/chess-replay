@@ -33,6 +33,14 @@ test('android · chrome · local build', async (t) => {
   const sh = async (cmd) => (await device.shell(cmd)).toString().trim();
   assert.match(await sh('pm list packages com.android.chrome'), /com\.android\.chrome/, 'Chrome is not installed on the device');
   t.diagnostic(`${device.model()} · Android ${await sh('getprop ro.build.version.release')} · ${(await sh('dumpsys package com.android.chrome | grep versionName')).split('\n')[0]}`);
+  // an emulator has no camera cut-out, so the full-screen test would pass whatever the page does with one: give it
+  // Android's emulated punch hole (a developer option) for the run. A real phone is left as it is
+  const emulator = (await sh('getprop ro.kernel.qemu')) === '1' || (await sh('getprop ro.boot.qemu')) === '1';
+  const CUTOUT = 'com.android.internal.display.cutout.emulation.hole';
+  if (emulator) {
+    await sh(`cmd overlay enable ${CUTOUT}`);
+    undo.push(() => sh(`cmd overlay disable ${CUTOUT}`));
+  }
   execFileSync('adb', ['-s', device.serial(), 'reverse', `tcp:${PORT}`, `tcp:${PORT}`]);
   undo.push(() => execFileSync('adb', ['-s', device.serial(), 'reverse', '--remove', `tcp:${PORT}`]));
 
@@ -96,8 +104,19 @@ test('android · chrome · local build', async (t) => {
     await page.getByRole('button', { name: 'Ask Queen' }).waitFor({ state: 'visible', timeout: 3000 });
     await page.getByRole('button', { name: 'Full screen', exact: true }).tap();
     await page.waitForFunction(() => !!document.fullscreenElement, null, { timeout: 5000 });
-    // upright in full screen the page runs under the camera's cut-out, with no gap kept for it
-    assert.equal(await page.evaluate(() => getComputedStyle(document.documentElement).paddingTop), '0px');
+    // upright in full screen the page runs under the camera's cut-out, with no gap kept for it, though the browser
+    // reports one (the whole status-bar strip, on a phone)
+    const top = await page.evaluate(() => {
+      const probe = document.body.appendChild(document.createElement('div'));
+      probe.style.cssText = 'position:fixed;top:0;height:env(safe-area-inset-top,0px)';
+      const inset = probe.getBoundingClientRect().height;
+      probe.remove();
+      return { inset, padding: getComputedStyle(document.documentElement).paddingTop, stage: document.querySelector('.stage').getBoundingClientRect().top };
+    });
+    t.diagnostic(`full screen: top inset ${top.inset} px`);
+    if (emulator) assert.ok(top.inset > 0, 'the emulated cut-out reports no top inset');
+    assert.equal(top.padding, '0px');
+    assert.equal(top.stage, 0);
     await page.screenshot({ path: path.join(OUT, 'android-full-screen.png') });
     await menu.tap();
     await page.getByRole('button', { name: 'Exit full screen' }).tap();

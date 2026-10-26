@@ -33,7 +33,10 @@
 }
 html { height: 100%; box-sizing: border-box; font-size: calc(16px * var(--text, 1)); }
 /* a phone in full screen: the page runs under the camera's cut-out (viewport-fit=cover), with no gap kept for it; the
-   cut-out sits over the top player bar's middle, between the name and the clock */
+   cut-out sits over the top player bar's middle, between the name and the clock. The page's own top padding (the
+   safe-area inset, in build.cjs) goes: phones report the whole status-bar strip as the cut-out, 37–41 px of gap */
+:root:fullscreen { padding-top: 0; }
+@media (display-mode: fullscreen) { :root { padding-top: 0; } }
 *, *::before, *::after { box-sizing: inherit; }
 body { height: 100%; margin: 0; background: var(--bg); color: var(--ink); font: 0.875rem/1.4 var(--sans); overflow: hidden; }
 #root { position: relative; height: 100%; }
