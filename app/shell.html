@@ -34,9 +34,11 @@
 html { height: 100%; box-sizing: border-box; font-size: calc(16px * var(--text, 1)); }
 /* a phone in full screen: the page runs under the camera's cut-out (viewport-fit=cover), with no gap kept for it; the
    cut-out sits over the top player bar's middle, between the name and the clock. The page's own top padding (the
-   safe-area inset, in build.cjs) goes: phones report the whole status-bar strip as the cut-out, 37–41 px of gap */
-:root:fullscreen { padding-top: 0; }
-@media (display-mode: fullscreen) { :root { padding-top: 0; } }
+   safe-area inset, in build.cjs) goes: phones report the whole status-bar strip as the cut-out, 37–41 px of gap. Held
+   sideways the cut-out is a side's inset, which the stage's side padding (--safe-l, --safe-r) keeps clear out of full screen */
+:root { --safe-l: env(safe-area-inset-left, 0px); --safe-r: env(safe-area-inset-right, 0px); }
+:root:fullscreen { padding-top: 0; --safe-l: 0px; --safe-r: 0px; }
+@media (display-mode: fullscreen) { :root { padding-top: 0; --safe-l: 0px; --safe-r: 0px; } }
 *, *::before, *::after { box-sizing: inherit; }
 body { height: 100%; margin: 0; background: var(--bg); color: var(--ink); font: 0.875rem/1.4 var(--sans); overflow: hidden; }
 #root { position: relative; height: 100%; }
@@ -49,7 +51,7 @@ button:focus-visible, select:focus-visible, input:focus-visible, [role="slider"]
 .stage {
   position: absolute; inset: 0; display: flex; flex-direction: column; align-items: center; gap: 10px;
   padding-block: 12px;
-  padding-left: max(16px, env(safe-area-inset-left, 0px)); padding-right: max(16px, env(safe-area-inset-right, 0px));
+  padding-left: max(16px, var(--safe-l)); padding-right: max(16px, var(--safe-r));
 }
 /* the page is laid out at this area's size; it scrolls up and down only for a paused one-column page (Stage sets overflow-y) */
 .stage-area { flex: 1; min-height: 0; width: 100%; overflow-x: hidden; overflow-x: clip; }
@@ -108,7 +110,7 @@ body:has(.stage-one) .twk-panel { bottom: calc(51px + env(safe-area-inset-bottom
 /* one column: a slimmer transport bar and less padding around it, so the page gets the room; smaller buttons (the same
    icons) and gaps, so the seek bar keeps a usable width; below 360 px the first and last move buttons go, rather than
    the seek bar */
-.stage-one { padding-block: 2px 5px; gap: 6px; padding-left: max(4px, env(safe-area-inset-left, 0px)); padding-right: max(4px, env(safe-area-inset-right, 0px)); }
+.stage-one { padding-block: 2px 5px; gap: 6px; padding-left: max(4px, var(--safe-l)); padding-right: max(4px, var(--safe-r)); }
 .stage-one .pbar { padding: 3px 6px; gap: 4px; padding-block: 2px; }
 .stage-one .pbtn { width: 30px; height: 30px; }
 .stage-one .ptrack { min-width: 96px; }
@@ -124,7 +126,7 @@ body:has(.stage-one) .twk-panel { bottom: calc(51px + env(safe-area-inset-bottom
    the transport bar's buttons and gaps smaller */
 @media (max-width: 1023px) {
   html { font-size: calc(15px * var(--text, 1)); }
-  .stage:not(.stage-one):not(.stage-short) { padding-block: 8px; gap: 8px; padding-left: max(10px, env(safe-area-inset-left, 0px)); padding-right: max(10px, env(safe-area-inset-right, 0px)); }
+  .stage:not(.stage-one):not(.stage-short) { padding-block: 8px; gap: 8px; padding-left: max(10px, var(--safe-l)); padding-right: max(10px, var(--safe-r)); }
   .pbar { gap: 8px; padding: 4px 10px; }
   .pdock { gap: 5px; padding-left: 8px; }
 }
