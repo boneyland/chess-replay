@@ -349,7 +349,7 @@ function searchDepth(s) {
 // Lite/Full choice ({ value, options: [{ value, label }], onChange }) where the full engine is offered; body, the
 // engine settings, which take the panel's place while its menu is open
 const EngineMenuContext = React.createContext(null);
-const headCtl = () => ({ ...NO_SELECT, flex: 'none', height: '1.5em', margin: '-0.25em 0', borderRadius: 5, cursor: 'pointer', border: `1.5px solid ${C.line}`, background: 'transparent', color: C.ink, letterSpacing: 0 }); // C changes with the colour scheme
+const headCtl = () => ({ ...NO_SELECT, flex: 'none', height: '1.8em', margin: '-0.4em 0', borderRadius: 5, cursor: 'pointer', border: `1.5px solid ${C.line}`, background: 'transparent', color: C.ink, letterSpacing: 0 }); // C changes with the colour scheme
 const stopHere = (e) => e.stopPropagation();
 // The Analysis panel's title row (on the right: Go deeper, the search's depth, the engine, the engine menu) and, while the menu is
 // open, the engine settings in place of the panel's contents. Only a paused replay offers them; playing (an export
@@ -368,13 +368,13 @@ function AnalysisPanel({ box, a, depth, deep, paused, style, children }) {
       {!shown && depth && <SideScroll style={{ minWidth: 0, flex: '0 1 auto', letterSpacing: '0.04em', fontSize: `${box.right || 0.85}em` }}>{depth}</SideScroll>}
       {pick
         ? <select aria-label="Engine" value={pick.value} onChange={(e) => { const go = pick.onChange(e.target.value); if (go) setOpen(true); }} onClick={stopHere} onPointerDown={stopHere}
-            style={{ ...headCtl(), minWidth: 0, flex: '0 1 auto', padding: '0 0.3em', font: 'inherit', textTransform: 'none', background: C.panel }}>
+            style={{ ...headCtl(), padding: '0 0.4em', font: 'inherit', fontSize: '1.15em', height: '1.6em', textTransform: 'none', background: C.panel }}>
             {pick.options.map((o) => <option key={o.value} value={o.value}>{o.label}</option>)}
           </select>
         : <span style={{ flex: 'none', textTransform: 'none', letterSpacing: '0.04em', color: C.ink }}>{name}</span>}
       {live && (
         <button type="button" aria-label="Engine options" aria-expanded={shown} title="Engine settings" onClick={(e) => { e.stopPropagation(); setOpen((o) => !o); }} onPointerDown={stopHere}
-          style={{ ...headCtl(), width: '1.5em', padding: 0, display: 'grid', placeItems: 'center', color: shown ? C.best : C.dim, borderColor: shown ? C.best : C.line }}>
+          style={{ ...headCtl(), width: '1.8em', padding: 0, display: 'grid', placeItems: 'center', color: shown ? C.best : C.dim, borderColor: shown ? C.best : C.line }}>
           <svg viewBox="0 0 16 16" width="60%" height="60%" aria-hidden="true"><path d="M2 3.5h12M2 8h12M2 12.5h12" stroke="currentColor" strokeWidth="2" strokeLinecap="round" /></svg>
         </button>
       )}
