@@ -417,7 +417,7 @@ function GameApp() {
   const soundVolume = Number.isFinite(+t.soundVolume) ? +t.soundVolume : 70;
   const exportFps = EXPORT_FPS_OPTIONS.includes(+t.exportFps) ? +t.exportFps : 8;
   const exportFormat = EXPORT_FORMATS.includes(t.exportFormat) ? t.exportFormat : EXPORT_FORMATS[0], webp = exportFormat === 'WebP';
-  // WebP widths, largest first: the frame's own (0), half of it ('Half', the default, so a phone's 840 frame gives 420) and fixed ones below the frame's
+  // WebP widths, largest first: the frame's own (0), half of it ('Half', the default) and fixed ones below the frame's
   const halfW = Math.round(frameW / 2), wPx = (x) => (x === 'Half' ? halfW : x || frameW), webpPx = (x) => (x === 'Half' ? `${halfW} px (half)` : x ? x + ' px' : `${frameW} px (full)`);
   const webpWidths = [0].concat(WEBP_WIDTHS.filter((x) => x < frameW && x !== halfW), 'Half').sort((a, b) => wPx(b) - wPx(a));
   const webpWidth = webpWidths.includes(t.webpWidth) ? t.webpWidth : webpWidths.includes(+t.webpWidth) ? +t.webpWidth : 'Half';
@@ -426,7 +426,7 @@ function GameApp() {
   React.useEffect(() => { document.documentElement.style.setProperty('--text', String(LayoutCore.textScale(t.textSize))); }, [t.textSize]);
   React.useEffect(() => { if (t.webpSize !== undefined) { setTweak('webpWidth', t.webpSize === 'Full' ? 0 : 'Half'); setTweak('webpSize', undefined); } }, []);
   const webpQuality = Math.min(WEBP_QUALITY.max, Math.max(WEBP_QUALITY.min, +t.webpQuality || 75));
-  const video = useVideoExport({ fps: exportFps, format: exportFormat, webp: { width: wPx(webpWidth), quality: webpQuality }, stem: fileStem, save: (name, blob) => saveFile(name, blob, blob.type) });
+  const video = useVideoExport({ fps: exportFps, format: exportFormat, webp: { width: webpWidth, quality: webpQuality }, stem: fileStem, save: (name, blob) => saveFile(name, blob, blob.type) });
   busyRef.current = video.busy;
   // the stretch to export, in plies: from -1 starts on the title card, to N (the ply count) ends after the end card
   const [clip, setClip] = React.useState({ from: -1, to: Infinity });

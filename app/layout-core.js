@@ -132,5 +132,10 @@
     return (c === 1 ? oneColumn : twoColumns)({ w, h, text, view, video });
   }
 
-  window.LayoutCore = { TEXT_SIZES, textScale, columns, compute };
+  // The export's pixel scale for a w × h page: the screen's density, held so the longer side stays within 1920 px
+  const exportScale = (w, h, dpr) => Math.min(dpr || 1, 1920 / Math.max(w, h, 1));
+  // the export's canvas size on one side: the page's CSS size at that scale, rounded down to even (video wants even sides)
+  const exportPx = (v, scale) => Math.max(2, 2 * Math.floor((v * scale) / 2));
+
+  window.LayoutCore = { TEXT_SIZES, textScale, columns, compute, exportScale, exportPx };
 })();

@@ -65,7 +65,7 @@ function Stage({ menu, top, onLayout, duration, background, playback, nav, still
   const { w, h, cols } = area;
   const video = playing || !!forceVideo, narrow = w < 900, phone = cols === 1 || narrow;
   // the export's pixel width: the area's size at the device's pixel ratio, held to 1920 on its longer side
-  const exportW = Math.max(2, 2 * Math.floor((w * Math.min(window.devicePixelRatio || 1, 1920 / Math.max(w, h, 1))) / 2));
+  const exportW = LayoutCore.exportPx(w, LayoutCore.exportScale(w, h, window.devicePixelRatio));
   // onLayout(true, w): a phone layout (one column, or under 900 px wide), where the page folds its buttons into a menu; w is the export's width
   React.useLayoutEffect(() => { if (onLayout) onLayout(phone, exportW); }, [phone, exportW]);
 

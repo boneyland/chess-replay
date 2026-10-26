@@ -13,7 +13,7 @@ const EXPORT_LIBS = {
   mediabunny: 'mediabunny.min.js',
 };
 const EXPORT_FORMATS = ['MP4', 'WebP'];
-// WebP widths offered besides the frame's own (1920, or the portrait frame's 840): 1676 fills GitHub's 838 px README
+// WebP widths offered besides the frame's own (the screen-sized page's width at the screen's density): 1676 fills GitHub's 838 px README
 // column on 2× screens. Quality is 50–95 (lossy). Encoded straight from the drawn frames, a WebP looks better than one
 // converted from the MP4, though it is larger than the MP4 of the same clip
 const WEBP_WIDTHS = [1676, 1280, 960, 838, 640];
@@ -122,7 +122,7 @@ const seekStage = (t) => window.dispatchEvent(new CustomEvent('chess-video:seek'
 
 // run() takes the stretch of the timeline to export in seconds ({ start, end }), a file name suffix, and audio: an
 // async function giving the stretch's soundtrack as an AudioBuffer (or null for none; a WebP has no sound).
-// format: one of EXPORT_FORMATS; webp: { width, quality } for webpEncoder
+// format: one of EXPORT_FORMATS; webp: { width (0 the frame's own, 'Half', or pixels), quality } for webpEncoder
 function useVideoExport({ fps, format, webp, save, stem }) {
   const [state, setState] = React.useState(null); // { phase: 'load' | 'render' | 'save', done, N, eta } or { phase: 'error', msg }
   const stopRef = React.useRef(false);
@@ -133,12 +133,20 @@ function useVideoExport({ fps, format, webp, save, stem }) {
     let enc = null;
     try {
       const html2canvas = await loadHtml2canvas();
+      // the stage is in its screen-sized video layout once the busy state has rendered: wait a frame, then draw it from
+      // its top (a paused one-column page may have been scrolled)
+      await new Promise((ok) => requestAnimationFrame(ok));
       const el = document.querySelector('.stage-frame > div');
-      // the frame on screen is scaled to fit; the export draws it at its own size (1920×1080, or the portrait frame)
-      const W = el.offsetWidth & ~1, H = el.offsetHeight & ~1;
+      el.closest('.stage-area').scrollTop = 0;
+      // the page is drawn at the screen's density (LayoutCore.exportScale, as Settings' widths assume), up to 1920 px on its longer side
+      const cssW = el.offsetWidth, cssH = el.offsetHeight, scale = LayoutCore.exportScale(cssW, cssH, window.devicePixelRatio);
+      const W = LayoutCore.exportPx(cssW, scale), H = LayoutCore.exportPx(cssH, scale);
       const cv = document.createElement('canvas'); cv.width = W; cv.height = H;
       const cx = cv.getContext('2d', { willReadFrequently: format === 'WebP' }); // the WebP encoder reads every frame back
-      enc = format === 'WebP' ? await webpEncoder(cv, W, H, fps, webp) : await mp4Encoder(cv, W, H, fps, audio);
+      // Full (0) and Half are taken against the canvas drawn now: Settings' widths were worked out from the paused page,
+      // which can be a scrollbar narrower than the video layout
+      const wpx = webp.width === 'Half' ? Math.round(W / 2) : webp.width;
+      enc = format === 'WebP' ? await webpEncoder(cv, W, H, fps, { ...webp, width: wpx }) : await mp4Encoder(cv, W, H, fps, audio);
       // html2canvas copies the whole document every frame: leave out the scripts (the page inlines its sounds
       // and opening tables) and the page around the stage, but keep the head and every stylesheet (fonts and base styles)
       const keep = (n) => n.tagName === 'STYLE' || n.tagName === 'LINK' || n.tagName === 'HEAD' || n.closest('head');
@@ -151,7 +159,7 @@ function useVideoExport({ fps, format, webp, save, stem }) {
         // a frame whose markup matches the last one (holds, the title and end cards) reuses the canvas as it is
         const html = el.innerHTML, isNew = html !== prev;
         if (isNew) {
-          const shot = await html2canvas(el, { scale: 1, width: W, height: H, logging: false, ignoreElements: skip, onclone: (doc, c) => { c.style.transform = 'none'; } });
+          const shot = await html2canvas(el, { scale, width: cssW, height: cssH, logging: false, ignoreElements: skip, onclone: (doc, c) => { c.style.transform = 'none'; } });
           cx.clearRect(0, 0, W, H); cx.drawImage(shot, 0, 0, W, H);
           prev = html;
         }

@@ -117,7 +117,7 @@ for (const name of BROWSERS) for (const site of SITES) {
     // a phone's context options: Firefox has no mobile emulation in Playwright, so there it gets `other`
     const phone = (other) => (name === 'firefox' ? other : { isMobile: true, hasTouch: true, ...(name === 'webkit' ? IPHONE : {}) });
     // one browser at a time, closed before the next starts
-    if (ONLY) { const sub = t.test.bind(t); t.test = (n, fn) => (ONLY.test(n) ? sub(n, fn) : sub(n, { skip: 'LIVE_ONLY' }, fn)); }
+    if (ONLY) { const sub = t.test.bind(t); t.test = (n, ...rest) => (ONLY.test(n) ? sub(n, ...rest) : sub(n, { skip: 'LIVE_ONLY' }, rest[rest.length - 1])); }
     const browser = await LAUNCH[name]();
     t.after(() => browser.close());
     const { ctx, page, errors } = await open(browser, { width: 1440, height: 900 });
@@ -1762,6 +1762,60 @@ for (const name of BROWSERS) for (const site of SITES) {
       assert.equal(await p.evaluate(async () => (await caches.keys()).includes('stockfish-full-19')), false, 'the copy is gone');
       assert.deepEqual(fe.errors, []);
       await fe.ctx.close();
+    });
+
+    // Export at screen size: the saved WebP is the stage area's size at the screen's density (held to 1920 px on its
+    // longer side), whatever the page was scrolled to. Two moves, at the full width, to keep the canvas small
+    const exportSize = async (p, tag) => {
+      const area = await p.locator('.stage-area').evaluate((el) => ({ w: el.offsetWidth, h: el.offsetHeight })); // offset: a paused page's scrollbar (Firefox) isn't in the video's width
+      const dpr = await p.evaluate(() => window.devicePixelRatio), s = Math.min(dpr, 1920 / Math.max(area.w, area.h));
+      const even = (v) => 2 * Math.floor(v / 2);
+      const settings = p.getByRole('button', { name: 'Settings' });
+      if (!(await settings.isVisible())) await p.getByRole('button', { name: 'Menu' }).click();
+      await settings.click();
+      await p.getByRole('tab', { name: 'Export' }).click();
+      await p.getByRole('radio', { name: 'WebP' }).click();
+      await p.locator('#tw-webp-width').selectOption({ index: 0 });
+      await p.locator('#tw-clip-from').selectOption({ index: 1 });
+      await p.locator('#tw-clip-to').selectOption({ index: 1 });
+      const [dl] = await Promise.all([p.waitForEvent('download', { timeout: 120000 }), p.getByRole('button', { name: /^Export animated WebP/ }).click()]);
+      const file = path.join(OUT, `${tag}-export.webp`);
+      await dl.saveAs(file);
+      const buf = fs.readFileSync(file), vp8x = buf.indexOf('VP8X', 12);
+      assert.equal(buf.toString('ascii', 8, 12), 'WEBP');
+      const got = { w: buf.readUIntLE(vp8x + 12, 3) + 1, h: buf.readUIntLE(vp8x + 15, 3) + 1 };
+      assert.deepEqual(got, { w: even(area.w * s), h: even(area.h * s) }, `canvas for a ${area.w}×${area.h} area at ${dpr}×`);
+      // a frame holds the rectangle that changed; the first is the whole canvas and none reaches outside it
+      const anmf = [];
+      for (let at = 12; at < buf.length;) {
+        const id = buf.toString('ascii', at, at + 4), len = buf.readUInt32LE(at + 4);
+        if (id === 'ANMF') anmf.push({ x: buf.readUIntLE(at + 8, 3) * 2, y: buf.readUIntLE(at + 11, 3) * 2, w: buf.readUIntLE(at + 14, 3) + 1, h: buf.readUIntLE(at + 17, 3) + 1 });
+        at += 8 + len + (len & 1);
+      }
+      assert.ok(anmf.length >= 2, 'the clip has several frames');
+      assert.deepEqual(anmf[0], { x: 0, y: 0, ...got }, 'the first frame is the whole canvas');
+      for (const f of anmf) assert.ok(f.x + f.w <= got.w && f.y + f.h <= got.h, 'a frame inside the canvas');
+      return { area, got };
+    };
+    await t.test('desktop: an export is the screen-sized page', { timeout: 180000 }, async () => {
+      const dk = await open(browser, { width: 1440, height: 900 });
+      await dk.page.goto(base, { waitUntil: 'load' });
+      await loadedOn(dk.page);
+      await exportSize(dk.page, host + '-desktop');
+      await dk.page.getByRole('dialog', { name: 'Exporting' }).waitFor({ state: 'detached', timeout: 5000 });
+      assert.deepEqual(dk.errors, []);
+      await dk.ctx.close();
+    });
+    await t.test('phone: an export is the screen-sized page', { timeout: 180000 }, async () => {
+      const ph = await open(browser, { width: 390, height: 844 }, { ...phone({ hasTouch: true }), deviceScaleFactor: 3 });
+      await ph.page.goto(base, { waitUntil: 'load' });
+      await loadedOn(ph.page);
+      // scrolled down: the export still starts from the page's top, at the area's size
+      await ph.page.locator('.stage-area').evaluate((el) => { el.scrollTop = 300; });
+      const { area } = await exportSize(ph.page, host + '-phone');
+      assert.ok(area.w <= 390 && area.h < 844, 'the area is inside the screen');
+      assert.deepEqual(ph.errors, []);
+      await ph.ctx.close();
     });
 
     // a pinch doesn't zoom the page (Chromium only: the pinch is a DevTools gesture, and Firefox has no phone emulation)
