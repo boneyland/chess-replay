@@ -488,8 +488,10 @@ function clockOf(M, color, T, S) {
 }
 
 // a player bar's place: above or below the board (the side at the bottom below it), as wide as the board
+// a player bar runs from the eval bar's left edge (the board's, where there's none) to the board's right edge
+const barLeft = () => (L.eval ? L.eval.x : L.board.x), barWidth = () => L.board.x + L.board.size - barLeft();
 const barPlace = (side) => ({
-  position: 'absolute', left: L.board.x, width: L.board.size, height: L.bars.h, display: 'flex', alignItems: 'center',
+  position: 'absolute', left: barLeft(), width: barWidth(), height: L.bars.h, display: 'flex', alignItems: 'center',
   top: side === ORIENT ? L.board.y + L.board.size + L.bars.gap : L.board.y - L.bars.gap - L.bars.h,
 });
 function PlayerBar({ M, T, S, side, a, pieces }) {
@@ -512,7 +514,7 @@ function PlayerBar({ M, T, S, side, a, pieces }) {
   const capsW = shown.length ? tx(6) + tx(30) + (shown.length - 1) * tx(22) + (pts > 0 ? tx(8) + textWidth('+' + pts, `600 ${tx(16)}px ${MONO}`) : 0) : 0;
   const fixedW = tx(14) + (clk ? tx(72) + tx(14) + 2 * tx(7) : 0);
   const needW = textWidth(P.name, `600 ${tx(20)}px ${SANS}`) + (rating ? tx(10) + textWidth(rating, `500 ${tx(16)}px ${MONO}`) : 0) + tx(14);
-  const fit = (caps) => Math.min(1, (L.board.size - fixedW - (caps ? capsW + tx(14) : 0)) / needW);
+  const fit = (caps) => Math.min(1, (barWidth() - fixedW - (caps ? capsW + tx(14) : 0)) / needW);
   const caps = fit(true) >= 0.6 || !shown.length;
   const k = Math.max(0.6, fit(caps));
   return (
