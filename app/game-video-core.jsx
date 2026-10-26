@@ -6,14 +6,14 @@ const { winChance, plyCp } = window.ChessCore;
 // Frame palettes; light-theme text colours are at least 4.5:1 on the panel. Board squares and the eval bar's white/black halves are the sides' colours and stay put.
 const PALETTES = {
   dark: {
-    bg: '#13100f', panel: '#1b1715', line: 'rgba(255,236,214,0.09)', ink: '#efe8de', dim: '#8e8276',
+    bg: '#13100f', panel: '#1b1715', line: 'rgba(255,236,214,0.09)', ctlLine: 'rgba(255,236,214,0.4)', ink: '#efe8de', dim: '#8e8276',
     light: '#f0d9b5', dark: '#b58863', last: '#e3b55b',
     best: '#62c483', inaccuracy: '#e6c14d', mistake: '#ec9442', blunder: '#e4553f', none: '#efe8de',
     good: '#5aa9e6', brilliant: '#3cc7bd', interesting: '#c98be0', queen: '#e0609f',
     off: '#2a2320', scrim: '19,16,15', rim: 'drop-shadow(0 0 1px rgba(239,232,222,0.95)) drop-shadow(0 0 1px rgba(239,232,222,0.6))',
   },
   light: {
-    bg: '#f2ece3', panel: '#fbf7f1', line: 'rgba(60,40,20,0.13)', ink: '#2a211b', dim: '#76695c',
+    bg: '#f2ece3', panel: '#fbf7f1', line: 'rgba(60,40,20,0.13)', ctlLine: 'rgba(60,40,20,0.5)', ink: '#2a211b', dim: '#76695c',
     light: '#f0d9b5', dark: '#b58863', last: '#8a5e15',
     best: '#237a46', inaccuracy: '#8a6a0a', mistake: '#b05616', blunder: '#c63b29', none: '#2a211b',
     good: '#2a6fae', brilliant: '#1a7a73', interesting: '#8f4fab', queen: '#c03f7c',
@@ -202,10 +202,13 @@ function SideScroll({ style, children }) {
 }
 // extra: a node after right that never scrolls with it (Analysis: Go deeper beside the search's depth)
 // head: the title row's own contents, in place of title, right and extra (the Analysis panel's)
-function Panel({ box, title, right, extra, head, a, style, children }) {
+// progress: 0–1, drawn along the top border (the Analysis panel's while Stockfish searches); null draws none
+function Panel({ box, title, right, extra, head, a, style, progress, children }) {
   const { x, y, w, h, k } = box;
+  const place = { position: 'absolute', left: x, top: y, width: w / k, height: h / k, boxSizing: 'border-box', borderRadius: 8, opacity: a, transform: `translateY(${(1 - a) * 18}px) scale(${k})`, transformOrigin: '0 0', overflow: 'hidden' };
   return (
-    <div style={{ position: 'absolute', left: x, top: y, width: w / k, height: h / k, boxSizing: 'border-box', background: C.panel, border: `1px solid ${C.line}`, borderRadius: 8, padding: L.pad || '16px 22px', opacity: a, transform: `translateY(${(1 - a) * 18}px) scale(${k})`, transformOrigin: '0 0', overflow: 'hidden', ...(box.scroll && { overflowY: 'auto', overscrollBehavior: 'contain', scrollbarWidth: 'thin' }), ...style }}>
+    <>
+    <div style={{ ...place, background: C.panel, border: `1px solid ${C.line}`, padding: L.pad || '16px 22px', ...(box.scroll && { overflowY: 'auto', overscrollBehavior: 'contain', scrollbarWidth: 'thin' }), ...style }}>
       {(title || head) && (
         // the same heading size in every panel, whatever its magnification k; box.right sizes the text on the right
         <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: (L.titleGap || 16) / k, font: `600 ${L.title / k}px ${MONO}`, letterSpacing: '0.12em', textTransform: 'uppercase', color: C.dim, marginBottom: 12 / k }}>
@@ -214,6 +217,13 @@ function Panel({ box, title, right, extra, head, a, style, children }) {
       )}
       {children}
     </div>
+    {/* over the panel rather than in it, so it covers the border and never scrolls with the contents */}
+    {progress != null && (
+      <div style={{ ...place, pointerEvents: 'none' }}>
+        <div style={{ height: 3, width: `${(cl01(progress) * 100).toFixed(1)}%`, background: C.best, transition: progress > 0 ? 'width 0.3s linear' : 'none' }} />
+      </div>
+    )}
+    </>
   );
 }
 
@@ -338,7 +348,6 @@ const lineLabel = (M, c, j, san) => `${window.ChessCore.moveNo(M.ply0 + c + j)} 
 
 // What a search actually did: "Stockfish 19 lite · depth 22 (23 unfinished) · 3.0 s · 1.5M nodes" (the eval is from depth 22)
 const engineLabel = (name) => (name || 'Stockfish').replace(/\s*\(browser\)$/, '');
-// the portrait frame (no header panel) has room for the numbers only
 // the Analysis title row's word on a search: the depth it reached, or the tablebase that answered it
 function searchDepth(s) {
   if (s && s.tablebase) return 'Tablebase'; // a game analysis's position the tablebase answered
@@ -349,7 +358,7 @@ function searchDepth(s) {
 // Lite/Full choice ({ value, options: [{ value, label }], onChange }) where the full engine is offered; body, the
 // engine settings, which take the panel's place while its menu is open
 const EngineMenuContext = React.createContext(null);
-const headCtl = () => ({ ...NO_SELECT, flex: 'none', height: '1.8em', margin: '-0.4em 0', borderRadius: 5, cursor: 'pointer', border: `1.5px solid ${C.line}`, background: 'transparent', color: C.ink, letterSpacing: 0 }); // C changes with the colour scheme
+const headCtl = () => ({ ...NO_SELECT, flex: 'none', height: '1.8em', margin: '-0.4em 0', borderRadius: 5, cursor: 'pointer', border: `1.5px solid ${C.ctlLine}`, background: 'transparent', color: C.ink, letterSpacing: 0 }); // C changes with the colour scheme; ctlLine stands out more than the panels' line
 const stopHere = (e) => e.stopPropagation();
 // The Analysis panel's title row (on the right: Go deeper, the search's depth, the engine, the engine menu) and, while the menu is
 // open, the engine settings in place of the panel's contents. Only a paused replay offers them; playing (an export
@@ -362,26 +371,29 @@ function AnalysisPanel({ box, a, depth, deep, paused, style, children }) {
   const head = (
     <>
       <span style={{ flex: 'none' }}>Analysis</span>
-      <span style={{ flex: 1 }} />
-      {/* the engine stays put, next to the menu; Go deeper and the depth come and go to its left */}
+      {/* the engine stays put, next to the menu; Go deeper and the depth come and go to its left. Spaced as the
+          desktop's heading whatever the layout's title gap (the phone's wide one left the depth no room) */}
+      <span style={{ flex: 1, minWidth: 0, display: 'flex', alignItems: 'center', justifyContent: 'flex-end', gap: 16 / box.k }}>
       {!shown && paused && <DeeperButton ev={deep} />}
-      {!shown && depth && <SideScroll style={{ minWidth: 0, flex: '0 1 auto', letterSpacing: '0.04em', fontSize: `${box.right || 0.85}em` }}>{depth}</SideScroll>}
+      {!shown && depth && <span style={{ flex: 'none', whiteSpace: 'nowrap', letterSpacing: '0.04em', fontSize: `${box.right || 0.85}em` }}>{depth}</span>}
+      {/* smaller on the phone, where the row is tight */}
       {pick
         ? <select aria-label="Engine" value={pick.value} onChange={(e) => { const go = pick.onChange(e.target.value); if (go) setOpen(true); }} onClick={stopHere} onPointerDown={stopHere}
-            style={{ ...headCtl(), padding: '0 0.4em', font: 'inherit', fontSize: '1.15em', height: '1.6em', textTransform: 'none', background: C.panel }}>
+            style={{ ...headCtl(), padding: '0 0.4em', font: 'inherit', fontSize: L.header ? '1.15em' : '1em', height: '1.6em', textTransform: 'none', background: C.panel }}>
             {pick.options.map((o) => <option key={o.value} value={o.value}>{o.label}</option>)}
           </select>
         : <span style={{ flex: 'none', textTransform: 'none', letterSpacing: '0.04em', color: C.ink }}>{name}</span>}
       {live && (
         <button type="button" aria-label="Engine options" aria-expanded={shown} title="Engine settings" onClick={(e) => { e.stopPropagation(); setOpen((o) => !o); }} onPointerDown={stopHere}
-          style={{ ...headCtl(), width: '1.8em', padding: 0, display: 'grid', placeItems: 'center', color: shown ? C.best : C.dim, borderColor: shown ? C.best : C.line }}>
+          style={{ ...headCtl(), width: '1.8em', padding: 0, display: 'grid', placeItems: 'center', color: shown ? C.best : C.dim, borderColor: shown ? C.best : C.ctlLine }}>
           <svg viewBox="0 0 16 16" width="60%" height="60%" aria-hidden="true"><path d="M2 3.5h12M2 8h12M2 12.5h12" stroke="currentColor" strokeWidth="2" strokeLinecap="round" /></svg>
         </button>
       )}
+      </span>
     </>
   );
   return (
-    <Panel box={shown ? { ...box, scroll: true } : box} a={a} style={style} head={head}>
+    <Panel box={shown ? { ...box, scroll: true } : box} a={a} style={style} head={head} progress={!shown && deep && deep.pending ? deep.progress || 0 : null}>
       {shown ? <div className="an-engine" onClick={stopHere} onPointerDown={stopHere}><div className="twk-flow">{E.body}</div></div> : children}
     </Panel>
   );
