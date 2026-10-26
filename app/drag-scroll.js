@@ -1,11 +1,12 @@
 // Drag to scroll: a mouse drag on anything that scrolls (a list, a panel, a menu, a settings page, a one-line strip)
 // scrolls it, as a finger does, and glides on when let go while moving. A finger or pen already scrolls natively.
 // One listener for the page: it starts from the nearest box that scrolls along the drag, skipping text fields,
-// sliders, and any press a pointerdown handler claimed (preventDefault).
+// sliders, anything marked data-no-drag-scroll (a piece or board drag of its own), and any press a pointerdown handler
+// claimed (preventDefault).
 (function () {
   const START = 4; // px the pointer moves before a press becomes a drag
   const GLIDE_MS = 325, GLIDE_MIN = 0.03, GLIDE_MAX = 5; // the glide's decay time constant, and the speeds (px/ms) it stops at and starts at most
-  const SKIP = 'input, textarea, select, [contenteditable]:not([contenteditable="false"]), [role="slider"]';
+  const SKIP = 'input, textarea, select, [contenteditable]:not([contenteditable="false"]), [role="slider"], [data-no-drag-scroll]';
 
   const scrolls = (el, axis) => {
     const s = getComputedStyle(el), o = axis === 'x' ? s.overflowX : s.overflowY;
@@ -61,7 +62,7 @@
       const main = Math.abs(dx) > Math.abs(dy) ? 'x' : 'y', el = scroller(d.t, main);
       if (!el) { drag = null; return; }
       const r = el.getBoundingClientRect();
-      // screen px per scrolled px: the stage scales the frame, and a panel its own content
+      // screen px per scrolled px: 1 unless a transform or zoom scales the box
       d.k = { x: r.width / el.offsetWidth || 1, y: r.height / el.offsetHeight || 1, ax: { x: scrolls(el, 'x'), y: scrolls(el, 'y') } };
       Object.assign(d, { el, left: el.scrollLeft, top: el.scrollTop });
       try { el.setPointerCapture(e.pointerId); } catch (err) {}

@@ -5,7 +5,8 @@ What each part of the repo is, with the pinned SHA-256 of every vendored file. B
 - `app/`: page sources
   - `shell.html`: the page shell, its CSS and the settings defaults (`window.TWEAK_DEFAULTS`)
   - `game-app.jsx`: the app (loading games, the dock and menus, the Settings panel's contents); `tweaks.jsx` the Settings controls
-  - `engine.jsx`: the animation engine (the replay is one element tree drawn as a function of time); `game-video-core.jsx` the replay's scenes and layouts (`LAYOUTS.wide`, `tallLayout`)
+  - `engine.jsx`: the animation engine (the replay is one element tree drawn as a function of time); `game-video-core.jsx` the replay's scenes, the board's scaled space (`BoardSpace`) and text sizing (`tx()`)
+  - `layout-core.js`: the page's layout (`LayoutCore`: one or two columns, the boxes for the board and panels, the export scale)
   - `chess-core.js`: PGN, analysis and notes turned into the game model the replay draws
   - `analysis-core.js`, `sf-engine.js`, `stockfish.jsx`: Stockfish in the browser (a Web Worker over UCI) and the move ratings, ported from chess-animator's Python
   - `sf-full.js`: the full engine the viewer can download (the Analysis panel's engine drop-down), checked and kept in the browser

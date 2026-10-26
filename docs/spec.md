@@ -7,8 +7,8 @@ The one spec for the app: what it does now, what is planned, and the decisions b
 ## Contents
 
 - [Principles](#principles)
-- [Built](#built): replay and browser analysis, opening names, custom starts and flip, free board and explorer, edit position, play vs human, My games, play vs Stockfish, full Stockfish download, lines (MultiPV), endgame tablebase (in game analysis too)
-- [Roadmap](#roadmap): Lichess data and multi-threaded Stockfish, player names, Chess960, typed commentary, Maia3, dead positions, chasolver, background music, peer-to-peer online play, app walk-through
+- [Built](#built): replay and browser analysis, opening names, custom starts and flip, free board and explorer, edit position, play vs human, My games, play vs Stockfish, full Stockfish download, lines (MultiPV), endgame tablebase (in game analysis too), responsive layout
+- [Roadmap](#roadmap): square layouts and breakpoints, Lichess data and multi-threaded Stockfish, player names, Chess960, typed commentary, Maia3, dead positions, chasolver, background music, peer-to-peer online play, app walk-through
 - [Known gaps](#known-gaps)
 - [Decisions log](#decisions-log)
 
@@ -17,7 +17,7 @@ The one spec for the app: what it does now, what is planned, and the decisions b
 These hold across every feature; a change that breaks one is a failure even if it works.
 
 - **Nothing leaves the browser** unless the viewer turns it on (Ask Queen, and the planned Lichess features, each behind a toggle or button). No accounts of our own (online play, when built, is between two browsers with no account or game server of ours).
-- **The playing video stays clean.** Buttons, progress lines and engine controls are for the paused page; the frames of a playing video look as they always have.
+- **The playing video stays clean.** Buttons, progress lines and engine controls are for the paused page; a playing video looks like the page, without the paused page's controls (buttons, progress lines, engine controls); the title and end cards, the panels' fade-in, the blunder glow, the camera push and the typewriter commentary show only then, while stepping and paused viewing are a plain, still page.
 - **Nothing heavy starts by itself.** The engine (1.8 MB) loads on first use; the full engine (99 MB) downloads only when the viewer asks; whole-game analysis runs only when asked.
 - **No hints in a game.** During Play vs human or Play vs Stockfish no eval bar, arrows, verdicts, book moves or engine lines show.
 - **Replay doesn't regress.** A loaded game's title card, timeline, export and own-move exploration are untouched by free-board and game features (which is why the free board is a separate view).
@@ -114,7 +114,7 @@ A plain board with Stockfish, separate from the replay (`app/free-board.jsx`, st
 The viewer sees a position or puzzle somewhere (a book diagram, a screen, someone's game) and wants it on the board, to analyse it or play on from it. Modelled on en-croissant's editor; the view is `EditBoard` (`app/edit-board.jsx`), its rules `EditCore` (`app/edit-core.js`), and `GameApp` swaps it in for the free board or the loaded game while its `editing` state is set (neither stays mounted, so no search, Stockfish reply or clock runs meanwhile).
 
 - **Entry**: Play/Explore › Explore › **Edit position…**, under Starting position (the phone menu too). It opens on an **empty board**, White to move, no castling. From a game in progress it asks first (`guard`); the game is paused and kept in My games.
-- **Layout**: the board where the free board draws it, centred where no eval bar stands beside it; the editor in the panels' room beside it (wide, compact, square and sideways frames), with the piece tray in the panel. On the portrait (phone) frame the tray's two rows sit right under the board and the panel under them.
+- **Layout**: the board where the free board draws it, centred where no eval bar stands beside it; the editor in the panels' room beside it in the two-column layout, with the piece tray in the panel. In the one-column layout the tray's two rows sit right under the board and the panel under them.
 - **The panel**: a FEN field updated live, which sets up any well-formed FEN at once, legal or not (a `[FEN "…"]` tag too); only malformed text is refused, with a message under it, the board unchanged. **Start**, **Empty**, White/Black to move. Castling boxes (White and Black, O-O and O-O-O), each enabled only while its king and rook stand on their home squares; moving either off unticks it, and a pasted FEN's unsupported rights are dropped. The tray (White's six pieces, then Black's). A status line. **Cancel** and **Done**.
 - **Editing**: drag a tray piece onto a square; or click/tap a tray piece to hold it (again, or Esc, lets it go) and tap squares to drop copies, a tap on the same piece taking it off. Drag a piece on the board to move it, or off the board to take it away. Squares through `view()`, so a flipped board works. Any edit drops en passant; the move number stays.
 - **By keyboard**: the board is a Tab stop (`role="application"`). A tray piece picked with Enter or Space sends the focus to the board. There the arrows move a square outlined while it has the keyboard's focus (as the viewer sees the board, flipped too; it starts on e4); Enter or Space places the held piece (on the same piece takes it off), or with none held picks up the piece there and puts it down on the next square Enter is pressed on (Esc lets it go); Delete or Backspace takes the piece away; K Q R B N P place White pieces, k q r b n p Black ones. The keys are listed under the status line while the board has the keyboard's focus, and a screen reader hears the square and its piece.
@@ -187,9 +187,29 @@ Positions of 7 pieces or fewer get Lichess's Syzygy tablebase (`https://tablebas
 - Never in Play vs Stockfish (its opponent and critique don't use `runAnalysis`) or for the viewer's own-move ratings.
 - Tests: `tests/tablebase-analysis.test.cjs` (fake client: no search for tablebase positions, fields, the outcome table, a cursed win, an uncertain or failed answer searched and the asking stopped, a 429 back-off searched through and asked again, the requests' pacing, the setting off and 8 pieces send nothing, the setting turned off mid-run, a win without DTM beside a searched position rated on two searches, the tablebase's time reported apart, a resumed run, `buildGame`); `tests/check_browser_json.py` also loads its JSON (`tests/out/tb_analysis.json`) in Python, which has no tablebase.
 
+### Responsive layout
+
+Built 2026-10-26 (designed the same day), replacing the fixed video frames (1920×1080, compact, square, sideways and 840-wide portrait, scaled as a whole to the window) with a normal responsive page. Text keeps one comfortable size whatever the window, extra room goes to the board and the panels together, and nothing is cut off at any size (the anti-goal; a live test sweeps nine sizes for overflow).
+
+- **Where it lives**: `LayoutCore` (`app/layout-core.js`, pure numbers in, boxes `{ x, y, w, h, scroll }` out) says where the board, eval bar, player bars and each panel go for the window's size, the view (`replay`, `free`, `game`, `edit`) and the text size. `Stage` (`app/engine.jsx`) measures the window, picks the column count and gives the views a frame `{ w, h, text, cols, video }` (`useFrame()`). Views place only what `LayoutCore` says; the board is a fixed 768 px picture scaled into its box (`BoardSpace`, `app/game-video-core.jsx`), so pieces, arrows and badges stay in board pixels through `view()`. The fixed `LAYOUTS`/`tallLayout`/`COMPACT`/`SQUARE`/`SHORT` frames are gone.
+- **Two columns**: the board (with its player bars, and an eval bar in the replay and free board only) on the left, up to 900 px; on the right the game info, Moves beside Commentary, then Analysis. Moves lists two columns of moves from 480 px wide. The eval graph (replay only) runs full width at the bottom (110 px) from 700 px high; on a shorter window it sits in the sidebar under Analysis (80 px) while the sidebar has the room, else it is hidden. The sidebar takes at least 320·text px, and up to (230+150)·text+10 px while the board stays at 360 px or more, so Moves and Commentary read side by side.
+- **One column**: the board across the width, then the game info (the paused page only: a video has none), Commentary, Analysis and Moves at fixed heights (times the text size), each scrolling inside itself; the page scrolls and the transport bar stays pinned at the bottom of the screen. No eval graph (the eval bar stays, where the view has one). Edit position shows only its tray and panel, the tray under the board and the panel under that.
+- **Which one**: `LayoutCore.columns()` picks one column when the window is tall for its width (height over 1.15 times the width, with hysteresis: to one column at 1.2, back to two under 1.1) or when the board beside the sidebar would be under 360 px (380 to come back): by the room left, not by device, so 1024×768 keeps the sidebar and 768×1024 stacks. A window too short for the one-column layout keeps two columns where a 200 px board still fits beside the sidebar (a phone held sideways, even at Larger text), and always for a video; a paused page in a narrow, short window (a phone with its keyboard up) takes one column.
+- **Text size**: Settings › Appearance › **Text size** (Small, Default, Large, Larger: 90, 100, 115, 130 %; `TWEAK_DEFAULTS.textSize`, persisted). It sets the root size (`--text`, so the dock, Settings, menus and dialogs follow, all in `rem`) and the panels' text through `tx()`; widths that hold text (the sidebar minimum, the one-column switch, the bars) grow with it, so a larger size stacks sooner. The board's pieces don't scale. The browser's own zoom works too.
+- **A video is screen-sized**: while playing or exporting, the page fits the window exactly (the one-column panels shrink under the board, to a 48 px floor, the board never under 200 px) and the title and end cards draw over it, so the size never changes mid-video. Panels follow the current part (Moves the current move), so a long comment can be out of frame at that moment.
+- **Exports record the page as it is**: the screen-sized page at `min(devicePixelRatio, 1920 / longer side)` (`LayoutCore.exportScale`), sides rounded down to even. Settings' WebP widths are full, the fixed widths below it, and half, and the exports use the text size chosen.
+- **Video touches only while playing or exporting**: the title and end cards, the panels' fade-in, the blunder glow, the camera push and the commentary's typewriter. Stepping, clicking a move, exploring and analysing show a plain, still page, Commentary in whole (a long comment scrolls in its box). Pieces and arrows still slide to their squares, as normal app behaviour.
+- **Every view**: the replay, the free board and explorer, Play vs human and Stockfish, and Edit position use the same layout. Overlays (dock, Settings, menus, dialogs) float over it as before, with their rules keyed on `.stage-one` in `app/shell.html`; `.stage-short` (a two-column window under 500 px tall) slims the transport bar.
+- **Touch and drag**: the board's touch layer opts out of the page-wide drag-scroll (`data-no-drag-scroll`), so a mouse drag on the board moves a piece in the one-column page instead of scrolling it.
+- **Tests**: `tests/layout-core.test.cjs` (boxes, the column rule, export scale) and the live layout sweep (`tests/live/site.test.cjs`: nine sizes from 320×568 to 2560×1080, both browsers, no text overflowing its box, the board's and panels' floors).
+
 ## Roadmap
 
 Planned, roughly in this order; each item gets its own PR(s) on a `claude/<topic>` branch. Items marked *needs design* have open questions to settle with the user before a plan.
+
+### Square layouts and breakpoints (*needs design*)
+
+The responsive layout's squarish windows (near 1:1, such as an unfolded foldable or a tablet-sized window around 772×965) get either a sidebar that holds the board small or one column that scrolls; neither is designed for that shape. Open: a layout of its own for square screens (the board with the panels in a band under or beside it, sized for both); whether the device tiers' breakpoints (phone under 600 px wide or 500 px high, tablet and foldable 600–1023, desktop from 1024) and the stacking rules hold up on real devices (iPhone Duo's viewports per WebKit: 382–951 wide, 368–902 high); whether a half-folded screen (`device-posture: folded`, viewport segments, in preview in Safari 27.1) puts the board and the panels on separate halves. Asked for 2026-10-27.
 
 ### Lichess data and multi-threaded Stockfish
 
@@ -331,6 +351,10 @@ A short guided tour for a first visit: steps that point at the dock, the transpo
 
 Deferred by the per-plan reviews; each was true when recorded and may since have been fixed.
 
+**Responsive layout** (2026-10-26)
+- The Analysis panel hides the search depth when narrower than 440·text px (at 1024×768, for one).
+- `tests/live/android.test.cjs` wasn't run locally for this change (no device); GitHub Actions' `android` job covers it.
+
 **Custom starts and flip** (2026-10-19)
 - The player bars' "+N" counts captures during the game only, so a FEN start with a material edge shows none.
 - Untested by the live suite: the sideways phone layout flipped, flipped arrows and line board, a flipped or FEN-start video export, and the F key's guards.
@@ -345,7 +369,6 @@ Deferred by the per-plan reviews; each was true when recorded and may since have
 - A draw can only be claimed in the position on the board, not by announcing the move that would make the repetition or the fiftieth move.
 - Dead positions are found only behind locked pawns (an en-passant capture on offer counts as a pawn break), with kings, pawns and bishops all on one colour of square (`PlayCore.lockedDead`: every pawn blocked, no capture possible, neither king nor any bishop able to reach an enemy pawn it could take; a king a bishop can reach always has a square of the other colour to step to, and the kings never meet). Knights, rooks, queens, bishops on both colours, a pawn break either king could make, or a position dead for other reasons (a forced line) play on; finding those needs a helpmate search (CHA-style).
 - A flag fall in a dead position the check can't prove (see above) still loses: the flag rule looks at material only. Positions it proves dead have already ended the game.
-- Play again and Analyse in the Analysis box scale with the frame on the phone.
 
 **My games** (2026-10-20)
 - A replayed game's Stockfish analysis, Queen answers and commentary stay with the loaded game: opening it from My games again starts without them.
@@ -403,3 +426,5 @@ Deferred by the per-plan reviews; each was true when recorded and may since have
 - 2026-10-26: chasolver, peer-to-peer online play and an app walk-through added to the roadmap.
 - 2026-10-26: the engine settings move from Settings › Engine into the Analysis panel (its ☰ menu turns the panel into them; the explanations behind ⓘ), the engine itself a drop-down in the panel's title row, Go deeper and the depth reached to its left (so the drop-down never moves); the Engine tab becomes **Online** (the tablebase toggle now, online features later).
 - 2026-10-26: "no online play" dropped from the principles (no accounts of our own stays), for peer-to-peer play between two browsers.
+- 2026-10-26: responsive layout designed and approved: a normal responsive page (board + sidebar, one column when narrow) replaces the scaled fixed frames, text at fixed sizes with a Text size setting, exports record the screen-sized page, video touches only while playing.
+- 2026-10-26: responsive layout built as designed, with these calls: `LayoutCore` computes the boxes in JS (not CSS grid), the board is a 768 px picture scaled into its box; the column rule is a window tall for its width (over 1.15) or a board under 360 px beside the sidebar, and a short window keeps two columns where a 200 px board fits; the side graph is 80 px; the paused one-column panels take fixed heights (times text) with inner scroll rather than their natural height; Commentary shows whole (no typewriter) when not a video; the sidebar reserves room for Moves and Commentary side by side (a 564 px board at 1024×768); exports record the screen-sized page at min(dpr, 1920/longer side).

@@ -192,12 +192,12 @@ function useGameAnalysis(M, files, getFiles, commit, engine, settings, tbOn) {
   return { ...st, start, stop, resumeAt, plies: M.plies.length, estimateMin: Math.max(1, Math.ceil(secondsFrom(resumeAt ? resumeAt + 1 : 0, perPos) / 60)) };
 }
 
-// A button inside the video frame (frame pixels, theme colours)
+// A button inside a panel (theme colours, sized with the panel text)
 function FrameButton({ primary, color, onClick, children, label, disabled }) {
   const c = color || C.best;
   return (
     <button type="button" aria-label={label} disabled={disabled} onClick={(e) => { e.stopPropagation(); onClick(); }} onPointerDown={(e) => e.stopPropagation()}
-      style={{ whiteSpace: 'nowrap', font: `600 ${primary ? 20 : 15}px ${MONO}`, letterSpacing: primary ? '0.02em' : '0.1em', textTransform: primary ? 'none' : 'uppercase', padding: primary ? '12px 22px' : '5px 12px', borderRadius: 8, cursor: disabled ? 'default' : 'pointer', opacity: disabled ? 0.4 : 1, userSelect: 'none', WebkitUserSelect: 'none', border: `1.5px solid ${c}`, background: primary ? c : 'transparent', color: primary ? C.bg : c }}>
+      style={{ whiteSpace: 'nowrap', font: `600 ${tx(primary ? 20 : 15)}px ${MONO}`, letterSpacing: primary ? '0.02em' : '0.1em', textTransform: primary ? 'none' : 'uppercase', padding: primary ? `${tx(12)}px ${tx(22)}px` : `${tx(5)}px ${tx(12)}px`, borderRadius: 4, cursor: disabled ? 'default' : 'pointer', opacity: disabled ? 0.4 : 1, userSelect: 'none', WebkitUserSelect: 'none', border: `1.5px solid ${c}`, background: primary ? c : 'transparent', color: primary ? C.bg : c }}>
       {children}
     </button>
   );
@@ -219,36 +219,36 @@ function EngineEmptyState({ M, sf, paused, compact }) {
   if (run.state === 'running') {
     const k = run.total ? run.done / run.total : 0;
     return (
-      <div style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
-        <span style={{ ...NO_SELECT, font: `500 22px ${MONO}`, color: C.ink }}>{sf.status !== 'ready' ? 'Starting Stockfish…' : `Analysing ${run.done} / ${run.total}${run.done > 0 ? ' · ' + fmtEta(run.etaSec) : ''}`}</span>
-        <div style={{ height: 8, borderRadius: 4, background: C.off, overflow: 'hidden' }}><div style={{ width: `${(k * 100).toFixed(1)}%`, height: '100%', background: C.best }} /></div>
+      <div style={{ display: 'flex', flexDirection: 'column', gap: tx(14) }}>
+        <span style={{ ...NO_SELECT, font: `500 ${tx(22)}px ${MONO}`, color: C.ink }}>{sf.status !== 'ready' ? 'Starting Stockfish…' : `Analysing ${run.done} / ${run.total}${run.done > 0 ? ' · ' + fmtEta(run.etaSec) : ''}`}</span>
+        <div style={{ height: tx(8), borderRadius: 2, background: C.off, overflow: 'hidden' }}><div style={{ width: `${(k * 100).toFixed(1)}%`, height: '100%', background: C.best }} /></div>
         {paused && <div><FrameButton onClick={sf.stop} label="Stop the analysis">Stop</FrameButton></div>}
       </div>
     );
   }
-  const narrow = !L.header, est = `about ${sf.estimateMin} min`;
-  const text = compact ? null : <span style={{ ...NO_SELECT, font: `400 26px ${SERIF}`, color: C.dim, fontStyle: 'italic' }}>No engine analysis for this game.</span>;
+  // a panel too narrow for the estimate on the button (a phone's) puts it beside the button
+  const narrow = !L.analysis || L.analysis.w < 480, est = `about ${sf.estimateMin} min`;
+  const text = compact ? null : <span style={{ ...NO_SELECT, font: `400 ${tx(26)}px ${SERIF}`, color: C.dim, fontStyle: 'italic' }}>No engine analysis for this game.</span>;
   if (!paused) return text;
   if (sf.status === 'unavailable') {
     return (
-      <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
+      <div style={{ display: 'flex', flexDirection: 'column', gap: tx(12) }}>
         {text}
-        <span style={{ font: `500 17px ${MONO}`, color: C.dim }}>Stockfish can't run here.</span>
+        <span style={{ font: `500 ${tx(17)}px ${MONO}`, color: C.dim }}>Stockfish can't run here.</span>
         <div><FrameButton onClick={sf.start} label="Try starting Stockfish again">Try again</FrameButton></div>
       </div>
     );
   }
   return (
-    <div style={{ display: 'flex', flexDirection: 'column', gap: 14, alignItems: 'flex-start' }}>
+    <div style={{ display: 'flex', flexDirection: 'column', gap: tx(14), alignItems: 'flex-start' }}>
       {text}
-      {/* the phone's panel is too narrow for the estimate on the button: it goes beside it */}
-      <div style={{ display: 'flex', alignItems: 'center', gap: 14 }}>
+      <div style={{ display: 'flex', alignItems: 'center', gap: tx(14), flexWrap: 'wrap' }}>
         <FrameButton primary onClick={sf.start}>{(run.resumeAt ? `${narrow ? 'Resume' : 'Resume analysis'} from move ${Math.floor((M.ply0 + run.resumeAt) / 2) + 1}` : 'Analyse with Stockfish') + (narrow ? '' : ` · ${est}`)}</FrameButton>
-        {narrow && <span style={{ ...NO_SELECT, font: `500 15px ${MONO}`, color: C.dim, whiteSpace: 'nowrap' }}>{est}</span>}
+        {narrow && <span style={{ ...NO_SELECT, font: `500 ${tx(15)}px ${MONO}`, color: C.dim, whiteSpace: 'nowrap' }}>{est}</span>}
       </div>
-      {run.resumeAt > 0 && <span style={{ ...NO_SELECT, font: `500 15px ${MONO}`, color: C.dim }}>{run.resumeAt} of {run.plies} moves analysed so far.</span>}
-      {!compact && <span style={{ ...NO_SELECT, font: `500 15px ${MONO}`, color: C.dim }}>{engineLabel(sf.game.name)} runs in your browser.</span>}
-      {run.err && <span style={{ font: `500 15px ${MONO}`, color: C.blunder }}>{run.err}</span>}
+      {run.resumeAt > 0 && <span style={{ ...NO_SELECT, font: `500 ${tx(15)}px ${MONO}`, color: C.dim }}>{run.resumeAt} of {run.plies} moves analysed so far.</span>}
+      {!compact && <span style={{ ...NO_SELECT, font: `500 ${tx(15)}px ${MONO}`, color: C.dim }}>{engineLabel(sf.game.name)} runs in your browser.</span>}
+      {run.err && <span style={{ font: `500 ${tx(15)}px ${MONO}`, color: C.blunder }}>{run.err}</span>}
     </div>
   );
 }
@@ -334,7 +334,7 @@ function DeeperButton({ ev }) {
   const t = ev.deeperTo, tip = t.depth == null ? `Go deeper: ${t.time_limit} s` : `Go deeper: depth ${t.depth}, up to ${t.time_limit} s`;
   return (
     <button type="button" aria-label={tip} title={tip} onClick={(e) => { e.stopPropagation(); ev.deeper(); }} onPointerDown={(e) => e.stopPropagation()}
-      style={{ ...NO_SELECT, flex: 'none', width: '1.5em', height: '1.5em', padding: 0, margin: '-0.25em 0 -0.25em -0.4em', borderRadius: 5, cursor: 'pointer', border: `1.5px solid ${C.best}`, background: 'transparent', color: C.best, font: `700 1.2em/1 ${MONO}`, letterSpacing: 0 }}>+</button>
+      style={{ ...NO_SELECT, flex: 'none', width: '1.5em', height: '1.5em', padding: 0, margin: '-0.25em 0 -0.25em -0.4em', borderRadius: 3, cursor: 'pointer', border: `1.5px solid ${C.best}`, background: 'transparent', color: C.best, font: `700 1.2em/1 ${MONO}`, letterSpacing: 0 }}>+</button>
   );
 }
 
@@ -350,12 +350,12 @@ function engineSteps(pos, pv, max = 8) {
 function EngineLines({ lines, pos, ply0, c, onPick }) {
   const top = lines[0].depth;
   return (
-    <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
+    <div style={{ display: 'flex', flexDirection: 'column', gap: tx(6) }}>
       {lines.map((l) => {
         const st = engineSteps(pos, l.pv, 6), ev = fmtSf(l.cp);
         return (
-          <div key={l.k} style={{ display: 'flex', alignItems: 'flex-start', gap: 6 }}>
-            <span style={{ flex: '0 0 auto', width: 100, whiteSpace: 'nowrap', lineHeight: '30px', color: l.k === 1 ? C.ink : C.dim }}>{ev}{l.depth < top && <span style={{ font: `500 13px ${MONO}`, color: C.dim }}> d{l.depth}</span>}</span>
+          <div key={l.k} style={{ display: 'flex', alignItems: 'flex-start', gap: tx(6) }}>
+            <span style={{ flex: '0 0 auto', width: tx(100), whiteSpace: 'nowrap', lineHeight: `${tx(30)}px`, color: l.k === 1 ? C.ink : C.dim }}>{ev}{l.depth < top && <span style={{ font: `500 ${tx(13)}px ${MONO}`, color: C.dim }}> d{l.depth}</span>}</span>
             <div style={{ flex: '1 1 0', minWidth: 0 }}>
               <LineChips name={null} tip={`Stockfish's line ${l.k} (${ev})`} accent={l.k === 1 ? C.best : C.line}
                 moves={st.map((m) => m.san)} ply0={ply0} c={c} legal={st.length} sel={null} onPick={(j) => onPick(st.slice(0, j + 1))} />
@@ -392,13 +392,13 @@ function OwnMoveAnalysis({ M, vline, own, status, onReply }) {
   const many = after && after.lines && after.lines.length > 1;
   return (
     <React.Fragment>
-      <div style={{ display: 'flex', alignItems: 'flex-end', gap: 28 }}>
-        <span style={{ font: `700 38px ${MONO}`, color: col }}>{lineLabel(M, vline.at, vline.upto, step.san)}</span>
-        <span style={{ marginLeft: 'auto', font: `700 38px ${MONO}`, color: C.ink }}>{(status === 'unavailable' || status === 'stopped') && !(after && !after.partial) ? '—' : fmtSf(after && after.cp)}</span>
+      <div style={{ display: 'flex', flexWrap: 'wrap', alignItems: 'flex-end', columnGap: tx(28) }}>
+        <span style={{ font: `700 ${tx(HEADLINE)}px ${MONO}`, color: col }}>{lineLabel(M, vline.at, vline.upto, step.san)}</span>
+        <span style={{ marginLeft: 'auto', font: `700 ${tx(HEADLINE)}px ${MONO}`, color: C.ink }}>{(status === 'unavailable' || status === 'stopped') && !(after && !after.partial) ? '—' : fmtSf(after && after.cp)}</span>
       </div>
       {/* the verdict spans the panel, under the move and the eval, so it fits on one line in the phone layout */}
-      <div style={{ marginTop: 6, font: `600 16px ${MONO}`, letterSpacing: '0.08em', textTransform: 'uppercase', color: col }}>{who} · {bad ? CLASS_LABEL[rated.classification] + ' · ' : ''}{verdict}</div>
-      <div style={{ marginTop: 16, paddingTop: 14, borderTop: `1px solid ${C.line}`, font: `500 18px ${MONO}`, color: C.dim, display: 'flex', flexDirection: 'column', gap: 8 }}>
+      <div style={{ marginTop: tx(6), font: `600 ${tx(16)}px ${MONO}`, letterSpacing: '0.08em', textTransform: 'uppercase', color: col }}>{who} · {bad ? CLASS_LABEL[rated.classification] + ' · ' : ''}{verdict}</div>
+      <div style={{ marginTop: tx(16), paddingTop: tx(14), borderTop: `1px solid ${C.line}`, font: `500 ${tx(18)}px ${MONO}`, color: C.dim, display: 'flex', flexDirection: 'column', gap: tx(8) }}>
         {many ? <EngineLines lines={after.lines} pos={step.pos} ply0={M.ply0} c={ply + 1} onPick={onReply} />
           : replies.length > 0
           ? <LineChips name={null} tip="Stockfish’s reply" accent={C.best} moves={replies.map((r) => r.san)} ply0={M.ply0} c={ply + 1} legal={replies.length} sel={null} onPick={(j) => onReply(replies.slice(0, j + 1))} />

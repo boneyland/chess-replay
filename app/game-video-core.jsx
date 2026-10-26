@@ -34,101 +34,49 @@ const boardCls = (cls) => BOARD[cls] || BOARD.last;
 const LAST_MOVE = 'rgba(155,199,0,0.41)'; // Lichess's last-move tint, clear on both square colours
 
 const SQ = 96, BW = SQ * 8;
-// Frame layouts. Landscape is the 1920×1080 video; portrait (phones) stacks the panels under the board.
-// k magnifies a box's contents, so text designed for the wide frame stays readable on a small screen.
-const LAYOUTS = {
-  wide: {
-    // the smallest text (15 px and under) 2 px larger, as in the square frame
-    eval: 44, bx: 100, by: 88, bar: { k: 1, gap: 10 }, title: 15, small: 2, hint: 17,
-    // header and Moves/Commentary fit their contents; Analysis (long with Queen's lines) takes the rest down to the graph
-    header: { x: 916, y: 40, w: 964, h: 174, k: 1 },
-    moves: { x: 916, y: 232, w: 330, h: 322, k: 1, rows: 7 },
-    comment: { x: 1266, y: 232, w: 614, h: 322, k: 1, text: 1, gap: 18, right: 1 },
-    analysis: { x: 916, y: 572, w: 964, h: 340, k: 1, right: 1 },
-    plot: { x: 44, y: 930, w: 1836, h: 120, k: 1 },
-    card: { k: 1, w: 1700, stack: false },
-  },
+// The page's boxes in real CSS pixels (LayoutCore), for the window's size and the view; the board is drawn as a 768 px
+// picture scaled into its box (BoardSpace). TX: panel and player-bar text sizes are written at the old 1920 frame's
+// sizes, times 0.8 and the viewer's text size, through tx().
+let L = window.LayoutCore.compute({ w: 1440, h: 900 }), TX = 0.8, TEXT = 1;
+const setLayout = (frame, view = 'replay') => {
+  L = window.LayoutCore.compute({ w: frame.w, h: frame.h, text: frame.text, view, video: frame.video, cols: frame.cols, vw: frame.vw, vh: frame.vh });
+  TEXT = L.text; TX = 0.8 * TEXT; // the viewer's text size, times the device tier's (smaller on phones and tablets)
 };
-// Compact landscape, for windows under 1300 px wide: the wide frame's panels at their sizes, with the square frame's
-// margins, gaps and panel padding (its smallest text 2 px larger too), so the frame is 1800×1040 and shows larger. The
-// export draws it at that size.
-const COMPACT = { width: 1800, height: 1040 };
-LAYOUTS.compact = (() => {
-  const m = 20, gap = 14, x = m + 48 + BW + 20, w = COMPACT.width - m - x, py = COMPACT.height - m - 120, my = m + 174 + gap, ay = my + 322 + gap;
-  return {
-    eval: m, bx: m + 48, by: m + 50, bar: { k: 1, gap: 10 }, title: 15, small: 2, hint: 17, pad: '12px 16px', frameH: COMPACT.height, edge: m,
-    header: { x, y: m, w, h: 174, k: 1 },
-    moves: { x, y: my, w: 330, h: 322, k: 1, rows: 7 },
-    comment: { x: x + 330 + gap, y: my, w: w - 330 - gap, h: 322, k: 1, text: 1, gap: 18, right: 1 },
-    analysis: { x, y: ay, w, h: py - gap - ay, k: 1, right: 1 },
-    plot: { x: m, y: py, w: COMPACT.width - 2 * m, h: 120, k: 1 },
-    card: { k: 1, w: 1640, stack: false },
-  };
+const tx = (px) => Math.round(px * TX * 10) / 10;
+// a text's width in px in a CSS font, measured on a canvas (in the page's fonts once they've loaded), to fit text to a box
+const textWidth = (() => {
+  let cx = null;
+  return (txt, font) => { cx = cx || document.createElement('canvas').getContext('2d'); cx.font = font; return cx.measureText(txt).width; };
 })();
-// Portrait: 840 wide, and as tall as the screen allows. A phone shows it at about 0.43×, so text here is ~27 px
-// (about 12 px on screen): no eval graph (the eval bar stays), so Commentary sits right under the board; Moves the full
-// width with two move pairs a row.
-const PORTRAIT = { width: 840, minHeight: 1810, maxHeight: 2100 };
-function tallLayout(H) {
-  // Moves gets two thirds of the extra height (each row is 38 px × 1.4), commentary the rest
-  const extra = Math.max(0, H - PORTRAIT.minHeight), movesH = 250 + Math.floor(extra * 2 / 3), commentH = 284 + extra - Math.floor(extra * 2 / 3);
-  // player bars (40 px × 1.4) sit 5 px from the board, 2 px from the frame's top edge
-  const by = 2 + 56 + 5, cy = by + BW + 5 + 56 + 8;
-  const ay = cy + commentH + 8, my = ay + 360 + 8;
-  return {
-    eval: 12, bx: 60, by, bar: { k: 1.4, gap: 5 }, title: 26, titleGap: 44,
-    header: null,
-    plot: null,
-    comment: { x: 4, y: cy, w: 832, h: commentH, k: 1, text: 0.78, label: 1.6, gap: 8 },
-    // scrolls: Queen's line and verdict can outgrow it
-    analysis: { x: 4, y: ay, w: 832, h: 360, k: 1.6, big: 30, scroll: true },
-    moves: { x: 4, y: my, w: 832, h: movesH, k: 1.4, font: 22, cols: 2, rows: Math.max(3, Math.floor((movesH / 1.4 - 64) / 38)) },
-    card: { k: 1.3, w: 600, stack: true },
-  };
+// the text-bearing padding inside every panel: the device tier's (tighter on phones and tablets)
+const panelPad = () => `${tx(L.pad[0])}px ${tx(L.pad[1])}px`;
+// the move and eval headline in Analysis (and the free board's and a game's)
+const HEADLINE = 28;
+// A paused one-column page flows (L.flow): the panels stack under the board as a column, each as tall as its contents,
+// and the page scrolls. flowStyle() makes a view's container that column (its absolutely placed board and bars stay
+// out of it); useFlowHeight reports how tall it came out, so the stage can scroll that far.
+const flowStyle = () => (L.flow ? { display: 'flex', flexDirection: 'column', gap: L.flow.gap, padding: `${L.flow.top}px ${L.flow.x}px 0`, boxSizing: 'border-box' } : null);
+function useFlowHeight(frame, ref) {
+  const flow = !!L.flow, h = L.h, bottom = L.flow ? L.flow.bottom : 0;
+  React.useLayoutEffect(() => {
+    const el = ref.current;
+    if (!flow || !el) { frame.setContentH(h); return; }
+    const measure = () => {
+      let end = 0;
+      for (const c of el.children) if (getComputedStyle(c).position !== 'absolute') end = Math.max(end, c.offsetTop + c.offsetHeight);
+      frame.setContentH(Math.ceil(end + bottom));
+    };
+    measure();
+    const ro = new ResizeObserver(measure);
+    for (const c of el.children) ro.observe(c);
+    return () => ro.disconnect();
+  });
 }
-// Phone held sideways: 880 high (the board and its player bars, 2 px from the edges), as wide as the screen's shape
-// (1900–2400). The board fills the height; Moves and Commentary sit beside it with Analysis under them, all magnified,
-// and the eval graph under Analysis.
-const SHORT = { height: 880, minWidth: 1900, maxWidth: 2400, maxArea: 560 };
-function shortLayout(W) {
-  const x = 60 + BW + 24, w = W - x - 12, top = 420, k = 1.22, ph = 120, ay = top + 22, ah = SHORT.height - 10 - ph - 12 - ay;
-  return {
-    eval: 12, bx: 60, by: 2 + 48 + 6, bar: { k: 1.2, gap: 6 }, title: 16,
-    header: null,
-    moves: { x, y: 10, w: 330, h: top, k, rows: Math.floor((top / k - 61) / 38) },
-    comment: { x: x + 342, y: 10, w: w - 342, h: top, k, text: 1, gap: 14, right: 1 },
-    analysis: { x, y: ay, w, h: ah, k, scroll: true, right: 1 },
-    plot: { x, y: ay + ah + 12, w, h: ph, k },
-    card: { k: 1, w: 1700, stack: false },
-  };
+// The board's own 768 px space, scaled to L.board: the board, its touch layer, arrows and badges position from 0,0 in it
+// lift: the board's space paints over the panels and tray (a piece dragged from the tray must stay on top)
+function BoardSpace({ children, lift }) {
+  return <div style={{ position: 'absolute', left: L.board.x, top: L.board.y, width: BW, height: BW, transform: `scale(${L.board.size / BW})`, transformOrigin: '0 0', ...(lift && { zIndex: 20 }) }}>{children}</div>;
 }
-// Square-ish screen (a desktop window near 1:1, a tablet, an unfolded foldable): 1520 wide, 1400–1720 high. The board
-// with the header (players stacked) and Commentary beside it; the eval graph the full width under the board, then
-// Analysis and Moves side by side, taking the extra height. Tighter margins, gaps and panel padding than the wide frame,
-// its smallest text (15 px and under) 2 px larger, and Commentary's notes and the
-// hints under Analysis larger still.
-const SQUARE = { width: 1520, minHeight: 1400, maxHeight: 1720 };
-function squareLayout(H) {
-  const m = 20, gap = 14, hh = 290, cy = m + hh + gap, by = 70, py = by + BW + 10 + 40 + gap, ay = py + 120 + gap, bh = H - ay - m;
-  return {
-    eval: m, bx: m + 48, by, bar: { k: 1, gap: 10 }, title: 15, small: 2, hint: 20, pad: '12px 16px',
-    header: { x: 856, y: m, w: 644, h: hh, k: 1, stack: true },
-    comment: { x: 856, y: cy, w: 644, h: by + BW + 50 - cy, k: 1, text: 1, label: 1.25, gap: 14, right: 1 },
-    plot: { x: m, y: py, w: 1480, h: 120, k: 1 },
-    analysis: { x: m, y: ay, w: 976, h: bh, k: 1, scroll: true, right: 1 },
-    moves: { x: 1010, y: ay, w: 490, h: bh, k: 1, font: 26, num: 68, rows: Math.floor((bh - 53) / 38) },
-    card: { k: 1, w: 1440, stack: false },
-  };
-}
-let L = LAYOUTS.wide, BX = L.bx, BY = L.by, tallH = 0, shortW = 0, squareH = 0;
-// a font size of 15 px or under, raised by the layout's small (the wide, compact and square frames')
-const sm = (px) => px + (L.small || 0);
-const setLayout = (frame) => {
-  if (frame.tall && frame.height !== tallH) { tallH = frame.height; LAYOUTS.tall = tallLayout(tallH); }
-  if (frame.short && frame.width !== shortW) { shortW = frame.width; LAYOUTS.short = shortLayout(shortW); }
-  if (frame.square && frame.height !== squareH) { squareH = frame.height; LAYOUTS.square = squareLayout(squareH); }
-  L = frame.tall ? LAYOUTS.tall : frame.square ? LAYOUTS.square : frame.short ? LAYOUTS.short : frame.compact ? LAYOUTS.compact : LAYOUTS.wide; BX = L.bx; BY = L.by;
-};
 
 // The side at the bottom ('b' turns the board round). view() maps a board column and row (0 = a, 0 = rank 8) to where it
 // is drawn, and back: every square-to-pixel conversion goes through it.
@@ -197,29 +145,39 @@ function SideScroll({ style, children }) {
   const fade = more ? `linear-gradient(to right, ${more.includes('l') ? 'transparent, #000 32px' : '#000'}, ${more.includes('r') ? '#000 calc(100% - 32px), transparent' : '#000'})` : 'none';
   return (
     <span ref={ref} onScroll={check}
-      style={{ ...style, whiteSpace: 'nowrap', overflowX: 'auto', overflowY: 'hidden', scrollbarWidth: 'none', touchAction: 'pan-x', WebkitMaskImage: fade, maskImage: fade }}>{children}</span>
+      style={{ ...style, whiteSpace: 'nowrap', overflowX: 'auto', overflowY: 'hidden', scrollbarWidth: 'none', touchAction: 'pan-x pan-y', WebkitMaskImage: fade, maskImage: fade }}>{children}</span>
   );
 }
 // extra: a node after right that never scrolls with it (Analysis: Go deeper beside the search's depth)
 // head: the title row's own contents, in place of title, right and extra (the Analysis panel's)
 // progress: 0–1, drawn along the top border (the Analysis panel's while Stockfish searches); null draws none
 function Panel({ box, title, right, extra, head, a, style, progress, children }) {
-  const { x, y, w, h, k } = box;
-  const place = { position: 'absolute', left: x, top: y, width: w / k, height: h / k, boxSizing: 'border-box', borderRadius: 8, opacity: a, transform: `translateY(${(1 - a) * 18}px) scale(${k})`, transformOrigin: '0 0', overflow: 'hidden' };
+  const { x, y, w, h } = box;
+  // the entrance slide only while it fades in (a video's): a settled panel has no transform. A flowing panel (a paused
+  // one-column page) takes its place in the view's column, as tall as its contents
+  const place = box.flow ? { position: 'relative', order: box.order, flex: 'none', boxSizing: 'border-box', borderRadius: 4, overflow: 'hidden' }
+    : { position: 'absolute', left: x, top: y, width: w, height: h, boxSizing: 'border-box', borderRadius: 4, opacity: a, ...(a < 1 && { transform: `translateY(${(1 - a) * 18}px)` }), overflow: 'hidden' };
+  // the progress line goes over the panel's top edge: beside a placed panel, inside a flowing one
+  const over = box.flow ? { position: 'absolute', left: 0, right: 0, top: 0, height: 3, pointerEvents: 'none' } : { ...place, pointerEvents: 'none' };
+  // a box whose contents can outgrow it scrolls, and hands the wheel or finger on to the page at its ends
   return (
     <>
-    <div style={{ ...place, background: C.panel, border: `1px solid ${C.line}`, padding: L.pad || '16px 22px', ...(box.scroll && { overflowY: 'auto', overscrollBehavior: 'contain', scrollbarWidth: 'thin' }), ...style }}>
+    <div style={{ ...place, background: C.panel, border: `1px solid ${C.line}`, padding: panelPad(), ...(box.scroll && { overflowY: 'auto', scrollbarWidth: 'thin' }), ...style }}>
       {(title || head) && (
-        // the same heading size in every panel, whatever its magnification k; box.right sizes the text on the right
-        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: (L.titleGap || 16) / k, font: `600 ${L.title / k}px ${MONO}`, letterSpacing: '0.12em', textTransform: 'uppercase', color: C.dim, marginBottom: 12 / k }}>
-          {head || <><span style={{ flex: 'none' }}>{title}</span><SideScroll style={{ minWidth: 0, flex: 1, textAlign: 'right', letterSpacing: '0.04em', fontSize: `${box.right || 0.85}em` }}>{right}</SideScroll>{extra}</>}
+        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: tx(16), font: `600 ${tx(15)}px ${MONO}`, letterSpacing: '0.12em', textTransform: 'uppercase', color: C.dim, marginBottom: tx(12) }}>
+          {head || <><span style={{ flex: '0 1 auto', minWidth: 0, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{title}</span><SideScroll style={{ minWidth: 0, flex: 1, textAlign: 'right', letterSpacing: '0.04em' }}>{right}</SideScroll>{extra}</>}
         </div>
       )}
       {children}
+      {box.flow && progress != null && (
+        <div style={over}>
+          <div style={{ height: 3, width: `${(cl01(progress) * 100).toFixed(1)}%`, background: C.best, transition: progress > 0 ? 'width 0.3s linear' : 'none' }} />
+        </div>
+      )}
     </div>
     {/* over the panel rather than in it, so it covers the border and never scrolls with the contents */}
-    {progress != null && (
-      <div style={{ ...place, pointerEvents: 'none' }}>
+    {!box.flow && progress != null && (
+      <div style={over}>
         <div style={{ height: 3, width: `${(cl01(progress) * 100).toFixed(1)}%`, background: C.best, transition: progress > 0 ? 'width 0.3s linear' : 'none' }} />
       </div>
     )}
@@ -284,8 +242,8 @@ function boardSquares() {
     const light = (r + f) % 2 === 0, [sf, sr] = view(f, r); // the square drawn here
     sq.push(
       <div key={r * 8 + f} style={{ position: 'absolute', left: f * SQ, top: r * SQ, width: SQ, height: SQ, background: light ? C.light : C.dark }}>
-        {f === 0 && <span style={{ position: 'absolute', left: 6, top: 4, font: `600 ${sm(14)}px ${MONO}`, color: light ? C.dark : C.light }}>{8 - sr}</span>}
-        {r === 7 && <span style={{ position: 'absolute', right: 6, bottom: 3, font: `600 ${sm(14)}px ${MONO}`, color: light ? C.dark : C.light }}>{String.fromCharCode(97 + sf)}</span>}
+        {f === 0 && <span style={{ position: 'absolute', left: 6, top: 4, font: `600 16px ${MONO}`, color: light ? C.dark : C.light }}>{8 - sr}</span>}
+        {r === 7 && <span style={{ position: 'absolute', right: 6, bottom: 3, font: `600 16px ${MONO}`, color: light ? C.dark : C.light }}>{String.fromCharCode(97 + sf)}</span>}
       </div>
     );
   }
@@ -324,7 +282,7 @@ function Board({ M, T, S, a, arrows, pieces, queen, vline, hide, lines }) {
     }
   }
   return (
-    <div onDragStart={(e) => e.preventDefault()} style={{ ...NO_SELECT, position: 'absolute', left: BX, top: BY, width: BW, height: BW, borderRadius: 4, overflow: 'hidden', boxShadow: '0 4px 12px rgba(0,0,0,0.28)', opacity: a, transform: `scale(${lerp(0.96, 1, a)})` }}>
+    <div onDragStart={(e) => e.preventDefault()} style={{ ...NO_SELECT, position: 'absolute', left: 0, top: 0, width: BW, height: BW, borderRadius: 2, overflow: 'hidden', boxShadow: '0 4px 12px rgba(0,0,0,0.28)', opacity: a, transform: `scale(${lerp(0.96, 1, a)})` }}>
       {sq}{over}
       {pieces.map((p) => <Piece key={p.id} p={p} T={T} S={S} />)}
       <svg width={BW} height={BW} style={{ position: 'absolute', left: 0, top: 0, zIndex: 6, pointerEvents: 'none' }}>
@@ -358,7 +316,7 @@ function searchDepth(s) {
 // Lite/Full choice ({ value, options: [{ value, label }], onChange }) where the full engine is offered; body, the
 // engine settings, which take the panel's place while its menu is open
 const EngineMenuContext = React.createContext(null);
-const headCtl = () => ({ ...NO_SELECT, flex: 'none', height: '1.8em', margin: '-0.4em 0', borderRadius: 5, cursor: 'pointer', border: `1.5px solid ${C.ctlLine}`, background: 'transparent', color: C.ink, letterSpacing: 0 }); // C changes with the colour scheme; ctlLine stands out more than the panels' line
+const headCtl = () => ({ ...NO_SELECT, flex: 'none', height: '1.8em', margin: '-0.4em 0', borderRadius: 3, cursor: 'pointer', border: `1.5px solid ${C.ctlLine}`, background: 'transparent', color: C.ink, letterSpacing: 0 }); // C changes with the colour scheme; ctlLine stands out more than the panels' line
 const stopHere = (e) => e.stopPropagation();
 // The Analysis panel's title row (on the right: Go deeper, the search's depth, the engine, the engine menu) and, while the menu is
 // open, the engine settings in place of the panel's contents. Only a paused replay offers them; playing (an export
@@ -368,21 +326,26 @@ function AnalysisPanel({ box, a, depth, deep, paused, style, children }) {
   const [open, setOpen] = React.useState(false);
   const live = !!E && paused, shown = open && live, pick = live && E.pick;
   const name = E ? E.name : 'Stockfish';
+  // a narrow panel (a laptop's sidebar, a phone) shortens the depth to D22 (the tablebase to TB), so the title and the
+  // controls share one line
+  const roomy = box.w >= 440 * TEXT;
+  const depthText = !depth || roomy ? depth : depth.startsWith('depth ') ? 'D' + depth.slice(6) : 'TB';
   const head = (
-    <>
+    // the controls go under the title rather than over it where even then they don't fit (a small phone, large text)
+    <span style={{ flex: 1, minWidth: 0, display: 'flex', flexWrap: 'wrap', alignItems: 'center', justifyContent: 'space-between', columnGap: tx(16), rowGap: tx(8) }}>
       <span style={{ flex: 'none' }}>Analysis</span>
       {/* the engine stays put, next to the menu; Go deeper and the depth come and go to its left. Spaced as the
           desktop's heading whatever the layout's title gap (the phone's wide one left the depth no room) */}
-      <span style={{ flex: 1, minWidth: 0, display: 'flex', alignItems: 'center', justifyContent: 'flex-end', gap: 16 / box.k }}>
+      <span style={{ flex: '1 1 auto', minWidth: 0, display: 'flex', alignItems: 'center', justifyContent: 'flex-end', gap: tx(16) }}>
       {!shown && paused && <DeeperButton ev={deep} />}
-      {!shown && depth && <span style={{ flex: 'none', whiteSpace: 'nowrap', letterSpacing: '0.04em', fontSize: `${box.right || 0.85}em` }}>{depth}</span>}
+      {!shown && depthText && <span title={depth} style={{ flex: 'none', whiteSpace: 'nowrap', letterSpacing: '0.04em' }}>{depthText}</span>}
       {/* smaller on the phone, where the row is tight */}
       {pick
         ? <select aria-label="Engine" value={pick.value} onChange={(e) => { const go = pick.onChange(e.target.value); if (go) setOpen(true); }} onClick={stopHere} onPointerDown={stopHere}
-            style={{ ...headCtl(), padding: '0 0.4em', font: 'inherit', fontSize: L.header ? '1.15em' : '1em', height: '1.6em', textTransform: 'none', background: C.panel }}>
+            style={{ ...headCtl(), flex: '0 1 auto', minWidth: '3em', padding: '0 0.4em', font: 'inherit', fontSize: L.cols === 2 ? '1.15em' : '1em', height: '1.6em', textTransform: 'none', background: C.panel }}>
             {pick.options.map((o) => <option key={o.value} value={o.value}>{o.label}</option>)}
           </select>
-        : <span style={{ flex: 'none', textTransform: 'none', letterSpacing: '0.04em', color: C.ink }}>{name}</span>}
+        : <span style={{ flex: '0 1 auto', minWidth: 0, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', textTransform: 'none', letterSpacing: '0.04em', color: C.ink }}>{name}</span>}
       {live && (
         <button type="button" aria-label="Engine options" aria-expanded={shown} title="Engine settings" onClick={(e) => { e.stopPropagation(); setOpen((o) => !o); }} onPointerDown={stopHere}
           style={{ ...headCtl(), width: '1.8em', padding: 0, display: 'grid', placeItems: 'center', color: shown ? C.best : C.dim, borderColor: shown ? C.best : C.ctlLine }}>
@@ -390,10 +353,10 @@ function AnalysisPanel({ box, a, depth, deep, paused, style, children }) {
         </button>
       )}
       </span>
-    </>
+    </span>
   );
   return (
-    <Panel box={shown ? { ...box, scroll: true } : box} a={a} style={style} head={head} progress={!shown && deep && deep.pending ? deep.progress || 0 : null}>
+    <Panel box={shown && !box.flow ? { ...box, scroll: true } : box} a={a} style={style} head={head} progress={!shown && deep && deep.pending ? deep.progress || 0 : null}>
       {shown ? <div className="an-engine" onClick={stopHere} onPointerDown={stopHere}><div className="twk-flow">{E.body}</div></div> : children}
     </Panel>
   );
@@ -419,7 +382,7 @@ function LineBoard({ a, sq, v, hide, arrows }) {
   ) : null));
   return (
     // drawing only: taps and drags go to BoardTouch (without this its pieces sit above it and swallow them)
-    <div style={{ ...NO_SELECT, position: 'absolute', left: BX, top: BY, width: BW, height: BW, borderRadius: 4, overflow: 'hidden', boxShadow: `0 0 0 4px ${accent}, 0 4px 12px rgba(0,0,0,0.28)`, opacity: a, pointerEvents: 'none' }}>
+    <div style={{ ...NO_SELECT, position: 'absolute', left: 0, top: 0, width: BW, height: BW, borderRadius: 2, overflow: 'hidden', boxShadow: `0 0 0 4px ${accent}, 0 4px 12px rgba(0,0,0,0.28)`, opacity: a, pointerEvents: 'none' }}>
       {sq}{over}{pieces}
       {arrows && (
         <svg width={BW} height={BW} style={{ position: 'absolute', left: 0, top: 0, zIndex: 6, pointerEvents: 'none' }}>
@@ -436,9 +399,9 @@ const promoPieces = (pr) => PROMO_PIECES.map((t, k) => ({ t, sq: pr.to + (pr.whi
 function BoardTouch({ pos, sel, targets, drag, promo, onDown, onMove, onUp, onCancel }) {
   const dragged = drag && drag.moved ? pos.b[drag.from] : null;
   return (
-    <div onPointerDown={onDown} onPointerMove={onMove} onPointerUp={onUp} onPointerCancel={onCancel}
+    <div data-no-drag-scroll onPointerDown={onDown} onPointerMove={onMove} onPointerUp={onUp} onPointerCancel={onCancel}
       onDragStart={(e) => e.preventDefault()} title="Drag a piece to try your own move"
-      style={{ ...NO_SELECT, position: 'absolute', left: BX, top: BY, width: BW, height: BW, cursor: drag && drag.moved ? 'grabbing' : 'grab', touchAction: 'none' }}>
+      style={{ ...NO_SELECT, position: 'absolute', left: 0, top: 0, width: BW, height: BW, cursor: drag && drag.moved ? 'grabbing' : 'grab', touchAction: 'none' }}>
       {sel != null && <div style={{ position: 'absolute', left: idxXY(sel)[0] * SQ, top: idxXY(sel)[1] * SQ, width: SQ, height: SQ, boxSizing: 'border-box', border: `5px solid ${BOARD.last}`, background: 'rgba(255,255,255,0.12)', pointerEvents: 'none' }} />}
       {targets.map((t) => (
         <div key={t} style={{ position: 'absolute', left: idxXY(t)[0] * SQ, top: idxXY(t)[1] * SQ, width: SQ, height: SQ, display: 'flex', alignItems: 'center', justifyContent: 'center', pointerEvents: 'none' }}>
@@ -467,17 +430,17 @@ function BoardTouch({ pos, sel, targets, drag, promo, onDown, onMove, onUp, onCa
 function LineChips({ name, nameColor, accent, moves, ply0, c, legal, sel, onPick, tip }) {
   const what = tip || String(name).toLowerCase();
   return (
-    <div style={{ display: 'flex', flexWrap: 'wrap', alignItems: 'center', columnGap: 6, rowGap: 6 }}>
-      {name != null && <span style={{ color: nameColor, marginRight: 8 }}>{name}</span>}
+    <div style={{ display: 'flex', flexWrap: 'wrap', alignItems: 'center', columnGap: tx(6), rowGap: tx(6) }}>
+      {name != null && <span style={{ color: nameColor, marginRight: tx(8) }}>{name}</span>}
       {moves.map((m, j) => {
         const ply = ply0 + c + j, white = ply % 2 === 0, ok = j < legal, on = sel === j;
         return (
-          <span key={j} style={{ display: 'flex', alignItems: 'center', gap: 5 }}>
-            {(white || j === 0) && <span style={{ color: C.dim, marginLeft: j ? 6 : 0, font: `500 ${sm(15)}px ${MONO}` }}>{window.ChessCore.moveNo(ply)}</span>}
+          <span key={j} style={{ display: 'flex', alignItems: 'center', gap: tx(5) }}>
+            {(white || j === 0) && <span style={{ color: C.dim, marginLeft: j ? tx(6) : 0, font: `500 ${tx(15)}px ${MONO}` }}>{window.ChessCore.moveNo(ply)}</span>}
             <span className={ok ? 'mv' : undefined} role={ok ? 'button' : undefined} title={ok ? `Show ${what} on the board up to ${m}` : 'Not a legal move in this line'}
               onClick={ok ? (e) => { e.stopPropagation(); onPick(j); } : undefined} tabIndex={ok ? 0 : undefined}
               onKeyDown={ok ? (e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); e.stopPropagation(); onPick(j); } } : undefined}
-              style={{ cursor: ok ? 'pointer' : 'default', opacity: ok ? 1 : 0.4, padding: '2px 8px', borderRadius: 4, font: `${j === 0 || on ? 700 : 600} 16px ${MONO}`, background: white ? '#f1ebe1' : '#2a2320', color: white ? '#15100d' : '#efe8de', boxShadow: on ? `0 0 0 3px ${C.last}` : 'none', border: j === 0 ? `2px solid ${accent}` : `1px solid ${white ? 'rgba(60,40,20,0.22)' : 'rgba(255,236,214,0.22)'}` }}>{m}</span>
+              style={{ cursor: ok ? 'pointer' : 'default', opacity: ok ? 1 : 0.4, padding: `${tx(2)}px ${tx(8)}px`, borderRadius: 2, font: `${j === 0 || on ? 700 : 600} ${tx(16)}px ${MONO}`, background: white ? '#f1ebe1' : '#2a2320', color: white ? '#15100d' : '#efe8de', boxShadow: on ? `0 0 0 3px ${C.last}` : 'none', border: j === 0 ? `2px solid ${accent}` : `1px solid ${white ? 'rgba(60,40,20,0.22)' : 'rgba(255,236,214,0.22)'}` }}>{m}</span>
           </span>
         );
       })}
@@ -497,11 +460,13 @@ function EvalBar({ M, T, S, a, tb }) {
 function EvalBarView({ cp, txt, a }) {
   const f = (winChance(cp) + 1) / 2;
   const flip = ORIENT === 'b', inWhite = cp >= 0, top = inWhite === flip; // the number sits in the part of the bar it favours
+  if (!L.eval) return null;
+  const H = L.board.size, ef = Math.round(L.eval.w * 0.62 * 10) / 10; // the number, sized to the bar's width
   return (
-    <div style={{ ...NO_SELECT, position: 'absolute', left: L.eval, top: BY, width: 36, height: BW, borderRadius: 4, overflow: 'hidden', background: '#2a2320', boxShadow: `0 0 0 1px ${C.line}`, opacity: a }}>
-      <div style={{ position: 'absolute', left: 0, right: 0, [flip ? 'top' : 'bottom']: 0, height: f * BW, background: '#ffffff' }} />
-      <div style={{ position: 'absolute', left: 0, right: 0, top: BW / 2 - 1, height: 2, background: C.last, opacity: 0.5 }} />
-      <div style={{ position: 'absolute', left: 0, right: 0, [top ? 'top' : 'bottom']: 8, height: 104, display: 'flex', alignItems: 'center', justifyContent: 'center', font: `700 22px ${MONO}`, color: inWhite ? '#2a2320' : '#f1ebe1' }}>
+    <div style={{ ...NO_SELECT, position: 'absolute', left: L.eval.x, top: L.board.y, width: L.eval.w, height: H, borderRadius: 2, overflow: 'hidden', background: '#2a2320', boxShadow: `0 0 0 1px ${C.line}`, opacity: a }}>
+      <div style={{ position: 'absolute', left: 0, right: 0, [flip ? 'top' : 'bottom']: 0, height: f * H, background: '#ffffff' }} />
+      <div style={{ position: 'absolute', left: 0, right: 0, top: H / 2 - 1, height: 2, background: C.last, opacity: 0.5 }} />
+      <div style={{ position: 'absolute', left: 0, right: 0, [top ? 'top' : 'bottom']: ef / 2, height: ef * 5, display: 'flex', alignItems: 'center', justifyContent: 'center', font: `700 ${ef}px ${MONO}`, color: inWhite ? '#2a2320' : '#f1ebe1' }}>
         {/* a rotated line rather than writing-mode, which the video export's html2canvas lays out wrongly */}
         <span style={{ flex: 'none', whiteSpace: 'nowrap', transform: 'rotate(-90deg)' }}>{txt}</span>
       </div>
@@ -522,6 +487,13 @@ function clockOf(M, color, T, S) {
   return { s: own, active: false };
 }
 
+// a player bar's place: above or below the board (the side at the bottom below it), as wide as the board
+// a player bar runs from the eval bar's left edge (the board's, where there's none) to the board's right edge
+const barLeft = () => (L.eval ? L.eval.x : L.board.x), barWidth = () => L.board.x + L.board.size - barLeft();
+const barPlace = (side) => ({
+  position: 'absolute', left: barLeft(), width: barWidth(), height: L.bars.h, display: 'flex', alignItems: 'center',
+  top: side === ORIENT ? L.board.y + L.board.size + L.bars.gap : L.board.y - L.bars.gap - L.bars.h,
+});
 function PlayerBar({ M, T, S, side, a, pieces }) {
   const P = side === 'w' ? M.white : M.black;
   const cap = { w: {}, b: {} };
@@ -532,75 +504,57 @@ function PlayerBar({ M, T, S, side, a, pieces }) {
     const n = (cap[opp][t] || 0) - (cap[side][t] || 0);
     pts += n * VALUE[t];
     // black pieces get a light rim so they read on the dark frame
-    for (let i = 0; i < n; i++) shown.push(<img key={t + i} src={img(opp, t)} alt="" style={{ width: 30, height: 30, flex: 'none', marginLeft: shown.length ? -8 : 0, filter: opp === 'b' ? C.rim : 'none' }} />);
+    for (let i = 0; i < n; i++) shown.push(<img key={t + i} src={img(opp, t)} alt="" style={{ width: tx(30), height: tx(30), flex: 'none', marginLeft: shown.length ? -tx(8) : 0, filter: opp === 'b' ? C.rim : 'none' }} />);
   });
   const clk = M.hasClock ? clockOf(M, side, T, S) : null;
   const low = clk && clk.s < 60;
+  // the full name, title and rating always; where the bar is too narrow (a phone's) their text gets smaller, down to 0.6
+  // of its size, then the captures go, then the name ends in an ellipsis
+  const rating = [P.title, P.elo].filter(Boolean).join(' ');
+  const capsW = shown.length ? tx(6) + tx(30) + (shown.length - 1) * tx(22) + (pts > 0 ? tx(8) + textWidth('+' + pts, `600 ${tx(16)}px ${MONO}`) : 0) : 0;
+  const fixedW = tx(14) + (clk ? tx(72) + tx(14) + 2 * tx(7) : 0);
+  const needW = textWidth(P.name, `600 ${tx(20)}px ${SANS}`) + (rating ? tx(10) + textWidth(rating, `500 ${tx(16)}px ${MONO}`) : 0) + tx(14);
+  const fit = (caps) => Math.min(1, (barWidth() - fixedW - (caps ? capsW + tx(14) : 0)) / needW);
+  const caps = fit(true) >= 0.6 || !shown.length;
+  const k = Math.max(0.6, fit(caps));
   return (
-    <div style={{ position: 'absolute', left: BX, width: BW / L.bar.k, top: side === ORIENT ? BY + BW + L.bar.gap : BY - L.bar.gap - 40 * L.bar.k, height: 40, transform: `scale(${L.bar.k})`, transformOrigin: '0 0', display: 'flex', alignItems: 'center', gap: 14, opacity: a }}>
-      <span style={{ width: 14, height: 14, borderRadius: 3, background: side === 'w' ? '#f1ebe1' : '#1c1613', border: `1.5px solid ${C.dim}`, flex: 'none' }} />
-      <span style={{ font: `600 20px ${SANS}`, color: C.ink, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis', minWidth: 0 }}>{P.name}</span>
-      <span style={{ font: `500 16px ${MONO}`, color: C.dim, whiteSpace: 'nowrap' }}>{[P.title, P.elo].filter(Boolean).join(' ')}</span>
-      <span style={{ display: 'flex', alignItems: 'center', marginLeft: 6 }}>{shown}</span>
-      {pts > 0 && <span style={{ font: `600 16px ${MONO}`, color: C.dim, marginLeft: 8 }}>+{pts}</span>}
-      {clk && <span style={{ marginLeft: 'auto', minWidth: 96, textAlign: 'center', padding: '2px 10px', borderRadius: 5, font: `600 22px ${MONO}`, background: clk.active ? (low ? C.blunder : '#f1ebe1') : C.off, color: clk.active ? '#15100d' : C.dim, boxShadow: clk.active ? `0 0 0 1px ${C.line}` : 'none' }}>{fmtClock(clk.s)}</span>}
+    <div style={{ ...barPlace(side), gap: tx(14), opacity: a }}>
+      <span style={{ width: tx(14), height: tx(14), borderRadius: 2, background: side === 'w' ? '#f1ebe1' : '#1c1613', border: `1.5px solid ${C.dim}`, flex: 'none' }} />
+      <span style={{ display: 'flex', alignItems: 'baseline', gap: tx(10) * k, minWidth: 0, whiteSpace: 'nowrap' }}>
+        <span title={P.name} style={{ font: `600 ${tx(20) * k}px ${SANS}`, color: C.ink, overflow: 'hidden', textOverflow: 'ellipsis', minWidth: 0 }}>{P.name}</span>
+        {rating && <span style={{ flex: 'none', font: `500 ${tx(16) * k}px ${MONO}`, color: C.dim }}>{rating}</span>}
+      </span>
+      {caps && <span style={{ display: 'flex', alignItems: 'center', marginLeft: tx(6) }}>{shown}</span>}
+      {caps && pts > 0 && <span style={{ font: `600 ${tx(16)}px ${MONO}`, color: C.dim, marginLeft: tx(8) }}>+{pts}</span>}
+      {clk && <span style={{ marginLeft: 'auto', minWidth: tx(72), textAlign: 'center', padding: `${tx(1)}px ${tx(7)}px`, borderRadius: 3, font: `600 ${tx(17)}px ${MONO}`, background: clk.active ? (low ? C.blunder : '#f1ebe1') : C.off, color: clk.active ? '#15100d' : C.dim, boxShadow: clk.active ? `0 0 0 1px ${C.line}` : 'none' }}>{fmtClock(clk.s)}</span>}
     </div>
   );
 }
 
 // ---------- right column ----------
+// Where the game was played, in three lines: event, round and teams, then place and date, then the opening; each
+// scrolls sideways when it's long. The players, titles and ratings are the player bars'
 function Header({ M, a }) {
-  const person = (P, side, align) => (
-    <div style={{ display: 'flex', flexDirection: 'column', gap: 4, minWidth: 0, alignItems: align }}>
-      <div style={{ display: 'flex', alignItems: 'center', gap: 12, minWidth: 0, maxWidth: '100%' }}>
-        <span style={{ width: 14, height: 14, borderRadius: 3, background: side === 'w' ? '#f1ebe1' : '#1c1613', border: `1.5px solid ${C.dim}`, flex: 'none' }} />
-        <span style={{ font: `400 40px ${SERIF}`, color: C.ink, lineHeight: 1.05, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{P.name}</span>
-      </div>
-      <span style={{ font: `500 ${sm(15)}px ${MONO}`, color: C.dim, whiteSpace: 'nowrap' }}>{[[P.title, P.elo].filter(Boolean).join(' '), P.team].filter(Boolean).join(' · ')}</span>
-    </div>
-  );
-  const line = { overflow: 'hidden', textOverflow: 'ellipsis', minWidth: 0 };
-  // stacked (the square frame's narrower header): the players one above the other, then event, place and date, opening
-  if (L.header.stack) return (
-    <Panel box={L.header} a={a}>
-      <div style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>{person(M.white, 'w', 'flex-start')}{person(M.black, 'b', 'flex-start')}</div>
-      <div style={{ marginTop: 18, paddingTop: 14, borderTop: `1px solid ${C.line}`, display: 'flex', flexDirection: 'column', gap: 8, font: `500 ${sm(15)}px ${MONO}`, color: C.dim, whiteSpace: 'nowrap' }}>
-        <span style={{ ...line, color: C.ink }}>{[M.event, M.round && 'Round ' + M.round].filter(Boolean).join(' · ')}</span>
-        <span style={line}>{[M.site, M.date].filter(Boolean).join(' · ')}</span>
-        {(M.eco || M.opening) && <div style={{ display: 'flex', alignItems: 'center', gap: 12, minWidth: 0 }}>
-          {M.eco && <span style={{ flex: 'none', padding: '2px 8px', border: `1px solid ${C.line}`, borderRadius: 4, color: C.ink }}>{M.eco}</span>}
-          <span style={line}>{M.opening}</span>
-        </div>}
-      </div>
-    </Panel>
-  );
+  const teams = M.white.team && M.black.team ? `${M.white.team} vs ${M.black.team}` : M.white.team || M.black.team;
+  const lines = [[M.event, M.round && 'Round ' + M.round, teams].filter(Boolean).join(' · '), [M.site, M.date].filter(Boolean).join(' · '), [M.eco, M.opening].filter(Boolean).join(' ')].filter(Boolean);
   return (
-    <Panel box={L.header} a={a}>
-      <div style={{ display: 'grid', gridTemplateColumns: 'minmax(0,1fr) auto minmax(0,1fr)', gap: 20, alignItems: 'start' }}>
-        {person(M.white, 'w', 'flex-start')}
-        <span style={{ font: `500 16px ${MONO}`, color: C.dim, paddingTop: 12 }}>vs</span>
-        {person(M.black, 'b', 'flex-end')}
-      </div>
-      {/* two rows, so each shows whole: event and round, then place and date on the right; the opening under them */}
-      <div style={{ marginTop: 12, paddingTop: 10, borderTop: `1px solid ${C.line}`, display: 'flex', flexDirection: 'column', gap: 6, font: `500 ${sm(15)}px ${MONO}`, color: C.dim, whiteSpace: 'nowrap', minWidth: 0 }}>
-        <div style={{ display: 'flex', gap: 18, minWidth: 0 }}>
-          <span style={{ ...line, color: C.ink, flexShrink: 0.5 }}>{[M.event, M.round && 'Round ' + M.round].filter(Boolean).join(' · ')}</span>
-          <span style={{ ...line, marginLeft: 'auto' }}>{[M.site, M.date].filter(Boolean).join(' · ')}</span>
-        </div>
-        {(M.eco || M.opening) && <div style={{ display: 'flex', alignItems: 'center', gap: 12, minWidth: 0 }}>
-          {M.eco && <span style={{ flex: 'none', padding: '0 8px', border: `1px solid ${C.line}`, borderRadius: 4, color: C.ink }}>{M.eco}</span>}
-          <span style={line}>{M.opening}</span>
-        </div>}
-      </div>
+    <Panel box={L.header} a={a} style={{ padding: `${tx(10)}px ${tx(L.pad[1])}px`, display: 'flex', flexDirection: 'column', justifyContent: 'center', gap: tx(4), font: `500 ${tx(15)}px/1.35 ${MONO}`, color: C.dim }}>
+      {lines.map((t, i) => <SideScroll key={i} style={{ display: 'block', color: i === 0 ? C.ink : undefined }}>{t}</SideScroll>)}
     </Panel>
   );
 }
 
 function MoveList({ M, T, S, a, paused, onPick }) {
   const c = lastPly(T, S);
-  // COLS move pairs to a row (the phone's full-width list), VIS rows in view
-  const ROW = 38, VIS = L.moves.rows, COLS = L.moves.cols || 1, NUM = L.moves.num || 50; // NUM: the move number's column
-  const odd = M.ply0 % 2, scrollFor = (i) => Math.max(0, Math.floor((Math.max(i, 0) + odd) / (2 * COLS)) - (VIS - (COLS > 1 ? 2 : 3))) * ROW;
+  // COLS move pairs to a row (two in a list 480 px wide or more), VIS rows in view: as many as fit under the title
+  // (LayoutCore counts them from the panel's chrome), at least one
+  const ROW = tx(38), COLS = L.moves.cols || 1, NUM = tx(50); // NUM: the move number's column
+  const pairRows = Math.ceil((Math.ceil((S.N + M.ply0 % 2) / 2)) / COLS);
+  // a flowing list shows every row up to maxRows; a placed one as many as fit
+  const VIS = L.moves.flow ? clamp(pairRows, 1, L.moves.maxRows) : Math.max(1, L.moves.rows);
+  // a placed list takes all the box's height under its title (the part of a row past the last whole one too), a flowing one its rows
+  const listH = L.moves.flow ? VIS * ROW : Math.max(ROW, L.moves.h - 2 * tx(L.pad[0]) - tx(15) * 1.4 - tx(12) - 2);
+  const odd = M.ply0 % 2, scrollFor = (i) => Math.max(0, Math.floor((Math.max(i, 0) + odd) / (2 * COLS)) - Math.max(0, VIS - (COLS > 1 ? 2 : 3))) * ROW;
   const k = c >= 0 ? MOTION.move(cl01((T - S.tp[c]) / 0.35)) : 1;
   const scroll = lerp(scrollFor(c - 1), scrollFor(c), k), listRef = React.useRef(null);
   // the list scrolls (wheel, finger, a mouse drag); a new move scrolls it to that move, and leaves it where the viewer put it until the next
@@ -626,7 +580,7 @@ function MoveList({ M, T, S, a, paused, onPick }) {
     return (
       <span key={i} className="mv" role="button" data-ply={i} tabIndex={i === focusPly ? 0 : -1} title={`Go to ${label(M, i)}`} onClick={(e) => { e.stopPropagation(); onPick(i); }}
         onKeyDown={(e) => moveKey(e, i)}
-        style={{ opacity: paused ? 1 : shown, padding: '3px 8px', borderRadius: 4, justifySelf: 'start', cursor: 'pointer', boxShadow: cur ? `inset 0 0 0 2px ${C.last}` : 'none', color: ahead ? C.dim : P.cls === 'none' ? C.ink : clsColor(P.cls), fontWeight: cur ? 700 : 500 }}>{P.san}{P.mark || ''}</span>
+        style={{ opacity: paused ? 1 : shown, padding: `${tx(3)}px ${tx(8)}px`, borderRadius: 2, justifySelf: 'start', cursor: 'pointer', boxShadow: cur ? `inset 0 0 0 2px ${C.last}` : 'none', color: ahead ? C.dim : P.cls === 'none' ? C.ink : clsColor(P.cls), fontWeight: cur ? 700 : 500 }}>{P.san}{P.mark || ''}</span>
     );
   };
   const pairs = Math.ceil((S.N + odd) / 2), rows = [], first = Math.floor(M.ply0 / 2);
@@ -641,7 +595,7 @@ function MoveList({ M, T, S, a, paused, onPick }) {
   }
   return (
     <Panel box={L.moves} a={a} title="Moves">
-      <div ref={listRef} className="moves-list" style={{ position: 'relative', height: VIS * ROW, overflowY: 'auto', overscrollBehavior: 'contain', scrollbarWidth: 'thin', font: `500 ${L.moves.font || 19}px ${MONO}` }}>
+      <div ref={listRef} className="moves-list" style={{ position: 'relative', height: listH, overflowY: 'auto', scrollbarWidth: 'thin', font: `500 ${tx(19)}px ${MONO}` }}>
         <div>{rows}</div>
       </div>
     </Panel>
@@ -649,6 +603,7 @@ function MoveList({ M, T, S, a, paused, onPick }) {
 }
 
 function Commentary({ M, T, S, a, book, line }) {
+  const video = useFrame().video;
   const c = lastPly(T, S);
   // the book name of this position while the game is in book (before the book loads: the game's opening, early on)
   const bookAt = line ? line.book : c < 0 ? null : book ? book[c] : c < 12 && M.opening ? { eco: M.eco, name: M.opening } : null;
@@ -658,27 +613,31 @@ function Commentary({ M, T, S, a, book, line }) {
   // one typewriter across the comment, then Queen's sentence
   const total = txt.length + qtxt.length;
   const avail = (c + 1 < S.N ? S.tp[c + 1] : t0 + 8) - t0;
-  const n = total ? Math.floor(cl01((T - t0) / Math.max(0.4, Math.min(total / 60, avail * 0.45))) * total) : 0;
+  // the typewriter is a video touch: a paused or stepped page shows the whole text
+  const n = !video ? total : total ? Math.floor(cl01((T - t0) / Math.max(0.4, Math.min(total / 60, avail * 0.45))) * total) : 0;
   const nh = Math.min(n, txt.length), nq = Math.max(0, n - txt.length);
-  const size = Math.round((qtxt ? (txt.length > 90 ? 30 : 36) : txt.length > 140 ? 34 : 44) * L.comment.text);
-  const qsize = qtxt.length > 200 ? 22 : 26;
+  // about 22–27 px: smaller for a long comment, or one that shares the box with Queen's sentence
+  // a phone's comments a size smaller
+  const ph = L.tier === 'phone' ? 0.88 : 1;
+  const size = tx(qtxt ? (txt.length > 90 ? 26 : 30) : txt.length > 140 ? 28 : 34) * ph;
+  const qsize = tx(qtxt.length > 200 ? 20 : 22) * ph;
   return (
     <Panel box={L.comment} a={a} title="Commentary" right={bookAt ? `${bookAt.eco} ${bookAt.name}` : null}>
       {total ? (
-        <div style={{ display: 'flex', flexDirection: 'column', gap: L.comment.gap }}>
+        <div style={{ display: 'flex', flexDirection: 'column', gap: tx(14) }}>
           {/* the Analysis panel names the move, unless the game has no analysis */}
-          {c >= 0 && !M.hasEval && !M.plies.some((p) => p.best) && <span style={{ font: `600 18px ${MONO}`, color: M.plies[c].mark ? clsColor(M.plies[c].cls) : C.last }}>{label(M, c)}</span>}
+          {c >= 0 && !M.hasEval && !M.plies.some((p) => p.best) && <span style={{ font: `600 ${tx(18)}px ${MONO}`, color: M.plies[c].mark ? clsColor(M.plies[c].cls) : C.last }}>{label(M, c)}</span>}
           {txt && <span style={{ font: `400 ${size}px/1.14 ${SERIF}`, color: C.ink, textWrap: 'pretty' }}>{txt.slice(0, nh)}<span style={{ opacity: 0 }}>{txt.slice(nh)}</span></span>}
           {qtxt && (
-            <div style={{ display: 'flex', flexDirection: 'column', gap: 6, opacity: nq > 0 || !txt ? 1 : 0 }}>
-              <span style={{ font: `600 ${sm(Math.round(13 * (L.comment.label || 1)))}px ${MONO}`, letterSpacing: '0.12em', textTransform: 'uppercase', color: C.queen }}>Queen · after {M.plies[c].san}{M.plies[c].mark || ''}</span>
-              <span style={{ font: `italic 400 ${qsize}px/1.2 ${SERIF}`, color: C.ink, textWrap: 'pretty', paddingLeft: 12, borderLeft: `2px solid ${C.queen}` }}>{qtxt.slice(0, nq)}<span style={{ opacity: 0 }}>{qtxt.slice(nq)}</span></span>
+            <div style={{ display: 'flex', flexDirection: 'column', gap: tx(6), opacity: nq > 0 || !txt ? 1 : 0 }}>
+              <span style={{ font: `600 ${tx(15)}px ${MONO}`, letterSpacing: '0.12em', textTransform: 'uppercase', color: C.queen }}>Queen · after {M.plies[c].san}{M.plies[c].mark || ''}</span>
+              <span style={{ font: `italic 400 ${qsize}px/1.2 ${SERIF}`, color: C.ink, textWrap: 'pretty', paddingLeft: tx(12), borderLeft: `2px solid ${C.queen}` }}>{qtxt.slice(0, nq)}<span style={{ opacity: 0 }}>{qtxt.slice(nq)}</span></span>
             </div>
           )}
         </div>
       ) : (
         // a quiet line instead of an empty box: why there's nothing here
-        <span style={{ ...NO_SELECT, font: `italic 400 30px/1.25 ${SERIF}`, color: C.dim }}>
+        <span style={{ ...NO_SELECT, font: `italic 400 ${tx(28)}px/1.25 ${SERIF}`, color: C.dim }}>
           {!M.intro && !M.plies.some((p) => p.comment) ? (M.commentaryHidden ? 'Commentary is off.' : 'This game has no commentary.')
             : c < 0 ? 'Comments appear here as the game plays.' : `No comment on ${label(M, c)}.`}
         </span>
@@ -691,8 +650,8 @@ function Commentary({ M, T, S, a, book, line }) {
 function Analysis({ M, T, S, a, vline, onLine, paused, sf, own, onReply, deep, tb, onTb }) {
   const c = lastPly(T, S);
   // the Tablebase block goes under the lines; the panel scrolls to it where it doesn't fit
-  const box = tb ? { ...L.analysis, scroll: true } : L.analysis;
-  const tbEl = tb && <div style={{ marginTop: 12, paddingTop: 12, borderTop: `1px solid ${C.line}` }}><TablebaseBlock t={tb} onPlay={onTb} /></div>;
+  const box = tb && !L.analysis.flow ? { ...L.analysis, scroll: true } : L.analysis;
+  const tbEl = tb && <div style={{ marginTop: tx(12), paddingTop: tx(12), borderTop: `1px solid ${C.line}` }}><TablebaseBlock t={tb} onPlay={onTb} /></div>;
   // Go deeper's search of this move, once it has passed the analysis's (deep: useMoveEval's)
   const deeper = paused && deep && deep.after && !deep.after.stored ? deep.after : null;
   // this move's own search when the analysis recorded it, else the engine settings
@@ -702,19 +661,19 @@ function Analysis({ M, T, S, a, vline, onLine, paused, sf, own, onReply, deep, t
       <AnalysisPanel box={box} a={a} paused={paused} depth={sf && (sf.status === 'unavailable' || sf.status === 'stopped') ? null : searchDepth(own.after)} deep={own}>
         <OwnMoveAnalysis M={M} vline={vline} own={own} status={sf ? sf.status : 'idle'} onReply={onReply} />
         {tbEl}
-        <span style={{ display: 'block', marginTop: 8, font: `500 ${sm(15)}px ${MONO}`, color: C.dim }}>
+        <span style={{ display: 'block', marginTop: tx(8), font: `500 ${tx(15)}px ${MONO}`, color: C.dim }}>
           <span style={{ color: lineAccent('you') }}>Your moves: {vline.moves.slice(0, vline.upto + 1).map((m, j) => (j === 0 || (M.ply0 + vline.at + j) % 2 === 0 ? lineLabel(M, vline.at, j, m.san) : m.san)).join(' ')}</span> · ← → step · Esc returns to the game
         </span>
       </AnalysisPanel>
     );
   }
   if (!M.hasEval && !M.plies.some((p) => p.best)) {
-    return <AnalysisPanel box={box} a={a} paused={paused} depth={depth}>{sf ? <EngineEmptyState M={M} sf={sf} paused={paused} /> : <span style={{ font: `400 26px ${SERIF}`, color: C.dim, fontStyle: 'italic' }}>No engine analysis loaded.</span>}{tbEl}</AnalysisPanel>;
+    return <AnalysisPanel box={box} a={a} paused={paused} depth={depth}>{sf ? <EngineEmptyState M={M} sf={sf} paused={paused} /> : <span style={{ font: `400 ${tx(26)}px ${SERIF}`, color: C.dim, fontStyle: 'italic' }}>No engine analysis loaded.</span>}{tbEl}</AnalysisPanel>;
   }
   if (c < 0) return (
     <AnalysisPanel box={box} a={a} paused={paused} depth={depth}>
-      {paused && <span style={{ ...NO_SELECT, font: `500 ${L.hint || 17}px ${MONO}`, color: C.dim }}>Press play to watch the game, or drag a piece to try your own move.</span>}
-      {sf && !M.hasAnalysis && (sf.run.state === 'running' || paused) && <div style={{ marginTop: 16 }}><EngineEmptyState M={M} sf={sf} paused={paused} compact /></div>}
+      {paused && <span style={{ ...NO_SELECT, font: `500 ${tx(15)}px ${MONO}`, color: C.dim }}>Press play to watch the game, or drag a piece to try your own move.</span>}
+      {sf && !M.hasAnalysis && (sf.run.state === 'running' || paused) && <div style={{ marginTop: tx(16) }}><EngineEmptyState M={M} sf={sf} paused={paused} compact /></div>}
       {tbEl}
     </AnalysisPanel>
   );
@@ -722,7 +681,7 @@ function Analysis({ M, T, S, a, vline, onLine, paused, sf, own, onReply, deep, t
   const k = cl01((T - S.tp[c] - S.md[c]) / 0.25);
   const { cp } = evalNow(M, T, S);
   const col = cls === 'none' ? C.ink : clsColor(cls);
-  const big = L.analysis.big || 38; // the move and eval headline
+  const big = tx(HEADLINE);
   // Queen's line from before this move (its scores are left out: often off, and they squeezed the move's labels onto more lines)
   const Qp = P.queen || {};
   // P.best: the engine preferred another move (a mistake, or an equally good move rated best with 0 cp lost)
@@ -737,17 +696,17 @@ function Analysis({ M, T, S, a, vline, onLine, paused, sf, own, onReply, deep, t
   return (
     <AnalysisPanel box={box} a={a} paused={paused} depth={depth} deep={M.hasEval ? deep : null}>
       <div style={{ opacity: k, transform: `translateY(${(1 - k) * 8}px)` }}>
-        <div style={{ display: 'flex', alignItems: 'flex-end', gap: 28 }}>
+        <div style={{ display: 'flex', flexWrap: 'wrap', alignItems: 'flex-end', columnGap: tx(28) }}>
           <span style={{ font: `700 ${big}px ${MONO}`, color: col }}>{label(M, c)}</span>
           {M.hasEval && <span style={{ marginLeft: 'auto', font: `700 ${big}px ${MONO}`, color: C.ink }}>{deeper ? fmtSf(deeper.cp) : (P.mate != null || P.won) && k >= 1 ? fmtEval(P) : fmtEval({ cp })}</span>}
         </div>
         {/* the verdict spans the panel under the move and the eval; spaced parts rather than " · " separators, so a
             line too long for a narrow panel breaks between them */}
-        <div style={{ marginTop: 6, display: 'flex', flexWrap: 'wrap', columnGap: 14, font: `600 16px ${MONO}`, letterSpacing: '0.08em', textTransform: 'uppercase', color: col }}>
+        <div style={{ marginTop: tx(6), display: 'flex', flexWrap: 'wrap', columnGap: tx(14), font: `600 ${tx(16)}px ${MONO}`, letterSpacing: '0.08em', textTransform: 'uppercase', color: col }}>
           {[P.checkmate ? 'Checkmate' : CLASS_LABEL[cls], P.loss > 0 && `−${P.loss} cp`, cls === 'best' && P.best && P.best.line[0] && `as good as ${P.best.line[0]}`].filter(Boolean).map((t) => <span key={t} style={{ whiteSpace: 'nowrap' }}>{t}</span>)}
         </div>
       </div>
-      <div style={{ marginTop: 16, paddingTop: 14, borderTop: `1px solid ${C.line}`, font: `500 18px ${MONO}`, color: C.dim, display: 'flex', flexDirection: 'column', gap: 8, opacity: k }}>
+      <div style={{ marginTop: tx(16), paddingTop: tx(14), borderTop: `1px solid ${C.line}`, font: `500 ${tx(18)}px ${MONO}`, color: C.dim, display: 'flex', flexDirection: 'column', gap: tx(8), opacity: k }}>
         {P.best && P.best.line.length ? (
           <LineChips name="Best line" nameColor={C.ink} accent={C.best} moves={P.best.line.slice(0, 8)} ply0={M.ply0} c={c} legal={sfLegal.length}
             sel={vline && vline.src === 'sf' ? vline.upto : null} onPick={(j) => onLine('sf', sfLegal, j)} />
@@ -760,9 +719,9 @@ function Analysis({ M, T, S, a, vline, onLine, paused, sf, own, onReply, deep, t
             sel={vline && vline.src === 'queen' ? vline.upto : null} onPick={(j) => onLine('queen', qLegal, j)} />
         )}
         {P.advice && <span style={{ color: C.inaccuracy }}>{P.advice}</span>}
-        {tb && <div style={{ paddingTop: 8, borderTop: `1px solid ${C.line}` }}><TablebaseBlock t={tb} onPlay={onTb} /></div>}
+        {tb && <div style={{ paddingTop: tx(8), borderTop: `1px solid ${C.line}` }}><TablebaseBlock t={tb} onPlay={onTb} /></div>}
         {vline && (
-          <span style={{ font: `500 ${sm(15)}px ${MONO}`, color: C.dim }}>
+          <span style={{ font: `500 ${tx(15)}px ${MONO}`, color: C.dim }}>
             <span style={{ color: lineAccent(vline.src) }}>
               {vline.src === 'you'
                 ? (vline.upto < 0 ? 'Your moves: drag a piece to play' : `Your moves: ${vline.moves.slice(0, vline.upto + 1).map((m, j) => (j === 0 || (M.ply0 + vline.at + j) % 2 === 0 ? lineLabel(M, vline.at, j, m.san) : m.san)).join(' ')}`)
@@ -771,7 +730,7 @@ function Analysis({ M, T, S, a, vline, onLine, paused, sf, own, onReply, deep, t
           </span>
         )}
         {sf && !M.hasAnalysis && (sf.run.state === 'running' || paused) && <EngineEmptyState M={M} sf={sf} paused={paused} compact />}
-        {!vline && paused && M.hasEval && <FitOrHide style={{ ...NO_SELECT, font: `500 ${L.hint || 15}px ${MONO}`, color: C.dim }}>Tip: drag a piece on the board to try your own move.</FitOrHide>}
+        {!vline && paused && M.hasEval && <FitOrHide style={{ ...NO_SELECT, font: `500 ${tx(15)}px ${MONO}`, color: C.dim }}>Tip: drag a piece on the board to try your own move.</FitOrHide>}
       </div>
     </AnalysisPanel>
   );
@@ -779,7 +738,7 @@ function Analysis({ M, T, S, a, vline, onLine, paused, sf, own, onReply, deep, t
 
 function EvalPlot({ M, T, S, a, paused, onPick }) {
   const { c, k } = evalNow(M, T, S);
-  const PLOT = L.plot, W = PLOT.w / PLOT.k - 40, H = PLOT.h / PLOT.k - 30, mid = H / 2, N = S.N;
+  const PLOT = L.plot, W = PLOT.w - 40, H = PLOT.h - 30, mid = H / 2, N = S.N;
   const [hover, setHover] = React.useState(null);
   const down = React.useRef(false), fade = React.useRef(null);
   React.useEffect(() => () => clearTimeout(fade.current), []);
@@ -798,7 +757,7 @@ function EvalPlot({ M, T, S, a, paused, onPick }) {
   const area = `${line} L${last[0].toFixed(1)},${mid} L0,${mid} Z`;
   const ticks = window.ChessCore.evalTicks(M.ply0, N);
   return (
-    <div style={{ ...NO_SELECT, position: 'absolute', left: PLOT.x, top: PLOT.y, width: PLOT.w / PLOT.k, height: PLOT.h / PLOT.k, transform: `scale(${PLOT.k})`, transformOrigin: '0 0', boxSizing: 'border-box', background: C.panel, border: `1px solid ${C.line}`, borderRadius: 8, padding: '10px 20px', opacity: a }}>
+    <div style={{ ...NO_SELECT, position: 'absolute', left: PLOT.x, top: PLOT.y, width: PLOT.w, height: PLOT.h, boxSizing: 'border-box', background: C.panel, border: `1px solid ${C.line}`, borderRadius: 4, padding: '10px 20px', opacity: a }}>
       <svg width={W} height={H + 14} style={{ display: 'block', overflow: 'visible', cursor: 'pointer', touchAction: 'none' }}
         onPointerDown={(e) => { try { e.currentTarget.setPointerCapture(e.pointerId); } catch (err) {} down.current = true; clearTimeout(fade.current); setHover(plyAt(e)); }}
         onPointerMove={(e) => { if (down.current || e.pointerType === 'mouse') setHover(plyAt(e)); }}
@@ -819,7 +778,7 @@ function EvalPlot({ M, T, S, a, paused, onPick }) {
         {ticks.map(({ m, at }) => (
           <g key={m}>
             <line x1={px(at)} x2={px(at)} y1="0" y2={H} stroke={C.line} strokeWidth="1" />
-            <text x={px(at) + 6} y={H + 12} fill={C.dim} style={{ font: `500 ${sm(12)}px ${MONO}` }}>{m}</text>
+            <text x={px(at) + 6} y={H + 12} fill={C.dim} style={{ font: `500 ${tx(15)}px ${MONO}` }}>{m}</text>
           </g>
         ))}
         {M.hasEval ? (
@@ -833,40 +792,44 @@ function EvalPlot({ M, T, S, a, paused, onPick }) {
             <circle cx={last[0]} cy={last[1]} r="6" fill={C.ink} />
           </g>
         ) : (
-          <text x={W / 2} y={mid + 5} textAnchor="middle" fill={C.dim} style={{ font: `500 ${sm(14)}px ${MONO}` }}>No evaluation data</text>
+          <text x={W / 2} y={mid + 5} textAnchor="middle" fill={C.dim} style={{ font: `500 ${tx(16)}px ${MONO}` }}>No evaluation data</text>
         )}
         {hover != null && (() => {
-          const x = px(hover + 1), name = hover < 0 ? 'Start' : label(M, hover), w = name.length * 9 + 16;
+          const x = px(hover + 1), name = hover < 0 ? 'Start' : label(M, hover), w = name.length * tx(16) * 0.62 + 16;
           const bx = Math.min(Math.max(x - w / 2, 0), W - w);
           return (
             <g style={{ pointerEvents: 'none' }}>
               <line x1={x} x2={x} y1="0" y2={H} stroke={C.last} strokeWidth="2" opacity="0.8" />
               <rect x={bx} y={-6} width={w} height={22} rx="4" fill={C.bg} stroke={C.last} strokeWidth="1" />
-              <text x={bx + w / 2} y={10} textAnchor="middle" fill={C.ink} style={{ font: `600 ${sm(14)}px ${MONO}` }}>{name}</text>
+              <text x={bx + w / 2} y={10} textAnchor="middle" fill={C.ink} style={{ font: `600 ${tx(16)}px ${MONO}` }}>{name}</text>
             </g>
           );
         })()}
-        <text x="4" y="12" fill={C.dim} style={{ font: `600 ${sm(11)}px ${MONO}`, letterSpacing: '0.1em' }}>WHITE</text>
-        <text x="4" y={H - 4} fill={C.dim} style={{ font: `600 ${sm(11)}px ${MONO}`, letterSpacing: '0.1em' }}>BLACK</text>
+        <text x="4" y="12" fill={C.dim} style={{ font: `600 ${tx(14)}px ${MONO}`, letterSpacing: '0.1em' }}>WHITE</text>
+        <text x="4" y={H - 4} fill={C.dim} style={{ font: `600 ${tx(14)}px ${MONO}`, letterSpacing: '0.1em' }}>BLACK</text>
       </svg>
     </div>
   );
 }
 
 // ---------- title & end cards ----------
+// A card is drawn at the 1920 frame's sizes and scaled: by the text size, and down to fit the stage with 16 px to spare
+// (w × h: the card's size at scale 1). One column stacks it, narrower.
+const cardLayout = (w, h) => ({ stack: L.cols === 1, k: Math.min(TX, (L.w - 32) / w, (L.h - 32) / h) });
 function TitleCard({ M, T, CUES }) {
   const out = 1 - cl01((T - (CUES.Opening - 0.7)) / 0.6);
   if (out <= 0) return null;
   const st = (d) => { const k = MOTION.enter(cl01((T - d) / 0.8)); return { opacity: k, transform: `translateY(${(1 - k) * 22}px)` }; };
   const len = M.white.short.length + M.black.short.length;
-  // side by side in the wide frame; one name per line in the portrait one
-  const size = L.card.stack ? Math.min(120, Math.floor(1300 / Math.max(M.white.short.length, M.black.short.length, 6))) : Math.min(130, Math.floor(1560 / (len * 0.5 + 3)));
+  // side by side in two columns; one name per line in one
+  const card = { w: L.cols === 1 ? 640 : 1700, ...cardLayout(L.cols === 1 ? 640 : 1700, L.cols === 1 ? 640 : 420) };
+  const size = card.stack ? Math.min(120, Math.floor(1300 / Math.max(M.white.short.length, M.black.short.length, 6))) : Math.min(130, Math.floor(1560 / (len * 0.5 + 3)));
   const sub = (P) => [[P.title, P.elo].filter(Boolean).join(' '), P.team].filter(Boolean).join(' · ');
   return (
     <div style={{ position: 'absolute', inset: 0, background: C.bg, opacity: out, display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 20 }}>
-      <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 28, transform: `scale(${(1 + T * 0.006) * L.card.k})`, maxWidth: L.card.w, textAlign: 'center' }}>
+      <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 28, transform: `scale(${(1 + T * 0.006) * card.k})`, maxWidth: card.w, textAlign: 'center' }}>
         <span style={{ ...st(0.3), font: `600 20px ${MONO}`, letterSpacing: '0.2em', textTransform: 'uppercase', color: C.last }}>{[M.event, M.round && 'Round ' + M.round].filter(Boolean).join(' · ')}</span>
-        <div style={{ display: 'flex', flexDirection: L.card.stack ? 'column' : 'row', alignItems: L.card.stack ? 'center' : 'baseline', gap: L.card.stack ? 12 : 40 }}>
+        <div style={{ display: 'flex', flexDirection: card.stack ? 'column' : 'row', alignItems: card.stack ? 'center' : 'baseline', gap: card.stack ? 12 : 40 }}>
           <span style={{ ...st(0.6), font: `400 ${size}px ${SERIF}`, color: C.ink, lineHeight: 1 }}>{M.white.short}</span>
           <span style={{ ...st(0.9), font: `400 ${Math.round(size * 0.42)}px ${SERIF}`, color: C.dim, fontStyle: 'italic' }}>vs</span>
           <span style={{ ...st(1.1), font: `400 ${size}px ${SERIF}`, color: C.ink, lineHeight: 1 }}>{M.black.short}</span>
@@ -886,22 +849,23 @@ function EndCard({ M, T, CUES }) {
   const res = M.result.replace('1/2-1/2', '½–½').replace('-', '–');
   const verdict = M.result === '1-0' ? `${M.white.short} wins` : M.result === '0-1' ? `${M.black.short} wins` : M.result === '1/2-1/2' ? 'Draw' : '';
   const hasAcc = typeof M.white.acc === 'number' && typeof M.black.acc === 'number';
+  const card = { w: L.cols === 1 ? 640 : 1700, ...cardLayout(L.cols === 1 ? 660 : 1100, 700) };
   const bar = (P, d) => {
     const g = MOTION.move(cl01((T - CUES.Outro - d) / 1.2));
     return (
-      <div style={{ ...st(d), display: 'grid', gridTemplateColumns: L.card.stack ? '190px 300px 100px' : '320px 520px 110px', alignItems: 'center', gap: 24 }}>
+      <div style={{ ...st(d), display: 'grid', gridTemplateColumns: card.stack ? '190px 300px 100px' : '320px 520px 110px', alignItems: 'center', gap: 24 }}>
         <span style={{ font: `500 24px ${SANS}`, color: C.ink, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{P.name}</span>
-        <div style={{ height: 12, borderRadius: 6, background: C.off, overflow: 'hidden' }}><div style={{ width: `${P.acc * g}%`, height: '100%', background: C.best }} /></div>
+        <div style={{ height: 12, borderRadius: 3, background: C.off, overflow: 'hidden' }}><div style={{ width: `${P.acc * g}%`, height: '100%', background: C.best }} /></div>
         <span style={{ font: `700 24px ${MONO}`, color: C.ink, textAlign: 'right' }}>{(P.acc * g).toFixed(1)}%</span>
       </div>
     );
   };
   return (
     <div style={{ position: 'absolute', inset: 0, zIndex: 20, background: `rgba(${C.scrim},${0.86 * k})`, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-     <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 30, flex: 'none', transform: `scale(${L.card.k})` }}>
+     <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 30, flex: 'none', transform: `scale(${card.k})` }}>
       <span style={{ ...st(0.3), font: `400 170px ${SERIF}`, color: C.ink, lineHeight: 1 }}>{res}</span>
       {verdict && <span style={{ ...st(0.6), font: `400 44px ${SERIF}`, color: C.ink }}>{verdict}</span>}
-      {M.conclusion && <span style={{ ...st(0.8), font: `400 30px ${SERIF}`, color: C.dim, fontStyle: 'italic', maxWidth: Math.min(1100, L.card.w), textAlign: 'center' }}>{M.conclusion}</span>}
+      {M.conclusion && <span style={{ ...st(0.8), font: `400 30px ${SERIF}`, color: C.dim, fontStyle: 'italic', maxWidth: Math.min(1100, card.w), textAlign: 'center' }}>{M.conclusion}</span>}
       {hasAcc && <span style={{ ...st(0.9), font: `600 15px ${MONO}`, letterSpacing: '0.14em', color: C.dim, marginTop: 16 }}>ACCURACY</span>}
       {hasAcc && bar(M.white, 1.0)}
       {hasAcc && bar(M.black, 1.2)}
@@ -969,7 +933,11 @@ function GameVideo({ M, tw, d, probe, queen, nav, scheme, sf, orient }) {
   const { T: T0, CUES, authoredTotal, playing: live } = useComposition();
   // the export steps through a paused player; its frames look like playback (no paused-only hints or buttons)
   const playing = live || !!tw.exporting;
-  setLayout(useFrame()); // before the children render, which read the layout
+  const frame = useFrame(), video = frame.video;
+  setLayout(frame); // before the children render, which read the layout
+  // a paused one-column page is as tall as its panels; the stage scrolls it
+  const flowRef = React.useRef(null);
+  useFlowHeight(frame, flowRef);
   setOrient(orient);
   const S = useSchedule(M, CUES, d);
   // When the schedule changes (a Queen answer lengthens a move's hold, a commentary source is turned off), keep the
@@ -1086,25 +1054,29 @@ function GameVideo({ M, tw, d, probe, queen, nav, scheme, sf, orient }) {
     return () => window.removeEventListener('keydown', onKey);
   }, []);
   const pieces = React.useMemo(() => simulate(M), [M]);
-  const enter = (i) => MOTION.enter(cl01((T - (CUES.Opening - 0.5 + i * 0.12)) / 0.7));
+  // the video touches (panels fading in, the camera push, the blunder glow, the final fade, the title and end cards)
+  // only while playing or exporting: stepping, exploring and analysing show a still page
+  const enter = (i) => (video ? MOTION.enter(cl01((T - (CUES.Opening - 0.5 + i * 0.12)) / 0.7)) : 1);
   let f = 0;
-  if (tw.cameraPush) S.blunders.forEach((i) => {
+  if (video && tw.cameraPush) S.blunders.forEach((i) => {
     const t0 = S.tp[i] - 0.3, t1 = Math.min(S.tp[i] + S.md[i] + 0.8, i + 1 < S.N ? S.tp[i + 1] - 0.5 : CUES.Outro);
     f = Math.max(f, MOTION.move(cl01((T - t0) / 0.7)) * (1 - MOTION.move(cl01((T - t1) / 0.7))));
   });
   const c = lastPly(T, S);
   if (probe) probe.current = { S, c };
-  const flash = tw.blunderGlow !== false && c >= 0 && (M.plies[c].cls === 'blunder' || M.plies[c].checkmate) ? Math.max(0, 1 - Math.abs(T - S.tp[c] - S.md[c] - 0.25) / 0.6) : 0;
-  const cx = BX + BW / 2, cy = BY + BW / 2, sc = 1 + 0.1 * f;
-  const fade = 1 - cl01((T - (authoredTotal - 0.9)) / 0.8);
+  const flash = video && tw.blunderGlow !== false && c >= 0 && (M.plies[c].cls === 'blunder' || M.plies[c].checkmate) ? Math.max(0, 1 - Math.abs(T - S.tp[c] - S.md[c] - 0.25) / 0.6) : 0;
+  const cx = L.board.x + L.board.size / 2, cy = L.board.y + L.board.size / 2, sc = 1 + 0.1 * f;
+  const fade = video ? 1 - cl01((T - (authoredTotal - 0.9)) / 0.8) : 1;
   return (
     <div data-screen-label={'t=' + Math.floor(T) + 's'} style={{ position: 'absolute', inset: 0, background: C.bg, overflow: 'hidden' }}>
       <div style={{ position: 'absolute', inset: 0, opacity: fade }}>
-        <div style={{ position: 'absolute', inset: 0, transformOrigin: '0 0', transform: `translate(${cx}px,${cy}px) scale(${sc}) translate(${-cx}px,${-cy}px)` }}>
+        <div ref={flowRef} style={{ position: 'absolute', inset: 0, transformOrigin: '0 0', ...flowStyle(), ...(f > 0 && { transform: `translate(${cx}px,${cy}px) scale(${sc}) translate(${-cx}px,${-cy}px)` }) }}>
           <EvalBar M={M} T={T} S={S} a={enter(1)} tb={tbBar(tb)} />
           <PlayerBar M={M} T={T} S={S} side="b" a={enter(1)} pieces={pieces} />
-          <Board M={M} T={T} S={S} a={enter(0)} arrows={tw.bestArrows} pieces={pieces} queen={queen} vline={vline} hide={input.drag && input.drag.moved ? input.drag.from : null} lines={tw.bestArrows && own ? lineArrows(own.after) : null} />
-          <BoardTouch pos={touchPos} sel={input.sel} targets={input.targets} drag={input.drag} promo={input.promo} {...input.handlers} />
+          <BoardSpace>
+            <Board M={M} T={T} S={S} a={enter(0)} arrows={tw.bestArrows} pieces={pieces} queen={queen} vline={vline} hide={input.drag && input.drag.moved ? input.drag.from : null} lines={tw.bestArrows && own ? lineArrows(own.after) : null} />
+            <BoardTouch pos={touchPos} sel={input.sel} targets={input.targets} drag={input.drag} promo={input.promo} {...input.handlers} />
+          </BoardSpace>
           <PlayerBar M={M} T={T} S={S} side="w" a={enter(1)} pieces={pieces} />
           {L.header && <Header M={M} a={enter(2)} />}
           <MoveList M={M} T={T} S={S} a={enter(3)} paused={!playing} onPick={goTo} />
@@ -1113,8 +1085,8 @@ function GameVideo({ M, tw, d, probe, queen, nav, scheme, sf, orient }) {
           {L.plot && <EvalPlot M={M} T={T} S={S} a={enter(6)} paused={!playing} onPick={goTo} />}
         </div>
         <div style={{ position: 'absolute', inset: 0, pointerEvents: 'none', boxShadow: `inset 0 0 220px rgba(228,85,63,${0.55 * flash})` }} />
-        <TitleCard M={M} T={T} CUES={CUES} />
-        <EndCard M={M} T={T} CUES={CUES} />
+        {video && <TitleCard M={M} T={T} CUES={CUES} />}
+        {video && <EndCard M={M} T={T} CUES={CUES} />}
       </div>
     </div>
   );

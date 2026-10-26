@@ -16,7 +16,7 @@ A browser app for replaying and playing chess games, at https://chess-replay.onr
 - **My games**: every game is kept in the browser from its first move; the 50 most recent are listed, to resume one in progress or replay a finished one like a loaded game (analysis, PGN and video export included)
 - **Ask Queen**: a commentary on the position from queen-pawn-8, a chess language model on a Hugging Face Space (needs a connection)
 - **Export**: any game, or a stretch of it, as an MP4 video or an animated WebP
-- **Layouts for every screen**: a wide desktop frame and tall phone ones; full screen where the browser allows it, and Add to Home Screen opens it as an app
+- **Layouts for every screen**: one responsive page, a board with a sidebar on a wide window and one column on a narrow one, with a Text size setting; full screen where the browser allows it, and Add to Home Screen opens it as an app
 - **Move sounds**: a synthesized Wood set and four of Lichess's sets
 - **Offline**: a service worker keeps the page, the engine and everything they load
 

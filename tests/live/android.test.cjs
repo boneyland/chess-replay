@@ -96,8 +96,8 @@ test('android · chrome · local build', async (t) => {
     await page.getByRole('button', { name: 'Ask Queen' }).waitFor({ state: 'visible', timeout: 3000 });
     await page.getByRole('button', { name: 'Full screen', exact: true }).tap();
     await page.waitForFunction(() => !!document.fullscreenElement, null, { timeout: 5000 });
-    // upright in full screen, a fixed gap clears the camera's punch hole
-    assert.equal(await page.evaluate(() => getComputedStyle(document.documentElement).paddingTop), '24px');
+    // upright in full screen the page runs under the camera's cut-out, with no gap kept for it
+    assert.equal(await page.evaluate(() => getComputedStyle(document.documentElement).paddingTop), '0px');
     await page.screenshot({ path: path.join(OUT, 'android-full-screen.png') });
     await menu.tap();
     await page.getByRole('button', { name: 'Exit full screen' }).tap();

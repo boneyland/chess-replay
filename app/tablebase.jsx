@@ -39,7 +39,7 @@ function TablebaseBlock({ t, onPlay }) {
   if (!t) return null;
   const LC = window.LichessCore;
   const head = (txt, color) => (
-    <div style={{ ...NO_SELECT, display: 'flex', alignItems: 'baseline', gap: 10, font: `600 15px ${MONO}`, letterSpacing: '0.08em', textTransform: 'uppercase' }}>
+    <div style={{ ...NO_SELECT, display: 'flex', alignItems: 'baseline', gap: tx(10), font: `600 ${tx(15)}px ${MONO}`, letterSpacing: '0.08em', textTransform: 'uppercase' }}>
       <span style={{ flex: 'none', color: C.dim }}>Tablebase</span><span style={{ minWidth: 0, color }}>{txt}</span>
     </div>
   );
@@ -49,19 +49,19 @@ function TablebaseBlock({ t, onPlay }) {
   const decided = !tb.checkmate && (['win', 'loss'].includes(LC.outcome(tb.category)) || tb.category === 'cursed-win' || tb.category === 'blessed-loss');
   const dist = decided ? [tb.dtz != null && `DTZ ${Math.abs(tb.dtz)}`, tb.dtm ? `DTM ${Math.abs(tb.dtm)}` : null].filter(Boolean) : [];
   return (
-    <div className="tb-block" style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
+    <div className="tb-block" style={{ display: 'flex', flexDirection: 'column', gap: tx(6) }}>
       {head([LC.verdict(tb, t.turn), ...dist].join(' · '), C.ink)}
       {LC.groups(tb).map((g) => (
-        <div key={g.outcome} style={{ display: 'flex', alignItems: 'center', gap: 10, minWidth: 0 }}>
-          <span style={{ ...NO_SELECT, flex: 'none', width: 52, font: `600 14px ${MONO}`, letterSpacing: '0.08em', textTransform: 'uppercase', color: tbColor(g.outcome) }}>{TB_GROUP[g.outcome]}</span>
-          <SideScroll style={{ display: 'flex', gap: 6, minWidth: 0, flex: 1 }}>
+        <div key={g.outcome} style={{ display: 'flex', alignItems: 'center', gap: tx(10), minWidth: 0 }}>
+          <span style={{ ...NO_SELECT, flex: 'none', width: tx(52), font: `600 ${tx(14)}px ${MONO}`, letterSpacing: '0.08em', textTransform: 'uppercase', color: tbColor(g.outcome) }}>{TB_GROUP[g.outcome]}</span>
+          <SideScroll style={{ display: 'flex', gap: tx(6), minWidth: 0, flex: 1 }}>
             {g.moves.map((m) => {
               const tip = `Play ${m.san}: ${LC.verdict({ category: m.mine, moves: [] }, t.turn)}${tbDist(m) ? ' · ' + tbDist(m) : ''}`;
               return (
                 <span key={m.uci} className="mv tb-move" role="button" tabIndex={0} title={tip} aria-label={tip}
                   onClick={(e) => { e.stopPropagation(); onPlay(m.uci); }} onPointerDown={(e) => e.stopPropagation()}
                   onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); e.stopPropagation(); onPlay(m.uci); } }}
-                  style={{ flex: 'none', cursor: 'pointer', padding: '2px 8px', borderRadius: 4, font: `600 16px ${MONO}`, background: white ? '#f1ebe1' : '#2a2320', color: white ? '#15100d' : '#efe8de', border: `1px solid ${g.outcome === 'win' || g.outcome === 'loss' ? tbColor(g.outcome) : white ? 'rgba(60,40,20,0.22)' : 'rgba(255,236,214,0.22)'}` }}>{m.san}</span>
+                  style={{ flex: 'none', cursor: 'pointer', padding: `${tx(2)}px ${tx(8)}px`, borderRadius: 2, font: `600 ${tx(16)}px ${MONO}`, background: white ? '#f1ebe1' : '#2a2320', color: white ? '#15100d' : '#efe8de', border: `1px solid ${g.outcome === 'win' || g.outcome === 'loss' ? tbColor(g.outcome) : white ? 'rgba(60,40,20,0.22)' : 'rgba(255,236,214,0.22)'}` }}>{m.san}</span>
               );
             })}
           </SideScroll>
@@ -75,9 +75,9 @@ function TablebaseBlock({ t, onPlay }) {
 // verdict, then every move by result, best first, the moves of a result wrapping in rows (their distances in their
 // tooltips); a move plays as a drag would. t: useTablebase's answer
 function TablebaseExplorer({ t, posKey, onPlay }) {
-  const LC = window.LichessCore, z = L.comment.label || 1;
-  const heading = (txt, dim) => <span className="tb-head" style={{ display: 'block', font: `400 ${Math.round(40 * Math.max(1, L.comment.text))}px/1.14 ${SERIF}`, color: dim ? C.dim : C.ink, textWrap: 'pretty' }}>{txt}</span>;
-  const note = (txt) => <span style={{ display: 'block', marginTop: 8, font: `500 ${Math.round(15 * z)}px ${MONO}`, color: C.dim }}>{txt}</span>;
+  const LC = window.LichessCore;
+  const heading = (txt, dim) => <span className="tb-head" style={{ display: 'block', font: `400 ${tx(30)}px/1.14 ${SERIF}`, color: dim ? C.dim : C.ink, textWrap: 'pretty' }}>{txt}</span>;
+  const note = (txt) => <span style={{ display: 'block', marginTop: tx(8), font: `500 ${tx(15)}px ${MONO}`, color: C.dim }}>{txt}</span>;
   const play = (e, uci) => { e.preventDefault(); e.stopPropagation(); onPlay(uci); };
   // each position's list starts at its top, as the explorer's does
   const top = React.useRef(null);
@@ -97,15 +97,15 @@ function TablebaseExplorer({ t, posKey, onPlay }) {
         {heading(say)}
         {why.length > 0 && note(why.join(' · '))}
         {LC.groups(tb).map((g) => (
-          <div key={g.outcome} className="tb-group" style={{ marginTop: 14 * z }}>
-            <span style={{ ...NO_SELECT, display: 'block', marginBottom: 4 * z, font: `600 ${Math.round(14 * z)}px ${MONO}`, letterSpacing: '0.08em', textTransform: 'uppercase', color: tbColor(g.outcome) }}>{TB_GROUP[g.outcome]}</span>
-            <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6 * z }}>
+          <div key={g.outcome} className="tb-group" style={{ marginTop: tx(14) }}>
+            <span style={{ ...NO_SELECT, display: 'block', marginBottom: tx(4), font: `600 ${tx(14)}px ${MONO}`, letterSpacing: '0.08em', textTransform: 'uppercase', color: tbColor(g.outcome) }}>{TB_GROUP[g.outcome]}</span>
+            <div style={{ display: 'flex', flexWrap: 'wrap', gap: tx(6) }}>
               {g.moves.map((m) => {
                 const tip = `Play ${m.san}: ${LC.verdict({ category: m.mine, moves: [] }, t.turn)}${tbDist(m) ? ' · ' + tbDist(m) : ''}`;
                 return (
                   <span key={m.uci} className="mv tb-move" role="button" tabIndex={0} title={tip} aria-label={tip} onClick={(e) => play(e, m.uci)}
                     onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') play(e, m.uci); }}
-                    style={{ flex: 'none', minWidth: 58 * z, boxSizing: 'border-box', textAlign: 'center', cursor: 'pointer', padding: `${2 * z}px ${8 * z}px`, borderRadius: 4, font: `600 ${Math.round(17 * z)}px ${MONO}`, background: white ? '#f1ebe1' : '#2a2320', color: white ? '#15100d' : '#efe8de', border: `1px solid ${g.outcome === 'win' || g.outcome === 'loss' ? tbColor(g.outcome) : white ? 'rgba(60,40,20,0.22)' : 'rgba(255,236,214,0.22)'}` }}>{m.san}</span>
+                    style={{ flex: 'none', minWidth: tx(58), boxSizing: 'border-box', textAlign: 'center', cursor: 'pointer', padding: `${tx(2)}px ${tx(8)}px`, borderRadius: 2, font: `600 ${tx(17)}px ${MONO}`, background: white ? '#f1ebe1' : '#2a2320', color: white ? '#15100d' : '#efe8de', border: `1px solid ${g.outcome === 'win' || g.outcome === 'loss' ? tbColor(g.outcome) : white ? 'rgba(60,40,20,0.22)' : 'rgba(255,236,214,0.22)'}` }}>{m.san}</span>
                 );
               })}
             </div>
@@ -116,7 +116,7 @@ function TablebaseExplorer({ t, posKey, onPlay }) {
     );
   }
   return (
-    <Panel box={{ ...L.comment, scroll: true }} a={1} title="Endgame tablebase" right={right}>
+    <Panel box={{ ...L.comment, scroll: !L.comment.flow }} a={1} title="Endgame tablebase" right={right}>
       <div ref={top}>{body}</div>
     </Panel>
   );

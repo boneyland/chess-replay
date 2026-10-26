@@ -31,18 +31,11 @@
   --panel-glass: #1b1715; --scrim: rgba(19, 16, 15, 0.82); --shadow: rgba(0, 0, 0, 0.45);
   color-scheme: dark;
 }
-html { height: 100%; box-sizing: border-box; }
-/* a phone held upright in full screen: the status bar is gone but the camera's punch hole isn't. Browsers report only the
-   whole cut-out strip (the page's safe-area padding, more than the hole needs), so it takes this fixed gap instead,
-   enough to clear the player row */
-@media (pointer: coarse) and (orientation: portrait) {
-  :root:fullscreen { padding-top: 24px; }
-}
-@media (pointer: coarse) and (orientation: portrait) and (display-mode: fullscreen) {
-  :root { padding-top: 24px; }
-}
+html { height: 100%; box-sizing: border-box; font-size: calc(16px * var(--text, 1)); }
+/* a phone in full screen: the page runs under the camera's cut-out (viewport-fit=cover), with no gap kept for it; the
+   cut-out sits over the top player bar's middle, between the name and the clock */
 *, *::before, *::after { box-sizing: inherit; }
-body { height: 100%; margin: 0; background: var(--bg); color: var(--ink); font: 14px/1.4 var(--sans); overflow: hidden; }
+body { height: 100%; margin: 0; background: var(--bg); color: var(--ink); font: 0.875rem/1.4 var(--sans); overflow: hidden; }
 #root { position: relative; height: 100%; }
 button { font: inherit; color: inherit; }
 /* nothing on the page selects but what's typed in a field (a mouse drag scrolls instead: drag-scroll.js) */
@@ -55,19 +48,18 @@ button:focus-visible, select:focus-visible, input:focus-visible, [role="slider"]
   padding-block: 12px;
   padding-left: max(16px, env(safe-area-inset-left, 0px)); padding-right: max(16px, env(safe-area-inset-right, 0px));
 }
-.stage-area { flex: 1; min-height: 0; width: 100%; display: flex; align-items: center; justify-content: center; }
-/* clip, not just hidden: a hidden box still scrolls when something inside is scrolled into view (a focused row on the
-   right of the frame, which is laid out at full size and only scaled down), and the board would slide out from under the pointer */
-.stage-frame { flex: none; overflow: hidden; overflow: clip; border-radius: 4px; box-shadow: 0 20px 60px var(--shadow); }
-.stage-error { position: absolute; inset: 0; display: grid; place-items: center; color: var(--danger); font: 500 15px var(--mono); }
+/* the page is laid out at this area's size; it scrolls up and down only for a paused one-column page (Stage sets overflow-y) */
+.stage-area { flex: 1; min-height: 0; width: 100%; overflow-x: hidden; overflow-x: clip; }
+.stage-frame { overflow: hidden; overflow: clip; }
+.stage-error { position: absolute; inset: 0; display: grid; place-items: center; color: var(--danger); font: 500 0.9375rem var(--mono); }
 
 .pbar {
   flex: none; display: flex; align-items: center; gap: 10px; width: 100%; max-width: 720px;
-  padding: 6px 12px; border-radius: 8px; background: var(--panel); border: 1px solid var(--line); user-select: none;
+  padding: 6px 12px; border-radius: 4px; background: var(--panel); border: 1px solid var(--line); user-select: none;
 }
 .pbtn {
   flex: none; width: 34px; height: 34px; display: grid; place-items: center; padding: 0; cursor: pointer;
-  border-radius: 6px; border: 1px solid var(--line); background: var(--raise); color: var(--ink);
+  border-radius: 3px; border: 1px solid var(--line); background: var(--raise); color: var(--ink);
 }
 .pbtn:hover:not(:disabled) { border-color: var(--line-strong); }
 .pbtn:disabled { opacity: 0.35; cursor: default; }
@@ -77,7 +69,7 @@ button:focus-visible, select:focus-visible, input:focus-visible, [role="slider"]
 .pnav:hover:not(:disabled) { background: color-mix(in srgb, var(--accent) 14%, transparent); border-color: var(--accent); }
 /* the move name is announced to screen readers only: the board and Moves panel already show it, and the track gets the room */
 .plabel { position: absolute; width: 1px; height: 1px; overflow: hidden; clip-path: inset(50%); white-space: nowrap; }
-.ptime { flex: none; width: 64px; text-align: right; font: 500 12px var(--mono); font-variant-numeric: tabular-nums; color: var(--ink); }
+.ptime { flex: none; width: 64px; text-align: right; font: 500 0.75rem var(--mono); font-variant-numeric: tabular-nums; color: var(--ink); }
 .ptime-total { text-align: left; color: var(--dim); }
 .pspacer { flex: 1; min-width: 0; }
 .ptrack { position: relative; flex: 1; min-width: 0; height: 28px; cursor: pointer; touch-action: none; }
@@ -87,53 +79,62 @@ button:focus-visible, select:focus-visible, input:focus-visible, [role="slider"]
 .ptrack-knob { position: absolute; top: 8px; width: 12px; height: 12px; margin-left: -6px; border-radius: 50%; background: var(--ink); box-shadow: 0 2px 4px rgba(0, 0, 0, 0.5); }
 @media (max-width: 480px) { .ptime-total, .ptime { display: none; } }
 
-.stage:not(.stage-tall) .pbar { max-width: 1200px; }
+.stage:not(.stage-one) .pbar { max-width: 1200px; }
 .pdock { position: relative; flex: none; display: flex; align-items: center; gap: 6px; padding-left: 10px; border-left: 1px solid var(--line); }
 .dock-status {
   position: absolute; z-index: 50; right: -6px; bottom: calc(100% + 12px); width: max-content; max-width: min(640px, calc(100vw - 32px));
-  padding: 6px 10px; border-radius: 8px; background: var(--panel-glass); border: 1px solid var(--line); box-shadow: 0 8px 24px var(--shadow);
-  font: 500 12px var(--mono); color: var(--danger); white-space: normal; overflow: hidden; pointer-events: none;
+  padding: 6px 10px; border-radius: 4px; background: var(--panel-glass); border: 1px solid var(--line); box-shadow: 0 8px 24px var(--shadow);
+  font: 500 0.75rem var(--mono); color: var(--danger); white-space: normal; overflow: hidden; pointer-events: none;
 }
 /* landscape: panels open above the transport bar, so they leave its buttons uncovered */
-body:has(.stage:not(.stage-tall)) .twk-panel { bottom: calc(70px + env(safe-area-inset-bottom, 0px)); max-height: calc(100% - 86px); }
+body:has(.stage:not(.stage-one)) .twk-panel { bottom: calc(70px + env(safe-area-inset-bottom, 0px)); max-height: calc(100% - 86px); }
 /* portrait: the same above its slimmer bar */
-body:has(.stage-tall) .twk-panel { bottom: calc(51px + env(safe-area-inset-bottom, 0px)); max-height: calc(100% - 67px); }
-.dock-btn { flex: none; font: 600 12px var(--mono); padding: 0 10px; height: 34px; border-radius: 6px; cursor: pointer; white-space: nowrap; border: 1px solid var(--line); background: var(--raise); color: var(--ink); }
+body:has(.stage-one) .twk-panel { bottom: calc(51px + env(safe-area-inset-bottom, 0px)); max-height: calc(100% - 67px); }
+.dock-btn { flex: none; font: 600 0.75rem var(--mono); padding: 0 10px; height: 34px; border-radius: 3px; cursor: pointer; white-space: nowrap; border: 1px solid var(--line); background: var(--raise); color: var(--ink); }
 /* Settings and Full screen: square icon buttons in every layout */
 .dock-icons { display: contents; }
 .dock-iconic { display: inline-flex; align-items: center; justify-content: center; width: 34px; padding: 0; }
 .dock-icon { display: block; }
 /* the landscape bar below 1200 px drops the times, so the seek bar keeps some width */
-@media (max-width: 1199px) { .stage:not(.stage-tall) .ptime { display: none; } }
+@media (max-width: 1199px) { .stage:not(.stage-one) .ptime { display: none; } }
 .dock-primary { border-color: transparent; background: var(--accent); color: var(--accent-ink); }
 .dock-items { display: contents; }
 .dock-group { display: contents; }
 .dock-menu-status { display: none; }
 /* portrait layout: the dock's buttons fold into a menu at the end of the transport bar */
-/* phones: a slimmer transport bar and less padding around it, so the frame can be larger */
-.stage-tall { padding-block: 2px 5px; gap: 6px; padding-left: max(8px, env(safe-area-inset-left, 0px)); padding-right: max(8px, env(safe-area-inset-right, 0px)); }
-/* square frame: the phone's padding around a full-size bar, so the frame can be larger */
-.stage-square { padding-block: 2px 5px; gap: 6px; padding-left: max(8px, env(safe-area-inset-left, 0px)); padding-right: max(8px, env(safe-area-inset-right, 0px)); }
-/* compact landscape frame (windows under 1300 px wide): less padding around the full-size bar, so the frame can be larger */
-.stage-compact { padding-block: 4px 6px; gap: 6px; padding-left: max(8px, env(safe-area-inset-left, 0px)); padding-right: max(8px, env(safe-area-inset-right, 0px)); }
-/* phone held sideways: a slim bar and little padding, so the board keeps the height */
+/* one column: a slimmer transport bar and less padding around it, so the page gets the room; smaller buttons (the same
+   icons) and gaps, so the seek bar keeps a usable width; below 360 px the first and last move buttons go, rather than
+   the seek bar */
+.stage-one { padding-block: 2px 5px; gap: 6px; padding-left: max(4px, env(safe-area-inset-left, 0px)); padding-right: max(4px, env(safe-area-inset-right, 0px)); }
+.stage-one .pbar { padding: 3px 6px; gap: 4px; padding-block: 2px; }
+.stage-one .pbtn { width: 30px; height: 30px; }
+.stage-one .ptrack { min-width: 96px; }
+@media (max-width: 359px) { .stage-one .pbtn-end { display: none; } }
+/* a short two-column window (a phone held sideways): the slim bar and padding, so the board gets the height */
 .stage-short { padding-block: 2px 4px; gap: 4px; }
-.stage-tall .pbar, .stage-short .pbar { padding: 3px 6px; gap: 6px; }
-/* sideways, height is what's scarce (the status and address bars take a share of it): buttons as wide as before but
-   shorter, in a thinner bar */
-.stage-short .pbar { padding-block: 2px; }
+.stage-short .pbar { padding: 2px 6px; gap: 6px; }
 .stage-short .pbtn { width: 36px; height: 28px; }
-/* a phone held upright: smaller buttons (the same icons) and gaps, so the seek bar keeps a usable width; below 360 px
-   the first and last move buttons go, rather than the seek bar */
-.stage-tall .pbar { gap: 4px; padding-block: 2px; }
-.stage-tall .pbtn { width: 30px; height: 30px; }
-.stage-tall .ptrack { min-width: 96px; }
-@media (max-width: 359px) { .stage-tall .pbtn-end { display: none; } }
+.stage-short .pdock .dock-btn:not(.dock-pop .dock-btn) { height: 28px; }
+/* Device tiers, the same breakpoints as LayoutCore's (app/layout-core.js): a tablet or foldable (under 1024 px wide) and
+   a phone (under 600 px wide, or under 500 px high held sideways) are tighter than a desktop, not just rearranged. The
+   overlays' text (dock, transport bar, Settings, menus, all in rem) is a size smaller, the stage's padding slimmer and
+   the transport bar's buttons and gaps smaller */
+@media (max-width: 1023px) {
+  html { font-size: calc(15px * var(--text, 1)); }
+  .stage:not(.stage-one):not(.stage-short) { padding-block: 8px; gap: 8px; padding-left: max(10px, env(safe-area-inset-left, 0px)); padding-right: max(10px, env(safe-area-inset-right, 0px)); }
+  .pbar { gap: 8px; padding: 4px 10px; }
+  .pdock { gap: 5px; padding-left: 8px; }
+}
+@media (max-width: 599px), (max-height: 499px) {
+  html { font-size: calc(14px * var(--text, 1)); }
+  .pbtn, .dock-iconic { width: 30px; height: 30px; }
+  .dock-btn { height: 30px; padding: 0 8px; }
+}
 .pmenu { position: relative; flex: none; }
 .pmenu-err .dock-menu { border-color: var(--danger); color: var(--danger); }
 .pmenu .dock-items {
   position: absolute; z-index: 60; bottom: calc(100% + 12px); right: -6px; display: none; flex-direction: column; align-items: stretch; gap: 6px;
-  width: max-content; max-width: calc(100vw - 32px); padding: 8px; border-radius: 10px;
+  width: max-content; max-width: calc(100vw - 32px); padding: 8px; border-radius: 5px;
   background: var(--panel-glass); border: 1px solid var(--line); box-shadow: 0 12px 32px var(--shadow);
 }
 /* never past the top of the screen: what doesn't fit scrolls */
@@ -142,10 +143,10 @@ body:has(.stage-tall) .twk-panel { bottom: calc(51px + env(safe-area-inset-botto
 .pmenu .dock-icons { display: flex; justify-content: flex-end; gap: 6px; }
 .pmenu .dock-iconic { width: 40px; height: 40px; padding: 0; }
 .pmenu .dock-icons .dock-queen { flex: 1; text-align: center; }
-.pmenu .dock-menu-status { display: block; max-width: 240px; padding: 2px 4px 4px; font: 500 11px/1.4 var(--mono); color: var(--dim); white-space: normal; }
+.pmenu .dock-menu-status { display: block; max-width: 240px; padding: 2px 4px 4px; font: 500 0.6875rem/1.4 var(--mono); color: var(--dim); white-space: normal; }
 .pmenu-err .dock-menu-status { color: var(--danger); }
 /* a screen held sideways: the menu is as wide as Settings there, Explore and Play side by side, the last row under Play
-   (the folded menu shows in the wide layout too, as at 800×480, so this goes by orientation, not .stage-short) */
+   (the folded menu shows in the wide layout too, as at 800×480, so this goes by orientation, not by stage class) */
 @media (orientation: landscape) {
   .pmenu-open .dock-items { display: grid; grid-template-columns: 1fr 1fr; grid-template-areas: "st st" "load load" "ex pl" "ex tail"; align-items: start; width: min(760px, calc(100vw - 32px)); }
   .pmenu .dock-menu-status { grid-area: st; max-width: none; }
@@ -159,7 +160,7 @@ body:has(.stage-tall) .twk-panel { bottom: calc(51px + env(safe-area-inset-botto
 .dock-new { position: relative; flex: none; }
 .dock-pop {
   position: absolute; z-index: 60; bottom: calc(100% + 12px); left: 0; display: flex; flex-direction: column; align-items: stretch; gap: 6px;
-  width: max-content; padding: 8px; border-radius: 10px; background: var(--panel-glass); border: 1px solid var(--line); box-shadow: 0 12px 32px var(--shadow);
+  width: max-content; padding: 8px; border-radius: 5px; background: var(--panel-glass); border: 1px solid var(--line); box-shadow: 0 12px 32px var(--shadow);
 }
 .dock-pop .dock-btn { text-align: left; }
 /* a short screen (901×376): Explore and Play side by side, anchored to the button's right edge so the wider menu stays on
@@ -169,59 +170,59 @@ body:has(.stage-tall) .twk-panel { bottom: calc(51px + env(safe-area-inset-botto
   .dock-pop { flex-direction: row; align-items: flex-start; left: auto; right: 0; }
   .dock-pop .dock-group { display: flex; flex-direction: column; gap: 6px; }
 }
-.dock-menu-label { padding: 6px 4px 0; font: 600 10px var(--mono); letter-spacing: 0.14em; text-transform: uppercase; color: var(--accent); }
+.dock-menu-label { padding: 6px 4px 0; font: 600 0.625rem var(--mono); letter-spacing: 0.14em; text-transform: uppercase; color: var(--accent); }
 /* the dialogs (Paste PGN, Play, My games…): a centred box over a scrim, which also keeps taps off the board */
 .fen-scrim { position: fixed; inset: 0; z-index: 85; display: grid; place-items: center; padding: 16px; background: var(--scrim); }
 .fen-box {
-  width: min(560px, 100%); display: flex; flex-direction: column; gap: 12px; padding: 16px 18px 18px; border-radius: 12px;
+  width: min(560px, 100%); display: flex; flex-direction: column; gap: 12px; padding: 16px 18px 18px; border-radius: 6px;
   background: var(--panel-glass); color: var(--ink); border: 1px solid var(--line); box-shadow: 0 16px 48px var(--shadow);
 }
-.fen-title { font: 600 12px var(--mono); letter-spacing: 0.12em; text-transform: uppercase; color: var(--dim); }
-.fen-box .fen-field { height: 38px; padding: 0 10px; font: 500 13px var(--mono); }
+.fen-title { font: 600 0.75rem var(--mono); letter-spacing: 0.12em; text-transform: uppercase; color: var(--dim); }
+.fen-box .fen-field { height: 38px; padding: 0 10px; font: 500 0.8125rem var(--mono); }
 .fen-box .pgn-field { height: min(40vh, 280px); padding: 8px 10px; resize: vertical; line-height: 1.45; }
 .fen-box .fen-field::placeholder { color: var(--dim); opacity: 0.7; }
 /* 16px stops a phone's browser zooming in on the field */
 @media (pointer: coarse) { .fen-box .fen-field { font-size: 16px; } }
-.fen-msg { font: 500 12px/1.45 var(--mono); color: var(--danger); }
-.fen-note { font: 12px/1.45 var(--sans); color: var(--dim); }
+.fen-msg { font: 500 0.75rem/1.45 var(--mono); color: var(--danger); }
+.fen-note { font: 0.75rem/1.45 var(--sans); color: var(--dim); }
 .fen-btns { display: flex; justify-content: flex-end; gap: 8px; }
 .fen-btns .twk-btn { min-height: 34px; padding: 4px 16px; }
 /* Play vs human's choices: a label over a segmented row */
 .play-row { display: flex; flex-direction: column; gap: 6px; }
-.play-label { font: 500 12px var(--sans); color: var(--dim); }
-.play-row .twk-seg button { min-height: 30px; color: var(--ink); font: 500 13px var(--sans); }
+.play-label { font: 500 0.75rem var(--sans); color: var(--dim); }
+.play-row .twk-seg button { min-height: 30px; color: var(--ink); font: 500 0.8125rem var(--sans); }
 /* My games: a scrolling list, each row's text on the left and its buttons on the right (below it on a phone) */
 .games-list { list-style: none; margin: 0; padding: 0; max-height: min(56vh, 460px); overflow-y: auto; border-top: 1px solid var(--line); }
 .games-row { display: flex; align-items: center; gap: 12px; padding: 10px 2px; border-bottom: 1px solid var(--line); }
 .games-text { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 3px; }
-.games-head { font: 600 14px var(--sans); color: var(--ink); }
-.games-meta { font: 12px/1.4 var(--sans); color: var(--dim); }
+.games-head { font: 600 0.875rem var(--sans); color: var(--ink); }
+.games-meta { font: 0.75rem/1.4 var(--sans); color: var(--dim); }
 .games-btns { flex: none; display: flex; align-items: center; gap: 6px; }
-.games-ask { font: 500 12px var(--sans); color: var(--dim); }
+.games-ask { font: 500 0.75rem var(--sans); color: var(--dim); }
 @media (max-width: 480px) { .games-row { flex-wrap: wrap; gap: 8px; } .games-text { flex-basis: 100%; } .games-btns { margin-left: auto; } }
 
 .drop { position: fixed; inset: 0; z-index: 60; display: grid; place-items: center; background: var(--scrim); pointer-events: none; }
-.drop-box { padding: 40px 60px; margin: 0 16px; border: 2px dashed var(--accent); border-radius: 12px; text-align: center; font: 500 20px/1.6 var(--mono); color: var(--ink); }
+.drop-box { padding: 40px 60px; margin: 0 16px; border: 2px dashed var(--accent); border-radius: 6px; text-align: center; font: 500 1.25rem/1.6 var(--mono); color: var(--ink); }
 .export { position: fixed; inset: 0; z-index: 90; display: grid; place-items: center; background: var(--scrim); }
-.export-box { width: min(420px, calc(100% - 32px)); box-sizing: border-box; display: flex; flex-direction: column; gap: 10px; padding: 20px; border-radius: 12px; background: var(--panel); border: 1px solid var(--line); box-shadow: 0 10px 30px var(--shadow); }
-.export-title { font: 600 16px var(--sans); color: var(--ink); }
-.export-bar { height: 6px; border-radius: 3px; background: var(--raise); overflow: hidden; }
+.export-box { width: min(420px, calc(100% - 32px)); box-sizing: border-box; display: flex; flex-direction: column; gap: 10px; padding: 20px; border-radius: 6px; background: var(--panel); border: 1px solid var(--line); box-shadow: 0 10px 30px var(--shadow); }
+.export-title { font: 600 1rem var(--sans); color: var(--ink); }
+.export-bar { height: 6px; border-radius: 2px; background: var(--raise); overflow: hidden; }
 .export-bar div { height: 100%; background: var(--accent); transition: width 0.2s; }
-.export-line { font: 500 13px var(--mono); color: var(--ink); font-variant-numeric: tabular-nums; }
+.export-line { font: 500 0.8125rem var(--mono); color: var(--ink); font-variant-numeric: tabular-nums; }
 .export-err { color: var(--danger); font-family: var(--sans); }
-.export-note { font: 13px/1.4 var(--sans); color: var(--dim); }
+.export-note { font: 0.8125rem/1.4 var(--sans); color: var(--dim); }
 .export-box .twk-btn { align-self: flex-end; }
-.drop-box span { color: var(--dim); font-size: 15px; }
+.drop-box span { color: var(--dim); font-size: 0.9375rem; }
 
 .twk-panel {
   position: fixed; z-index: 70; right: max(16px, env(safe-area-inset-right, 0px)); bottom: calc(16px + env(safe-area-inset-bottom, 0px));
-  width: min(300px, calc(100% - 32px)); max-height: calc(100% - 72px); display: flex; flex-direction: column; overflow: hidden;
-  background: var(--panel-glass); color: var(--ink); border: 1px solid var(--line); border-radius: 12px;
-  box-shadow: 0 16px 48px var(--shadow); font: 12px/1.4 var(--sans);
+  width: min(18.75rem, calc(100% - 32px)); max-height: calc(100% - 72px); display: flex; flex-direction: column; overflow: hidden;
+  background: var(--panel-glass); color: var(--ink); border: 1px solid var(--line); border-radius: 6px;
+  box-shadow: 0 16px 48px var(--shadow); font: 0.75rem/1.4 var(--sans);
 }
 .twk-hd { display: flex; align-items: center; justify-content: space-between; padding: 10px 8px 8px 14px; }
-.twk-hd b { font: 600 12px var(--mono); letter-spacing: 0.12em; text-transform: uppercase; color: var(--dim); }
-.twk-x { width: 26px; height: 26px; border: 0; border-radius: 6px; background: transparent; color: var(--dim); cursor: pointer; }
+.twk-hd b { font: 600 0.75rem var(--mono); letter-spacing: 0.12em; text-transform: uppercase; color: var(--dim); }
+.twk-x { width: 26px; height: 26px; border: 0; border-radius: 3px; background: transparent; color: var(--dim); cursor: pointer; }
 .twk-x:hover { background: var(--raise); color: var(--ink); }
 .twk-body { display: flex; flex-direction: column; padding: 2px 14px 14px; overflow-y: auto; min-height: 0; scrollbar-width: thin; }
 .twk-flow { display: flex; flex-direction: column; gap: 10px; }
@@ -229,12 +230,12 @@ body:has(.stage-tall) .twk-panel { bottom: calc(51px + env(safe-area-inset-botto
 .twk-body > *, .twk-flow > * { flex-shrink: 0; }
 .twk-group { display: flex; flex-direction: column; gap: 10px; }
 .twk-flow > * + .twk-group { padding-top: 10px; }
-.twk-sect { font: 600 10px var(--mono); letter-spacing: 0.14em; text-transform: uppercase; color: var(--accent); }
+.twk-sect { font: 600 0.625rem var(--mono); letter-spacing: 0.14em; text-transform: uppercase; color: var(--accent); }
 /* Settings: one size in every layout and on every tab, so a tab reads the same on a phone as on a desktop and switching
    tabs doesn't move the panel; the tabs sit in a fixed grid, three a row when there are five or six */
 .twk-tabbed { width: min(380px, calc(100% - 32px)); height: min(720px, calc(100% - 72px)); }
-.twk-tabs { flex: none; display: grid; grid-template-columns: repeat(var(--twk-tab-cols), 1fr); gap: 2px; margin: 0 14px 12px; padding: 2px; border-radius: 8px; background: var(--raise); }
-.twk-tabs button { min-height: 28px; padding: 4px 6px; border: 0; border-radius: 6px; background: transparent; color: var(--dim); font: 600 12px var(--sans); cursor: pointer; }
+.twk-tabs { flex: none; display: grid; grid-template-columns: repeat(var(--twk-tab-cols), 1fr); gap: 2px; margin: 0 14px 12px; padding: 2px; border-radius: 4px; background: var(--raise); }
+.twk-tabs button { min-height: 28px; padding: 4px 6px; border: 0; border-radius: 3px; background: transparent; color: var(--dim); font: 600 0.75rem var(--sans); cursor: pointer; }
 .twk-tabs button:hover { color: var(--ink); }
 .twk-tabs button[aria-selected="true"] { color: var(--ink); background: color-mix(in srgb, var(--accent) 22%, transparent); box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--accent) 50%, transparent); }
 .twk-tabs button:focus-visible { outline: 2px solid var(--accent); outline-offset: 1px; }
@@ -242,38 +243,38 @@ body:has(.stage-tall) .twk-panel { bottom: calc(51px + env(safe-area-inset-botto
    one row and each tab's rows in two columns. The columns are an inner box of natural height that the body scrolls: a
    multi-column box of capped height adds columns past its right edge in Firefox */
 @media (max-height: 560px) and (min-width: 600px) {
-  body:has(.stage:not(.stage-tall)) .twk-tabbed { width: min(760px, calc(100% - 32px)); bottom: calc(52px + env(safe-area-inset-bottom, 0px)); height: calc(100% - 68px - env(safe-area-inset-bottom, 0px)); max-height: none; display: grid; grid-template-columns: auto 1fr auto; grid-template-rows: auto minmax(0, 1fr); align-items: center; }
-  body:has(.stage:not(.stage-tall)) .twk-tabbed .twk-hd { display: contents; }
-  body:has(.stage:not(.stage-tall)) .twk-tabbed .twk-hd b { grid-row: 1; grid-column: 1; padding: 0 4px 0 14px; }
-  body:has(.stage:not(.stage-tall)) .twk-tabbed .twk-tabs { grid-row: 1; grid-column: 2; margin: 8px 6px; grid-template-columns: none; grid-auto-flow: column; grid-auto-columns: 1fr; }
-  body:has(.stage:not(.stage-tall)) .twk-tabbed .twk-x { grid-row: 1; grid-column: 3; margin-right: 8px; }
-  body:has(.stage:not(.stage-tall)) .twk-tabbed .twk-body { grid-row: 2; grid-column: 1 / -1; align-self: stretch; display: block; padding-bottom: 4px; }
-  body:has(.stage:not(.stage-tall)) .twk-tabbed .twk-flow { display: block; columns: 2; column-gap: 28px; }
-  body:has(.stage:not(.stage-tall)) .twk-tabbed .twk-group { display: block; }
-  body:has(.stage:not(.stage-tall)) .twk-tabbed :is(.twk-flow > :not(.twk-group), .twk-group > *) { break-inside: avoid; margin-bottom: 10px; }
-  body:has(.stage:not(.stage-tall)) .twk-tabbed .twk-sect { break-after: avoid; }
-  body:has(.stage:not(.stage-tall)) .twk-tabbed .twk-btn { display: block; width: 100%; }
+  body:has(.stage:not(.stage-one)) .twk-tabbed { width: min(760px, calc(100% - 32px)); bottom: calc(52px + env(safe-area-inset-bottom, 0px)); height: calc(100% - 68px - env(safe-area-inset-bottom, 0px)); max-height: none; display: grid; grid-template-columns: auto 1fr auto; grid-template-rows: auto minmax(0, 1fr); align-items: center; }
+  body:has(.stage:not(.stage-one)) .twk-tabbed .twk-hd { display: contents; }
+  body:has(.stage:not(.stage-one)) .twk-tabbed .twk-hd b { grid-row: 1; grid-column: 1; padding: 0 4px 0 14px; }
+  body:has(.stage:not(.stage-one)) .twk-tabbed .twk-tabs { grid-row: 1; grid-column: 2; margin: 8px 6px; grid-template-columns: none; grid-auto-flow: column; grid-auto-columns: 1fr; }
+  body:has(.stage:not(.stage-one)) .twk-tabbed .twk-x { grid-row: 1; grid-column: 3; margin-right: 8px; }
+  body:has(.stage:not(.stage-one)) .twk-tabbed .twk-body { grid-row: 2; grid-column: 1 / -1; align-self: stretch; display: block; padding-bottom: 4px; }
+  body:has(.stage:not(.stage-one)) .twk-tabbed .twk-flow { display: block; columns: 2; column-gap: 28px; }
+  body:has(.stage:not(.stage-one)) .twk-tabbed .twk-group { display: block; }
+  body:has(.stage:not(.stage-one)) .twk-tabbed :is(.twk-flow > :not(.twk-group), .twk-group > *) { break-inside: avoid; margin-bottom: 10px; }
+  body:has(.stage:not(.stage-one)) .twk-tabbed .twk-sect { break-after: avoid; }
+  body:has(.stage:not(.stage-one)) .twk-tabbed .twk-btn { display: block; width: 100%; }
 }
 .twk-pair { display: flex; gap: 10px; }
 .twk-pair > * { flex: 1; min-width: 0; }
 .twk-row { display: flex; flex-direction: column; gap: 5px; }
 .twk-row-h { flex-direction: row; align-items: center; justify-content: space-between; gap: 10px; }
 .twk-lbl { display: flex; justify-content: space-between; align-items: baseline; gap: 8px; color: var(--ink); font-weight: 500; }
-.twk-val { color: var(--dim); font: 500 11px var(--mono); font-variant-numeric: tabular-nums; }
+.twk-val { color: var(--dim); font: 500 0.6875rem var(--mono); font-variant-numeric: tabular-nums; }
 .twk-note { color: var(--dim); }
 .twk-err { color: var(--danger); }
-.twk-progress { height: 6px; border-radius: 3px; background: var(--raise); overflow: hidden; }
+.twk-progress { height: 6px; border-radius: 2px; background: var(--raise); overflow: hidden; }
 .twk-progress > i { display: block; height: 100%; background: var(--accent); }
-.twk-field { width: 100%; height: 28px; padding: 0 8px; border: 1px solid var(--line); border-radius: 7px; background: var(--raise); color: var(--ink); font: inherit; }
+.twk-field { width: 100%; height: 28px; padding: 0 8px; border: 1px solid var(--line); border-radius: 4px; background: var(--raise); color: var(--ink); font: inherit; }
 .twk-slider { width: 100%; margin: 4px 0; accent-color: var(--accent); }
-.twk-seg { position: relative; display: flex; padding: 2px; border-radius: 8px; background: var(--raise); }
-.twk-seg-thumb { position: absolute; top: 2px; bottom: 2px; border-radius: 6px; background: color-mix(in srgb, var(--accent) 22%, transparent); box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--accent) 50%, transparent); transition: left 0.15s, width 0.15s; }
-.twk-seg button { position: relative; z-index: 1; flex: 1; min-height: 24px; padding: 4px 6px; border: 0; border-radius: 6px; background: transparent; font-weight: 500; cursor: pointer; }
+.twk-seg { position: relative; display: flex; padding: 2px; border-radius: 4px; background: var(--raise); }
+.twk-seg-thumb { position: absolute; top: 2px; bottom: 2px; border-radius: 3px; background: color-mix(in srgb, var(--accent) 22%, transparent); box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--accent) 50%, transparent); transition: left 0.15s, width 0.15s; }
+.twk-seg button { position: relative; z-index: 1; flex: 1; min-height: 24px; padding: 4px 6px; border: 0; border-radius: 3px; background: transparent; font-weight: 500; cursor: pointer; }
 .twk-toggle { position: relative; flex: none; width: 34px; height: 20px; padding: 0; border: 0; border-radius: 999px; background: var(--track); cursor: pointer; transition: background 0.15s; }
 .twk-toggle[data-on="1"] { background: var(--ok); }
 .twk-toggle i { position: absolute; top: 3px; left: 3px; width: 14px; height: 14px; border-radius: 50%; background: #fff; transition: transform 0.15s; }
 .twk-toggle[data-on="1"] i { transform: translateX(14px); }
-.twk-btn { min-height: 30px; padding: 4px 12px; border: 0; border-radius: 7px; background: var(--accent); color: var(--accent-ink); font-weight: 600; cursor: pointer; text-align: center; }
+.twk-btn { min-height: 30px; padding: 4px 12px; border: 0; border-radius: 4px; background: var(--accent); color: var(--accent-ink); font-weight: 600; cursor: pointer; text-align: center; }
 .twk-btn.secondary { background: var(--raise); color: var(--ink); border: 1px solid var(--line); }
 .twk-btn.danger { background: var(--danger); color: var(--panel); }
 .twk-btn:disabled { opacity: 0.6; cursor: progress; }
@@ -284,55 +285,55 @@ body:has(.stage-tall) .twk-panel { bottom: calc(51px + env(safe-area-inset-botto
 .q-panel { left: max(16px, env(safe-area-inset-left, 0px)); right: auto; width: min(400px, calc(100% - 32px)); }
 .q-panel .twk-hd b { color: var(--queen); }
 .q-hd { display: flex; align-items: center; gap: 8px; }
-.q-exp { padding: 1px 6px; border-radius: 4px; border: 1px solid color-mix(in srgb, var(--queen) 55%, transparent); color: var(--queen); font: 600 9px var(--mono); letter-spacing: 0.1em; text-transform: uppercase; }
+.q-exp { padding: 1px 6px; border-radius: 2px; border: 1px solid color-mix(in srgb, var(--queen) 55%, transparent); color: var(--queen); font: 600 0.5625rem var(--mono); letter-spacing: 0.1em; text-transform: uppercase; }
 .twk-note a { color: var(--accent); }
-.twk-info { flex: none; width: 15px; height: 15px; margin-left: 6px; padding: 0; vertical-align: 1px; border: 1px solid var(--line); border-radius: 50%; background: transparent; color: var(--dim); font: italic 600 10px/13px Georgia, serif; cursor: help; }
+.twk-info { flex: none; width: 15px; height: 15px; margin-left: 6px; padding: 0; vertical-align: 1px; border: 1px solid var(--line); border-radius: 50%; background: transparent; color: var(--dim); font: italic 600 0.625rem/13px Georgia, serif; cursor: help; }
 .twk-info:hover, .twk-info[aria-expanded="true"] { color: var(--ink); border-color: var(--dim); }
 .twk-btn-row { display: flex; align-items: center; gap: 4px; }
-.twk-tip { position: fixed; z-index: 100; max-width: min(280px, calc(100vw - 16px)); padding: 7px 10px; border: 1px solid var(--line); border-radius: 8px; background: var(--panel); color: var(--ink); box-shadow: 0 8px 24px var(--shadow); font: 12px/1.4 var(--sans); pointer-events: none; }
+.twk-tip { position: fixed; z-index: 100; max-width: min(280px, calc(100vw - 16px)); padding: 7px 10px; border: 1px solid var(--line); border-radius: 4px; background: var(--panel); color: var(--ink); box-shadow: 0 8px 24px var(--shadow); font: 0.75rem/1.4 var(--sans); pointer-events: none; }
 .twk-btn-row > .twk-btn { flex: 1; min-width: 0; }
-/* the engine settings in the Analysis panel (its ☰ menu): the Settings panel's controls, zoomed to read at the frame's
-   scale, in as many columns as fit */
-.an-engine { zoom: 1.6; font: 12px/1.4 var(--sans); color: var(--ink); letter-spacing: normal; text-transform: none; }
+/* the engine settings in the Analysis panel (its ☰ menu): the Settings panel's controls, zoomed 1.3 to read at the frame's text size and sized by the Text size setting (rem) like
+   the rest of the overlays, in as many columns as fit */
+.an-engine { zoom: 1.3; font: 0.75rem/1.4 var(--sans); color: var(--ink); letter-spacing: normal; text-transform: none; }
 .an-engine .twk-flow { display: grid; grid-template-columns: repeat(auto-fill, minmax(230px, 1fr)); gap: 10px 24px; align-items: start; }
 .an-engine .twk-flow > :is(.twk-note, .twk-progress, .twk-pair, .twk-btn, .twk-btn-row) { grid-column: 1 / -1; }
 .q-strong { color: var(--ink); }
 .q-sect { margin-top: 10px; }
-.q-busy { display: flex; align-items: center; gap: 8px; color: var(--ink); font: 500 12px var(--mono); }
+.q-busy { display: flex; align-items: center; gap: 8px; color: var(--ink); font: 500 0.75rem var(--mono); }
 .q-dot { width: 8px; height: 8px; border-radius: 50%; background: var(--queen); animation: q-pulse 1.2s ease-in-out infinite; }
 @keyframes q-pulse { 50% { opacity: 0.25; } }
-.q-stop { margin-left: auto; padding: 2px 8px; border-radius: 5px; border: 1px solid var(--line); background: var(--raise); cursor: pointer; font: 500 11px var(--mono); }
-.q-result { display: flex; flex-direction: column; gap: 8px; padding: 10px 12px; border-radius: 8px; background: var(--raise); border: 1px solid var(--line); }
-.q-pos { font: 600 11px var(--mono); letter-spacing: 0.1em; text-transform: uppercase; color: var(--dim); }
-.q-grid { display: grid; grid-template-columns: auto minmax(0, 1fr); gap: 4px 12px; margin: 0; font: 500 12px var(--mono); }
+.q-stop { margin-left: auto; padding: 2px 8px; border-radius: 3px; border: 1px solid var(--line); background: var(--raise); cursor: pointer; font: 500 0.6875rem var(--mono); }
+.q-result { display: flex; flex-direction: column; gap: 8px; padding: 10px 12px; border-radius: 4px; background: var(--raise); border: 1px solid var(--line); }
+.q-pos { font: 600 0.6875rem var(--mono); letter-spacing: 0.1em; text-transform: uppercase; color: var(--dim); }
+.q-grid { display: grid; grid-template-columns: auto minmax(0, 1fr); gap: 4px 12px; margin: 0; font: 500 0.75rem var(--mono); }
 .q-grid dt { color: var(--dim); }
 .q-grid dd { margin: 0; min-width: 0; display: flex; flex-wrap: wrap; align-items: center; gap: 6px; }
-.q-queen { color: var(--queen); font-size: 14px; }
+.q-queen { color: var(--queen); font-size: 0.875rem; }
 .q-line { color: var(--dim); }
-.q-tag { padding: 1px 6px; border-radius: 4px; font: 600 10px var(--mono); letter-spacing: 0.04em; }
+.q-tag { padding: 1px 6px; border-radius: 2px; font: 600 0.625rem var(--mono); letter-spacing: 0.04em; }
 .q-tag.q-ok { background: rgba(98, 196, 131, 0.16); }
 .q-tag.q-no { background: rgba(236, 148, 66, 0.16); }
 .q-ok { color: var(--ok); }
 .q-no { color: var(--warn); }
 .q-dim { color: var(--dim); }
 .q-evalbox { display: flex; flex-direction: column; gap: 6px; padding-top: 8px; border-top: 1px solid var(--line); }
-.q-evals { width: 100%; border-collapse: collapse; font: 700 16px var(--mono); font-variant-numeric: tabular-nums; }
-.q-evals thead th { font: 600 10px var(--mono); letter-spacing: 0.1em; text-transform: uppercase; color: var(--dim); text-align: right; padding: 0 0 4px 12px; }
-.q-evals tbody th { font: 500 11px var(--mono); color: var(--dim); text-align: left; padding: 3px 0; white-space: nowrap; }
+.q-evals { width: 100%; border-collapse: collapse; font: 700 1rem var(--mono); font-variant-numeric: tabular-nums; }
+.q-evals thead th { font: 600 0.625rem var(--mono); letter-spacing: 0.1em; text-transform: uppercase; color: var(--dim); text-align: right; padding: 0 0 4px 12px; }
+.q-evals tbody th { font: 500 0.6875rem var(--mono); color: var(--dim); text-align: left; padding: 3px 0; white-space: nowrap; }
 .q-evals td { text-align: right; padding: 3px 0 3px 12px; color: var(--ink); white-space: nowrap; }
 .q-evals td.q-evalv { color: var(--queen); }
-.q-evals tr.q-change th, .q-evals tr.q-change td { border-top: 1px solid var(--line); padding-top: 5px; font-size: 13px; }
+.q-evals tr.q-change th, .q-evals tr.q-change td { border-top: 1px solid var(--line); padding-top: 5px; font-size: 0.8125rem; }
 .q-sr { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); }
-.q-mini { padding: 1px 8px; border-radius: 5px; border: 1px solid color-mix(in srgb, var(--queen) 55%, transparent); background: transparent; color: var(--queen); font: 600 11px var(--mono); cursor: pointer; }
-.q-evalnote { font: 500 10px/1.4 var(--mono); color: var(--dim); }
-.q-evaltext span { font: 600 10px var(--mono); letter-spacing: 0.08em; text-transform: uppercase; font-style: normal; color: var(--dim); }
+.q-mini { padding: 1px 8px; border-radius: 3px; border: 1px solid color-mix(in srgb, var(--queen) 55%, transparent); background: transparent; color: var(--queen); font: 600 0.6875rem var(--mono); cursor: pointer; }
+.q-evalnote { font: 500 0.625rem/1.4 var(--mono); color: var(--dim); }
+.q-evaltext span { font: 600 0.625rem var(--mono); letter-spacing: 0.08em; text-transform: uppercase; font-style: normal; color: var(--dim); }
 .q-evalv { color: var(--queen); }
 .q-evalsf { color: var(--ink); }
-.q-evaltext { margin: 0; padding-left: 10px; border-left: 2px solid var(--queen); font: italic 17px/1.4 "Instrument Serif", Georgia, serif; color: var(--ink); max-width: 65ch; }
+.q-evaltext { margin: 0; padding-left: 10px; border-left: 2px solid var(--queen); font: italic 1.0625rem/1.4 "Instrument Serif", Georgia, serif; color: var(--ink); max-width: 65ch; }
 .q-why summary { cursor: pointer; color: var(--ink); font-weight: 500; }
-.q-why p { margin: 8px 0 0; color: var(--ink); font: 13px/1.5 var(--sans); max-width: 65ch; }
-.q-table { width: 100%; border-collapse: collapse; font: 500 12px var(--mono); font-variant-numeric: tabular-nums; }
-.q-table th { text-align: left; padding: 4px 6px; font: 600 10px var(--mono); letter-spacing: 0.08em; text-transform: uppercase; color: var(--dim); border-bottom: 1px solid var(--line); }
+.q-why p { margin: 8px 0 0; color: var(--ink); font: 0.8125rem/1.5 var(--sans); max-width: 65ch; }
+.q-table { width: 100%; border-collapse: collapse; font: 500 0.75rem var(--mono); font-variant-numeric: tabular-nums; }
+.q-table th { text-align: left; padding: 4px 6px; font: 600 0.625rem var(--mono); letter-spacing: 0.08em; text-transform: uppercase; color: var(--dim); border-bottom: 1px solid var(--line); }
 .q-table td { padding: 5px 6px; border-bottom: 1px solid var(--line); white-space: nowrap; }
 .q-table tbody tr { cursor: pointer; }
 .q-table tbody tr:hover, .q-table tr.q-sel { background: rgba(224, 96, 159, 0.1); }
@@ -341,9 +342,9 @@ body:has(.stage-tall) .twk-panel { bottom: calc(51px + env(safe-area-inset-botto
 .q-fail { color: var(--danger); }
 .q-via-box { display: flex; flex-direction: column; gap: 8px; }
 .q-via { color: var(--ink); }
-.signin-note { position: fixed; z-index: 80; top: calc(56px + env(safe-area-inset-top, 0px)); left: 50%; transform: translateX(-50%); max-width: calc(100% - 32px); display: flex; align-items: center; gap: 10px; padding: 10px 8px 10px 14px; border-radius: 10px; background: var(--panel-glass); border: 1px solid var(--line); box-shadow: 0 10px 30px var(--shadow); font: 500 13px/1.4 var(--sans); color: var(--ink); }
+.signin-note { position: fixed; z-index: 80; top: calc(56px + env(safe-area-inset-top, 0px)); left: 50%; transform: translateX(-50%); max-width: calc(100% - 32px); display: flex; align-items: center; gap: 10px; padding: 10px 8px 10px 14px; border-radius: 5px; background: var(--panel-glass); border: 1px solid var(--line); box-shadow: 0 10px 30px var(--shadow); font: 500 0.8125rem/1.4 var(--sans); color: var(--ink); }
 /* no connection: a warning-tinted tag at the top of the page, above the frame, while it lasts */
-.net-chip { flex: none; display: inline-flex; align-items: center; gap: 6px; height: 24px; padding: 0 10px; border-radius: 12px; border: 1px solid color-mix(in srgb, var(--warn) 55%, transparent); background: color-mix(in srgb, var(--warn) 16%, var(--bg)); font: 600 11px var(--mono); letter-spacing: 0.06em; color: var(--warn); white-space: nowrap; }
+.net-chip { flex: none; display: inline-flex; align-items: center; gap: 6px; height: 24px; padding: 0 10px; border-radius: 6px; border: 1px solid color-mix(in srgb, var(--warn) 55%, transparent); background: color-mix(in srgb, var(--warn) 16%, var(--bg)); font: 600 0.6875rem var(--mono); letter-spacing: 0.06em; color: var(--warn); white-space: nowrap; }
 /* the note sits centred from the middle of the page, which would wrap it at half the width: it takes its text's width, up to the page's */
 .net-note { width: max-content; box-sizing: border-box; }
 /* the offline note tinted with the warning colour, Back online with the ok one, so each stands out from the page */
@@ -352,13 +353,13 @@ body:has(.stage-tall) .twk-panel { bottom: calc(51px + env(safe-area-inset-botto
 /* Copy FEN's note: the FEN in a read-only field, where a click selects all of it; it wraps anywhere on a phone, and
    is as tall as its lines where the browser can size a field to its content */
 .fen-note { max-width: min(640px, calc(100% - 32px)); }
-.fen-note-fen { display: block; width: min(46ch, 100%); margin-top: 4px; padding: 2px 6px; border: 1px solid var(--line); border-radius: 4px; background: var(--bg); color: inherit; font: inherit; font-family: var(--mono); overflow-wrap: anywhere; resize: none; overflow: hidden; field-sizing: content; }
+.fen-note-fen { display: block; width: min(46ch, 100%); margin-top: 4px; padding: 2px 6px; border: 1px solid var(--line); border-radius: 2px; background: var(--bg); color: inherit; font: inherit; font-family: var(--mono); overflow-wrap: anywhere; resize: none; overflow: hidden; field-sizing: content; }
 /* the offline note reads larger on a desktop's full-size page */
-body:has(.stage:not(.stage-tall):not(.stage-short)) .net-note { top: calc(64px + env(safe-area-inset-top, 0px)); gap: 14px; padding: 14px 12px 14px 20px; border-radius: 12px; font-size: 16px; }
+body:has(.stage:not(.stage-one)) .net-note { top: calc(64px + env(safe-area-inset-top, 0px)); gap: 14px; padding: 14px 12px 14px 20px; border-radius: 6px; font-size: 1rem; }
 .net-chip::before { content: ""; width: 7px; height: 7px; border-radius: 50%; background: var(--warn); }
-.q-log pre { margin: 8px 0 0; max-height: 160px; overflow: auto; padding: 8px; border-radius: 6px; background: var(--bg); border: 1px solid var(--line); font: 500 11px/1.5 var(--mono); color: var(--ink); white-space: pre-wrap; }
+.q-log pre { margin: 8px 0 0; max-height: 160px; overflow: auto; padding: 8px; border-radius: 3px; background: var(--bg); border: 1px solid var(--line); font: 500 0.6875rem/1.5 var(--mono); color: var(--ink); white-space: pre-wrap; }
 .q-diag { display: flex; flex-direction: column; gap: 6px; }
-.q-diag pre { margin: 0; max-height: 180px; overflow: auto; padding: 8px; border-radius: 6px; background: var(--bg); border: 1px solid var(--line); font: 500 11px/1.5 var(--mono); color: var(--ink); white-space: pre-wrap; word-break: break-word; }
+.q-diag pre { margin: 0; max-height: 180px; overflow: auto; padding: 8px; border-radius: 3px; background: var(--bg); border: 1px solid var(--line); font: 500 0.6875rem/1.5 var(--mono); color: var(--ink); white-space: pre-wrap; word-break: break-word; }
 @media (prefers-reduced-motion: reduce) { .twk-seg-thumb, .twk-toggle, .twk-toggle i { transition: none; } }
 </style>
 <div id="root"></div>
@@ -367,6 +368,6 @@ body:has(.stage:not(.stage-tall):not(.stage-short)) .net-note { top: calc(64px +
 <script src="https://cdnjs.cloudflare.com/ajax/libs/react/18.3.1/umd/react.production.min.js" integrity="sha384-DGyLxAyjq0f9SPpVevD6IgztCFlnMF6oW/XQGmfe+IsZ8TqEiDrcHkMLKI6fiB/Z" crossorigin="anonymous"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/react-dom/18.3.1/umd/react-dom.production.min.js" integrity="sha384-gTGxhz21lVGYNMcdJOyq01Edg0jhn/c22nsx0kyqP0TxaV5WVdsSH1fSDUf5YJj1" crossorigin="anonymous"></script>
 <script>
-window.TWEAK_DEFAULTS = { flip: false, bestArrows: true, cameraPush: false, secondsPerMove: 1.6, keyHold: 1.5, fastOpening: false, queenInVideo: true, scheme: 'Auto', exportFps: 8, exportFormat: 'MP4', webpWidth: 'Half', webpQuality: 75, blunderGlow: true, commentary: true, commentPgn: true, commentNotes: true, commentQueen: true, sound: true, soundSet: 'Lichess sfx', soundVolume: 70, sfDepth: null, sfTime: 3, sfOwnDepth: null, sfOwnTime: 5, sfLines: 1, sfHash: 64, sfEngine: 'Lite', tablebase: true, playClock: 'Off', playSide: 'w' };
+window.TWEAK_DEFAULTS = { flip: false, bestArrows: true, cameraPush: false, secondsPerMove: 1.6, keyHold: 1.5, fastOpening: false, queenInVideo: true, scheme: 'Auto', textSize: 'Default', exportFps: 8, exportFormat: 'MP4', webpWidth: 'Half', webpQuality: 75, blunderGlow: true, commentary: true, commentPgn: true, commentNotes: true, commentQueen: true, sound: true, soundSet: 'Lichess sfx', soundVolume: 70, sfDepth: null, sfTime: 3, sfOwnDepth: null, sfOwnTime: 5, sfLines: 1, sfHash: 64, sfEngine: 'Lite', tablebase: true, playClock: 'Off', playSide: 'w' };
 </script>
 <!--SCRIPTS-->

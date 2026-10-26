@@ -12,21 +12,21 @@ function FreeBar({ pos, side, a, clock, name }) {
   const worth = (col) => Object.keys(FULL_SET).reduce((s, t) => s + left(col, t) * VALUE[t], 0);
   const opp = side === 'w' ? 'b' : 'w', pts = worth(side) - worth(opp), shown = [];
   Object.keys(FULL_SET).forEach((t) => {
-    for (let i = 0; i < lost(opp, t) - lost(side, t); i++) shown.push(<img key={t + i} src={img(opp, t)} alt="" style={{ width: 30, height: 30, flex: 'none', marginLeft: shown.length ? -8 : 0, filter: opp === 'b' ? C.rim : 'none' }} />);
+    for (let i = 0; i < lost(opp, t) - lost(side, t); i++) shown.push(<img key={t + i} src={img(opp, t)} alt="" style={{ width: tx(30), height: tx(30), flex: 'none', marginLeft: shown.length ? -tx(8) : 0, filter: opp === 'b' ? C.rim : 'none' }} />);
   });
   return (
-    <div style={{ position: 'absolute', left: BX, width: BW / L.bar.k, top: side === ORIENT ? BY + BW + L.bar.gap : BY - L.bar.gap - 40 * L.bar.k, height: 40, transform: `scale(${L.bar.k})`, transformOrigin: '0 0', display: 'flex', alignItems: 'center', gap: 14, opacity: a }}>
-      <span style={{ width: 14, height: 14, borderRadius: 3, background: side === 'w' ? '#f1ebe1' : '#1c1613', border: `1.5px solid ${C.dim}`, flex: 'none' }} />
-      <span style={{ font: `600 20px ${SANS}`, color: C.ink, whiteSpace: 'nowrap' }}>{name || (side === 'w' ? 'White' : 'Black')}</span>
-      <span style={{ display: 'flex', alignItems: 'center', marginLeft: 6 }}>{shown}</span>
-      {pts > 0 && <span style={{ font: `600 16px ${MONO}`, color: C.dim, marginLeft: 8 }}>+{pts}</span>}
-      {clock && <span className="game-clock" style={{ marginLeft: 'auto', minWidth: 96, textAlign: 'center', padding: '2px 10px', borderRadius: 5, font: `600 22px ${MONO}`, background: clock.active ? (clock.s < 60 ? C.blunder : '#f1ebe1') : C.off, color: clock.active ? '#15100d' : C.dim, boxShadow: clock.active ? `0 0 0 1px ${C.line}` : 'none' }}>{fmtClock(clock.s)}</span>}
+    <div style={{ ...barPlace(side), gap: tx(14), opacity: a }}>
+      <span style={{ width: tx(14), height: tx(14), borderRadius: 2, background: side === 'w' ? '#f1ebe1' : '#1c1613', border: `1.5px solid ${C.dim}`, flex: 'none' }} />
+      <span style={{ font: `600 ${tx(20)}px ${SANS}`, color: C.ink, whiteSpace: 'nowrap' }}>{name || (side === 'w' ? 'White' : 'Black')}</span>
+      <span style={{ display: 'flex', alignItems: 'center', marginLeft: tx(6) }}>{shown}</span>
+      {pts > 0 && <span style={{ font: `600 ${tx(16)}px ${MONO}`, color: C.dim, marginLeft: tx(8) }}>+{pts}</span>}
+      {clock && <span className="game-clock" style={{ marginLeft: 'auto', minWidth: tx(72), textAlign: 'center', padding: `${tx(1)}px ${tx(7)}px`, borderRadius: 3, font: `600 ${tx(17)}px ${MONO}`, background: clock.active ? (clock.s < 60 ? C.blunder : '#f1ebe1') : C.off, color: clock.active ? '#15100d' : C.dim, boxShadow: clock.active ? `0 0 0 1px ${C.line}` : 'none' }}>{fmtClock(clock.s)}</span>}
     </div>
   );
 }
 
 // a key's name drawn as a key: filled and bordered like a button, but only a label (no pointer, no clicks)
-const KeyCap = ({ children }) => <span style={{ display: 'inline-block', padding: '0 7px', margin: '0 1px', borderRadius: 4, background: C.off, border: `1px solid ${C.line}`, boxShadow: `0 1px 0 ${C.line}`, color: C.ink, lineHeight: 1.45, pointerEvents: 'none', userSelect: 'none' }}>{children}</span>;
+const KeyCap = ({ children }) => <span style={{ display: 'inline-block', padding: `0 ${tx(7)}px`, margin: `0 ${tx(1)}px`, borderRadius: 2, background: C.off, border: `1px solid ${C.line}`, boxShadow: `0 1px 0 ${C.line}`, color: C.ink, lineHeight: 1.45, pointerEvents: 'none', userSelect: 'none' }}>{children}</span>;
 
 // the book's name for the position on the board (the last named one on the way there, the start included), or null
 function boardOpening(board, book) {
@@ -42,31 +42,32 @@ function bookMoves(board, book) {
 // The Commentary box on the free board: the position's name and the book moves from it, each a button that plays the
 // move as a drag would (so Stockfish rates it). Out of the book it says so, with the last book position on the way.
 function OpeningExplorer({ board, book, onPlay }) {
-  const B = window.BoardCore, ucis = B.ucis(board), white = B.pos(board).turn === 'w', z = L.comment.label || 1;
+  const B = window.BoardCore, ucis = B.ucis(board), white = B.pos(board).turn === 'w';
   const named = boardOpening(board, book), next = bookMoves(board, book);
   let inBook = false;
   try { inBook = !!book && book.inBook(ucis, board.fen); } catch (e) {}
   const fromStart = board.fen === window.ChessCore.START_FEN;
-  const heading = (txt, dim) => <span className="book-head" style={{ display: 'block', font: `400 ${Math.round(40 * Math.max(1, L.comment.text))}px/1.14 ${SERIF}`, color: dim ? C.dim : C.ink, textWrap: 'pretty' }}>{txt}</span>;
-  const note = (txt) => <span style={{ display: 'block', marginTop: 8, font: `500 ${Math.round(15 * z)}px ${MONO}`, color: C.dim }}>{txt}</span>;
+  const heading = (txt, dim) => <span className="book-head" style={{ display: 'block', font: `400 ${tx(40)}px/1.14 ${SERIF}`, color: dim ? C.dim : C.ink, textWrap: 'pretty' }}>{txt}</span>;
+  const note = (txt) => <span style={{ display: 'block', marginTop: tx(8), font: `500 ${tx(15)}px ${MONO}`, color: C.dim }}>{txt}</span>;
   const play = (e, uci) => { e.preventDefault(); e.stopPropagation(); onPlay(uci); };
   // each position's list starts at its top, not where the last one was scrolled to (the panel's box stays the same node)
   const top = React.useRef(null), posKey = board.fen + '|' + ucis.join(' ');
   React.useLayoutEffect(() => { const box = top.current && top.current.parentElement; if (box) box.scrollTop = 0; }, [posKey]);
   let body;
-  if (!book) body = <span style={{ font: `italic 400 30px/1.25 ${SERIF}`, color: C.dim }}>Loading the opening book…</span>;
+  if (!book) body = <span style={{ font: `italic 400 ${tx(30)}px/1.25 ${SERIF}`, color: C.dim }}>Loading the opening book…</span>;
   else if (inBook) {
     body = (
       <React.Fragment>
         {heading(named ? named.name : ucis.length === 0 && fromStart ? 'Starting position' : 'In the book')}
         {next.length ? (
-          <div className="book-moves" style={{ display: 'flex', flexDirection: 'column', gap: 2 * z, marginTop: 12 * z }}>
+          <div className="book-moves" style={{ display: 'flex', flexDirection: 'column', gap: tx(2), marginTop: tx(12) }}>
             {next.map((m) => (
+              // a name that doesn't fit beside its move goes under it
               <div key={m.uci} className="mv" role="button" tabIndex={0} title={`Play ${m.san}`} onClick={(e) => play(e, m.uci)}
                 onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') play(e, m.uci); }}
-                style={{ display: 'flex', alignItems: 'center', gap: 14 * z, minWidth: 0, padding: `${3 * z}px 6px`, borderRadius: 4, cursor: 'pointer' }}>
-                <span style={{ flex: 'none', minWidth: 58 * z, boxSizing: 'border-box', textAlign: 'center', padding: `${2 * z}px ${8 * z}px`, borderRadius: 4, font: `600 ${Math.round(17 * z)}px ${MONO}`, background: white ? '#f1ebe1' : '#2a2320', color: white ? '#15100d' : '#efe8de', border: `1px solid ${white ? 'rgba(60,40,20,0.22)' : 'rgba(255,236,214,0.22)'}` }}>{m.san}</span>
-                <span style={{ minWidth: 0, font: `400 ${Math.round(17 * z)}px ${SANS}`, color: C.dim, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{m.name || ''}</span>
+                style={{ display: 'flex', flexWrap: 'wrap', alignItems: 'center', columnGap: tx(14), rowGap: tx(2), minWidth: 0, padding: `${tx(3)}px ${tx(6)}px`, borderRadius: 2, cursor: 'pointer' }}>
+                <span style={{ flex: 'none', minWidth: tx(58), boxSizing: 'border-box', textAlign: 'center', padding: `${tx(2)}px ${tx(8)}px`, borderRadius: 2, font: `600 ${tx(17)}px ${MONO}`, background: white ? '#f1ebe1' : '#2a2320', color: white ? '#15100d' : '#efe8de', border: `1px solid ${white ? 'rgba(60,40,20,0.22)' : 'rgba(255,236,214,0.22)'}` }}>{m.san}</span>
+                <span style={{ minWidth: 0, maxWidth: '100%', font: `400 ${tx(17)}px ${SANS}`, color: C.dim, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{m.name || ''}</span>
               </div>
             ))}
           </div>
@@ -75,9 +76,9 @@ function OpeningExplorer({ board, book, onPlay }) {
     );
   } else if (named || (fromStart && ucis.length)) {
     body = <React.Fragment>{heading('Out of book', true)}{named && note(`last book position: ${named.eco} ${named.name}`)}</React.Fragment>;
-  } else body = <span style={{ font: `italic 400 30px/1.25 ${SERIF}`, color: C.dim }}>This position isn’t in the opening book.</span>;
+  } else body = <span style={{ font: `italic 400 ${tx(30)}px/1.25 ${SERIF}`, color: C.dim }}>This position isn’t in the opening book.</span>;
   return (
-    <Panel box={{ ...L.comment, scroll: true }} a={1} title="Opening explorer" right={named ? `${named.eco} ${named.name}` : null}>
+    <Panel box={{ ...L.comment, scroll: !L.comment.flow }} a={1} title="Opening explorer" right={named ? `${named.eco} ${named.name}` : null}>
       <div ref={top}>{body}</div>
     </Panel>
   );
@@ -91,57 +92,24 @@ function StartAnalysis({ board, ev, status, onLine }) {
   const turn = board.start.pos.turn === 'w' ? 'White' : 'Black';
   return (
     <React.Fragment>
-      <div style={{ display: 'flex', alignItems: 'flex-end', gap: 28 }}>
-        <span style={{ font: `700 38px ${MONO}`, color: C.last }}>Start</span>
-        <span style={{ marginLeft: 'auto', font: `700 38px ${MONO}`, color: C.ink }}>{down && !(after && !after.partial) ? '—' : fmtSf(after && after.cp)}</span>
+      {/* a narrow panel puts the eval under Start, at the right */}
+      <div style={{ display: 'flex', flexWrap: 'wrap', alignItems: 'flex-end', columnGap: tx(28) }}>
+        <span style={{ font: `700 ${tx(HEADLINE)}px ${MONO}`, color: C.last }}>Start</span>
+        <span style={{ marginLeft: 'auto', font: `700 ${tx(HEADLINE)}px ${MONO}`, color: C.ink }}>{down && !(after && !after.partial) ? '—' : fmtSf(after && after.cp)}</span>
       </div>
       {/* under the move and the eval, spanning the panel, as in OwnMoveAnalysis */}
-      <div style={{ marginTop: 6, font: `600 16px ${MONO}`, letterSpacing: '0.08em', textTransform: 'uppercase', color: C.last }}>
+      <div style={{ marginTop: tx(6), font: `600 ${tx(16)}px ${MONO}`, letterSpacing: '0.08em', textTransform: 'uppercase', color: C.last }}>
         {turn} to move{down ? ` · ${status === 'unavailable' ? 'Stockfish can’t run here' : 'Stockfish stopped · play a move to restart it'}` : !after || after.partial ? ' · Thinking…' : ''}
       </div>
-      <div style={{ marginTop: 16, paddingTop: 14, borderTop: `1px solid ${C.line}`, font: `500 18px ${MONO}`, color: C.dim, display: 'flex', flexDirection: 'column', gap: 8 }}>
+      <div style={{ marginTop: tx(16), paddingTop: tx(14), borderTop: `1px solid ${C.line}`, font: `500 ${tx(18)}px ${MONO}`, color: C.dim, display: 'flex', flexDirection: 'column', gap: tx(8) }}>
         {after && after.lines && after.lines.length > 1 ? <EngineLines lines={after.lines} pos={board.start.pos} ply0={board.start.ply0} c={0} onPick={onLine} />
           : line.length > 0
           ? <LineChips name={null} tip="stockfish’s best line" accent={C.best} moves={line.map((m) => m.san)} ply0={board.start.ply0} c={0} legal={line.length} sel={null} onPick={(j) => onLine(line.slice(0, j + 1))} />
           : <span> </span>}
-        <span style={{ ...NO_SELECT, font: `500 ${L.hint || 15}px ${MONO}` }}>Drag a piece to play a move, for either side; Stockfish rates every move.</span>
+        <span style={{ ...NO_SELECT, font: `500 ${tx(15)}px ${MONO}` }}>Drag a piece to play a move, for either side; Stockfish rates every move.</span>
       </div>
     </React.Fragment>
   );
-}
-
-// The frame's layout without the eval graph, whose room goes to the panels: on the wide frame Moves and the explorer grow
-// down into it (more moves, and room for book moves) and Analysis moves down; on the square frame Analysis and Moves grow
-// up into it, on the sideways phone Analysis grows down into it.
-// GameVideo sets the plain layout again on its next render.
-const BOARD_LAYOUTS = new WeakMap();
-function boardLayout(base) {
-  if (!base.plot) return base;
-  if (!BOARD_LAYOUTS.has(base)) {
-    const p = base.plot, an = base.analysis, grow = p.y + p.h - (an.y + an.h);
-    BOARD_LAYOUTS.set(base, base.header && an.y > p.y ? { ...base, plot: null, analysis: { ...an, y: p.y, h: an.h + an.y - p.y }, moves: { ...base.moves, y: p.y, h: base.moves.h + base.moves.y - p.y, rows: base.moves.rows + Math.floor((base.moves.y - p.y) / 38) } } // square: Analysis and Moves grow up into it
-      : base.header
-      ? { ...base, plot: null, moves: { ...base.moves, h: base.moves.h + grow, rows: base.moves.rows + Math.floor(grow / base.moves.k / 38) }, comment: { ...base.comment, h: base.comment.h + grow }, analysis: { ...an, y: an.y + grow } }
-      : { ...base, plot: null, analysis: { ...an, h: p.y + p.h - an.y } });
-  }
-  return BOARD_LAYOUTS.get(base);
-}
-
-// A game draws no eval bar, so its board takes the bar's room: centred on the portrait frame; on the wide frame grown
-// (zoom) to fill the height, 40 px from the top and bottom edges (the compact frame's 20) with its player bars, the panels moved right to make room.
-const GAME_LAYOUTS = new WeakMap();
-function gameLayout(base) {
-  if (!GAME_LAYOUTS.has(base)) {
-    if (base === LAYOUTS.tall) GAME_LAYOUTS.set(base, { ...base, bx: (PORTRAIT.width - BW) / 2 });
-    else if (base !== boardLayout(LAYOUTS.wide) && base !== boardLayout(LAYOUTS.compact)) GAME_LAYOUTS.set(base, base);
-    else {
-      const e = base.edge || 40, bar = base.bar.gap + 40 * base.bar.k, zoom = ((base.frameH || 1080) - 2 * e) / (BW + 2 * bar), bx = base.eval, by = e + zoom * bar;
-      const dx = bx + zoom * BW + (base.edge ? 20 : 36) - base.header.x, right = base.header.x + base.header.w;
-      const move = (b) => ({ ...b, x: b.x + dx, w: b.x + b.w >= right ? b.w - dx : b.w });
-      GAME_LAYOUTS.set(base, { ...base, bx, by, zoom, header: move(base.header), moves: move(base.moves), comment: move(base.comment), analysis: move(base.analysis) });
-    }
-  }
-  return GAME_LAYOUTS.get(base);
 }
 
 // ---------- a game at the board (Play vs human, Play vs Stockfish) ----------
@@ -223,9 +191,9 @@ function useEngineOpponent(board, onChange, sf) {
 // also shows the critique: during the game the latest flagged move and why, without the better move; after it, every
 // flagged move with the better one
 function GameInfo({ board }) {
-  const G = board.game, z = L.comment.label || 1, sfGame = G.mode === 'stockfish';
-  const note = (txt) => <span style={{ display: 'block', marginTop: 10 * z, font: `400 ${Math.round(19 * z)}px/1.4 ${SANS}`, color: C.dim }}>{txt}</span>;
-  const heading = (txt, col) => <span className="game-info-head" style={{ display: 'block', font: `400 ${Math.round(40 * Math.max(1, L.comment.text))}px/1.14 ${SERIF}`, color: col || C.ink }}>{txt}</span>;
+  const G = board.game, sfGame = G.mode === 'stockfish';
+  const note = (txt) => <span style={{ display: 'block', marginTop: tx(10), font: `400 ${tx(19)}px/1.4 ${SANS}`, color: C.dim }}>{txt}</span>;
+  const heading = (txt, col) => <span className="game-info-head" style={{ display: 'block', font: `400 ${tx(40)}px/1.14 ${SERIF}`, color: col || C.ink }}>{txt}</span>;
   const from = board.fen === window.ChessCore.START_FEN ? 'From the starting position' : 'From a set-up position';
   let body;
   if (!sfGame) {
@@ -241,16 +209,16 @@ function GameInfo({ board }) {
     const named = (c) => `${CLASS_LABEL[c.cls]}: ${window.BoardCore.label(board, c.j)}`;
     const why = (c) => (c.text ? c.text[0].toUpperCase() + c.text.slice(1) + '.' : '');
     const bestSan = (c) => { const r = window.ChessCore.applyUci(c.j ? board.steps[c.j - 1].pos : board.start.pos, c.best); return r ? r.san : c.best; };
-    const line = (txt, col) => <span style={{ display: 'block', marginTop: 6 * z, font: `400 ${Math.round(22 * z)}px/1.35 ${SANS}`, color: col || C.ink }}>{txt}</span>;
+    const line = (txt, col) => <span style={{ display: 'block', marginTop: tx(6), font: `400 ${tx(22)}px/1.35 ${SANS}`, color: col || C.ink }}>{txt}</span>;
     if (G.result) {
       body = (
         <React.Fragment>
           {heading(crit.length ? `${crit.length} flagged move${crit.length === 1 ? '' : 's'}` : 'No moves flagged')}
           {crit.length ? (
-            <div className="game-critique" style={{ display: 'flex', flexDirection: 'column', gap: 10 * z, marginTop: 12 * z }}>
+            <div className="game-critique" style={{ display: 'flex', flexDirection: 'column', gap: tx(10), marginTop: tx(12) }}>
               {crit.map((c) => (
                 <div key={c.j}>
-                  <span style={{ display: 'block', font: `600 ${Math.round(20 * z)}px ${MONO}`, color: clsColor(c.cls) }}>{named(c)}</span>
+                  <span style={{ display: 'block', font: `600 ${tx(20)}px ${MONO}`, color: clsColor(c.cls) }}>{named(c)}</span>
                   {line(`${why(c)} Better was ${bestSan(c)}.`.trim())}
                 </div>
               ))}
@@ -271,7 +239,7 @@ function GameInfo({ board }) {
     }
   }
   return (
-    <Panel box={{ ...L.comment, scroll: true }} a={1} title={sfGame ? 'Play vs Stockfish' : 'Play vs human'} right={G.tc || 'No clock'}>
+    <Panel box={{ ...L.comment, scroll: !L.comment.flow }} a={1} title={sfGame ? 'Play vs Stockfish' : 'Play vs human'} right={G.tc || 'No clock'}>
       <div>{body}</div>
     </Panel>
   );
@@ -287,11 +255,11 @@ function GameStatus({ board, onChange, down }) {
   // the question waiting on an answer: 'resign' or 'draw'; another position or result drops it
   const [ask, setAsk] = React.useState(null);
   React.useEffect(() => { setAsk(null); }, [board.steps.length, !!G.result]);
-  const big = (txt, col) => <span style={{ font: `700 38px ${MONO}`, color: col }}>{txt}</span>;
-  const small = (txt, col) => <span style={{ font: `600 16px ${MONO}`, letterSpacing: '0.08em', textTransform: 'uppercase', color: col }}>{txt}</span>;
-  const hint = (txt) => <FitOrHide style={{ ...NO_SELECT, display: 'block', marginTop: 14, font: `500 15px ${MONO}`, color: C.dim }}>{txt}</FitOrHide>;
+  const big = (txt, col) => <span style={{ font: `700 ${tx(HEADLINE)}px ${MONO}`, color: col }}>{txt}</span>;
+  const small = (txt, col) => <span style={{ font: `600 ${tx(16)}px ${MONO}`, letterSpacing: '0.08em', textTransform: 'uppercase', color: col }}>{txt}</span>;
+  const hint = (txt) => <FitOrHide style={{ ...NO_SELECT, display: 'block', marginTop: tx(14), font: `500 ${tx(15)}px ${MONO}`, color: C.dim }}>{txt}</FitOrHide>;
   // the button rows can't be selected: quick clicks on the buttons would otherwise highlight their text and the question's
-  const row = (children) => <div style={{ display: 'flex', gap: 12, marginTop: 18, flexWrap: 'wrap', alignItems: 'center', userSelect: 'none', WebkitUserSelect: 'none' }}>{children}</div>;
+  const row = (children) => <div style={{ display: 'flex', gap: tx(12), marginTop: tx(18), flexWrap: 'wrap', alignItems: 'center', userSelect: 'none', WebkitUserSelect: 'none' }}>{children}</div>;
   if (G.result) {
     const r = P.resultText(G.result);
     const { game, ...free } = board;
@@ -299,8 +267,8 @@ function GameStatus({ board, onChange, down }) {
     const again = () => onChange(P.start(window.BoardCore.fromFen(board.fen), G.tc, null, sfGame ? { mode: 'stockfish', you: G.you } : undefined));
     return (
       <React.Fragment>
-        <div style={{ display: 'flex', alignItems: 'center', gap: 28 }}>
-          <div className="game-result" style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>{big(r.score, C.ink)}{small(r.why, C.last)}</div>
+        <div style={{ display: 'flex', alignItems: 'center', gap: tx(28) }}>
+          <div className="game-result" style={{ display: 'flex', flexDirection: 'column', gap: tx(6) }}>{big(r.score, C.ink)}{small(r.why, C.last)}</div>
           <div style={{ marginLeft: 'auto' }}><FrameButton primary onClick={again}>Play again</FrameButton></div>
         </div>
         {row(<FrameButton primary color={C.last} onClick={() => onChange(free)}>Analyse on the free board</FrameButton>)}
@@ -316,12 +284,12 @@ function GameStatus({ board, onChange, down }) {
     const trouble = down === 'unavailable' ? 'Stockfish can’t run here' : down === 'stopped' ? 'Stockfish stopped · Take back or Resign' : null;
     return (
       <React.Fragment>
-        <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
+        <div style={{ display: 'flex', flexDirection: 'column', gap: tx(6) }}>
           {big(mine ? 'Your move' : trouble ? 'Stockfish to move' : 'Stockfish is thinking…', C.last)}
           {small(check ? 'Check' : trouble || clockNote, check || trouble ? C.blunder : C.dim)}
         </div>
         {ask === 'resign' ? row(<React.Fragment>
-          <span style={{ font: `600 18px ${SANS}`, color: C.ink }}>Resign this game?</span>
+          <span style={{ font: `600 ${tx(18)}px ${SANS}`, color: C.ink }}>Resign this game?</span>
           <FrameButton color={C.blunder} onClick={() => onChange(P.resign(board, now(), G.you))}>Resign</FrameButton>
           <FrameButton color={C.dim} onClick={() => setAsk(null)}>Keep playing</FrameButton>
         </React.Fragment>) : row(<React.Fragment>
@@ -335,12 +303,12 @@ function GameStatus({ board, onChange, down }) {
   const claimNote = claim && `${claim === 'repetition' ? 'Threefold repetition' : 'Fifty moves'}: claim a draw`;
   return (
     <React.Fragment>
-      <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
+      <div style={{ display: 'flex', flexDirection: 'column', gap: tx(6) }}>
         {big(`${side} to move`, C.last)}
         {small(check ? 'Check' : claimNote || clockNote, check ? C.blunder : claim ? C.last : C.dim)}
       </div>
       {ask ? row(<React.Fragment>
-        <span style={{ font: `600 18px ${SANS}`, color: C.ink }}>{ask === 'resign' ? `Resign as ${side}?` : `${side} offers a draw. ${side === 'White' ? 'Black' : 'White'}, accept?`}</span>
+        <span style={{ font: `600 ${tx(18)}px ${SANS}`, color: C.ink }}>{ask === 'resign' ? `Resign as ${side}?` : `${side} offers a draw. ${side === 'White' ? 'Black' : 'White'}, accept?`}</span>
         <FrameButton color={ask === 'resign' ? C.blunder : C.last} onClick={() => onChange(ask === 'resign' ? P.resign(board, now()) : P.agreeDraw(board, now()))}>{ask === 'resign' ? 'Resign' : 'Accept'}</FrameButton>
         <FrameButton color={C.dim} onClick={() => setAsk(null)}>{ask === 'resign' ? 'Keep playing' : 'Decline'}</FrameButton>
       </React.Fragment>) : row(<React.Fragment>
@@ -354,9 +322,11 @@ function GameStatus({ board, onChange, down }) {
 }
 
 function FreeBoard({ board, onChange, tw, sf, nav, orient, book }) {
-  setLayout(useFrame()); // before the children render, which read the layout
-  L = boardLayout(L);
-  if (board.game) { L = gameLayout(L); BX = L.bx; BY = L.by; }
+  const frame = useFrame();
+  setLayout(frame, board.game ? 'game' : 'free'); // before the children render, which read the layout
+  // a paused one-column page is as tall as its panels; the stage scrolls it
+  const flowRef = React.useRef(null);
+  useFlowHeight(frame, flowRef);
   const B = window.BoardCore, P = window.PlayCore, pos = B.pos(board), { steps, upto } = board, last = steps.length - 1;
   // a game: no eval, no hints; vs human the board turned to the side to move in the game's last position, against
   // Stockfish drawn from the player's side, which Stockfish's moves never change (nor Flip)
@@ -448,15 +418,14 @@ function FreeBoard({ board, onChange, tw, sf, nav, orient, book }) {
   const HM = G ? { white: { name: playerName(G, 'w') }, black: { name: playerName(G, 'b') }, event: sfGame ? 'Play vs Stockfish' : 'Play vs human', site: `${G.tc || 'no clock'} · ${from}` }
     : { white: { name: 'White' }, black: { name: 'Black' }, event: 'Free board', site: from, eco: named && named.eco, opening: named && named.name };
   return (
-    <div style={{ position: 'absolute', inset: 0, background: C.bg, overflow: 'hidden' }}>
+    <div ref={flowRef} style={{ position: 'absolute', inset: 0, background: C.bg, overflow: 'hidden', ...flowStyle() }}>
       {!G && (tbv ? <EvalBarView cp={tbv.cp} txt={tbv.txt} a={1} /> : <EvalBarView cp={cp == null ? 0 : cp} txt={cp == null ? (down ? '' : '…') : fmtSf(cp)} a={1} />)}
-      {/* zero-sized, so the zoom grows the board and its bars from the board's top-left corner without covering the panels */}
-      <div style={{ position: 'absolute', left: 0, top: 0, width: 0, height: 0, transform: L.zoom ? `scale(${L.zoom})` : null, transformOrigin: `${BX}px ${BY}px` }}>
-        <FreeBar pos={pos} side="b" a={1} clock={clockOf('b')} name={G ? playerName(G, 'b') : null} />
+      <FreeBar pos={pos} side="b" a={1} clock={clockOf('b')} name={G ? playerName(G, 'b') : null} />
+      <BoardSpace>
         <LineBoard a={1} sq={boardSquares()} v={{ upto, moves: steps, base: board.start.pos, src: 'you' }} hide={input.drag && input.drag.moved ? input.drag.from : null} arrows={!G && tw.bestArrows !== false ? lineArrows(ev.after) : null} />
         <BoardTouch pos={pos} sel={input.sel} targets={input.targets} drag={input.drag} promo={input.promo} {...(still ? NO_INPUT : input.handlers)} />
-        <FreeBar pos={pos} side="w" a={1} clock={clockOf('w')} name={G ? playerName(G, 'w') : null} />
-      </div>
+      </BoardSpace>
+      <FreeBar pos={pos} side="w" a={1} clock={clockOf('w')} name={G ? playerName(G, 'w') : null} />
       {L.header && <Header M={HM} a={1} />}
       <MoveList M={MV} T={upto + 0.999} S={S} a={1} paused onPick={live ? () => {} : go} />
       {G ? <GameInfo board={board} /> : tb ? <TablebaseExplorer t={tb} posKey={boardKey} onPlay={onBook} /> : <OpeningExplorer board={board} book={book} onPlay={onBook} />}
@@ -468,7 +437,7 @@ function FreeBoard({ board, onChange, tw, sf, nav, orient, book }) {
           </React.Fragment>
           : <React.Fragment>
             <OwnMoveAnalysis M={MV} vline={{ at: 0, moves: steps, upto, src: 'you' }} own={own} status={sf.status} onReply={onReply} />
-            <FitOrHide style={{ ...NO_SELECT, display: 'block', marginTop: 8, font: `500 15px ${MONO}`, color: C.dim }}>← → step · <KeyCap>Home</KeyCap> the start · <KeyCap>End</KeyCap> the last move</FitOrHide>
+            <FitOrHide style={{ ...NO_SELECT, display: 'block', marginTop: tx(8), font: `500 ${tx(15)}px ${MONO}`, color: C.dim }}>← → step · <KeyCap>Home</KeyCap> the start · <KeyCap>End</KeyCap> the last move</FitOrHide>
           </React.Fragment>}
       </AnalysisPanel>}
     </div>
