@@ -27,10 +27,23 @@ test('boxes stay inside and never overlap', () => {
       const b = { x: L.board.x, y: L.board.y, w: L.board.size, h: L.board.size };
       all.push(['board', b]);
       if (L.eval) all.push(['eval', { x: L.eval.x, y: b.y, w: L.eval.w, h: b.h }]);
+      all.push(['top bar', { x: b.x, y: b.y - L.bars.gap - L.bars.h, w: b.w, h: L.bars.h }], ['bottom bar', { x: b.x, y: b.y + b.h + L.bars.gap, w: b.w, h: L.bars.h }]);
       for (const [k, x] of all) assert.ok(x.x >= -0.5 && x.y >= -0.5 && x.x + x.w <= w + 0.5 && x.y + x.h <= L.h + 0.5, `${id}: ${k} outside ${JSON.stringify(x)} (h ${L.h})`);
       for (let i = 0; i < all.length; i++) for (let j = i + 1; j < all.length; j++) assert.ok(!overlap(all[i][1], all[j][1]), `${id}: ${all[i][0]} overlaps ${all[j][0]}`);
       if (video) assert.equal(L.h, h, id);
     }
+  }
+});
+
+// a video in a very short window (a phone held sideways, 568×260): the board gives up its 200 px so the player bars and
+// the board's edge stay inside the stage
+test('a very short video keeps everything inside', () => {
+  for (const [name, text] of Object.entries(LC.TEXT_SIZES)) for (const view of VIEWS) {
+    const L = LC.compute({ w: 568, h: 260, text, view, video: true });
+    const id = `${name} ${view}`;
+    assert.equal(L.cols, 2, id);
+    assert.ok(L.board.size > 0 && L.board.size < 200, `${id}: board ${L.board.size}`);
+    assert.ok(L.board.y + L.board.size + L.bars.gap + L.bars.h <= 260 + 0.5, `${id}: bottom bar past the stage`);
   }
 });
 
@@ -95,13 +108,22 @@ test('video one column: board shrinks first, panels keep a floor', () => {
   assert.ok(s.board.size >= 200);
   for (const k of ['comment', 'analysis', 'moves']) assert.ok(s[k].h >= 48 - 0.5, k);
   assert.equal(LC.compute({ w: 390, h: 770, video: true }).moves.cols, 1);
+  // Moves keeps room for its title and one row at every text size, as MoveList draws them (MoveList takes its rows from here)
+  for (const [name, text] of Object.entries(LC.TEXT_SIZES)) {
+    assert.ok(LC.compute({ w: 390, h: 760, text, video: true }).moves.rows >= 1, `Moves at 390x760 ${name}`);
+    const L = LC.compute({ w: 390, h: 770, text, video: true });
+    assert.ok(L.board.size >= 200 && L.h === 770, `390x770 ${name}: board ${L.board.size}`);
+  }
   assert.equal(LC.compute({ w: 768, h: 950 }).moves.cols, 2);
 });
 
 test('cols override and moves rows', () => {
   assert.equal(LC.compute({ w: 1440, h: 818, cols: 1 }).cols, 1);
   const L = LC.compute({ w: 1440, h: 818 });
-  assert.equal(L.moves.rows, Math.floor((L.moves.h - 40) / (38 * 0.8)));
+  // rows: what fits under the title at MoveList's 38 px rows, the panel's padding (2 × 16), title row (15 × 1.4), its margin (12) and borders (2)
+  assert.equal(L.moves.rows, Math.floor((L.moves.h - (2 * 16 + 15 * 1.4 + 12 + 2)) / 38));
+  const big = LC.compute({ w: 1440, h: 818, text: 1.3 });
+  assert.equal(big.moves.rows, Math.floor((big.moves.h - (1.3 * (2 * 16 + 15 * 1.4 + 12) + 2)) / (38 * 1.3)));
   assert.equal(LC.columns({ w: 1440, h: 818 }), 2);
 });
 

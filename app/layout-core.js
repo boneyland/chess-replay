@@ -8,8 +8,12 @@
   const SIDEBAR_MIN = 320, MOVES_W = 230, COMMENT_MIN = 150;
   const HEADER_H = 64, PLOT_H = 110, PLOT_SIDE_H = 80, PLOT_BELOW_MIN_H = 700;
   const ONE_COL = { comment: 200, analysis: 260, moves: 240, panel: 260 }; // paused heights, times text
-  const VIDEO_PREF = [96, 120, 96], PANEL_FLOOR = 48; // comment, analysis, moves under a video's board
-  const MOVE_ROW = 38 * 0.8, MOVE_TITLE = 40;
+  const VIDEO_PREF = [96, 120, 96], PANEL_FLOOR = 48; // comment, analysis, moves under a video's board, times text
+  // MoveList's chrome at text 1, as it draws it (game-video-core.jsx): a move row, and the panel's padding, title row
+  // and its margin and the borders around the rows. All but the borders grow with the text
+  const MOVE_ROW = 38, MOVE_CHROME = 2 * 16 + 15 * 1.4 + 12, MOVE_BORDER = 2;
+  const moveRow = (text) => MOVE_ROW * text;
+  const moveChrome = (text) => MOVE_CHROME * text + MOVE_BORDER;
 
   const TEXT_SIZES = { Small: 0.9, Default: 1, Large: 1.15, Larger: 1.3 };
   const textScale = (name) => (Object.prototype.hasOwnProperty.call(TEXT_SIZES, name) ? TEXT_SIZES[name] : 1);
@@ -33,11 +37,11 @@
     return !keepTwo && (tall || narrow) ? 1 : 2;
   }
 
-  // moves.cols / moves.rows: the list shows two columns of moves from 480 px wide; rows is how many fit in its height
+  // moves.cols / moves.rows: the list shows two columns of moves from 480 px wide; rows is how many fit under its title
   function withMoves(m, text) {
     if (!m) return m;
     m.cols = m.w >= 480 ? 2 : 1;
-    m.rows = Math.max(0, Math.floor((m.h - MOVE_TITLE) / (MOVE_ROW * text)));
+    m.rows = Math.max(0, Math.floor((m.h - moveChrome(text)) / moveRow(text) + 1e-6));
     return m;
   }
 
@@ -50,7 +54,8 @@
     // under the minimum. The left column (board plus its eval bar) is what is left
     const side = Math.max(SIDEBAR_MIN * text, Math.min((MOVES_W + COMMENT_MIN) * text + GAP, w - 2 * MARGIN - GAP - EVAL_TOTAL - BOARD_OK));
     const wLimit = w - 2 * MARGIN - GAP - side;
-    const size = Math.max(BOARD_MIN, Math.min(BOARD_MAX, hLimit, wLimit - EVAL_TOTAL));
+    // 200 px at least by width; a window too short for that (a video in a phone held sideways at its smallest) shrinks the board to the height
+    const size = Math.max(40, Math.min(Math.max(BOARD_MIN, Math.min(BOARD_MAX, wLimit - EVAL_TOTAL)), hLimit));
     const left = size + EVAL_TOTAL; // same sidebar position whether or not the view draws an eval bar
     const boardX = hasEval ? MARGIN + EVAL_TOTAL : MARGIN + (left - size) / 2;
     const boardY = MARGIN + bar + BAR_GAP;
@@ -91,9 +96,12 @@
     const natural = Math.min(BOARD_MAX, w - 2 * MARGIN - ev);
     // what goes under the board, top to bottom, with its paused height and, in a video, its preferred one
     let parts;
-    if (view === 'edit') parts = [['tray'], ['panel', ONE_COL.panel * text, 120]];
+    // [name, paused height, preferred in a video, floor in a video]; the Moves box never gets less than its title and one row
+    const movesMin = moveChrome(text) + moveRow(text);
+    if (view === 'edit') parts = [['tray'], ['panel', ONE_COL.panel * text, 120 * text, PANEL_FLOOR * text]];
     else {
-      parts = [['comment', ONE_COL.comment * text, VIDEO_PREF[0]], ['analysis', ONE_COL.analysis * text, VIDEO_PREF[1]], ['moves', ONE_COL.moves * text, VIDEO_PREF[2]]];
+      parts = [['comment', ONE_COL.comment * text, VIDEO_PREF[0] * text, PANEL_FLOOR * text], ['analysis', ONE_COL.analysis * text, VIDEO_PREF[1] * text, PANEL_FLOOR * text],
+        ['moves', ONE_COL.moves * text, Math.max(VIDEO_PREF[2] * text, movesMin), movesMin]];
       if (!video) parts.unshift(['header', HEADER_H * text]);
     }
     const cell = Math.min(56, Math.floor((pw - 5 * 4) / 6));
@@ -108,11 +116,15 @@
       const sumPref = prefs.reduce((a, b) => a + b, 0);
       const room = (s) => h - 2 * MARGIN - bars - s - GAP - fixed - gaps; // for the panels, given a board of size s
       size = Math.max(BOARD_MIN, Math.min(natural, h - 2 * MARGIN - bars - GAP - fixed - gaps - sumPref));
-      const avail = room(size), floor = PANEL_FLOOR * sized.length;
+      const avail = room(size), sum = (a) => a.reduce((x, y) => x + y, 0);
+      // a window too small for those floors at the 200 px board gives up the Moves minimum, then the text scaling, before the board shrinks (R5)
+      const tiers = [sized.map((p) => p[3]), sized.map(() => PANEL_FLOOR * text), sized.map(() => PANEL_FLOOR)];
+      const floors = tiers.find((f) => avail >= sum(f)) || tiers[2];
+      const floor = sum(floors);
       if (avail >= sumPref) heights = prefs.map((p) => (p * avail) / sumPref);
       else {
         const t = Math.max(0, (avail - floor) / (sumPref - floor));
-        heights = prefs.map((p) => PANEL_FLOOR + (p - PANEL_FLOOR) * t);
+        heights = prefs.map((p, i) => floors[i] + (p - floors[i]) * t);
       }
     }
     const gx = (w - (size + ev)) / 2;

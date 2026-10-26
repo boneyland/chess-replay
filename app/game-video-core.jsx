@@ -522,9 +522,9 @@ function Header({ M, a }) {
 function MoveList({ M, T, S, a, paused, onPick }) {
   const c = lastPly(T, S);
   // COLS move pairs to a row (two in a list 480 px wide or more), VIS rows in view: as many as fit under the title
-  // (the panel's padding, the title row and its margin, the borders), at least one
+  // (LayoutCore counts them from the panel's chrome), at least one
   const ROW = tx(38), COLS = L.moves.cols || 1, NUM = tx(50); // NUM: the move number's column
-  const VIS = Math.max(1, Math.floor((L.moves.h - 2 * tx(16) - tx(15) * 1.4 - tx(12) - 2) / ROW));
+  const VIS = Math.max(1, L.moves.rows);
   const odd = M.ply0 % 2, scrollFor = (i) => Math.max(0, Math.floor((Math.max(i, 0) + odd) / (2 * COLS)) - Math.max(0, VIS - (COLS > 1 ? 2 : 3))) * ROW;
   const k = c >= 0 ? MOTION.move(cl01((T - S.tp[c]) / 0.35)) : 1;
   const scroll = lerp(scrollFor(c - 1), scrollFor(c), k), listRef = React.useRef(null);
