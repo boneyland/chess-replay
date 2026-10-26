@@ -202,10 +202,13 @@ function SideScroll({ style, children }) {
 }
 // extra: a node after right that never scrolls with it (Analysis: Go deeper beside the search's depth)
 // head: the title row's own contents, in place of title, right and extra (the Analysis panel's)
-function Panel({ box, title, right, extra, head, a, style, children }) {
+// progress: 0–1, drawn along the top border (the Analysis panel's while Stockfish searches); null draws none
+function Panel({ box, title, right, extra, head, a, style, progress, children }) {
   const { x, y, w, h, k } = box;
+  const place = { position: 'absolute', left: x, top: y, width: w / k, height: h / k, boxSizing: 'border-box', borderRadius: 8, opacity: a, transform: `translateY(${(1 - a) * 18}px) scale(${k})`, transformOrigin: '0 0', overflow: 'hidden' };
   return (
-    <div style={{ position: 'absolute', left: x, top: y, width: w / k, height: h / k, boxSizing: 'border-box', background: C.panel, border: `1px solid ${C.line}`, borderRadius: 8, padding: L.pad || '16px 22px', opacity: a, transform: `translateY(${(1 - a) * 18}px) scale(${k})`, transformOrigin: '0 0', overflow: 'hidden', ...(box.scroll && { overflowY: 'auto', overscrollBehavior: 'contain', scrollbarWidth: 'thin' }), ...style }}>
+    <>
+    <div style={{ ...place, background: C.panel, border: `1px solid ${C.line}`, padding: L.pad || '16px 22px', ...(box.scroll && { overflowY: 'auto', overscrollBehavior: 'contain', scrollbarWidth: 'thin' }), ...style }}>
       {(title || head) && (
         // the same heading size in every panel, whatever its magnification k; box.right sizes the text on the right
         <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: (L.titleGap || 16) / k, font: `600 ${L.title / k}px ${MONO}`, letterSpacing: '0.12em', textTransform: 'uppercase', color: C.dim, marginBottom: 12 / k }}>
@@ -214,6 +217,13 @@ function Panel({ box, title, right, extra, head, a, style, children }) {
       )}
       {children}
     </div>
+    {/* over the panel rather than in it, so it covers the border and never scrolls with the contents */}
+    {progress != null && (
+      <div style={{ ...place, pointerEvents: 'none' }}>
+        <div style={{ height: 3, width: `${(cl01(progress) * 100).toFixed(1)}%`, background: C.best, transition: progress > 0 ? 'width 0.3s linear' : 'none' }} />
+      </div>
+    )}
+    </>
   );
 }
 
@@ -381,7 +391,7 @@ function AnalysisPanel({ box, a, depth, deep, paused, style, children }) {
     </>
   );
   return (
-    <Panel box={shown ? { ...box, scroll: true } : box} a={a} style={style} head={head}>
+    <Panel box={shown ? { ...box, scroll: true } : box} a={a} style={style} head={head} progress={!shown && deep && deep.pending ? deep.progress || 0 : null}>
       {shown ? <div className="an-engine" onClick={stopHere} onPointerDown={stopHere}><div className="twk-flow">{E.body}</div></div> : children}
     </Panel>
   );

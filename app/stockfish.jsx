@@ -261,6 +261,7 @@ const SF_DEEPER = new Map(); // presses of Go deeper by position (its key at the
 // own: the search settings (AnalysisCore.engineSettings().own; its lines are searched for after only); fen: the game's start FEN, omitted for the standard start.
 // deeper(): searches both positions again, deeper (null when the search can't go further or hasn't finished); it counts
 // for that position only, and a deeper search shows the last result until it passes that result's depth.
+// progress: 0–1 through the searches still to run while pending (each one's depth or time limit, whichever it nears first)
 // stored: a loaded analysis's result for after (with before the same moves), standing in for the first search, which
 // then never runs: only a press of Go deeper searches. Results from it carry stored: true; its src names the evals it
 // comes from, so presses on one analysis's move don't carry over to another's (or the PGN's) once it is removed
@@ -275,7 +276,7 @@ function useMoveEval(engine, before, after, own, fen, stored) {
   const search = toSearch(A.deeperSearch(own, level));
   const sfKey = (moves) => keyOf(search, moves);
   const key = after ? sfKey(after) : '';
-  const empty = { key: '', before: null, after: null, pending: false };
+  const empty = { key: '', before: null, after: null, pending: false, progress: 0 };
   const [st, setSt] = React.useState(empty);
   React.useEffect(() => {
     if (!after) { setSt(empty); return; }
@@ -290,7 +291,10 @@ function useMoveEval(engine, before, after, own, fen, stored) {
     // the result a press of Go deeper started from, shown until the deeper search passes its depth
     const prev = (which) => (level > 0 ? at(level - 1, which) : null);
     const shown = (which) => cached(which) || (prev(which) && { ...prev(which), partial: true });
-    setSt({ key, before: shown('before'), after: shown('after'), pending: !cached('after') || !cached('before') });
+    setSt({ key, before: shown('before'), after: shown('after'), pending: !cached('after') || !cached('before'), progress: 0 });
+    // the searches to run (the start position's two are one)
+    const todo = [...new Set(['after', 'before'].filter((w) => !cached(w)).map((w) => keyAt(level, w)))].length;
+    let ran = 0;
     (async () => {
       let eng;
       try { eng = await engine.get(); } catch (e) { if (live) setSt((s) => ({ ...s, pending: false })); return; }
@@ -299,7 +303,14 @@ function useMoveEval(engine, before, after, own, fen, stored) {
         // the start position is both before and after: its second search is the first one's, cached
         if (cached(which)) { const c = cached(which); setSt((s) => ({ ...s, [which]: c })); continue; }
         const floor = prev(which) ? prev(which).depth : 0;
-        const h = eng.search({ moves: moves[which], fen, ...search, lines: lines(which), priority: 'own', onInfo: (sc) => { if (live && sc.depth > floor) setSt((s) => ({ ...s, [which]: { ...sc, best: sc.pv[0] || null, partial: true } })); } });
+        // a depth takes about 1.5 times the one before it, so depth d of D is about 1.5^(d − D) of the way
+        const part = (sc) => Math.max(sc.timeMs ? sc.timeMs / search.movetimeMs : 0, search.depth ? Math.pow(1.5, sc.depth - search.depth) : 0);
+        const i = ran++;
+        const h = eng.search({ moves: moves[which], fen, ...search, lines: lines(which), priority: 'own', onInfo: (sc) => {
+          if (!live) return;
+          const progress = (i + Math.min(1, part(sc))) / todo;
+          setSt((s) => ({ ...s, progress: Math.max(s.progress, progress), ...(sc.depth > floor && { [which]: { ...sc, best: sc.pv[0] || null, partial: true } }) }));
+        } });
         handles.push(h);
         const r = await h.promise;
         if (!live) return;
