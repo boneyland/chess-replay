@@ -8,7 +8,7 @@ What each part of the repo is, with the pinned SHA-256 of every vendored file. B
   - `engine.jsx`: the animation engine (the replay is one element tree drawn as a function of time); `game-video-core.jsx` the replay's scenes and layouts (`LAYOUTS.wide`, `tallLayout`)
   - `chess-core.js`: PGN, analysis and notes turned into the game model the replay draws
   - `analysis-core.js`, `sf-engine.js`, `stockfish.jsx`: Stockfish in the browser (a Web Worker over UCI) and the move ratings, ported from chess-animator's Python
-  - `sf-full.js`: the full engine the viewer can download (Settings › Engine), checked and kept in the browser
+  - `sf-full.js`: the full engine the viewer can download (the Analysis panel's engine drop-down), checked and kept in the browser
   - `openings-core.js`: opening names and book continuations (the opening explorer)
   - `board-core.js`, `free-board.jsx`: the free board (Play/Explore); `play-core.js` its games (rules, clocks, takebacks, the end); `games-core.js` My games
   - `queen-core.js`, `queen.jsx`: Ask Queen and its Hugging Face sign-in
