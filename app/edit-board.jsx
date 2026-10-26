@@ -38,7 +38,7 @@ const editField = () => ({ boxSizing: 'border-box', width: '100%', font: `500 ${
 function CastleBox({ setup, right, label, onChange }) {
   const E = window.EditCore, can = E.canCastle(setup, right);
   return (
-    <label style={{ display: 'flex', alignItems: 'center', gap: 8, font: `500 ${tx(15)}px ${MONO}`, color: can ? C.ink : C.dim, cursor: can ? 'pointer' : 'default' }}>
+    <label style={{ display: 'flex', alignItems: 'center', gap: 8, whiteSpace: 'nowrap', font: `500 ${tx(15)}px ${MONO}`, color: can ? C.ink : C.dim, cursor: can ? 'pointer' : 'default' }}>
       <input type="checkbox" aria-label={label} checked={setup.castle.includes(right)} disabled={!can} onChange={(e) => onChange(E.setCastle(setup, right, e.target.checked))}
         style={{ width: tx(18), height: tx(18), margin: 0, accentColor: C.last }} />
       {label.split(' ')[1]}
@@ -191,7 +191,8 @@ function EditBoard({ setup, onChange, onDone, onCancel, fenText, onFenText, fenM
               <option value="b">Black to move</option>
             </select>
           </div>
-          <div style={{ display: 'flex', gap: tx(40) }}>
+          {/* a narrow panel puts Black's boxes under White's */}
+          <div style={{ display: 'flex', flexWrap: 'wrap', columnGap: tx(40), rowGap: tx(10) }}>
             {[['w', 'White', 'K', 'Q'], ['b', 'Black', 'k', 'q']].map(([side, name, k, q]) => (
               <div key={side} role="group" aria-label={`${name} castling`}>
                 {label(name)}

@@ -392,7 +392,7 @@ function OwnMoveAnalysis({ M, vline, own, status, onReply }) {
   const many = after && after.lines && after.lines.length > 1;
   return (
     <React.Fragment>
-      <div style={{ display: 'flex', alignItems: 'flex-end', gap: tx(28) }}>
+      <div style={{ display: 'flex', flexWrap: 'wrap', alignItems: 'flex-end', columnGap: tx(28) }}>
         <span style={{ font: `700 ${tx(38)}px ${MONO}`, color: col }}>{lineLabel(M, vline.at, vline.upto, step.san)}</span>
         <span style={{ marginLeft: 'auto', font: `700 ${tx(38)}px ${MONO}`, color: C.ink }}>{(status === 'unavailable' || status === 'stopped') && !(after && !after.partial) ? '—' : fmtSf(after && after.cp)}</span>
       </div>

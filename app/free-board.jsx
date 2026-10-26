@@ -62,11 +62,12 @@ function OpeningExplorer({ board, book, onPlay }) {
         {next.length ? (
           <div className="book-moves" style={{ display: 'flex', flexDirection: 'column', gap: tx(2), marginTop: tx(12) }}>
             {next.map((m) => (
+              // a name that doesn't fit beside its move goes under it
               <div key={m.uci} className="mv" role="button" tabIndex={0} title={`Play ${m.san}`} onClick={(e) => play(e, m.uci)}
                 onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') play(e, m.uci); }}
-                style={{ display: 'flex', alignItems: 'center', gap: tx(14), minWidth: 0, padding: `${tx(3)}px ${tx(6)}px`, borderRadius: 4, cursor: 'pointer' }}>
+                style={{ display: 'flex', flexWrap: 'wrap', alignItems: 'center', columnGap: tx(14), rowGap: tx(2), minWidth: 0, padding: `${tx(3)}px ${tx(6)}px`, borderRadius: 4, cursor: 'pointer' }}>
                 <span style={{ flex: 'none', minWidth: tx(58), boxSizing: 'border-box', textAlign: 'center', padding: `${tx(2)}px ${tx(8)}px`, borderRadius: 4, font: `600 ${tx(17)}px ${MONO}`, background: white ? '#f1ebe1' : '#2a2320', color: white ? '#15100d' : '#efe8de', border: `1px solid ${white ? 'rgba(60,40,20,0.22)' : 'rgba(255,236,214,0.22)'}` }}>{m.san}</span>
-                <span style={{ minWidth: 0, font: `400 ${tx(17)}px ${SANS}`, color: C.dim, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{m.name || ''}</span>
+                <span style={{ minWidth: 0, maxWidth: '100%', font: `400 ${tx(17)}px ${SANS}`, color: C.dim, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{m.name || ''}</span>
               </div>
             ))}
           </div>
@@ -91,7 +92,8 @@ function StartAnalysis({ board, ev, status, onLine }) {
   const turn = board.start.pos.turn === 'w' ? 'White' : 'Black';
   return (
     <React.Fragment>
-      <div style={{ display: 'flex', alignItems: 'flex-end', gap: tx(28) }}>
+      {/* a narrow panel puts the eval under Start, at the right */}
+      <div style={{ display: 'flex', flexWrap: 'wrap', alignItems: 'flex-end', columnGap: tx(28) }}>
         <span style={{ font: `700 ${tx(38)}px ${MONO}`, color: C.last }}>Start</span>
         <span style={{ marginLeft: 'auto', font: `700 ${tx(38)}px ${MONO}`, color: C.ink }}>{down && !(after && !after.partial) ? '—' : fmtSf(after && after.cp)}</span>
       </div>

@@ -133,7 +133,7 @@ function Panel({ box, title, right, extra, head, a, style, progress, children })
     <div style={{ ...place, background: C.panel, border: `1px solid ${C.line}`, padding: panelPad(), ...(box.scroll && { overflowY: 'auto', overscrollBehavior: 'contain', scrollbarWidth: 'thin' }), ...style }}>
       {(title || head) && (
         <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: tx(16), font: `600 ${tx(15)}px ${MONO}`, letterSpacing: '0.12em', textTransform: 'uppercase', color: C.dim, marginBottom: tx(12) }}>
-          {head || <><span style={{ flex: 'none' }}>{title}</span><SideScroll style={{ minWidth: 0, flex: 1, textAlign: 'right', letterSpacing: '0.04em' }}>{right}</SideScroll>{extra}</>}
+          {head || <><span style={{ flex: '0 1 auto', minWidth: 0, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{title}</span><SideScroll style={{ minWidth: 0, flex: 1, textAlign: 'right', letterSpacing: '0.04em' }}>{right}</SideScroll>{extra}</>}
         </div>
       )}
       {children}
@@ -289,21 +289,24 @@ function AnalysisPanel({ box, a, depth, deep, paused, style, children }) {
   const [open, setOpen] = React.useState(false);
   const live = !!E && paused, shown = open && live, pick = live && E.pick;
   const name = E ? E.name : 'Stockfish';
+  // a narrow panel (a laptop's sidebar, a phone) leaves out the depth, so the title and the controls share one line
+  const roomy = box.w >= 440 * TEXT;
   const head = (
-    <>
+    // the controls go under the title rather than over it where even then they don't fit (a small phone, large text)
+    <span style={{ flex: 1, minWidth: 0, display: 'flex', flexWrap: 'wrap', alignItems: 'center', justifyContent: 'space-between', columnGap: tx(16), rowGap: tx(8) }}>
       <span style={{ flex: 'none' }}>Analysis</span>
       {/* the engine stays put, next to the menu; Go deeper and the depth come and go to its left. Spaced as the
           desktop's heading whatever the layout's title gap (the phone's wide one left the depth no room) */}
-      <span style={{ flex: 1, minWidth: 0, display: 'flex', alignItems: 'center', justifyContent: 'flex-end', gap: tx(16) }}>
+      <span style={{ flex: '1 1 auto', minWidth: 0, display: 'flex', alignItems: 'center', justifyContent: 'flex-end', gap: tx(16) }}>
       {!shown && paused && <DeeperButton ev={deep} />}
-      {!shown && depth && <span style={{ flex: 'none', whiteSpace: 'nowrap', letterSpacing: '0.04em' }}>{depth}</span>}
+      {!shown && depth && roomy && <span style={{ flex: 'none', whiteSpace: 'nowrap', letterSpacing: '0.04em' }}>{depth}</span>}
       {/* smaller on the phone, where the row is tight */}
       {pick
         ? <select aria-label="Engine" value={pick.value} onChange={(e) => { const go = pick.onChange(e.target.value); if (go) setOpen(true); }} onClick={stopHere} onPointerDown={stopHere}
-            style={{ ...headCtl(), padding: '0 0.4em', font: 'inherit', fontSize: L.cols === 2 ? '1.15em' : '1em', height: '1.6em', textTransform: 'none', background: C.panel }}>
+            style={{ ...headCtl(), flex: '0 1 auto', minWidth: '3em', padding: '0 0.4em', font: 'inherit', fontSize: L.cols === 2 ? '1.15em' : '1em', height: '1.6em', textTransform: 'none', background: C.panel }}>
             {pick.options.map((o) => <option key={o.value} value={o.value}>{o.label}</option>)}
           </select>
-        : <span style={{ flex: 'none', textTransform: 'none', letterSpacing: '0.04em', color: C.ink }}>{name}</span>}
+        : <span style={{ flex: '0 1 auto', minWidth: 0, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', textTransform: 'none', letterSpacing: '0.04em', color: C.ink }}>{name}</span>}
       {live && (
         <button type="button" aria-label="Engine options" aria-expanded={shown} title="Engine settings" onClick={(e) => { e.stopPropagation(); setOpen((o) => !o); }} onPointerDown={stopHere}
           style={{ ...headCtl(), width: '1.8em', padding: 0, display: 'grid', placeItems: 'center', color: shown ? C.best : C.dim, borderColor: shown ? C.best : C.ctlLine }}>
@@ -311,7 +314,7 @@ function AnalysisPanel({ box, a, depth, deep, paused, style, children }) {
         </button>
       )}
       </span>
-    </>
+    </span>
   );
   return (
     <Panel box={shown ? { ...box, scroll: true } : box} a={a} style={style} head={head} progress={!shown && deep && deep.pending ? deep.progress || 0 : null}>
@@ -464,6 +467,11 @@ function PlayerBar({ M, T, S, side, a, pieces }) {
   });
   const clk = M.hasClock ? clockOf(M, side, T, S) : null;
   const low = clk && clk.s < 60, short = L.board.size < 480 && !!P.short;
+  // beside a very small board (a phone held sideways at large text) the captures go when they would leave the name no
+  // room: the bar's width less the colour square, about five letters of name and the clock
+  const room = L.board.size - 2 * tx(14) - 5 * tx(11) - (clk ? tx(96) + tx(20) + tx(14) : 0);
+  const capsW = shown.length ? tx(20) + tx(30) + (shown.length - 1) * tx(22) + (pts > 0 ? tx(22) + tx(10) * (String(pts).length + 1) : 0) : 0;
+  const caps = capsW <= room;
   return (
     <div style={{ ...barPlace(side), gap: tx(14), opacity: a }}>
       <span style={{ width: tx(14), height: tx(14), borderRadius: 3, background: side === 'w' ? '#f1ebe1' : '#1c1613', border: `1.5px solid ${C.dim}`, flex: 'none' }} />
@@ -471,8 +479,8 @@ function PlayerBar({ M, T, S, side, a, pieces }) {
       <span title={P.name} style={{ font: `600 ${tx(20)}px ${SANS}`, color: C.ink, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis', minWidth: 0 }}>{short ? P.short : P.name}</span>
       {/* not beside a phone's board, where the clock and captures need the room (the header's second line has it) */}
       {L.board.size >= 360 && <span style={{ font: `500 ${tx(16)}px ${MONO}`, color: C.dim, whiteSpace: 'nowrap' }}>{[P.title, P.elo].filter(Boolean).join(' ')}</span>}
-      <span style={{ display: 'flex', alignItems: 'center', marginLeft: tx(6) }}>{shown}</span>
-      {pts > 0 && <span style={{ font: `600 ${tx(16)}px ${MONO}`, color: C.dim, marginLeft: tx(8) }}>+{pts}</span>}
+      {caps && <span style={{ display: 'flex', alignItems: 'center', marginLeft: tx(6) }}>{shown}</span>}
+      {caps && pts > 0 && <span style={{ font: `600 ${tx(16)}px ${MONO}`, color: C.dim, marginLeft: tx(8) }}>+{pts}</span>}
       {clk && <span style={{ marginLeft: 'auto', minWidth: tx(96), textAlign: 'center', padding: `${tx(2)}px ${tx(10)}px`, borderRadius: 5, font: `600 ${tx(22)}px ${MONO}`, background: clk.active ? (low ? C.blunder : '#f1ebe1') : C.off, color: clk.active ? '#15100d' : C.dim, boxShadow: clk.active ? `0 0 0 1px ${C.line}` : 'none' }}>{fmtClock(clk.s)}</span>}
     </div>
   );
@@ -657,7 +665,7 @@ function Analysis({ M, T, S, a, vline, onLine, paused, sf, own, onReply, deep, t
   return (
     <AnalysisPanel box={box} a={a} paused={paused} depth={depth} deep={M.hasEval ? deep : null}>
       <div style={{ opacity: k, transform: `translateY(${(1 - k) * 8}px)` }}>
-        <div style={{ display: 'flex', alignItems: 'flex-end', gap: tx(28) }}>
+        <div style={{ display: 'flex', flexWrap: 'wrap', alignItems: 'flex-end', columnGap: tx(28) }}>
           <span style={{ font: `700 ${big}px ${MONO}`, color: col }}>{label(M, c)}</span>
           {M.hasEval && <span style={{ marginLeft: 'auto', font: `700 ${big}px ${MONO}`, color: C.ink }}>{deeper ? fmtSf(deeper.cp) : (P.mate != null || P.won) && k >= 1 ? fmtEval(P) : fmtEval({ cp })}</span>}
         </div>
