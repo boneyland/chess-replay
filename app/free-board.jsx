@@ -460,9 +460,9 @@ function FreeBoard({ board, onChange, tw, sf, nav, orient, book }) {
       {L.header && <Header M={HM} a={1} />}
       <MoveList M={MV} T={upto + 0.999} S={S} a={1} paused onPick={live ? () => {} : go} />
       {G ? <GameInfo board={board} /> : tb ? <TablebaseExplorer t={tb} posKey={boardKey} onPlay={onBook} /> : <OpeningExplorer board={board} book={book} onPlay={onBook} />}
-      <Panel box={L.analysis} a={1} style={G && NO_SELECT} title={G ? 'Game' : 'Analysis'} right={G || down ? null : searchStats(sf.game.name, ev.after)} extra={!G && <DeeperButton ev={ev} />}>
-        {G ? <GameStatus board={board} onChange={onChange} down={opponent.down} />
-          : upto < 0
+      {G ? <Panel box={L.analysis} a={1} style={NO_SELECT} title="Game"><GameStatus board={board} onChange={onChange} down={opponent.down} /></Panel>
+        : <AnalysisPanel box={L.analysis} a={1} paused depth={down ? null : searchDepth(ev.after)} deep={ev}>
+        {upto < 0
           ? <React.Fragment>
             <StartAnalysis board={board} ev={ev} status={sf.status} onLine={onReply} />
           </React.Fragment>
@@ -470,7 +470,7 @@ function FreeBoard({ board, onChange, tw, sf, nav, orient, book }) {
             <OwnMoveAnalysis M={MV} vline={{ at: 0, moves: steps, upto, src: 'you' }} own={own} status={sf.status} onReply={onReply} />
             <FitOrHide style={{ ...NO_SELECT, display: 'block', marginTop: 8, font: `500 15px ${MONO}`, color: C.dim }}>← → step · <KeyCap>Home</KeyCap> the start · <KeyCap>End</KeyCap> the last move</FitOrHide>
           </React.Fragment>}
-      </Panel>
+      </AnalysisPanel>}
     </div>
   );
 }

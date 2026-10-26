@@ -286,6 +286,16 @@ body:has(.stage-tall) .twk-panel { bottom: calc(51px + env(safe-area-inset-botto
 .q-hd { display: flex; align-items: center; gap: 8px; }
 .q-exp { padding: 1px 6px; border-radius: 4px; border: 1px solid color-mix(in srgb, var(--queen) 55%, transparent); color: var(--queen); font: 600 9px var(--mono); letter-spacing: 0.1em; text-transform: uppercase; }
 .twk-note a { color: var(--accent); }
+.twk-info { flex: none; width: 15px; height: 15px; margin-left: 6px; padding: 0; vertical-align: 1px; border: 1px solid var(--line); border-radius: 50%; background: transparent; color: var(--dim); font: italic 600 10px/13px Georgia, serif; cursor: help; }
+.twk-info:hover, .twk-info[aria-expanded="true"] { color: var(--ink); border-color: var(--dim); }
+.twk-btn-row { display: flex; align-items: center; gap: 4px; }
+.twk-tip { position: fixed; z-index: 100; max-width: min(280px, calc(100vw - 16px)); padding: 7px 10px; border: 1px solid var(--line); border-radius: 8px; background: var(--panel); color: var(--ink); box-shadow: 0 8px 24px var(--shadow); font: 12px/1.4 var(--sans); pointer-events: none; }
+.twk-btn-row > .twk-btn { flex: 1; min-width: 0; }
+/* the engine settings in the Analysis panel (its ☰ menu): the Settings panel's controls, zoomed to read at the frame's
+   scale, in as many columns as fit */
+.an-engine { zoom: 1.6; font: 12px/1.4 var(--sans); color: var(--ink); letter-spacing: normal; text-transform: none; }
+.an-engine .twk-flow { display: grid; grid-template-columns: repeat(auto-fill, minmax(230px, 1fr)); gap: 10px 24px; align-items: start; }
+.an-engine .twk-flow > :is(.twk-note, .twk-progress, .twk-pair, .twk-btn, .twk-btn-row) { grid-column: 1 / -1; }
 .q-strong { color: var(--ink); }
 .q-sect { margin-top: 10px; }
 .q-busy { display: flex; align-items: center; gap: 8px; color: var(--ink); font: 500 12px var(--mono); }

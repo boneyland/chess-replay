@@ -213,7 +213,7 @@ function GameApp() {
   const M = built.M || lastGood.current || window.ChessCore.buildGame(SAMPLE);
   const hf = useHfAuth();
   const Q = useQueen(M, hf);
-  // Settings › Engine: Full runs once its download is kept; until then Lite does
+  // the engine drop-down: Full runs once its download is kept; until then Lite does
   const full = useFullEngine();
   // Remove the full engine asks first (getting it back is another 99 MB); any change to the download drops the question
   const [askRemove, setAskRemove] = React.useState(false);
@@ -445,7 +445,6 @@ function GameApp() {
     : () => window.Sfx.renderTrack(window.SFX_DATA || {}, soundSet, window.Sfx.track(MV, clipOpts.S, clipT.start, clipT.end), soundVolume, clipT.end - clipT.start) }); };
   const depthText = (d) => (d == null ? 'No limit' : String(d)), SF_KEYS = ['sfDepth', 'sfTime', 'sfOwnDepth', 'sfOwnTime', 'sfLines', 'sfHash'];
   const sfChanged = JSON.stringify(ES) !== JSON.stringify(window.AnalysisCore.engineSettings(window.TWEAK_DEFAULTS, sfKind));
-  const SF_ENGINE_OPTS = ['Lite · 1.8 MB', `Full · ${sfMB(window.SFFull.TOTAL)} MB`];
   const askQueen = () => { setQueenOpen((q) => !q); setPanel(false); };
   // the Queen panel opens centred over its button in the transport bar, or over the menu button when the dock is folded
   // into a menu (a phone frame, or a window under 900 px), kept on screen
@@ -464,6 +463,55 @@ function GameApp() {
     return () => window.removeEventListener('resize', place);
   }, [queenOpen, tall]);
   const sf = { engine, own: ES.own, game: ES.game, book, status: engine.status, run: analysis, start: analysis.start, stop: analysis.stop, estimateMin: analysis.estimateMin };
+
+  // The Analysis panel's engine menu (EngineMenuContext): the Lite/Full choice in its title row, and these settings in
+  // the panel while the menu is open; the explanations sit behind ⓘ. A game has no engine menu.
+  const MB = sfMB(window.SFFull.TOTAL), stopsAt = 'Each search stops at its depth or time limit, whichever comes first.';
+  const engineBody = <>
+    {full.offered && <>
+      {t.sfEngine === 'Full' && full.state === 'absent' && <TweakButton label={`Download full Stockfish · ${MB} MB`} onClick={full.download}
+        info={`Full Stockfish 19 is stronger than Lite, with the big neural network. It is a ${MB} MB download from unpkg.com, kept in this browser for next time and offline. Until it is downloaded, Lite runs.`} />}
+      {full.state === 'downloading' && <>
+        <div className="twk-note" role="status">Downloading full Stockfish · {sfMB(full.got)} of {MB} MB</div>
+        <div className="twk-progress"><i style={{ width: `${(100 * full.got / window.SFFull.TOTAL).toFixed(1)}%` }} /></div>
+        <TweakButton secondary label="Cancel the download" onClick={full.cancel} />
+      </>}
+      {full.err && <div className="twk-note twk-err">{full.err}</div>}
+      {full.state === 'ready' && (askRemove ? <>
+        <div className="twk-note" role="alert">Remove the full engine? You’d need to download {MB} MB again to use it.</div>
+        <div className="twk-pair">
+          <TweakButton danger label="Remove" onClick={full.remove} />
+          <TweakButton secondary label="Keep" onClick={() => setAskRemove(false)} />
+        </div>
+      </> : <TweakButton secondary label={`Remove the full engine download · ${MB} MB`} onClick={() => setAskRemove(true)}
+        info={`Full Stockfish is kept in this browser (${MB} MB) and takes a few seconds to start. It reaches less depth than Lite in the same time but judges positions better.`} />)}
+    </>}
+    {/* the game-analysis limits apply only to a loaded game; the own-move ones only on the free board and your own moves in a replay */}
+    {!board && <>
+      <TweakSlider id="tw-sf-depth" label="Game analysis: depth" value={ES.game.depth} stops={window.AnalysisCore.DEPTHS} format={depthText} onChange={(v) => setTweak('sfDepth', v)} info={`For “Analyse with Stockfish”. ${stopsAt}`} />
+      <TweakSlider id="tw-sf-time" label="Game analysis: time limit per position" value={ES.game.time_limit} stops={window.AnalysisCore.SECONDS} unit="s" onChange={(v) => setTweak('sfTime', v)} info={`For “Analyse with Stockfish”. ${stopsAt}`} />
+    </>}
+    <TweakSlider id="tw-sf-odepth" label="Your moves: depth" value={ES.own.depth} stops={window.AnalysisCore.DEPTHS} format={depthText} onChange={(v) => setTweak('sfOwnDepth', v)} info={`For the moves you play on the board${board ? ': on the free board every move is rated with these' : ''}. ${stopsAt}`} />
+    <TweakSlider id="tw-sf-otime" label="Your moves: time limit per position" value={ES.own.time_limit} stops={window.AnalysisCore.SECONDS} unit="s" onChange={(v) => setTweak('sfOwnTime', v)} info={`For the moves you play on the board. ${stopsAt}`} />
+    <TweakSelect id="tw-sf-lines" label="Your moves: lines" value={String(ES.own.lines)} options={window.AnalysisCore.LINES.map(String)} onChange={(v) => setTweak('sfLines', parseInt(v, 10))}
+      info="Above one, Stockfish shows that many best moves, with an arrow each. Every line takes its share of the search, so each one goes less deep in the same time." />
+    <TweakSelect id="tw-sf-hash" label="Hash table" value={ES.game.hash_mb + ' MB'} options={window.AnalysisCore.HASH_MB.map((x) => x + ' MB')} onChange={(v) => setTweak('sfHash', parseInt(v, 10))} info="Helps long searches; a phone may run out of memory." />
+    {sfChanged && <TweakButton secondary label="Reset engine settings" onClick={() => SF_KEYS.forEach((k) => setTweak(k, window.TWEAK_DEFAULTS[k]))} />}
+    {!board && (analysis.state === 'running'
+      ? <>
+        <div className="twk-note">Analysing {analysis.done} of {analysis.total} positions{analysis.etaSec != null ? ' · ' + fmtEta(analysis.etaSec) : ''}</div>
+        <TweakButton secondary label="Stop the analysis" onClick={analysis.stop} />
+      </>
+      : <TweakButton disabled={engine.status === 'unavailable'} label={`${analysis.resumeAt ? `Resume analysis from move ${Math.floor((MV.ply0 + analysis.resumeAt) / 2) + 1}` : files.analysis ? 'Analyse again' : 'Analyse with Stockfish'} · about ${analysis.estimateMin} min`} onClick={analysis.start}
+        info={`${engineLabel(ES.game.name)} runs in your browser. New settings apply to the next analysis${files.analysis ? ', which replaces this one' : ''}; a stopped analysis resumes with its original settings.`} />)}
+    {!board && analysis.err && <div className="twk-note twk-err">{analysis.err}</div>}
+    {!board && files.analysis && analysis.state !== 'running' && <TweakButton secondary label="Remove analysis" onClick={() => commit({ ...files, analysis: null, analysisName: null, evalSource: null })} />}
+    <div className="twk-note">Stockfish is free software under the GPL-3.0; <a href="https://github.com/nmrugg/stockfish.js" target="_blank" rel="noopener">source</a>.</div>
+  </>;
+  // picking Full before it is downloaded opens the menu, where its Download button is
+  const engineMenu = { name: engineLabel(ES.game.name), body: engineBody,
+    pick: full.offered ? { value: t.sfEngine === 'Full' ? 'Full' : 'Lite', options: [{ value: 'Lite', label: engineLabel(window.AnalysisCore.ENGINE_NAMES.lite) }, { value: 'Full', label: engineLabel(window.AnalysisCore.ENGINE_NAMES.full) + (full.state === 'ready' ? ' full' : ` full · ${MB} MB`) }],
+      onChange: (v) => { setTweak('sfEngine', v); return v === 'Full' && full.state === 'absent'; } } : null };
 
   const gameName = (g) => (g.mode === 'stockfish' ? `Play vs Stockfish · you play ${g.you === 'w' ? 'White' : 'Black'}` : 'Play vs human');
   const boardStatus = board && board.game ? `${gameName(board.game)} · ${board.game.tc || 'no clock'} · ${board.steps.length} move${board.steps.length === 1 ? '' : 's'}${board.game.result ? ' · ' + window.PlayCore.resultText(board.game.result).score : ''}`
@@ -529,6 +577,7 @@ function GameApp() {
 
   return (
     <React.Fragment>
+      <EngineMenuContext.Provider value={board && board.game ? null : engineMenu}>
       <CompositionStage nav={nav} width={1920} height={1080} compact={COMPACT} portrait={PORTRAIT} square={SQUARE} short={SHORT} top={!net.online && <span className="net-chip" role="status" title={OFFLINE_NOTE}>Offline</span>} menu={<React.Fragment><SoundButton on={t.sound !== false} onChange={(v) => setTweak('sound', v)} />{tall ? menuEl : deskDock}</React.Fragment>} onLayout={onLayout} scenes={scenes} playback={PLAYBACK} bg={C.bg} still={!!board || !!editing}>
         {editing
           ? <EditBoard setup={editing.setup} onChange={editTo} onDone={editDone} onCancel={editCancel} fenText={editing.text} onFenText={editText} fenMsg={editing.msg} doneLabel={editing.play ? 'Start game' : 'Done'} orient={t.flip ? 'b' : 'w'} nav={nav} overlay={panel || newMenu || menu || queenOpen} />
@@ -536,6 +585,7 @@ function GameApp() {
           ? <FreeBoard board={board} onChange={commitBoard} tw={t} sf={sf} nav={nav} orient={t.flip ? 'b' : 'w'} book={book && !board.game ? window.Openings.book() : null} />
           : <GameVideo M={MV} tw={video.busy ? { ...t, cameraPush: false, exporting: true } : t} d={TM.d} probe={probe} queen={queenArrow} nav={nav} scheme={scheme} sf={sf} orient={t.flip ? 'b' : 'w'} />}
       </CompositionStage>
+      </EngineMenuContext.Provider>
       <input ref={inputRef} id="game-files" type="file" multiple accept=".pgn,.txt,.json,application/json,text/plain" hidden onChange={(e) => { loadFiles(e.target.files); e.target.value = ''; }} />
       {hf.note && (
         <div className="signin-note" role="status">{hf.note}<button type="button" className="twk-x" aria-label="Dismiss" onClick={hf.clearNote}>✕</button></div>
@@ -564,7 +614,8 @@ function GameApp() {
         { id: 'game', label: 'Game', body: <>
           <div className={shownErr ? 'twk-note twk-err' : 'twk-note'}>{shownErr || status}</div>
           <TweakButton label="Load game…" onClick={loadGame} />
-          {!board && <div className="twk-note">Uses the PGN’s own evals (Lichess [%eval] or cutechess +0.25/20). Without them, run “Analyse with Stockfish” from Analysis or Engine. Saved analysis, notes and Queen files load here too.</div>}
+          {board && board.game && <div className="twk-note">{board.game.mode === 'stockfish' ? 'Stockfish 19 plays the other side at full strength (there is no strength setting) and quietly rates your moves; Analyse on the free board shows its eval once the game ends.' : 'Stockfish is off during a game; Analyse on the free board brings it back once the game ends.'}</div>}
+          {!board && <div className="twk-note">Uses the PGN’s own evals (Lichess [%eval] or cutechess +0.25/20). Without them, run “Analyse with Stockfish” from the Analysis panel’s ☰ menu. Saved analysis, notes and Queen files load here too.</div>}
           {board && !window.PlayCore.inProgress(board) && <TweakButton label="Replay these moves as a game" disabled={!board.steps.length} onClick={boardAsGame} />}
           {board && !window.PlayCore.inProgress(board) && <div className="twk-note">{board.steps.length ? 'Opens every move on the board as a game: watch it, analyse it with Stockfish, and export it as a video or WebP. The board comes back with “Back to the free board”.' : 'Play some moves first; then they can be replayed and exported as a video.'}</div>}
           {!board && files.fromBoard && <TweakButton secondary label="Back to the free board" onClick={() => { const b = window.BoardCore.restore(files.fromBoard); if (b) commitBoard(b); }} />}
@@ -608,57 +659,9 @@ function GameApp() {
             <TweakToggle id="tw-fast" label="Faster opening" value={t.fastOpening} onChange={(v) => setTweak('fastOpening', v)} />
           </TweakSection>}
         </> },
-        { id: 'engine', label: 'Engine', body: <>
-          <div className="twk-note">{engineLabel(ES.game.name)} runs in your browser, for your own moves and “Analyse with Stockfish”. Each search stops at its depth or time limit, whichever comes first.</div>
-          {full.offered && <>
-            <TweakRadio id="tw-sf-engine" label="Engine" value={SF_ENGINE_OPTS[t.sfEngine === 'Full' ? 1 : 0]} options={SF_ENGINE_OPTS} onChange={(v) => setTweak('sfEngine', v === SF_ENGINE_OPTS[1] ? 'Full' : 'Lite')} />
-            {t.sfEngine === 'Full' && full.state === 'absent' && <>
-              <div className="twk-note">Full Stockfish 19 is stronger than Lite, with the big neural network. It is a {sfMB(window.SFFull.TOTAL)} MB download from unpkg.com, kept in this browser for next time and offline. Until it is downloaded, Lite runs.</div>
-              <TweakButton label={`Download full Stockfish · ${sfMB(window.SFFull.TOTAL)} MB`} onClick={full.download} />
-            </>}
-            {full.state === 'downloading' && <>
-              <div className="twk-note" role="status">Downloading full Stockfish · {sfMB(full.got)} of {sfMB(window.SFFull.TOTAL)} MB</div>
-              <div className="twk-progress"><i style={{ width: `${(100 * full.got / window.SFFull.TOTAL).toFixed(1)}%` }} /></div>
-              <TweakButton secondary label="Cancel the download" onClick={full.cancel} />
-            </>}
-            {full.err && <div className="twk-note twk-err">{full.err}</div>}
-            {full.state === 'ready' && <>
-              {t.sfEngine === 'Full' && <div className="twk-note">Full Stockfish is kept in this browser ({sfMB(window.SFFull.TOTAL)} MB) and takes a few seconds to start. It reaches less depth than Lite in the same time but judges positions better.</div>}
-              {askRemove ? <>
-                <div className="twk-note" role="alert">Remove the full engine? You’d need to download {sfMB(window.SFFull.TOTAL)} MB again to use it.</div>
-                <div className="twk-pair">
-                  <TweakButton danger label="Remove" onClick={full.remove} />
-                  <TweakButton secondary label="Keep" onClick={() => setAskRemove(false)} />
-                </div>
-              </> : <TweakButton secondary label={`Remove the full engine download · ${sfMB(window.SFFull.TOTAL)} MB`} onClick={() => setAskRemove(true)} />}
-            </>}
-          </>}
-          {/* the game-analysis limits apply only to a loaded game; the own-move ones only where moves are rated (not during a game) */}
-          {!board && <>
-            <TweakSlider id="tw-sf-depth" label="Game analysis: depth" value={ES.game.depth} stops={window.AnalysisCore.DEPTHS} format={depthText} onChange={(v) => setTweak('sfDepth', v)} />
-            <TweakSlider id="tw-sf-time" label="Game analysis: time limit per position" value={ES.game.time_limit} stops={window.AnalysisCore.SECONDS} unit="s" onChange={(v) => setTweak('sfTime', v)} />
-          </>}
-          {!(board && board.game) && <>
-            <TweakSlider id="tw-sf-odepth" label="Your moves: depth" value={ES.own.depth} stops={window.AnalysisCore.DEPTHS} format={depthText} onChange={(v) => setTweak('sfOwnDepth', v)} />
-            <TweakSlider id="tw-sf-otime" label="Your moves: time limit per position" value={ES.own.time_limit} stops={window.AnalysisCore.SECONDS} unit="s" onChange={(v) => setTweak('sfOwnTime', v)} />
-            <TweakSelect id="tw-sf-lines" label="Your moves: lines" value={String(ES.own.lines)} options={window.AnalysisCore.LINES.map(String)} onChange={(v) => setTweak('sfLines', parseInt(v, 10))} />
-            {ES.own.lines > 1 && <div className="twk-note">Stockfish shows its {ES.own.lines} best moves with an arrow each. Every line takes its share of the search, so each one goes less deep in the same time.</div>}
-          </>}
-          <TweakSelect id="tw-sf-hash" label="Hash table (helps long searches; a phone may run out of memory)" value={ES.game.hash_mb + ' MB'} options={window.AnalysisCore.HASH_MB.map((x) => x + ' MB')} onChange={(v) => setTweak('sfHash', parseInt(v, 10))} />
-          {sfChanged && <TweakButton secondary label="Reset engine settings" onClick={() => SF_KEYS.forEach((k) => setTweak(k, window.TWEAK_DEFAULTS[k]))} />}
-          {!board && (analysis.state === 'running'
-            ? <>
-              <div className="twk-note">Analysing {analysis.done} of {analysis.total} positions{analysis.etaSec != null ? ' · ' + fmtEta(analysis.etaSec) : ''}</div>
-              <TweakButton secondary label="Stop the analysis" onClick={analysis.stop} />
-            </>
-            : <TweakButton disabled={engine.status === 'unavailable'} label={`${analysis.resumeAt ? `Resume analysis from move ${Math.floor((MV.ply0 + analysis.resumeAt) / 2) + 1}` : files.analysis ? 'Analyse again' : 'Analyse with Stockfish'} · about ${analysis.estimateMin} min`} onClick={analysis.start} />)}
-          {!board && analysis.err && <div className="twk-note twk-err">{analysis.err}</div>}
-          {!board && files.analysis && analysis.state !== 'running' && <TweakButton secondary label="Remove analysis" onClick={() => commit({ ...files, analysis: null, analysisName: null, evalSource: null })} />}
-          <div className="twk-note">{board && board.game ? (board.game.mode === 'stockfish' ? 'Stockfish 19 plays the other side at full strength (there is no strength setting) and quietly rates your moves; Analyse on the free board shows its eval once the game ends.' : 'Stockfish is off during a game; Analyse on the free board brings it back once the game ends.') : board ? 'On the free board every move is rated with the “Your moves” settings.' : <>New settings apply to the next analysis{files.analysis ? ', which replaces this one' : ''}; a stopped analysis resumes with its original settings.</>} Stockfish is free software under the GPL-3.0; <a href="https://github.com/nmrugg/stockfish.js" target="_blank" rel="noopener">source</a>.</div>
-          <TweakSection label="Online data">
-            <TweakToggle id="tw-tablebase" label="Endgame tablebase (7 pieces or fewer)" value={t.tablebase !== false} onChange={(v) => setTweak('tablebase', v)} />
-            <div className="twk-note">Positions with 7 pieces or fewer go to Lichess’s tablebase (tablebase.lichess.ovh) for the result with best play and every move ranked by it: in the Analysis panel and the eval bar (tagged TB), while the replay is paused and on the free board, never during a game. “Analyse with Stockfish” takes them from it too, and rates those moves by whether they keep the win or the draw. Nothing is sent with this off.</div>
-          </TweakSection>
+        { id: 'online', label: 'Online', body: <>
+          <TweakToggle id="tw-tablebase" label="Endgame tablebase (7 pieces or fewer)" value={t.tablebase !== false} onChange={(v) => setTweak('tablebase', v)} />
+          <div className="twk-note">Positions with 7 pieces or fewer go to Lichess’s tablebase (tablebase.lichess.ovh) for the result with best play and every move ranked by it: in the Analysis panel and the eval bar (tagged TB), while the replay is paused and on the free board, never during a game. “Analyse with Stockfish” takes them from it too, and rates those moves by whether they keep the win or the draw. Nothing is sent with this off.</div>
         </> },
         !board && { id: 'commentary', label: 'Commentary', body: <>
           <TweakToggle id="tw-comm" label="Show commentary" value={showCommentary} onChange={(v) => setTweak('commentary', v)} />

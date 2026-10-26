@@ -57,10 +57,40 @@ function TweaksPanel({ open, onClose, title = 'Settings', tabs, tab, onTab }) {
 // a titled group of rows within a tab
 function TweakSection({ label, children }) { return <section className="twk-group"><div className="twk-sect">{label}</div>{children}</section>; }
 
-function TweakRow({ label, value, children }) {
+// info: the row's explanation, behind an ⓘ: a floating tip just above it on hover, focus or a tap, drawn into the page's
+// body so no scrolling box clips it and no row grows
+function InfoTip({ info, label }) {
+  const btn = React.useRef(null), tip = React.useRef(null), id = React.useId();
+  const [open, setOpen] = React.useState(false), [at, setAt] = React.useState(null);
+  React.useLayoutEffect(() => {
+    if (!open) { setAt(null); return; }
+    const r = btn.current.getBoundingClientRect(), w = tip.current.offsetWidth, h = tip.current.offsetHeight;
+    const left = Math.max(8, Math.min(r.left + r.width / 2 - w / 2, window.innerWidth - w - 8));
+    setAt({ left, top: r.top - h - 6 >= 8 ? r.top - h - 6 : r.bottom + 6 });
+  }, [open]);
+  React.useEffect(() => {
+    if (!open) return;
+    const close = () => setOpen(false);
+    const away = (e) => { if (!btn.current.contains(e.target)) close(); };
+    const esc = (e) => { if (e.key === 'Escape') { e.stopPropagation(); close(); } };
+    window.addEventListener('scroll', close, true); window.addEventListener('resize', close);
+    document.addEventListener('pointerdown', away); window.addEventListener('keydown', esc, true);
+    return () => { window.removeEventListener('scroll', close, true); window.removeEventListener('resize', close); document.removeEventListener('pointerdown', away); window.removeEventListener('keydown', esc, true); };
+  }, [open]);
+  return (
+    <>
+      <button ref={btn} type="button" className="twk-info" aria-label={`About ${label}`} aria-expanded={open} aria-describedby={open ? id : undefined}
+        onClick={() => setOpen((o) => !o)} onPointerEnter={(e) => { if (e.pointerType === 'mouse') setOpen(true); }} onPointerLeave={(e) => { if (e.pointerType === 'mouse') setOpen(false); }}
+        onFocus={(e) => { if (e.target.matches(':focus-visible')) setOpen(true); }} onBlur={() => setOpen(false)}>i</button>
+      {open && ReactDOM.createPortal(<div ref={tip} id={id} role="tooltip" className="twk-tip" style={at ? { left: at.left, top: at.top } : { left: 0, top: 0, visibility: 'hidden' }}>{info}</div>, document.body)}
+    </>
+  );
+}
+
+function TweakRow({ label, value, info, children }) {
   return (
     <div className="twk-row">
-      <div className="twk-lbl"><span>{label}</span>{value != null && <span className="twk-val">{value}</span>}</div>
+      <div className="twk-lbl"><span>{label}{info && <InfoTip info={info} label={label} />}</span>{value != null && <span className="twk-val">{value}</span>}</div>
       {children}
     </div>
   );
@@ -68,10 +98,10 @@ function TweakRow({ label, value, children }) {
 
 // stops: the only values the slider takes, in order (uneven steps); it then moves through their indices
 // format: a value's text, when it isn't just the value and its unit
-function TweakSlider({ id, label, value, min = 0, max = 100, step = 1, stops, unit = '', format, onChange }) {
+function TweakSlider({ id, label, value, min = 0, max = 100, step = 1, stops, unit = '', format, info, onChange }) {
   const at = stops ? Math.max(0, stops.indexOf(value)) : value, text = format ? format(value) : `${value}${unit}`;
   return (
-    <TweakRow label={label} value={text}>
+    <TweakRow label={label} value={text} info={info}>
       <input id={id} type="range" className="twk-slider" min={stops ? 0 : min} max={stops ? stops.length - 1 : max} step={stops ? 1 : step} value={at} aria-label={label} aria-valuetext={stops ? text : undefined} onChange={(e) => onChange(stops ? stops[Number(e.target.value)] : Number(e.target.value))} />
     </TweakRow>
   );
@@ -86,9 +116,9 @@ function TweakToggle({ id, label, value, onChange }) {
   );
 }
 
-function TweakSelect({ id, label, aria, value, options, onChange }) {
+function TweakSelect({ id, label, aria, value, options, info, onChange }) {
   return (
-    <TweakRow label={label}>
+    <TweakRow label={label} info={info}>
       <select id={id} className="twk-field" value={value} aria-label={aria || label} onChange={(e) => onChange(e.target.value)}>
         {options.map((o) => <option key={o} value={o}>{o}</option>)}
       </select>
@@ -114,8 +144,9 @@ function TweakRadio({ id, label, value, options, onChange }) {
 }
 
 // danger: a button that throws something away (after the viewer has been asked)
-function TweakButton({ label, onClick, secondary = false, danger = false, disabled = false }) {
-  return <button type="button" className={secondary ? 'twk-btn secondary' : danger ? 'twk-btn danger' : 'twk-btn'} disabled={disabled} onClick={onClick}>{label}</button>;
+function TweakButton({ label, onClick, secondary = false, danger = false, disabled = false, info }) {
+  const el = <button type="button" className={secondary ? 'twk-btn secondary' : danger ? 'twk-btn danger' : 'twk-btn'} disabled={disabled} onClick={onClick}>{label}</button>;
+  return info ? <div className="twk-btn-row">{el}<InfoTip info={info} label={label} /></div> : el;
 }
 
 Object.assign(window, { useTweaks, TweaksPanel, TweakSection, TweakSlider, TweakToggle, TweakRadio, TweakSelect, TweakButton });

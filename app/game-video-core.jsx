@@ -201,14 +201,15 @@ function SideScroll({ style, children }) {
   );
 }
 // extra: a node after right that never scrolls with it (Analysis: Go deeper beside the search's depth)
-function Panel({ box, title, right, extra, a, style, children }) {
+// head: the title row's own contents, in place of title, right and extra (the Analysis panel's)
+function Panel({ box, title, right, extra, head, a, style, children }) {
   const { x, y, w, h, k } = box;
   return (
     <div style={{ position: 'absolute', left: x, top: y, width: w / k, height: h / k, boxSizing: 'border-box', background: C.panel, border: `1px solid ${C.line}`, borderRadius: 8, padding: L.pad || '16px 22px', opacity: a, transform: `translateY(${(1 - a) * 18}px) scale(${k})`, transformOrigin: '0 0', overflow: 'hidden', ...(box.scroll && { overflowY: 'auto', overscrollBehavior: 'contain', scrollbarWidth: 'thin' }), ...style }}>
-      {title && (
+      {(title || head) && (
         // the same heading size in every panel, whatever its magnification k; box.right sizes the text on the right
         <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: (L.titleGap || 16) / k, font: `600 ${L.title / k}px ${MONO}`, letterSpacing: '0.12em', textTransform: 'uppercase', color: C.dim, marginBottom: 12 / k }}>
-          <span style={{ flex: 'none' }}>{title}</span><SideScroll style={{ minWidth: 0, flex: 1, textAlign: 'right', letterSpacing: '0.04em', fontSize: `${box.right || 0.85}em` }}>{right}</SideScroll>{extra}
+          {head || <><span style={{ flex: 'none' }}>{title}</span><SideScroll style={{ minWidth: 0, flex: 1, textAlign: 'right', letterSpacing: '0.04em', fontSize: `${box.right || 0.85}em` }}>{right}</SideScroll>{extra}</>}
         </div>
       )}
       {children}
@@ -337,12 +338,51 @@ const lineLabel = (M, c, j, san) => `${window.ChessCore.moveNo(M.ply0 + c + j)} 
 
 // What a search actually did: "Stockfish 19 lite · depth 22 (23 unfinished) · 3.0 s · 1.5M nodes" (the eval is from depth 22)
 const engineLabel = (name) => (name || 'Stockfish').replace(/\s*\(browser\)$/, '');
-const fmtNodes = (n) => (n >= 1e6 ? (n / 1e6).toFixed(1) + 'M' : n >= 1e3 ? Math.round(n / 1e3) + 'k' : String(n)) + ' nodes';
 // the portrait frame (no header panel) has room for the numbers only
-function searchStats(name, s) {
-  if (s && s.tablebase) return L.header ? 'Lichess tablebase' : 'Tablebase'; // a game analysis's position the tablebase answered
-  if (!s || !s.depth) return engineLabel(name);
-  return [L.header ? engineLabel(name) : '', 'depth ' + s.depth + (s.maxDepth > s.depth ? ` (${s.maxDepth} unfinished)` : ''), s.timeMs != null ? (s.timeMs / 1000).toFixed(1) + ' s' : '', s.nodes != null ? fmtNodes(s.nodes) : ''].filter(Boolean).join(' · ');
+// the Analysis title row's word on a search: the depth it reached, or the tablebase that answered it
+function searchDepth(s) {
+  if (s && s.tablebase) return 'Tablebase'; // a game analysis's position the tablebase answered
+  return s && s.depth ? 'depth ' + s.depth : null;
+}
+
+// The browser engine's menu for the Analysis panel (GameApp provides it): name, the engine's label; pick, the
+// Lite/Full choice ({ value, options: [{ value, label }], onChange }) where the full engine is offered; body, the
+// engine settings, which take the panel's place while its menu is open
+const EngineMenuContext = React.createContext(null);
+const headCtl = () => ({ ...NO_SELECT, flex: 'none', height: '1.5em', margin: '-0.25em 0', borderRadius: 5, cursor: 'pointer', border: `1.5px solid ${C.line}`, background: 'transparent', color: C.ink, letterSpacing: 0 }); // C changes with the colour scheme
+const stopHere = (e) => e.stopPropagation();
+// The Analysis panel's title row (on the right: engine, the search's depth, Go deeper, the engine menu) and, while the menu is
+// open, the engine settings in place of the panel's contents. Only a paused replay offers them; playing (an export
+// too) shows the engine's name.
+function AnalysisPanel({ box, a, depth, deep, paused, style, children }) {
+  const E = React.useContext(EngineMenuContext);
+  const [open, setOpen] = React.useState(false);
+  const live = !!E && paused, shown = open && live, pick = live && E.pick;
+  const name = E ? E.name : 'Stockfish';
+  const head = (
+    <>
+      <span style={{ flex: 'none' }}>Analysis</span>
+      {pick
+        ? <select aria-label="Engine" value={pick.value} onChange={(e) => { const go = pick.onChange(e.target.value); if (go) setOpen(true); }} onClick={stopHere} onPointerDown={stopHere}
+            style={{ ...headCtl(), marginLeft: 'auto', minWidth: 0, flex: '0 1 auto', padding: '0 0.3em', font: 'inherit', textTransform: 'none', background: C.panel }}>
+            {pick.options.map((o) => <option key={o.value} value={o.value}>{o.label}</option>)}
+          </select>
+        : <span style={{ flex: 'none', marginLeft: 'auto', textTransform: 'none', letterSpacing: '0.04em', color: C.ink }}>{name}</span>}
+      {!shown && depth && <SideScroll style={{ minWidth: 0, flex: '0 1 auto', letterSpacing: '0.04em', fontSize: `${box.right || 0.85}em` }}>{depth}</SideScroll>}
+      {!shown && paused && <DeeperButton ev={deep} />}
+      {live && (
+        <button type="button" aria-label="Engine options" aria-expanded={shown} title="Engine settings" onClick={(e) => { e.stopPropagation(); setOpen((o) => !o); }} onPointerDown={stopHere}
+          style={{ ...headCtl(), width: '1.5em', padding: 0, display: 'grid', placeItems: 'center', color: shown ? C.best : C.dim, borderColor: shown ? C.best : C.line }}>
+          <svg viewBox="0 0 16 16" width="60%" height="60%" aria-hidden="true"><path d="M2 3.5h12M2 8h12M2 12.5h12" stroke="currentColor" strokeWidth="2" strokeLinecap="round" /></svg>
+        </button>
+      )}
+    </>
+  );
+  return (
+    <Panel box={shown ? { ...box, scroll: true } : box} a={a} style={style} head={head}>
+      {shown ? <div className="an-engine" onClick={stopHere} onPointerDown={stopHere}><div className="twk-flow">{E.body}</div></div> : children}
+    </Panel>
+  );
 }
 const lineAccent = (src) => (src === 'queen' ? C.queen : src === 'you' ? C.last : C.best);
 // arrows: the engine lines' first moves from the position shown ([{ uci, k }], lineArrows), line 1 the strongest
@@ -642,28 +682,27 @@ function Analysis({ M, T, S, a, vline, onLine, paused, sf, own, onReply, deep, t
   // Go deeper's search of this move, once it has passed the analysis's (deep: useMoveEval's)
   const deeper = paused && deep && deep.after && !deep.after.stored ? deep.after : null;
   // this move's own search when the analysis recorded it, else the engine settings
-  const sfName = sf ? sf.game.name : window.AnalysisCore.ENGINE.name; // the browser engine running (Settings › Engine)
-  const right = deeper ? searchStats(sfName, deeper) : c >= 0 && M.plies[c].search ? searchStats(M.engineName, M.plies[c].search) : M.engine;
+  const depth = searchDepth(deeper || (c >= 0 ? M.plies[c].search : null));
   if (own && vline && vline.src === 'you' && vline.upto >= 0) {
     return (
-      <Panel box={box} a={a} title="Analysis" right={sf && (sf.status === 'unavailable' || sf.status === 'stopped') ? null : searchStats(sfName, own.after)} extra={<DeeperButton ev={own} />}>
+      <AnalysisPanel box={box} a={a} paused={paused} depth={sf && (sf.status === 'unavailable' || sf.status === 'stopped') ? null : searchDepth(own.after)} deep={own}>
         <OwnMoveAnalysis M={M} vline={vline} own={own} status={sf ? sf.status : 'idle'} onReply={onReply} />
         {tbEl}
         <span style={{ display: 'block', marginTop: 8, font: `500 ${sm(15)}px ${MONO}`, color: C.dim }}>
           <span style={{ color: lineAccent('you') }}>Your moves: {vline.moves.slice(0, vline.upto + 1).map((m, j) => (j === 0 || (M.ply0 + vline.at + j) % 2 === 0 ? lineLabel(M, vline.at, j, m.san) : m.san)).join(' ')}</span> · ← → step · Esc returns to the game
         </span>
-      </Panel>
+      </AnalysisPanel>
     );
   }
   if (!M.hasEval && !M.plies.some((p) => p.best)) {
-    return <Panel box={box} a={a} title="Analysis" right={right}>{sf ? <EngineEmptyState M={M} sf={sf} paused={paused} /> : <span style={{ font: `400 26px ${SERIF}`, color: C.dim, fontStyle: 'italic' }}>No engine analysis loaded.</span>}{tbEl}</Panel>;
+    return <AnalysisPanel box={box} a={a} paused={paused} depth={depth}>{sf ? <EngineEmptyState M={M} sf={sf} paused={paused} /> : <span style={{ font: `400 26px ${SERIF}`, color: C.dim, fontStyle: 'italic' }}>No engine analysis loaded.</span>}{tbEl}</AnalysisPanel>;
   }
   if (c < 0) return (
-    <Panel box={box} a={a} title="Analysis" right={right}>
+    <AnalysisPanel box={box} a={a} paused={paused} depth={depth}>
       {paused && <span style={{ ...NO_SELECT, font: `500 ${L.hint || 17}px ${MONO}`, color: C.dim }}>Press play to watch the game, or drag a piece to try your own move.</span>}
       {sf && !M.hasAnalysis && (sf.run.state === 'running' || paused) && <div style={{ marginTop: 16 }}><EngineEmptyState M={M} sf={sf} paused={paused} compact /></div>}
       {tbEl}
-    </Panel>
+    </AnalysisPanel>
   );
   const P = M.plies[c], cls = P.cls;
   const k = cl01((T - S.tp[c] - S.md[c]) / 0.25);
@@ -682,7 +721,7 @@ function Analysis({ M, T, S, a, vline, onLine, paused, sf, own, onReply, deep, t
   const qLine = Qp.before && Qp.before.line ? Qp.before.line.split(/\s+/).filter((x) => x && !/^\d+\.+$/.test(x) && !/^\d+\.\.\.$/.test(x)).map((x) => x.replace(/^\d+\.+/, '')).filter(Boolean).slice(0, 6) : [];
   const qLegal = qLine.length ? playLineCached(M, c, qLine) : [];
   return (
-    <Panel box={box} a={a} title="Analysis" right={right} extra={M.hasEval && paused && <DeeperButton ev={deep} />}>
+    <AnalysisPanel box={box} a={a} paused={paused} depth={depth} deep={M.hasEval ? deep : null}>
       <div style={{ opacity: k, transform: `translateY(${(1 - k) * 8}px)` }}>
         <div style={{ display: 'flex', alignItems: 'flex-end', gap: 28 }}>
           <span style={{ font: `700 ${big}px ${MONO}`, color: col }}>{label(M, c)}</span>
@@ -720,7 +759,7 @@ function Analysis({ M, T, S, a, vline, onLine, paused, sf, own, onReply, deep, t
         {sf && !M.hasAnalysis && (sf.run.state === 'running' || paused) && <EngineEmptyState M={M} sf={sf} paused={paused} compact />}
         {!vline && paused && M.hasEval && <FitOrHide style={{ ...NO_SELECT, font: `500 ${L.hint || 15}px ${MONO}`, color: C.dim }}>Tip: drag a piece on the board to try your own move.</FitOrHide>}
       </div>
-    </Panel>
+    </AnalysisPanel>
   );
 }
 

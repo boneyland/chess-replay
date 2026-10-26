@@ -52,7 +52,7 @@ function useEngine(hashMB, kind = 'lite', onBroken) {
   return { get, status };
 }
 
-// The full engine's download (Settings › Engine).
+// The full engine's download (the Analysis panel's engine drop-down and menu).
 // state: 'checking', 'absent', 'downloading' (got: bytes so far) or 'ready'; err: why the last download or start failed
 const SF_FULL_OFFERED = !!(window.SFFull && window.SFFull.supported());
 const sfMB = (bytes) => Math.round(bytes / 1e6);
@@ -266,7 +266,7 @@ const SF_DEEPER = new Map(); // presses of Go deeper by position (its key at the
 // comes from, so presses on one analysis's move don't carry over to another's (or the PGN's) once it is removed
 function useMoveEval(engine, before, after, own, fen, stored) {
   const A = window.AnalysisCore;
-  // a search of several lines (Settings › Engine › Lines) is cached apart from one of one line
+  // a search of several lines (Analysis › ☰ › Lines) is cached apart from one of one line
   const keyOf = (s, moves) => (own.name ? own.name + '|' : '') + (sfStartFen(fen) ? fen + '|' : '') + `${s.depth}/${s.movetimeMs}${s.lines > 1 ? '/' + s.lines : ''}:` + moves.join(' ');
   const toSearch = (o, lines = own.lines || 1) => ({ depth: o.depth, movetimeMs: o.time_limit * 1000, lines });
   const baseKey = after ? keyOf(toSearch(own), after) + (stored ? '|' + stored.src : '') : '';
@@ -334,7 +334,7 @@ function engineSteps(pos, pv, max = 8) {
   return out;
 }
 
-// Settings › Engine › Lines above one: each line's eval and first moves, the moves wrapping under each other beside
+// Analysis › ☰ › Lines above one: each line's eval and first moves, the moves wrapping under each other beside
 // the eval (a narrow panel scrolls to the later lines); a move plays the line on the board up to it. c: the ply the lines start at
 function EngineLines({ lines, pos, ply0, c, onPick }) {
   const top = lines[0].depth;
