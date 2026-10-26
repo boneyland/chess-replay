@@ -37,7 +37,7 @@ function Stage({ menu, top, onLayout, duration, background, playback, nav, still
     freshRef.current = null;
     setPlaying((p) => !p);
   };
-  const [area, setArea] = React.useState({ w: 1440, h: 900, cols: 2 });
+  const [area, setArea] = React.useState({ w: 1440, h: 900, cols: 2, sh: 900 });
   const [contentH, setContentH] = React.useState(0);
   const colsRef = React.useRef(null); // the last column count, for the switch's hysteresis
   React.useEffect(() => { if (still) setPlaying(false); }, [still]);
@@ -53,18 +53,21 @@ function Stage({ menu, top, onLayout, duration, background, playback, nav, still
     const el = areaRef.current;
     if (!el) return;
     const measure = () => {
-      const w = el.clientWidth, h = el.clientHeight;
+      // sh: the whole stage's height, which the slim bar doesn't change (the area's does), so it can decide the bar
+      const w = el.clientWidth, h = el.clientHeight, sh = el.parentElement.clientHeight;
       const cols = LayoutCore.columns({ w, h, text, video, prevCols: colsRef.current });
       colsRef.current = cols;
-      setArea((a) => (a.w === w && a.h === h && a.cols === cols ? a : { w, h, cols }));
+      setArea((a) => (a.w === w && a.h === h && a.cols === cols && a.sh === sh ? a : { w, h, cols, sh }));
     };
     measure();
     const ro = new ResizeObserver(measure);
     ro.observe(el);
     return () => ro.disconnect();
   }, [text, video]);
-  const { w, h, cols } = area;
+  const { w, h, cols, sh } = area;
   const narrow = w < 900, phone = cols === 1 || narrow;
+  // a short two-column window (a phone held sideways): a slim transport bar, so the board gets the height
+  const short = cols === 2 && sh < 500;
   // the export's pixel width: the area's size at the device's pixel ratio, held to 1920 on its longer side
   const exportW = LayoutCore.exportPx(w, LayoutCore.exportScale(w, h, window.devicePixelRatio));
   // onLayout(true, w): a phone layout (one column, or under 900 px wide), where the page folds its buttons into a menu; w is the export's width
@@ -130,7 +133,7 @@ function Stage({ menu, top, onLayout, duration, background, playback, nav, still
   const fh = scrolls ? Math.max(h, contentH) : h;
 
   return (
-    <div className={'stage' + (cols === 1 ? ' stage-one' : '') + (narrow ? ' stage-narrow' : '')}>
+    <div className={'stage' + (cols === 1 ? ' stage-one' : '') + (narrow ? ' stage-narrow' : '') + (short ? ' stage-short' : '')}>
       {top}
       <div ref={areaRef} className="stage-area" style={{ overflowY: scrolls ? 'auto' : 'hidden' }}>
         <div className="stage-frame" style={{ width: w, height: fh, background, position: 'relative' }}>

@@ -117,6 +117,11 @@ body:has(.stage-one) .twk-panel { bottom: calc(51px + env(safe-area-inset-bottom
 .stage-one .pbtn { width: 30px; height: 30px; }
 .stage-one .ptrack { min-width: 96px; }
 @media (max-width: 359px) { .stage-one .pbtn-end { display: none; } }
+/* a short two-column window (a phone held sideways): the slim bar and padding, so the board gets the height */
+.stage-short { padding-block: 2px 4px; gap: 4px; }
+.stage-short .pbar { padding: 2px 6px; gap: 6px; }
+.stage-short .pbtn { width: 36px; height: 28px; }
+.stage-short .pdock .dock-btn:not(.dock-pop .dock-btn) { height: 28px; }
 .pmenu { position: relative; flex: none; }
 .pmenu-err .dock-menu { border-color: var(--danger); color: var(--danger); }
 .pmenu .dock-items {
