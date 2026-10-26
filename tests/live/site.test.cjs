@@ -457,7 +457,8 @@ for (const name of BROWSERS) for (const site of SITES) {
       assert.ok(Math.min(...bars.black) > bt.y0 + bt.h - 1, 'the Black bar is below the board');
       // the eval bar's white part is at its top
       const white = await fl.page.evaluate((b) => {
-        const bar = [...document.querySelectorAll('div')].find((d) => { const r = d.getBoundingClientRect(); return Math.abs(r.width - 36 * b.sq / 100) < 1.5 && Math.abs(r.height - b.h) < 2 && getComputedStyle(d).overflow === 'hidden'; });
+        // the eval bar: a thin clipped box as tall as the board, left of it (its width depends on the device tier)
+        const bar = [...document.querySelectorAll('div')].find((d) => { const r = d.getBoundingClientRect(); return r.width >= 6 && r.width <= 40 && r.right <= b.x0 + 1 && Math.abs(r.height - b.h) < 2 && getComputedStyle(d).overflow === 'hidden'; });
         if (!bar) return null;
         const w = [...bar.children].find((c) => getComputedStyle(c).backgroundColor === 'rgb(255, 255, 255)'), br = bar.getBoundingClientRect(), wr = w.getBoundingClientRect();
         return { top: wr.top - br.top, bottom: br.bottom - wr.bottom };
@@ -1953,8 +1954,8 @@ for (const name of BROWSERS) for (const site of SITES) {
       const fsOn = () => ph.page.evaluate(() => !!document.fullscreenElement);
       await ph.page.getByRole('button', { name: 'Full screen', exact: true }).click();
       await ph.page.waitForFunction(() => !!document.fullscreenElement, null, { timeout: 3000 });
-      // upright in full screen, a fixed gap clears the camera's punch hole (a coarse pointer only: not Firefox's window)
-      if (name === 'chromium') assert.equal(await ph.page.evaluate(() => getComputedStyle(document.documentElement).paddingTop), '24px');
+      // upright in full screen the page runs under the camera's cut-out: no gap kept for one this screen doesn't have
+      if (name === 'chromium') assert.equal(await ph.page.evaluate(() => getComputedStyle(document.documentElement).paddingTop), '0px');
       // headless Firefox's full screen is its 1366×768 screen, where the page lays out for a desktop: no menu
       if (await menu.isVisible()) await menu.click();
       await ph.page.getByRole('button', { name: 'Exit full screen' }).click();
