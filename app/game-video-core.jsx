@@ -46,8 +46,9 @@ const tx = (px) => Math.round(px * TX * 10) / 10;
 // the text-bearing padding inside every panel
 const panelPad = () => `${tx(16)}px ${tx(22)}px`;
 // The board's own 768 px space, scaled to L.board: the board, its touch layer, arrows and badges position from 0,0 in it
-function BoardSpace({ children }) {
-  return <div style={{ position: 'absolute', left: L.board.x, top: L.board.y, width: BW, height: BW, transform: `scale(${L.board.size / BW})`, transformOrigin: '0 0' }}>{children}</div>;
+// lift: the board's space paints over the panels and tray (a piece dragged from the tray must stay on top)
+function BoardSpace({ children, lift }) {
+  return <div style={{ position: 'absolute', left: L.board.x, top: L.board.y, width: BW, height: BW, transform: `scale(${L.board.size / BW})`, transformOrigin: '0 0', ...(lift && { zIndex: 20 }) }}>{children}</div>;
 }
 
 // The side at the bottom ('b' turns the board round). view() maps a board column and row (0 = a, 0 = rank 8) to where it

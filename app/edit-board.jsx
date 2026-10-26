@@ -16,7 +16,7 @@ const SR_ONLY = { position: 'absolute', width: 1, height: 1, overflow: 'hidden',
 
 function TrayPiece({ p, size, held, handlers }) {
   return (
-    <button type="button" aria-label={trayLabel(p)} aria-pressed={held === p} {...handlers}
+    <button type="button" data-no-drag-scroll aria-label={trayLabel(p)} aria-pressed={held === p} {...handlers}
       onDragStart={(e) => e.preventDefault()}
       style={{ ...NO_SELECT, width: size, height: size, padding: 0, border: 'none', borderRadius: 8, cursor: 'grab', touchAction: 'none', background: held === p ? 'rgba(255,255,255,0.12)' : 'transparent', boxShadow: held === p ? `inset 0 0 0 4px ${BOARD.last}` : 'none' }}>
       <img src={img(p === p.toUpperCase() ? 'w' : 'b', p.toLowerCase())} alt="" draggable={false} style={{ width: size * 0.9, height: size * 0.9, display: 'block', margin: 'auto', pointerEvents: 'none', filter: p === p.toLowerCase() ? C.rim : 'none' }} />
@@ -33,14 +33,14 @@ function Tray({ size, held, trayHandlers, style }) {
 }
 
 // a function: C follows the theme, which can change after load
-const editField = () => ({ boxSizing: 'border-box', width: '100%', font: `500 17px ${MONO}`, padding: '8px 10px', borderRadius: 6, border: `1px solid ${C.line}`, background: C.bg, color: C.ink });
+const editField = () => ({ boxSizing: 'border-box', width: '100%', font: `500 ${tx(17)}px ${MONO}`, padding: `${tx(8)}px ${tx(10)}px`, borderRadius: 6, border: `1px solid ${C.line}`, background: C.bg, color: C.ink });
 
 function CastleBox({ setup, right, label, onChange }) {
   const E = window.EditCore, can = E.canCastle(setup, right);
   return (
     <label style={{ display: 'flex', alignItems: 'center', gap: 8, font: `500 ${tx(15)}px ${MONO}`, color: can ? C.ink : C.dim, cursor: can ? 'pointer' : 'default' }}>
       <input type="checkbox" aria-label={label} checked={setup.castle.includes(right)} disabled={!can} onChange={(e) => onChange(E.setCastle(setup, right, e.target.checked))}
-        style={{ width: 18, height: 18, margin: 0, accentColor: C.last }} />
+        style={{ width: tx(18), height: tx(18), margin: 0, accentColor: C.last }} />
       {label.split(' ')[1]}
     </label>
   );
@@ -128,7 +128,10 @@ function useEditInput({ setup, onChange }) {
 }
 
 function EditBoard({ setup, onChange, onDone, onCancel, fenText, onFenText, fenMsg, doneLabel = 'Done', orient, nav, overlay }) {
-  setLayout(useFrame(), 'edit'); // before the children render, which read the layout
+  const frame = useFrame();
+  setLayout(frame, 'edit'); // before the children render, which read the layout
+  // a paused one-column page is as tall as its panels; the stage scrolls it
+  React.useLayoutEffect(() => { frame.setContentH(L.h); }, [L.h]);
   setOrient(orient);
   const E = window.EditCore, problems = E.problems(setup), empty = E.isEmpty(setup), P = L.panel;
   // the transport bar has no moves to step through; Copy FEN copies the setup's FEN
@@ -152,12 +155,12 @@ function EditBoard({ setup, onChange, onDone, onCancel, fenText, onFenText, fenM
   // the keyboard's square shows while the board has the focus from the keyboard
   const [kbFocus, setKbFocus] = React.useState(false);
   const ring = (i, color, inset) => { const [x, y] = idxXY(i); return <div style={{ position: 'absolute', left: x * SQ, top: y * SQ, width: SQ, height: SQ, boxShadow: `inset 0 0 0 ${inset}px ${color}`, pointerEvents: 'none' }} />; };
-  const label = (t) => <div style={{ font: `600 ${tx(13)}px ${MONO}`, letterSpacing: '0.1em', textTransform: 'uppercase', color: C.dim, marginBottom: 6 }}>{t}</div>;
+  const label = (t) => <div style={{ font: `600 ${tx(13)}px ${MONO}`, letterSpacing: '0.1em', textTransform: 'uppercase', color: C.dim, marginBottom: tx(6) }}>{t}</div>;
   return (
     <div style={{ position: 'absolute', inset: 0, background: C.bg, overflow: 'hidden' }}>
-      <BoardSpace>
+      <BoardSpace lift={!!(drag && drag.moved)}>
       <LineBoard a={1} sq={boardSquares()} v={{ upto: -1, moves: [], base: { b: setup.b }, src: 'you' }} hide={drag && drag.moved && drag.from != null ? drag.from : null} arrows={null} />
-      <div ref={input.boardEl} onPointerDown={H.onDown} onPointerMove={H.onMove} onPointerUp={H.onUp} onPointerCancel={H.onCancel} onDragStart={(e) => e.preventDefault()}
+      <div ref={input.boardEl} data-no-drag-scroll onPointerDown={H.onDown} onPointerMove={H.onMove} onPointerUp={H.onUp} onPointerCancel={H.onCancel} onDragStart={(e) => e.preventDefault()}
         tabIndex={0} role="application" aria-label={`Board${held ? `, placing ${trayLabel(held).toLowerCase()}` : ''}`} aria-describedby="edit-board-keys" onKeyDown={(e) => { input.onKeyDown(e); if (e.defaultPrevented) setKbFocus(true); }}
         onFocus={(e) => setKbFocus(e.currentTarget.matches(':focus-visible'))} onBlur={() => setKbFocus(false)}
         title={held ? 'Tap squares to place the piece' : 'Drag a piece to move it, or off the board to take it away'}
@@ -172,27 +175,27 @@ function EditBoard({ setup, onChange, onDone, onCancel, fenText, onFenText, fenM
           style={{ position: 'absolute', left: drag.x - SQ * 0.55, top: drag.y - SQ * 0.55, width: SQ * 1.1, height: SQ * 1.1, pointerEvents: 'none', filter: 'drop-shadow(0 10px 12px rgba(0,0,0,0.45))', zIndex: 10 }} />
       )}
       </BoardSpace>
-      {L.tray && <Tray size={Math.min(56, Math.floor((L.tray.w - 20) / 6))} held={held} trayHandlers={trayHandlers} style={{ position: 'absolute', left: L.tray.x, top: L.tray.y, width: L.tray.w }} />}
+      {L.tray && <Tray size={Math.min(112, Math.floor((L.tray.w - 20) / 6), Math.floor((L.tray.h - 4) / 2))} held={held} trayHandlers={trayHandlers} style={{ position: 'absolute', left: L.tray.x, top: L.tray.y, width: L.tray.w }} />}
       <Panel box={P} a={1} title="Edit position">
-        <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
+        <div style={{ display: 'flex', flexDirection: 'column', gap: tx(16) }}>
           <div>
             <input type="text" aria-label="FEN" aria-describedby="edit-fen-msg" spellCheck={false} autoComplete="off" autoCapitalize="off" autoCorrect="off"
               value={fenText} onChange={(e) => onFenText(e.target.value)} style={editField()} />
-            <div id="edit-fen-msg" role="alert" style={{ font: `500 ${tx(14)}px ${MONO}`, color: C.blunder, marginTop: fenMsg ? 6 : 0 }}>{fenMsg}</div>
+            <div id="edit-fen-msg" role="alert" style={{ font: `500 ${tx(14)}px ${MONO}`, color: C.blunder, marginTop: fenMsg ? tx(6) : 0 }}>{fenMsg}</div>
           </div>
-          <div style={{ display: 'flex', alignItems: 'center', gap: 10, flexWrap: 'wrap' }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: tx(10), flexWrap: 'wrap' }}>
             <FrameButton color={C.ink} onClick={() => onChange(E.start())}>Start</FrameButton>
             <FrameButton color={C.ink} onClick={() => onChange(E.empty())}>Empty</FrameButton>
-            <select aria-label="Side to move" value={setup.turn} onChange={(e) => onChange(E.setTurn(setup, e.target.value))} style={{ ...editField(), width: 'auto', flex: 1, minWidth: 180 }}>
+            <select aria-label="Side to move" value={setup.turn} onChange={(e) => onChange(E.setTurn(setup, e.target.value))} style={{ ...editField(), width: 'auto', flex: 1, minWidth: tx(180) }}>
               <option value="w">White to move</option>
               <option value="b">Black to move</option>
             </select>
           </div>
-          <div style={{ display: 'flex', gap: 40 }}>
+          <div style={{ display: 'flex', gap: tx(40) }}>
             {[['w', 'White', 'K', 'Q'], ['b', 'Black', 'k', 'q']].map(([side, name, k, q]) => (
               <div key={side} role="group" aria-label={`${name} castling`}>
                 {label(name)}
-                <div style={{ display: 'flex', gap: 18 }}>
+                <div style={{ display: 'flex', gap: tx(18) }}>
                   <CastleBox setup={setup} right={k} label={`${name} O-O`} onChange={onChange} />
                   <CastleBox setup={setup} right={q} label={`${name} O-O-O`} onChange={onChange} />
                 </div>
@@ -200,11 +203,11 @@ function EditBoard({ setup, onChange, onDone, onCancel, fenText, onFenText, fenM
             ))}
           </div>
           {!L.tray && <Tray size={Math.min(84, Math.floor((P.w - 60) / 6))} held={held} trayHandlers={trayHandlers} style={{ borderTop: `1px solid ${C.line}`, paddingTop: 14 }} />}
-          <div role="status" style={{ display: 'flex', flexDirection: 'column', gap: 4, font: `500 ${tx(15)}px ${MONO}`, minHeight: 22 }}>
+          <div role="status" style={{ display: 'flex', flexDirection: 'column', gap: 4, font: `500 ${tx(15)}px ${MONO}`, minHeight: tx(22) }}>
             {empty ? <span style={{ color: C.dim }}>{EDIT_HINT}</span> : problems.map((t) => <span key={t} style={{ color: C.blunder }}>{t}</span>)}
             {kbFocus && <span style={{ color: C.dim }}>{EDIT_KEYS}</span>}
           </div>
-          <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 12 }}>
+          <div style={{ display: 'flex', justifyContent: 'flex-end', gap: tx(12) }}>
             <FrameButton color={C.dim} onClick={onCancel}>Cancel</FrameButton>
             <FrameButton primary color={C.last} disabled={problems.length > 0} onClick={onDone}>{doneLabel}</FrameButton>
           </div>
