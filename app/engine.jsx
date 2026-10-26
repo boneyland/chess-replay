@@ -12,18 +12,17 @@ const clamp = (v, min, max) => Math.max(min, Math.min(max, v));
 
 const TimelineContext = React.createContext({ time: 0, duration: 10, playing: false });
 const useTimeline = () => React.useContext(TimelineContext);
-// which frame the stage shows: { tall: false } for landscape, { tall: true, height } for the portrait one,
-// { short: true, width } for the wide, short one on a phone held sideways, { square: true, height } for the square one
-const FrameContext = React.createContext({ tall: false });
-// Where the landscape frame is ruled out, the square one beats the sideways one unless that shows over 1/0.9 as large
-// (a page near 1050 × 800 gets square, which fills its height; a short one stays sideways)
-const SQUARE_OVER_SHORT = 0.9;
+// what the stage gives its view: the area's size (w, h), the column count the page lays out in (1 or 2), whether it is
+// a video (playing, or an export drawing) rather than a paused page, the text size multiplier, and narrow (under 900 px
+// wide, where the page's buttons fold into a menu). A view calls setContentH(h) with the height its layout needs, so a
+// paused one-column page can scroll when it is taller than the area.
+const FrameContext = React.createContext({ w: 1440, h: 900, cols: 2, video: false, text: 1, narrow: false, setContentH: () => {} });
 const useFrame = () => React.useContext(FrameContext);
 
 
 // still: a board without a timeline (the free board): no playing, no seeking keys, and a transport bar of moves only
-// top: an optional line above the frame (the page's Offline tag); the frame scales to the room left
-function Stage({ width, height, compact, portrait, square, short, menu, top, onLayout, duration, background, playback, nav, still, children }) {
+// top: an optional line above the frame (the page's Offline tag); the page lays out at the size of the room left
+function Stage({ menu, top, onLayout, duration, background, playback, nav, still, forceVideo, text = 1, children }) {
   const playTimes = playback && playback.mode === 'times' ? playback.count : null;
   const loop = !playback || playback.mode === 'loop';
   // The page opens paused on the composition's start frame (setStart); the first Play from that untouched frame
@@ -38,10 +37,9 @@ function Stage({ width, height, compact, portrait, square, short, menu, top, onL
     freshRef.current = null;
     setPlaying((p) => !p);
   };
-  const [scale, setScale] = React.useState(0.2);
-  const [frame, setFrame] = React.useState({ tall: false });
-  const tallRef = React.useRef(false), shortRef = React.useRef(false), squareRef = React.useRef(false);
-  const tall = frame.tall;
+  const [area, setArea] = React.useState({ w: 1440, h: 900, cols: 2 });
+  const [contentH, setContentH] = React.useState(0);
+  const colsRef = React.useRef(null); // the last column count, for the switch's hysteresis
   React.useEffect(() => { if (still) setPlaying(false); }, [still]);
   const areaRef = React.useRef(null);
   const lastTsRef = React.useRef(null);
@@ -53,54 +51,23 @@ function Stage({ width, height, compact, portrait, square, short, menu, top, onL
   React.useLayoutEffect(() => {
     const el = areaRef.current;
     if (!el) return;
-    // Each frame is judged by the room it would get: the stage less that frame's own transport bar and padding (the
-    // portrait and sideways ones are slimmer), as last measured while it showed. Judged by the room the current one
-    // leaves, a window at a boundary flips back and forth: the switch itself changes the room.
-    const chrome = { wide: [32, 82], compact: [16, 64], tall: [16, 49], short: [32, 44], square: [16, 61] };
     const measure = () => {
-      const st = el.parentElement, cur = st.classList.contains('stage-tall') ? 'tall' : st.classList.contains('stage-short') ? 'short' : st.classList.contains('stage-square') ? 'square' : st.classList.contains('stage-compact') ? 'compact' : 'wide';
-      chrome[cur] = [st.clientWidth - el.clientWidth, st.clientHeight - el.clientHeight];
-      const room = (k) => [Math.max(1, st.clientWidth - chrome[k][0]), Math.max(1, st.clientHeight - chrome[k][1])];
-      // under 1300 px wide the landscape frame is the compact one, with slimmer padding around it
-      const cw = !!compact && st.clientWidth < 1300, lw = cw ? compact.width : width, lh = cw ? compact.height : height;
-      const [w, h] = room(cw ? 'compact' : 'wide'), [tw, th] = room('tall'), [kw, kh] = room('short'), [uw, uh] = room('square');
-      // The portrait frame takes over when it would show noticeably larger than the landscape one;
-      // the 1.1–1.15 band keeps a window at the boundary from flipping back and forth.
-      // It is as tall as the area allows (between its min and max height), so it fills a phone screen.
-      // A page under 1050 × 650 never gets the landscape frame: it takes the largest of the others
-      const noWide = (portrait || square || short) && (st.clientWidth < 1050 || st.clientHeight < 650);
-      const sl = noWide ? 0 : Math.min(w / lw, h / lh);
-      const sp = portrait ? Math.min(tw / portrait.width, th / portrait.minHeight) : 0;
-      // A short landscape area (a phone held sideways) gets a wider frame whose board fills the height, as wide as
-      // the area allows (between its min and max width); a desktop window keeps the 16:9 video
-      const ss = short && (noWide || h < short.maxArea) ? Math.min(kw / short.minWidth, kh / short.height) : 0;
-      // A square-ish area big enough not to be a phone gets the square frame when it shows noticeably larger than the
-      // landscape one and at least as large as the portrait one (judged by the room it leaves: the landscape bar, with phone-like padding)
-      const sq = square && (noWide || Math.min(w, h) >= 600) ? Math.min(uw / square.width, uh / square.minHeight) : 0;
-      const nextSq = sq > sl * (squareRef.current ? 1.05 : 1.1) && sq > sp * (squareRef.current ? 1 : 1.02) && !(noWide && ss * SQUARE_OVER_SHORT > sq);
-      squareRef.current = nextSq;
-      const qh = nextSq ? clamp(Math.floor(uh / sq), square.minHeight, square.maxHeight) : 0;
-      const next = !nextSq && sp > sl * (tallRef.current ? 1.1 : 1.15) && !(noWide && ss > sp);
-      tallRef.current = next;
-      const ph = next ? clamp(Math.floor(th / sp), portrait.minHeight, portrait.maxHeight) : 0;
-      const nextShort = !next && !nextSq && ss > sl * (shortRef.current ? 1.05 : 1.1);
-      shortRef.current = nextShort;
-      const sw = nextShort ? clamp(Math.floor(kw / ss), short.minWidth, short.maxWidth) : 0;
-      // narrow: a landscape or square frame under 900 px wide, too little room beside the track for the page's buttons,
-      // which fold into a menu (the portrait frame always has it)
-      const narrow = !next && st.clientWidth < 900;
-      setFrame((f) => (f.tall === next && !!f.square === nextSq && !!f.short === nextShort && !!f.narrow === narrow && !!f.compact === (cw && !next && !nextSq && !nextShort) && (f.height || 0) === (ph || qh) && (f.width || 0) === sw ? f
-        : next ? { tall: true, height: ph } : nextSq ? { tall: false, square: true, narrow, height: qh } : nextShort ? { tall: false, short: true, narrow, width: sw } : { tall: false, narrow, compact: cw }));
-      setScale(Math.max(0.05, next ? sp : nextSq ? Math.min(uw / square.width, uh / qh) : nextShort ? Math.min(kw / sw, kh / short.height) : sl));
+      const w = el.clientWidth, h = el.clientHeight;
+      const cols = LayoutCore.columns({ w, h, text, prevCols: colsRef.current });
+      colsRef.current = cols;
+      setArea((a) => (a.w === w && a.h === h && a.cols === cols ? a : { w, h, cols }));
     };
     measure();
     const ro = new ResizeObserver(measure);
     ro.observe(el);
     return () => ro.disconnect();
-  }, [width, height, compact && compact.width, compact && compact.height, portrait && portrait.width, portrait && portrait.minHeight, portrait && portrait.maxHeight, square && square.minHeight, short && short.height]);
-  // onLayout(true, w): a phone frame (portrait, or any other under 900 px wide), where the page folds its buttons into a menu; w is the frame's width
-  const phone = tall || !!frame.narrow, fw = tall ? portrait.width : frame.square ? square.width : frame.short ? frame.width : frame.compact ? compact.width : width;
-  React.useLayoutEffect(() => { if (onLayout) onLayout(phone, fw); }, [phone, fw]);
+  }, [text]);
+  const { w, h, cols } = area;
+  const video = playing || !!forceVideo, narrow = w < 900, phone = cols === 1 || narrow;
+  // the export's pixel width: the area's size at the device's pixel ratio, held to 1920 on its longer side
+  const exportW = Math.max(2, 2 * Math.floor((w * Math.min(window.devicePixelRatio || 1, 1920 / Math.max(w, h, 1))) / 2));
+  // onLayout(true, w): a phone layout (one column, or under 900 px wide), where the page folds its buttons into a menu; w is the export's width
+  React.useLayoutEffect(() => { if (onLayout) onLayout(phone, exportW); }, [phone, exportW]);
 
   React.useEffect(() => {
     if (!playing) { lastTsRef.current = null; return; }
@@ -155,19 +122,20 @@ function Stage({ width, height, compact, portrait, square, short, menu, top, onL
     return () => window.removeEventListener('chess-video:seek', onSeek);
   }, [duration]);
 
-  const fh = tall || frame.square ? frame.height : frame.short ? short.height : frame.compact ? compact.height : height;
+  const frame = React.useMemo(() => ({ w, h, cols, video, text, narrow, setContentH }), [w, h, cols, video, text, narrow]);
   const ctx = React.useMemo(() => ({ time, duration, playing, setTime, setPlaying, setStart }), [time, duration, playing]);
+  // a video fills the area; so does a two-column page; a paused one-column page is as tall as its content (the area scrolls)
+  const scrolls = !video && cols === 1;
+  const fh = scrolls ? Math.max(h, contentH) : h;
 
   return (
-    <div className={'stage' + (tall ? ' stage-tall' : frame.short ? ' stage-short' : frame.square ? ' stage-square' : frame.compact ? ' stage-compact' : '')}>
+    <div className={'stage' + (cols === 1 ? ' stage-one' : '') + (narrow ? ' stage-narrow' : '')}>
       {top}
-      <div ref={areaRef} className="stage-area">
-        <div className="stage-frame" style={{ width: fw * scale, height: fh * scale }}>
-          <div style={{ width: fw, height: fh, background, position: 'relative', overflow: 'hidden', transform: `scale(${scale})`, transformOrigin: '0 0' }}>
-            <FrameContext.Provider value={frame}>
-              <TimelineContext.Provider value={ctx}>{children}</TimelineContext.Provider>
-            </FrameContext.Provider>
-          </div>
+      <div ref={areaRef} className="stage-area" style={{ overflowY: scrolls ? 'auto' : 'hidden' }}>
+        <div className="stage-frame" style={{ width: w, height: fh, background, position: 'relative' }}>
+          <FrameContext.Provider value={frame}>
+            <TimelineContext.Provider value={ctx}>{children}</TimelineContext.Provider>
+          </FrameContext.Provider>
         </div>
       </div>
       <PlaybackBar time={time} duration={duration} playing={playing} nav={nav} menu={menu} still={still}
@@ -300,13 +268,13 @@ function CompositionClock({ derived, children }) {
   return <CompositionContext.Provider value={value}>{children}</CompositionContext.Provider>;
 }
 
-function CompositionStage({ width, height, compact, portrait, square, short, menu, top, onLayout, scenes, playback, bg, nav, still, children }) {
+function CompositionStage({ menu, top, onLayout, scenes, playback, bg, nav, still, forceVideo, text, children }) {
   const parsed = React.useMemo(() => parseScenes(scenes), [scenes]);
   const derived = React.useMemo(() => (parsed ? deriveCues(parsed) : null), [parsed]);
   const pb = React.useMemo(() => { try { return JSON.parse(playback); } catch (e) { return null; } }, [playback]);
   if (!derived) return <div className="stage-error">This game produced an invalid scene list.</div>;
   return (
-    <Stage width={width} height={height} compact={compact} portrait={portrait} square={square} short={short} menu={menu} top={top} onLayout={onLayout} duration={derived.total} background={bg} playback={pb} nav={nav} still={still}>
+    <Stage menu={menu} top={top} onLayout={onLayout} duration={derived.total} background={bg} playback={pb} nav={nav} still={still} forceVideo={forceVideo} text={text}>
       <CompositionClock derived={derived}>{children}</CompositionClock>
     </Stage>
   );

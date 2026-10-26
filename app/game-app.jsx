@@ -144,10 +144,10 @@ function GameApp() {
   const [queenArrow, setQueenArrow] = React.useState(null);
   // the phone layouts (portrait, or a narrow one held sideways) fold the dock's buttons into a menu in the transport bar; it closes on a pick, an outside tap or Esc,
   // and opening it closes Settings or Queen, which would otherwise cover it
-  const [tall, setTall] = React.useState(false), [frameW, setFrameW] = React.useState(1920);
-  const onLayout = React.useCallback((phone, w) => { setTall(phone); setFrameW(w); }, []);
+  const [phone, setPhone] = React.useState(false), [frameW, setFrameW] = React.useState(1920);
+  const onLayout = React.useCallback((isPhone, w) => { setPhone(isPhone); setFrameW(w); }, []);
   const [menu, setMenu] = React.useState(false);
-  React.useEffect(() => { if (!tall) setMenu(false); }, [tall]);
+  React.useEffect(() => { if (!phone) setMenu(false); }, [phone]);
   // the dock's Play/Explore menu (landscape); on a phone its items sit in the folded menu instead
   const [newMenu, setNewMenu] = React.useState(false);
   const [pgnOpen, setPgnOpen] = React.useState(false);
@@ -171,7 +171,7 @@ function GameApp() {
     window.addEventListener('keydown', esc);
     return () => { document.removeEventListener('pointerdown', away); window.removeEventListener('keydown', esc); };
   }, [newMenu]);
-  React.useEffect(() => { if (tall) setNewMenu(false); }, [tall]);
+  React.useEffect(() => { if (phone) setNewMenu(false); }, [phone]);
   const dockRef = React.useRef(null);
   React.useEffect(() => {
     if (!menu) return;
@@ -341,7 +341,7 @@ function GameApp() {
   // a dialog closed (Esc, Cancel, Set up, Start game): focus goes back to what opened it, Play/Explore or the phone's Menu
   const newBtn = React.useRef(null), menuBtn = React.useRef(null), fenWasOpen = React.useRef(false), dialogOpen = pgnOpen || !!playOpen || !!gamesOpen;
   React.useEffect(() => {
-    if (fenWasOpen.current && !dialogOpen) { const b = tall ? menuBtn.current : newBtn.current; if (b) b.focus(); }
+    if (fenWasOpen.current && !dialogOpen) { const b = phone ? menuBtn.current : newBtn.current; if (b) b.focus(); }
     fenWasOpen.current = dialogOpen;
   }, [dialogOpen]);
   const loadFiles = async (list) => {
@@ -453,7 +453,7 @@ function GameApp() {
   React.useLayoutEffect(() => {
     if (!queenOpen) { setQueenLeft(null); return; }
     const place = () => {
-      const btn = tall ? menuBtn.current : queenBtn.current, b = btn && btn.getBoundingClientRect();
+      const btn = phone ? menuBtn.current : queenBtn.current, b = btn && btn.getBoundingClientRect();
       if (!b) return;
       const w = Math.min(400, window.innerWidth - 32);
       setQueenLeft(Math.round(Math.max(16, Math.min(b.left + b.width / 2 - w / 2, window.innerWidth - 16 - w))));
@@ -461,7 +461,7 @@ function GameApp() {
     place();
     window.addEventListener('resize', place);
     return () => window.removeEventListener('resize', place);
-  }, [queenOpen, tall]);
+  }, [queenOpen, phone]);
   const sf = { engine, own: ES.own, game: ES.game, book, status: engine.status, run: analysis, start: analysis.start, stop: analysis.stop, estimateMin: analysis.estimateMin };
 
   // The Analysis panel's engine menu (EngineMenuContext): the Lite/Full choice in its title row, and these settings in
@@ -528,10 +528,10 @@ function GameApp() {
   const fsLabel = fullscreen.on ? 'Exit full screen' : 'Full screen';
   const dockItems = (
     <div id="dock-items" className="dock-items">
-      {tall && <span className="dock-menu-status">{shownErr || status}</span>}
+      {phone && <span className="dock-menu-status">{shownErr || status}</span>}
       <button type="button" className="dock-btn dock-primary" onClick={() => { setMenu(false); loadGame(); }}>Load game…</button>
       {/* a list of starting points in two groups, each under its heading; on the phone they sit in the folded menu */}
-      {tall ? newItems : (
+      {phone ? newItems : (
         <div ref={newRef} className="dock-new">
           <button ref={newBtn} type="button" className="dock-btn" aria-expanded={newMenu} aria-controls="dock-new-items" onClick={() => { setNewMenu((m) => !m); setPanel(false); setQueenOpen(false); }}>Play/Explore</button>
           {newMenu && (
@@ -578,7 +578,7 @@ function GameApp() {
   return (
     <React.Fragment>
       <EngineMenuContext.Provider value={board && board.game ? null : engineMenu}>
-      <CompositionStage nav={nav} width={1920} height={1080} compact={COMPACT} portrait={PORTRAIT} square={SQUARE} short={SHORT} top={!net.online && <span className="net-chip" role="status" title={OFFLINE_NOTE}>Offline</span>} menu={<React.Fragment><SoundButton on={t.sound !== false} onChange={(v) => setTweak('sound', v)} />{tall ? menuEl : deskDock}</React.Fragment>} onLayout={onLayout} scenes={scenes} playback={PLAYBACK} bg={C.bg} still={!!board || !!editing}>
+      <CompositionStage nav={nav} forceVideo={video.busy} text={LayoutCore.textScale(t.textSize)} top={!net.online && <span className="net-chip" role="status" title={OFFLINE_NOTE}>Offline</span>} menu={<React.Fragment><SoundButton on={t.sound !== false} onChange={(v) => setTweak('sound', v)} />{phone ? menuEl : deskDock}</React.Fragment>} onLayout={onLayout} scenes={scenes} playback={PLAYBACK} bg={C.bg} still={!!board || !!editing}>
         {editing
           ? <EditBoard setup={editing.setup} onChange={editTo} onDone={editDone} onCancel={editCancel} fenText={editing.text} onFenText={editText} fenMsg={editing.msg} doneLabel={editing.play ? 'Start game' : 'Done'} orient={t.flip ? 'b' : 'w'} nav={nav} overlay={panel || newMenu || menu || queenOpen} />
           : board
