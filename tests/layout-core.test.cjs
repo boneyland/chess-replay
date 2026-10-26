@@ -105,6 +105,21 @@ test('cols override and moves rows', () => {
   assert.equal(LC.columns({ w: 1440, h: 818 }), 2);
 });
 
+// a laptop's window: the board gives up some size so the moves list keeps its width (a two-move row of long moves
+// needs it) beside a commentary of at least 150 px; never below the 360 px that keeps two columns
+test('the sidebar keeps room for the moves and commentary', () => {
+  for (const [w, h, text] of [[1024, 690, 1], [1024, 690, 1.3], [1100, 900, 1], [960, 800, 1]]) {
+    const L = LC.compute({ w, h, text });
+    assert.equal(L.cols, 2, `${w}x${h}`);
+    assert.equal(L.moves.w, 230 * text, `${w}x${h} moves`);
+    assert.ok(L.comment.w >= 150 * text - 0.5, `${w}x${h} comment ${L.comment.w}`);
+  }
+  for (let w = 700; w <= 1200; w += 5) {
+    const L = LC.compute({ w, h: 800 });
+    if (L.cols === 2) assert.ok(L.board.size >= 360, `${w}: board ${L.board.size}`);
+  }
+});
+
 // a narrow, short window (a phone with its keyboard up): paused, the one-column page scrolls, as two columns would
 // leave no sidebar; a video, which must fit, keeps two columns there. A phone held sideways at Larger text has room
 // for both columns, and keeps them

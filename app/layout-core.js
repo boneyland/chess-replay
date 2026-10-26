@@ -46,7 +46,10 @@
     const plotBelow = view === 'replay' && h >= PLOT_BELOW_MIN_H;
     const bar = barH(text);
     const hLimit = h - 2 * MARGIN - barsTotal(text) - (plotBelow ? GAP + PLOT_H : 0);
-    const wLimit = w - 2 * MARGIN - GAP - SIDEBAR_MIN * text; // the left column: board plus its eval bar
+    // the sidebar's share: room for the moves list and a commentary beside it, as long as the board keeps 360 px; never
+    // under the minimum. The left column (board plus its eval bar) is what is left
+    const side = Math.max(SIDEBAR_MIN * text, Math.min((MOVES_W + COMMENT_MIN) * text + GAP, w - 2 * MARGIN - GAP - EVAL_TOTAL - BOARD_OK));
+    const wLimit = w - 2 * MARGIN - GAP - side;
     const size = Math.max(BOARD_MIN, Math.min(BOARD_MAX, hLimit, wLimit - EVAL_TOTAL));
     const left = size + EVAL_TOTAL; // same sidebar position whether or not the view draws an eval bar
     const boardX = hasEval ? MARGIN + EVAL_TOTAL : MARGIN + (left - size) / 2;
