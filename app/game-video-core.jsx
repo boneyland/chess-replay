@@ -351,7 +351,7 @@ function searchDepth(s) {
 const EngineMenuContext = React.createContext(null);
 const headCtl = () => ({ ...NO_SELECT, flex: 'none', height: '1.5em', margin: '-0.25em 0', borderRadius: 5, cursor: 'pointer', border: `1.5px solid ${C.line}`, background: 'transparent', color: C.ink, letterSpacing: 0 }); // C changes with the colour scheme
 const stopHere = (e) => e.stopPropagation();
-// The Analysis panel's title row (on the right: engine, the search's depth, Go deeper, the engine menu) and, while the menu is
+// The Analysis panel's title row (on the right: Go deeper, the search's depth, the engine, the engine menu) and, while the menu is
 // open, the engine settings in place of the panel's contents. Only a paused replay offers them; playing (an export
 // too) shows the engine's name.
 function AnalysisPanel({ box, a, depth, deep, paused, style, children }) {
@@ -362,14 +362,16 @@ function AnalysisPanel({ box, a, depth, deep, paused, style, children }) {
   const head = (
     <>
       <span style={{ flex: 'none' }}>Analysis</span>
+      <span style={{ flex: 1 }} />
+      {/* the engine stays put, next to the menu; Go deeper and the depth come and go to its left */}
+      {!shown && paused && <DeeperButton ev={deep} />}
+      {!shown && depth && <SideScroll style={{ minWidth: 0, flex: '0 1 auto', letterSpacing: '0.04em', fontSize: `${box.right || 0.85}em` }}>{depth}</SideScroll>}
       {pick
         ? <select aria-label="Engine" value={pick.value} onChange={(e) => { const go = pick.onChange(e.target.value); if (go) setOpen(true); }} onClick={stopHere} onPointerDown={stopHere}
-            style={{ ...headCtl(), marginLeft: 'auto', minWidth: 0, flex: '0 1 auto', padding: '0 0.3em', font: 'inherit', textTransform: 'none', background: C.panel }}>
+            style={{ ...headCtl(), minWidth: 0, flex: '0 1 auto', padding: '0 0.3em', font: 'inherit', textTransform: 'none', background: C.panel }}>
             {pick.options.map((o) => <option key={o.value} value={o.value}>{o.label}</option>)}
           </select>
-        : <span style={{ flex: 'none', marginLeft: 'auto', textTransform: 'none', letterSpacing: '0.04em', color: C.ink }}>{name}</span>}
-      {!shown && depth && <SideScroll style={{ minWidth: 0, flex: '0 1 auto', letterSpacing: '0.04em', fontSize: `${box.right || 0.85}em` }}>{depth}</SideScroll>}
-      {!shown && paused && <DeeperButton ev={deep} />}
+        : <span style={{ flex: 'none', textTransform: 'none', letterSpacing: '0.04em', color: C.ink }}>{name}</span>}
       {live && (
         <button type="button" aria-label="Engine options" aria-expanded={shown} title="Engine settings" onClick={(e) => { e.stopPropagation(); setOpen((o) => !o); }} onPointerDown={stopHere}
           style={{ ...headCtl(), width: '1.5em', padding: 0, display: 'grid', placeItems: 'center', color: shown ? C.best : C.dim, borderColor: shown ? C.best : C.line }}>
