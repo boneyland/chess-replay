@@ -15,7 +15,7 @@ function FreeBar({ pos, side, a, clock, name }) {
     for (let i = 0; i < lost(opp, t) - lost(side, t); i++) shown.push(<img key={t + i} src={img(opp, t)} alt="" style={{ width: 30, height: 30, flex: 'none', marginLeft: shown.length ? -8 : 0, filter: opp === 'b' ? C.rim : 'none' }} />);
   });
   return (
-    <div style={{ position: 'absolute', left: BX, width: BW / L.bar.k, top: side === ORIENT ? BY + BW + L.bar.gap : BY - L.bar.gap - 40 * L.bar.k, height: 40, transform: `scale(${L.bar.k})`, transformOrigin: '0 0', display: 'flex', alignItems: 'center', gap: 14, opacity: a }}>
+    <div style={{ ...barPlace(side), gap: 14, opacity: a }}>
       <span style={{ width: 14, height: 14, borderRadius: 3, background: side === 'w' ? '#f1ebe1' : '#1c1613', border: `1.5px solid ${C.dim}`, flex: 'none' }} />
       <span style={{ font: `600 20px ${SANS}`, color: C.ink, whiteSpace: 'nowrap' }}>{name || (side === 'w' ? 'White' : 'Black')}</span>
       <span style={{ display: 'flex', alignItems: 'center', marginLeft: 6 }}>{shown}</span>
@@ -108,40 +108,6 @@ function StartAnalysis({ board, ev, status, onLine }) {
       </div>
     </React.Fragment>
   );
-}
-
-// The frame's layout without the eval graph, whose room goes to the panels: on the wide frame Moves and the explorer grow
-// down into it (more moves, and room for book moves) and Analysis moves down; on the square frame Analysis and Moves grow
-// up into it, on the sideways phone Analysis grows down into it.
-// GameVideo sets the plain layout again on its next render.
-const BOARD_LAYOUTS = new WeakMap();
-function boardLayout(base) {
-  if (!base.plot) return base;
-  if (!BOARD_LAYOUTS.has(base)) {
-    const p = base.plot, an = base.analysis, grow = p.y + p.h - (an.y + an.h);
-    BOARD_LAYOUTS.set(base, base.header && an.y > p.y ? { ...base, plot: null, analysis: { ...an, y: p.y, h: an.h + an.y - p.y }, moves: { ...base.moves, y: p.y, h: base.moves.h + base.moves.y - p.y, rows: base.moves.rows + Math.floor((base.moves.y - p.y) / 38) } } // square: Analysis and Moves grow up into it
-      : base.header
-      ? { ...base, plot: null, moves: { ...base.moves, h: base.moves.h + grow, rows: base.moves.rows + Math.floor(grow / base.moves.k / 38) }, comment: { ...base.comment, h: base.comment.h + grow }, analysis: { ...an, y: an.y + grow } }
-      : { ...base, plot: null, analysis: { ...an, h: p.y + p.h - an.y } });
-  }
-  return BOARD_LAYOUTS.get(base);
-}
-
-// A game draws no eval bar, so its board takes the bar's room: centred on the portrait frame; on the wide frame grown
-// (zoom) to fill the height, 40 px from the top and bottom edges (the compact frame's 20) with its player bars, the panels moved right to make room.
-const GAME_LAYOUTS = new WeakMap();
-function gameLayout(base) {
-  if (!GAME_LAYOUTS.has(base)) {
-    if (base === LAYOUTS.tall) GAME_LAYOUTS.set(base, { ...base, bx: (PORTRAIT.width - BW) / 2 });
-    else if (base !== boardLayout(LAYOUTS.wide) && base !== boardLayout(LAYOUTS.compact)) GAME_LAYOUTS.set(base, base);
-    else {
-      const e = base.edge || 40, bar = base.bar.gap + 40 * base.bar.k, zoom = ((base.frameH || 1080) - 2 * e) / (BW + 2 * bar), bx = base.eval, by = e + zoom * bar;
-      const dx = bx + zoom * BW + (base.edge ? 20 : 36) - base.header.x, right = base.header.x + base.header.w;
-      const move = (b) => ({ ...b, x: b.x + dx, w: b.x + b.w >= right ? b.w - dx : b.w });
-      GAME_LAYOUTS.set(base, { ...base, bx, by, zoom, header: move(base.header), moves: move(base.moves), comment: move(base.comment), analysis: move(base.analysis) });
-    }
-  }
-  return GAME_LAYOUTS.get(base);
 }
 
 // ---------- a game at the board (Play vs human, Play vs Stockfish) ----------
@@ -354,9 +320,7 @@ function GameStatus({ board, onChange, down }) {
 }
 
 function FreeBoard({ board, onChange, tw, sf, nav, orient, book }) {
-  setLayout(useFrame()); // before the children render, which read the layout
-  L = boardLayout(L);
-  if (board.game) { L = gameLayout(L); BX = L.bx; BY = L.by; }
+  setLayout(useFrame(), board.game ? 'game' : 'free'); // before the children render, which read the layout
   const B = window.BoardCore, P = window.PlayCore, pos = B.pos(board), { steps, upto } = board, last = steps.length - 1;
   // a game: no eval, no hints; vs human the board turned to the side to move in the game's last position, against
   // Stockfish drawn from the player's side, which Stockfish's moves never change (nor Flip)
@@ -450,13 +414,12 @@ function FreeBoard({ board, onChange, tw, sf, nav, orient, book }) {
   return (
     <div style={{ position: 'absolute', inset: 0, background: C.bg, overflow: 'hidden' }}>
       {!G && (tbv ? <EvalBarView cp={tbv.cp} txt={tbv.txt} a={1} /> : <EvalBarView cp={cp == null ? 0 : cp} txt={cp == null ? (down ? '' : '…') : fmtSf(cp)} a={1} />)}
-      {/* zero-sized, so the zoom grows the board and its bars from the board's top-left corner without covering the panels */}
-      <div style={{ position: 'absolute', left: 0, top: 0, width: 0, height: 0, transform: L.zoom ? `scale(${L.zoom})` : null, transformOrigin: `${BX}px ${BY}px` }}>
-        <FreeBar pos={pos} side="b" a={1} clock={clockOf('b')} name={G ? playerName(G, 'b') : null} />
+      <FreeBar pos={pos} side="b" a={1} clock={clockOf('b')} name={G ? playerName(G, 'b') : null} />
+      <BoardSpace>
         <LineBoard a={1} sq={boardSquares()} v={{ upto, moves: steps, base: board.start.pos, src: 'you' }} hide={input.drag && input.drag.moved ? input.drag.from : null} arrows={!G && tw.bestArrows !== false ? lineArrows(ev.after) : null} />
         <BoardTouch pos={pos} sel={input.sel} targets={input.targets} drag={input.drag} promo={input.promo} {...(still ? NO_INPUT : input.handlers)} />
-        <FreeBar pos={pos} side="w" a={1} clock={clockOf('w')} name={G ? playerName(G, 'w') : null} />
-      </div>
+      </BoardSpace>
+      <FreeBar pos={pos} side="w" a={1} clock={clockOf('w')} name={G ? playerName(G, 'w') : null} />
       {L.header && <Header M={HM} a={1} />}
       <MoveList M={MV} T={upto + 0.999} S={S} a={1} paused onPick={live ? () => {} : go} />
       {G ? <GameInfo board={board} /> : tb ? <TablebaseExplorer t={tb} posKey={boardKey} onPlay={onBook} /> : <OpeningExplorer board={board} book={book} onPlay={onBook} />}
