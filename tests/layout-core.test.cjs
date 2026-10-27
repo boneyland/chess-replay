@@ -202,8 +202,29 @@ test('Moves sits over Commentary, five lines at most', () => {
       const L = LC.compute({ w, h, text, video, view }), at = `${w}x${h} text ${text}${video ? ' video' : ''} ${view}`;
       assert.ok(L.moves.h <= cap(L), `${at}: moves ${L.moves.h} over ${cap(L)}`);
       assert.ok(Math.abs(L.moves.x - L.comment.x) < 0.5 && Math.abs(L.moves.w - L.comment.w) < 0.5, `${at}: not stacked`);
+      const gap = L.tier === 'phone' ? 6 : L.tier === 'desktop' ? 10 : 8;
       if (L.flow) assert.ok(L.moves.order < L.comment.order && L.moves.maxRows === 5, `${at}: flow order`);
-      else assert.ok(Math.abs(L.moves.y + L.moves.h + (L.tier === 'phone' ? 6 : L.tier === 'desktop' ? 10 : 8) - L.comment.y) < 0.5, `${at}: Commentary not under Moves`);
+      // one column: Analysis between Moves and Commentary
+      else if (L.cols === 1) assert.ok(Math.abs(L.analysis.y + L.analysis.h + gap - L.comment.y) < 0.5 && Math.abs(L.moves.y + L.moves.h + gap - L.analysis.y) < 0.5, `${at}: not Moves, Analysis, Commentary`);
+      else assert.ok(Math.abs(L.moves.y + L.moves.h + gap - L.comment.y) < 0.5, `${at}: Commentary not under Moves`);
     }
   }
+});
+
+// under 670 px high there is no eval graph; a square-ish two-column window has none either, and its Analysis runs the
+// full width under the board; one column puts Commentary at the bottom
+test('eval graph height floor, square-ish and portrait layouts', () => {
+  assert.equal(LC.compute({ w: 1440, h: 669 }).plot, null);
+  assert.ok(LC.compute({ w: 1440, h: 680 }).plot);
+  for (const [w, h] of [[900, 860], [1000, 1000], [1280, 1100], [1100, 900]]) for (const video of [false, true]) {
+    const L = LC.compute({ w, h, video }), at = `${w}x${h}${video ? ' video' : ''}`;
+    assert.equal(L.cols, 2, at);
+    assert.equal(L.plot, null, at);
+    assert.ok(Math.abs(L.analysis.x - L.eval.x) < 0.5 && Math.abs(L.analysis.w - (w - 2 * L.analysis.x)) < 0.5, `${at}: analysis not full width`);
+    assert.ok(L.analysis.y >= L.board.y + L.board.size + L.bars.h && L.analysis.h >= 160 * L.text - 0.5, `${at}: analysis ${JSON.stringify(L.analysis)}`);
+    assert.ok(L.comment.y + L.comment.h <= L.analysis.y, at);
+  }
+  assert.ok(LC.compute({ w: 1440, h: 900 }).plot); // landscape keeps it
+  const p = LC.compute({ w: 390, h: 844 });
+  assert.ok(p.moves.order < p.analysis.order && p.analysis.order < p.comment.order);
 });
