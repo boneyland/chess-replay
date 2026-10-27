@@ -386,3 +386,30 @@ test('real engine: threaded lite searches more nodes with 4 threads than 1', { t
     assert.ok(four.nodes > 2 * one.nodes, `${one.nodes} → ${four.nodes}`);
   } finally { e.quit(); }
 });
+
+// Firefox: the first threaded engine in a page can answer readyok and then never search (no info, no bestmove, even
+// after stop); a fresh worker then works. probeMs: ready() waits for a depth-1 search, else the engine fails
+test('probeMs: ready waits for a depth-1 search after readyok', async () => {
+  let w, ok = false;
+  const e = SF.create(() => (w = fakeWorker()), { threads: 4, probeMs: 1000 });
+  const r = e.ready().then(() => { ok = true; });
+  await tick();
+  assert.equal(ok, false, 'not ready before the probe answers');
+  assert.ok(w.posted.includes('go depth 1'), w.posted.join(' | '));
+  assert.ok(w.posted.indexOf('setoption name Threads value 4') < w.posted.indexOf('go depth 1'));
+  w.finish('e2e4');
+  await r;
+  // the probe is not a search of the page's: the first real one goes as usual
+  const s = e.search({ moves: [], depth: 5, movetimeMs: 100 });
+  await tick();
+  assert.match(w.posted.at(-1), /^go depth 5 movetime 100$/);
+  w.finish('d2d4');
+  assert.equal((await s.promise).best, 'd2d4');
+});
+
+test('probeMs: a probe that never answers fails the engine and terminates it', async () => {
+  let w, terminated = false;
+  const e = SF.create(() => { w = fakeWorker(); w.terminate = () => { terminated = true; }; return w; }, { threads: 4, probeMs: 30 });
+  await assert.rejects(e.ready(), /threads didn’t start/);
+  assert.equal(terminated, true);
+});

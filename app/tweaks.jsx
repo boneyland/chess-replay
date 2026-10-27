@@ -116,10 +116,10 @@ function TweakToggle({ id, label, value, onChange }) {
   );
 }
 
-function TweakSelect({ id, label, aria, value, options, info, onChange }) {
+function TweakSelect({ id, label, aria, value, options, info, onChange, disabled }) {
   return (
     <TweakRow label={label} info={info}>
-      <select id={id} className="twk-field" value={value} aria-label={aria || label} onChange={(e) => onChange(e.target.value)}>
+      <select id={id} className="twk-field" value={value} disabled={disabled} aria-label={aria || label} onChange={(e) => onChange(e.target.value)}>
         {options.map((o) => <option key={o} value={o}>{o}</option>)}
       </select>
     </TweakRow>

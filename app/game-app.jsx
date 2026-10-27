@@ -450,8 +450,8 @@ function GameApp() {
   const clipSuffix = clipFrom < 0 && clipTo >= NP ? '' : `_${clipFrom < 0 ? 'start' : plyTag(clipFrom)}-${clipTo >= NP ? 'end' : plyTag(clipTo)}`;
   const exportVideo = () => { setPanel(false); setQueenOpen(false); video.run({ start: clipT.start, end: clipT.end, suffix: clipSuffix, audio: t.sound === false || webp ? null
     : () => window.Sfx.renderTrack(window.SFX_DATA || {}, soundSet, window.Sfx.track(MV, clipOpts.S, clipT.start, clipT.end), soundVolume, clipT.end - clipT.start) }); };
-  const depthText = (d) => (d == null ? 'No limit' : String(d)), SF_KEYS = ['sfDepth', 'sfTime', 'sfOwnDepth', 'sfOwnTime', 'sfLines', 'sfHash'];
-  const sfChanged = JSON.stringify(ES) !== JSON.stringify(window.AnalysisCore.engineSettings(window.TWEAK_DEFAULTS, sfKind));
+  const depthText = (d) => (d == null ? 'No limit' : String(d)), SF_KEYS = ['sfDepth', 'sfTime', 'sfOwnDepth', 'sfOwnTime', 'sfLines', 'sfHash', 'sfThreads'];
+  const sfChanged = JSON.stringify(ES) !== JSON.stringify(window.AnalysisCore.engineSettings(window.TWEAK_DEFAULTS, sfKind, threading));
   const askQueen = () => { setQueenOpen((q) => !q); setPanel(false); };
   // the Queen panel opens centred over its button in the transport bar, or over the menu button when the dock is folded
   // into a menu (a phone frame, or a window under 900 px), kept on screen
@@ -503,6 +503,10 @@ function GameApp() {
     <TweakSelect id="tw-sf-lines" label="Your moves: lines" value={String(ES.own.lines)} options={window.AnalysisCore.LINES.map(String)} onChange={(v) => setTweak('sfLines', parseInt(v, 10))}
       info="Above one, Stockfish shows that many best moves, with an arrow each. Every line takes its share of the search, so each one goes less deep in the same time." />
     <TweakSelect id="tw-sf-hash" label="Hash table" value={ES.game.hash_mb + ' MB'} options={window.AnalysisCore.HASH_MB.map((x) => x + ' MB')} onChange={(v) => setTweak('sfHash', parseInt(v, 10))} info="Helps long searches; a phone may run out of memory." />
+    {/* sfThreads null (the default): half the cores, at most 4 */}
+    <TweakSelect id="tw-sf-threads" label="Threads" value={String(ES.game.threads)} options={window.AnalysisCore.threadChoices(threading.cores).map(String)} disabled={!threading.on} onChange={(v) => setTweak('sfThreads', parseInt(v, 10))}
+      info="Stockfish searches on this many of your processor’s threads at once: more search more positions in the same time and judge hard positions better, but keep the computer busier." />
+    {!threading.on && <div className="twk-note">{threading.reason}</div>}
     {sfChanged && <TweakButton secondary label="Reset engine settings" onClick={() => SF_KEYS.forEach((k) => setTweak(k, window.TWEAK_DEFAULTS[k]))} />}
     {!board && (analysis.state === 'running'
       ? <>

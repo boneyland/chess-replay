@@ -5,6 +5,9 @@ const SF_FILE = 'stockfish-19-lite-single', SF_FILE_THREADS = 'stockfish-19-lite
 const sfMakeWorker = (file) => () => new Worker(file + '.js');
 // A missing engine file only shows up inside the worker (it never reaches the page as an error), so the
 // page checks the wasm is there first rather than waiting out the start timeout
+// a threaded engine must answer a depth-1 search this soon after it is ready (SFEngine's probeMs: in Firefox the first
+// one in a page can hang, and the next one works, so it gets one more try)
+const SF_PROBE_MS = 1500, SF_THREADED_TRIES = 2;
 const sfFilesPresent = (file) => fetch(file + '.wasm', { method: 'HEAD', cache: 'no-store' }).then((r) => r.ok, () => false);
 
 // Whether Stockfish may search with threads on this page ({ on, cores, reason }, SFEngine.threadSupport); a threaded
@@ -74,18 +77,18 @@ function useEngine(hashMB, threads, kind = 'lite', onBroken) {
           if (withThreads) sfThreadsFailed('The threaded engine stopped');
           if (ref.current === mine) { ref.current = null; setStatus('stopped'); }
         };
-        const eng = window.SFEngine.create(make, { hashMB: hash.current, threads: withThreads ? nThreads.current : 1, onFail });
+        const eng = window.SFEngine.create(make, { hashMB: hash.current, threads: withThreads ? nThreads.current : 1, probeMs: withThreads ? SF_PROBE_MS : 0, onFail });
         await eng.ready();
         up = true;
         return eng;
       };
       const start = async () => {
         if (!sfThreading.on) return attempt(false);
-        try { return await attempt(true); } catch (e) {
-          if (!threaded.current) throw e;
-          sfThreadsFailed('The threaded engine didn’t start');
-          return attempt(false, k === 'full' && !(await window.SFFull.present('single')) ? 'lite' : k);
+        for (let i = 0; i < SF_THREADED_TRIES; i++) {
+          try { return await attempt(true); } catch (e) { if (!threaded.current) throw e; }
         }
+        sfThreadsFailed('The threaded engine didn’t start');
+        return attempt(false, k === 'full' && !(await window.SFFull.present('single')) ? 'lite' : k);
       };
       mine = ref.current = start().then((eng) => { if (ref.current === mine) setStatus('ready'); return eng; }, (e) => { if (ref.current === mine) { setStatus('unavailable'); ref.current = null; } throw e; });
       mine.catch(() => {});

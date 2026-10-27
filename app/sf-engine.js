@@ -36,8 +36,11 @@
     return { ok: true, cores, reason: '' };
   }
 
-  // onFail(err): called once when the engine dies, before or after it started; threads: more than 1 only for the threaded build
-  function create(makeWorker, { hashMB = 64, threads = 1, readyTimeoutMs = READY_TIMEOUT_MS, onFail } = {}) {
+  // onFail(err): called once when the engine dies, before or after it started; threads: more than 1 only for the threaded build.
+  // probeMs: ready() also waits for a depth-1 search, failing the engine without an answer by then: in Firefox the first
+  // threaded engine in a page can answer readyok and then never search (no info, no bestmove, even after stop), while
+  // a fresh worker works (found 2026-10-28, Firefox 159)
+  function create(makeWorker, { hashMB = 64, threads = 1, readyTimeoutMs = READY_TIMEOUT_MS, probeMs = 0, onFail } = {}) {
     const worker = makeWorker();
     const waiting = []; // [regex, resolve] for ready()
     const queue = [];
@@ -109,6 +112,11 @@
           if (threadsWant !== threadsSet) { worker.postMessage(`setoption name Threads value ${threadsWant}`); threadsSet = threadsWant; }
           const rd = expect(/^readyok/); worker.postMessage('isready'); await rd;
           clearTimeout(timer);
+          if (probeMs && !failed) {
+            const probe = setTimeout(() => fail(new Error('Stockfish’s threads didn’t start')), probeMs);
+            const bm = expect(/^bestmove/); worker.postMessage('position startpos'); worker.postMessage('go depth 1'); await bm;
+            clearTimeout(probe);
+          }
           if (!failed) { isReady = true; rejectReady = null; resolve(); pump(); }
         })();
       });
