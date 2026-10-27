@@ -274,10 +274,10 @@ body:has(.stage.stage-short) .twk-panel { bottom: calc(44px + env(safe-area-inse
   body:has(.stage.stage-one) .twk-panel.twk-tabbed.twk-tabbed { bottom: calc(45px + env(safe-area-inset-bottom, 0px)); height: auto; }
   body:has(.stage.stage-short) .twk-panel.twk-tabbed.twk-tabbed { bottom: calc(42px + env(safe-area-inset-bottom, 0px)); height: auto; }
 }
-/* a phone held sideways: Settings covers the transport bar too, and drops its title (the panel keeps it as its label) so
+/* a phone held sideways: Settings covers the transport bar too (full height, up to 760 px wide at the right), and drops its title (the panel keeps it as its label) so
    the tabs get the row; they wrap only where one row can't hold them */
 @media (max-height: 499px) and (orientation: landscape) {
-  body:has(.stage) .twk-panel.twk-tabbed.twk-tabbed.twk-tabbed { bottom: calc(4px + env(safe-area-inset-bottom, 0px)); height: auto; }
+  body:has(.stage) .twk-panel.twk-tabbed.twk-tabbed.twk-tabbed { bottom: calc(4px + env(safe-area-inset-bottom, 0px)); height: auto; left: auto; width: min(760px, calc(100% - max(4px, var(--safe-l)) - max(4px, var(--safe-r)))); }
   body:has(.stage) .twk-panel.twk-tabbed .twk-hd b { display: none; }
   body:has(.stage) .twk-panel.twk-tabbed .twk-tabs { display: flex; flex-wrap: wrap; margin-left: 8px; }
   body:has(.stage) .twk-panel.twk-tabbed .twk-tabs button { flex: 1 1 auto; }
