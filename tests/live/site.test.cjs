@@ -1146,6 +1146,53 @@ for (const name of BROWSERS) for (const site of SITES) {
       assert.deepEqual(tb.errors, []);
       await tb.ctx.close();
     });
+    // Lichess's cloud evaluation (the real service), off by default: on, the free board's position asks it once (the
+    // start's before and after are one position) and its deeper answer shows, labelled; a position it hasn't analysed
+    // falls back to Stockfish; Prefer cloud leaves the browser engine idle where the cloud is deep enough
+    await t.test('desktop: the cloud evaluation shows on the free board only when on, and a miss falls back to Stockfish', async () => {
+      const ce = await open(browser, { width: 1440, height: 900 });
+      const p = ce.page, sent = [];
+      ce.ctx.on('request', (r) => { if (r.url().startsWith('https://lichess.org/api/cloud-eval')) sent.push(new URL(r.url()).searchParams.get('fen')); });
+      const text = () => p.evaluate(() => document.body.innerText);
+      const E4 = 'rnbqkbnr/pppppppp/8/8/4P3/8/PPPP1PPP/RNBQKBNR b KQkq - 0 1';
+      await p.goto(base, { waitUntil: 'load' });
+      await loadedOn(p);
+      await setUpFen(p, E4);
+      await p.waitForFunction(() => /depth \d+/i.test(document.body.innerText), null, { timeout: 20000 });
+      await p.waitForTimeout(1000);
+      assert.deepEqual(sent, [], 'nothing sent with the setting off');
+      assert.doesNotMatch(await text(), /cloud depth/i);
+      await p.getByRole('button', { name: 'Settings' }).click();
+      await p.getByRole('tab', { name: 'Online' }).click();
+      await p.getByRole('switch', { name: /Lichess cloud evaluation/ }).click();
+      assert.equal(await p.getByRole('switch', { name: /Prefer cloud/ }).count(), 1);
+      await p.keyboard.press('Escape');
+      await setUpFen(p, E4.replace(' 0 1', ' 0 2')); // the same position, a new board
+      await p.waitForFunction(() => /cloud depth \d+/i.test(document.body.innerText), null, { timeout: 20000 });
+      // one position asked (its before and after are one); a request cut off by a re-render may go again
+      assert.deepEqual([...new Set(sent.map((f) => f.split(' ').slice(0, 4).join(' ')))], [E4.split(' ').slice(0, 4).join(' ')]);
+      const asked = sent.length;
+      assert.equal(await p.locator('[title^="Lichess cloud, depth"]').count(), 1);
+      await p.screenshot({ path: path.join(OUT, host + '-cloud-eval.png') });
+      // a position the cloud has never seen: a 404, then Stockfish's search
+      await setUpFen(p, 'r1b1k2r/pp3ppp/2n1p3/q7/1b1P4/2N2N1P/PP1B1PP1/R2QKB1R b KQkq - 0 9');
+      for (let i = 0; i < 50 && sent.length <= asked; i++) await p.waitForTimeout(100);
+      assert.equal(sent.length, asked + 1);
+      await p.waitForTimeout(1000); // the 404's answer
+      await p.waitForFunction(() => /(^|\s)depth \d+/i.test(document.body.innerText) && !/cloud depth/i.test(document.body.innerText), null, { timeout: 20000 });
+      // Prefer cloud: the cloud's depth-60 answer stands and the browser engine doesn't think
+      await p.getByRole('button', { name: 'Settings' }).click();
+      await p.getByRole('tab', { name: 'Online' }).click();
+      await p.getByRole('switch', { name: /Prefer cloud/ }).click();
+      await p.keyboard.press('Escape');
+      await setUpFen(p, E4.replace(' 0 1', ' 0 3'));
+      await p.waitForFunction(() => /cloud depth \d+/i.test(document.body.innerText), null, { timeout: 20000 });
+      assert.doesNotMatch(await text(), /Thinking/i);
+      assert.equal(sent.length, asked + 1, 'from the cache');
+      // the browser logs the miss's 404 itself
+      assert.deepEqual(ce.errors.filter((e) => !/status of 404 .*lichess\.org\/api\/cloud-eval/.test(e)), []);
+      await ce.ctx.close();
+    });
     // the tablebase in a game's analysis (the real service): every position of this KBN v K game has 7 pieces or fewer,
     // so the run asks Lichess (4 requests 4 s apart, the start's answer already shown) and searches none of them (with
     // 20 s a position, a search would show), and 2. Bc4+, which

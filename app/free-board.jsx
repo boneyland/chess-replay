@@ -102,7 +102,7 @@ function StartAnalysis({ board, ev, status, onLine }) {
         {turn} to move{down ? ` · ${status === 'unavailable' ? 'Stockfish can’t run here' : 'Stockfish stopped · play a move to restart it'}` : !after || after.partial ? ' · Thinking…' : ''}
       </div>
       <div style={{ marginTop: tx(16), paddingTop: tx(14), borderTop: `1px solid ${C.line}`, font: `500 ${tx(18)}px ${MONO}`, color: C.dim, display: 'flex', flexDirection: 'column', gap: tx(8) }}>
-        {after && after.lines && after.lines.length > 1 ? <EngineLines lines={after.lines} pos={board.start.pos} ply0={board.start.ply0} c={0} onPick={onLine} />
+        {after && after.lines && after.lines.length > 1 ? <EngineLines lines={after.lines} pos={board.start.pos} ply0={board.start.ply0} c={0} onPick={onLine} cloud={after.source === 'cloud'} />
           : line.length > 0
           ? <LineChips name={null} tip="stockfish’s best line" accent={C.best} moves={line.map((m) => m.san)} ply0={board.start.ply0} c={0} legal={line.length} sel={null} onPick={(j) => onLine(line.slice(0, j + 1))} />
           : <span> </span>}
@@ -342,7 +342,7 @@ function FreeBoard({ board, onChange, tw, sf, nav, orient, book }) {
   // another position (a step, a takeback) drops a half-made move: a selected piece, the promotion picker
   React.useEffect(() => { input.clear(); }, [boardKey]);
   // Stockfish rates the move on the board: the positions before and after it (before the first move, both the start); never in a game
-  const ev = useMoveEval(sf.engine, G ? null : B.ucis(board, upto), G ? null : B.ucis(board), sf.own, board.fen);
+  const ev = useMoveEval(sf.engine, G ? null : B.ucis(board, upto), G ? null : B.ucis(board), sf.own, board.fen, null, cloudSetting(tw));
   const posBefore = upto > 0 ? steps[upto - 1].pos : board.start.pos;
   const bm = upto >= 0 && ev.before && ev.before.best ? window.ChessCore.applyUci(posBefore, ev.before.best) : null;
   const own = { ...ev, bestSan: bm ? bm.san : null };

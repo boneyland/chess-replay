@@ -95,7 +95,7 @@ const CSP = [
   "default-src 'self'",
   `script-src 'self' 'wasm-unsafe-eval' https://cdnjs.cloudflare.com https://cdn.jsdelivr.net ${inlineHashes.join(' ')}`,
   "worker-src 'self' blob:",
-  "connect-src 'self' blob: data: https://huggingface.co https://boneyland-queen-pawn-8.hf.space https://tablebase.lichess.ovh https://unpkg.com https://cdnjs.cloudflare.com https://cdn.jsdelivr.net https://fonts.googleapis.com https://fonts.gstatic.com",
+  "connect-src 'self' blob: data: https://huggingface.co https://boneyland-queen-pawn-8.hf.space https://tablebase.lichess.ovh https://lichess.org https://unpkg.com https://cdnjs.cloudflare.com https://cdn.jsdelivr.net https://fonts.googleapis.com https://fonts.gstatic.com",
   "style-src 'self' 'unsafe-inline' https://fonts.googleapis.com",
   "font-src 'self' data: https://fonts.gstatic.com",
   "img-src 'self' data: blob:",

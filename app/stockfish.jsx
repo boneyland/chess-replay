@@ -256,6 +256,8 @@ function EngineEmptyState({ M, sf, paused, compact }) {
 // ---------- the viewer's own moves ----------
 const SF_EVAL_CACHE = new Map(); // finished searches by settings and move list, for the session
 const SF_DEEPER = new Map(); // presses of Go deeper by position (its key at the base settings), for the session
+const CLOUD = window.LichessCore ? window.LichessCore.create() : null; // Lichess's cloud evaluation, cached for the session
+const CLOUD_DEBOUNCE_MS = 300; // after the last position change (stepping through moves asks nothing for the ones passed)
 
 // Evaluates the positions before and after the viewer's move (move lists from the start, or from fen); the score streams in.
 // own: the search settings (AnalysisCore.engineSettings().own; its lines are searched for after only); fen: the game's start FEN, omitted for the standard start.
@@ -265,7 +267,12 @@ const SF_DEEPER = new Map(); // presses of Go deeper by position (its key at the
 // stored: a loaded analysis's result for after (with before the same moves), standing in for the first search, which
 // then never runs: only a press of Go deeper searches. Results from it carry stored: true; its src names the evals it
 // comes from, so presses on one analysis's move don't carry over to another's (or the PGN's) once it is removed
-function useMoveEval(engine, before, after, own, fen, stored) {
+// cloud: Settings › Online › Lichess cloud evaluation ({ on, prefer }), never for a stored analysis: each position
+// asks the cloud (after CLOUD_DEBOUNCE_MS, at once when cached) while the local search runs; whichever comes first
+// shows, and a finished local search replaces the cloud's only when deeper. prefer: a position the cloud has as deep
+// as the local depth limit (No limit: the slider's top stop) isn't searched locally. A miss falls back silently
+const cloudSetting = (tw) => ({ on: !!(tw && tw.cloudEval), prefer: !!(tw && tw.cloudPrefer) });
+function useMoveEval(engine, before, after, own, fen, stored, cloud) {
   const A = window.AnalysisCore;
   // a search of several lines (Analysis › ☰ › Lines) is cached apart from one of one line
   const keyOf = (s, moves) => (own.name ? own.name + '|' : '') + (sfStartFen(fen) ? fen + '|' : '') + `${s.depth}/${s.movetimeMs}${s.lines > 1 ? '/' + s.lines : ''}:` + moves.join(' ');
@@ -275,8 +282,9 @@ function useMoveEval(engine, before, after, own, fen, stored) {
   const level = SF_DEEPER.get(baseKey) || 0;
   const search = toSearch(A.deeperSearch(own, level));
   const sfKey = (moves) => keyOf(search, moves);
-  const key = after ? sfKey(after) : '';
-  const empty = { key: '', before: null, after: null, pending: false, progress: 0 };
+  const cloudOn = !!(cloud && cloud.on && CLOUD && after && !stored), prefer = cloudOn && !!cloud.prefer;
+  const key = after ? sfKey(after) + (cloudOn ? (prefer ? '|cloud+' : '|cloud') : '') : '';
+  const empty = { key: '', before: null, after: null, cloud: {}, pending: false, progress: 0 };
   const [st, setSt] = React.useState(empty);
   React.useEffect(() => {
     if (!after) { setSt(empty); return; }
@@ -285,13 +293,24 @@ function useMoveEval(engine, before, after, own, fen, stored) {
     // the start position is both, and searches after's lines
     const lines = (which) => (which === 'after' || before.join(' ') === after.join(' ') ? own.lines || 1 : 1);
     const moves = { after, before };
+    // the cloud's answers, as promises (null: a miss); a cached one shows at once
+    const ctl = new AbortController(), timers = [], asked = {};
+    const fenOf = (m) => { const f = window.AnalysisCore.positionFens(fen || window.ChessCore.START_FEN, m); return f.length === m.length + 1 ? f[m.length] : null; };
+    const cloudHit = {};
+    if (cloudOn) for (const which of ['after', 'before']) {
+      const f = fenOf(moves[which]), n = lines(which), hit = f ? CLOUD.cloudCached(f, n) : null;
+      if (hit !== undefined) { cloudHit[which] = hit; asked[which] = Promise.resolve(hit); continue; }
+      asked[which] = new Promise((res) => { timers.push(setTimeout(() => CLOUD.cloudEval(f, n, { signal: ctl.signal }).then(res), CLOUD_DEBOUNCE_MS)); })
+        .then((r) => { if (live && r) setSt((s) => ({ ...s, cloud: { ...s.cloud, [which]: r } })); return r; });
+    }
+    const cloudLimit = search.depth == null ? A.SEARCH_LIMITS.depth[1] : search.depth;
     const keyAt = (lv, which) => keyOf(toSearch(A.deeperSearch(own, lv), lines(which)), moves[which]);
     const at = (lv, which) => (lv === 0 && stored ? stored : SF_EVAL_CACHE.get(keyAt(lv, which)) || null);
     const handles = [], cached = (which) => at(level, which);
     // the result a press of Go deeper started from, shown until the deeper search passes its depth
     const prev = (which) => (level > 0 ? at(level - 1, which) : null);
     const shown = (which) => cached(which) || (prev(which) && { ...prev(which), partial: true });
-    setSt({ key, before: shown('before'), after: shown('after'), pending: !cached('after') || !cached('before'), progress: 0 });
+    setSt({ key, before: shown('before'), after: shown('after'), cloud: { before: cloudHit.before || null, after: cloudHit.after || null }, pending: !cached('after') || !cached('before'), progress: 0 });
     // the searches to run (the start position's two are one)
     const todo = [...new Set(['after', 'before'].filter((w) => !cached(w)).map((w) => keyAt(level, w)))].length;
     let ran = 0;
@@ -302,6 +321,11 @@ function useMoveEval(engine, before, after, own, fen, stored) {
         if (!live) return;
         // the start position is both before and after: its second search is the first one's, cached
         if (cached(which)) { const c = cached(which); setSt((s) => ({ ...s, [which]: c })); continue; }
+        if (prefer) {
+          const c = await asked[which];
+          if (!live) return;
+          if (c && c.depth >= cloudLimit) { ran++; continue; }
+        }
         const floor = prev(which) ? prev(which).depth : 0;
         // a depth takes about 1.5 times the one before it, so depth d of D is about 1.5^(d − D) of the way
         const part = (sc) => Math.max(sc.timeMs ? sc.timeMs / search.movetimeMs : 0, search.depth ? Math.pow(1.5, sc.depth - search.depth) : 0);
@@ -318,12 +342,17 @@ function useMoveEval(engine, before, after, own, fen, stored) {
       }
       if (live) setSt((s) => ({ ...s, pending: false }));
     })();
-    return () => { live = false; handles.forEach((h) => h.cancel()); };
+    return () => { live = false; handles.forEach((h) => h.cancel()); timers.forEach(clearTimeout); ctl.abort(); };
   }, [key]);
-  const out = st.key === key ? st : { ...empty, pending: !!after };
+  const raw = st.key === key ? st : { ...empty, pending: !!after };
+  // the cloud's answer stands until a finished local search goes deeper
+  const pick = (loc, cl) => (cl && (!loc || loc.partial || cl.depth >= loc.depth) ? cl : loc);
+  const out = { ...raw, before: pick(raw.before, raw.cloud.before), after: pick(raw.after, raw.cloud.after) };
+  const fromCloud = (r) => !!(r && r.source === 'cloud');
   const done = out.after && !out.after.partial && out.before && !out.before.partial && !out.pending;
   const next = A.deeperSearch(own, level + 1);
-  const deeper = done && A.canGoDeeper(own, level) ? () => { SF_DEEPER.set(baseKey, level + 1); bump((n) => n + 1); } : null;
+  // nothing to go deeper on where both positions show the cloud's answer
+  const deeper = done && !(fromCloud(out.after) && fromCloud(out.before)) && A.canGoDeeper(own, level) ? () => { SF_DEEPER.set(baseKey, level + 1); bump((n) => n + 1); } : null;
   return { ...out, deeper, deeperTo: deeper ? next : null };
 }
 
@@ -347,7 +376,8 @@ function engineSteps(pos, pv, max = 8) {
 
 // Analysis › ☰ › Lines above one: each line's eval and first moves, the moves wrapping under each other beside
 // the eval (a narrow panel scrolls to the later lines); a move plays the line on the board up to it. c: the ply the lines start at
-function EngineLines({ lines, pos, ply0, c, onPick }) {
+// cloud: the lines are Lichess's cloud evaluation's
+function EngineLines({ lines, pos, ply0, c, onPick, cloud }) {
   const top = lines[0].depth;
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: tx(6) }}>
@@ -357,7 +387,7 @@ function EngineLines({ lines, pos, ply0, c, onPick }) {
           <div key={l.k} style={{ display: 'flex', alignItems: 'flex-start', gap: tx(6) }}>
             <span style={{ flex: '0 0 auto', width: tx(100), whiteSpace: 'nowrap', lineHeight: `${tx(30)}px`, color: l.k === 1 ? C.ink : C.dim }}>{ev}{l.depth < top && <span style={{ font: `500 ${tx(13)}px ${MONO}`, color: C.dim }}> d{l.depth}</span>}</span>
             <div style={{ flex: '1 1 0', minWidth: 0 }}>
-              <LineChips name={null} tip={`Stockfish's line ${l.k} (${ev})`} accent={l.k === 1 ? C.best : C.line}
+              <LineChips name={null} tip={`${cloud ? 'Lichess cloud' : 'Stockfish'}'s line ${l.k} (${ev})`} accent={l.k === 1 ? C.best : C.line}
                 moves={st.map((m) => m.san)} ply0={ply0} c={c} legal={st.length} sel={null} onPick={(j) => onPick(st.slice(0, j + 1))} />
             </div>
           </div>
@@ -399,9 +429,9 @@ function OwnMoveAnalysis({ M, vline, own, status, onReply }) {
       {/* the verdict spans the panel, under the move and the eval, so it fits on one line in the phone layout */}
       <div style={{ marginTop: tx(6), font: `600 ${tx(16)}px ${MONO}`, letterSpacing: '0.08em', textTransform: 'uppercase', color: col }}>{who} · {bad ? CLASS_LABEL[rated.classification] + ' · ' : ''}{verdict}</div>
       <div style={{ marginTop: tx(16), paddingTop: tx(14), borderTop: `1px solid ${C.line}`, font: `500 ${tx(18)}px ${MONO}`, color: C.dim, display: 'flex', flexDirection: 'column', gap: tx(8) }}>
-        {many ? <EngineLines lines={after.lines} pos={step.pos} ply0={M.ply0} c={ply + 1} onPick={onReply} />
+        {many ? <EngineLines lines={after.lines} pos={step.pos} ply0={M.ply0} c={ply + 1} onPick={onReply} cloud={after.source === 'cloud'} />
           : replies.length > 0
-          ? <LineChips name={null} tip="Stockfish’s reply" accent={C.best} moves={replies.map((r) => r.san)} ply0={M.ply0} c={ply + 1} legal={replies.length} sel={null} onPick={(j) => onReply(replies.slice(0, j + 1))} />
+          ? <LineChips name={null} tip={after.source === 'cloud' ? 'Lichess cloud’s reply' : 'Stockfish’s reply'} accent={C.best} moves={replies.map((r) => r.san)} ply0={M.ply0} c={ply + 1} legal={replies.length} sel={null} onPick={(j) => onReply(replies.slice(0, j + 1))} />
           : <span>{step.san.endsWith('#') ? 'Checkmate.' : ' '}</span>}
       </div>
     </React.Fragment>
