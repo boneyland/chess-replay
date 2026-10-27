@@ -123,11 +123,11 @@ body:has(.stage-one) .twk-panel { bottom: calc(51px + env(safe-area-inset-bottom
 .stage-short .pbtn { width: 34px; height: 28px; }
 .stage-short .pbar-narrow .pbtn-end { display: none; }
 .stage-short .pdock .dock-btn:not(.dock-pop .dock-btn) { height: 28px; }
-/* Device tiers, the same breakpoints as LayoutCore's (app/layout-core.js): a tablet or foldable (under 1024 px wide) and
+/* Device tiers, the same breakpoints as LayoutCore's (app/layout-core.js): a tablet or foldable (a viewport under 1055 px wide) and
    a phone (under 600 px wide, or under 500 px high held sideways) are tighter than a desktop, not just rearranged. The
    overlays' text (dock, transport bar, Settings, menus, all in rem) is a size smaller, the stage's padding slimmer and
    the transport bar's buttons and gaps smaller */
-@media (max-width: 1023px) {
+@media (max-width: 1054px) {
   html { font-size: calc(15px * var(--text, 1)); }
   .stage:not(.stage-one):not(.stage-short) { padding-block: 8px; gap: 8px; padding-left: max(10px, var(--safe-l)); padding-right: max(10px, var(--safe-r)); }
   .pbar { gap: 8px; padding: 4px 10px; }

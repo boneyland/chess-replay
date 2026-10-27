@@ -277,6 +277,18 @@ test('the eval graph runs under the board wherever that leaves the board its siz
     const L = LC.compute({ w: 910, h });
     assert.ok(L.plot && L.plot.x < L.board.x && L.plot.w > L.board.size + L.analysis.w, `910x${h}: the graph the full width`);
   }
+  // held by the width with less than the graph's 110 px under it (966x680): the graph shrinks to the room, from 80 px
+  for (const [w, h] of [[966, 680], [966, 690], [1000, 685]]) {
+    const L = LC.compute({ w, h }), alone = LC.compute({ w, h, view: 'free' }), at = `${w}x${h}`;
+    assert.ok(L.plot && L.plot.x < L.board.x && L.plot.h >= 80 && L.plot.h <= 110, `${at}: under the board ${JSON.stringify(L.plot)}`);
+    assert.ok(Math.abs(L.board.size - alone.board.size) < 0.5, `${at}: the board keeps its size`);
+    assert.ok(L.plot.y >= L.board.y + L.board.size + L.bars.gap + L.bars.h + 7.5 && L.plot.y + L.plot.h <= h, at);
+  }
+  // thinner in a viewport under 1181 px wide (the viewport's width, vw, not the stage's): 80 px, as in the sidebar, against 110
+  for (const [w, h, ph, vw] of [[966, 684, 80], [1000, 760, 80], [1100, 720, 80], [1180, 760, 110, 1212], [1149, 760, 80, 1180], [1149, 760, 110, 1181], [1440, 900, 110]]) {
+    const L = LC.compute({ w, h, vw: vw || w });
+    assert.ok(L.plot && L.plot.x < L.board.x && L.plot.h === ph, `${w}x${h}: ${JSON.stringify(L.plot)}`);
+  }
   const s = LC.compute({ w: 1100, h: 690 }); // held by the height: the graph under it would shrink the board
   assert.ok(s.plot && s.plot.x > s.board.x + s.board.size, 'beside it in the sidebar');
 });
@@ -286,4 +298,15 @@ test('a tall square-ish window shows the eval graph under Analysis', () => {
   assert.equal(s.plot, null, 'not while Analysis would be under 240 px');
   assert.ok(t.plot && t.plot.y > t.analysis.y + t.analysis.h && t.plot.y + t.plot.h <= 800 && t.plot.w === t.analysis.w);
   assert.equal(LC.compute({ w: 738, h: 800, view: 'free' }).plot, null, 'the replay only');
+});
+
+// one desktop breakpoint, the viewport's 1055 px (vw), for LayoutCore and shell.html's @media alike: the stage is
+// narrower than the viewport, and judging the tier by it once made a second breakpoint (1024 in CSS, ~1056 here)
+test('the desktop tier starts at a 1055 px viewport', () => {
+  assert.equal(LC.compute({ w: 1023, h: 818, vw: 1055, vh: 900 }).tier, 'desktop');
+  assert.equal(LC.compute({ w: 1034, h: 818, vw: 1054, vh: 900 }).tier, 'tablet');
+  assert.equal(LC.compute({ w: 1408, h: 818, vw: 1440, vh: 900 }).tier, 'desktop');
+  const css = require('fs').readFileSync(require('path').join(__dirname, '../app/shell.html'), 'utf8');
+  assert.match(css, /@media \(max-width: 1054px\) \{\n  html \{ font-size/);
+  assert.doesNotMatch(css, /max-width: 1023px/);
 });

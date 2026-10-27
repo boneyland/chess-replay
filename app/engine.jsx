@@ -64,9 +64,9 @@ function Stage({ menu, top, onLayout, duration, background, playback, nav, still
       const vw = document.documentElement.clientWidth, vh = document.documentElement.clientHeight;
       const iw = window.innerWidth, ih = window.innerHeight, was = colsRef.current;
       if (was != null) off[was] = [iw - w, ih - h];
-      let cols = LayoutCore.columns({ w, h, text, video, prevCols: was });
+      let cols = LayoutCore.columns({ w, h, text, video, prevCols: was, vw });
       const o = off[cols];
-      if (was != null && cols !== was && o && LayoutCore.columns({ w: iw - o[0], h: ih - o[1], text, video, prevCols: cols }) !== cols) cols = was;
+      if (was != null && cols !== was && o && LayoutCore.columns({ w: iw - o[0], h: ih - o[1], text, video, prevCols: cols, vw }) !== cols) cols = was;
       colsRef.current = cols;
       setArea((a) => (a.w === w && a.h === h && a.cols === cols && a.sh === sh && a.vw === vw && a.vh === vh && a.ox === ox && a.oy === oy ? a : { w, h, cols, sh, vw, vh, ox, oy }));
     };
