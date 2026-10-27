@@ -561,7 +561,8 @@ function MoveList({ M, T, S, a, paused, onPick }) {
     if (!el) return;
     const at = (i) => {
       const m = i >= 0 && el.querySelector(`[data-ply="${i}"]`);
-      return m ? Math.max(0, Math.round(m.offsetTop / ROW) + 3 - Math.max(1, Math.floor(el.clientHeight / ROW))) * ROW : 0;
+      // the lines in view: clientHeight is rounded to whole pixels, so a box of exactly n lines can read a pixel short
+      return m ? Math.max(0, Math.round(m.offsetTop / ROW) + 3 - Math.max(1, Math.floor((el.clientHeight + 1) / ROW))) * ROW : 0;
     };
     const scroll = Math.round(lerp(at(c - 1), at(c), k));
     if (applied.current !== scroll) { el.scrollTop = scroll; applied.current = scroll; }
