@@ -3,8 +3,9 @@
 // only place what this says. columns() makes the one decision that depends on the size alone; compute() lays a view out.
 (function () {
   // Device tiers, by the window's size (the @media rules in shell.html use the same breakpoints): a phone (under 600 px
-  // wide, or under 500 px high when held sideways), a foldable or square-ish window (600–1023 wide, between 0.8 and 1.2
-  // times as tall as wide: an unfolded foldable), a tablet (600–1023 otherwise) and a desktop (1024 up). Smaller devices
+  // wide, or under 500 px high when held sideways), a foldable or square-ish window (600 wide up to a 1054 px viewport,
+  // between 0.8 and 1.2 times as tall as wide: an unfolded foldable), a tablet (the same widths otherwise) and a desktop
+  // (a viewport from 1055 px wide: the viewport's width, as shell.html's @media judge it, not the narrower stage's). Smaller devices
   // are tighter, not just rearranged: thinner margins, gaps and panel padding, a thinner eval bar, and text a little
   // smaller (scale multiplies the viewer's text size). A foldable is spaced as a tablet; whether either keeps the sidebar
   // is columns()'s call, by the room
@@ -14,7 +15,8 @@
     tablet: { margin: 8, gap: 8, evalW: 16, evalGap: 6, pad: [12, 16], scale: 0.95 },
     desktop: { margin: 12, gap: 10, evalW: 20, evalGap: 8, pad: [16, 22], scale: 1 },
   };
-  const tierOf = (w, h) => (w < 600 || h < 500 ? 'phone' : w >= 1024 ? 'desktop' : h >= 0.8 * w && h <= 1.2 * w ? 'foldable' : 'tablet');
+  const DESKTOP_VW = 1055;
+  const tierOf = (w, h, vw = w) => (w < 600 || h < 500 ? 'phone' : vw >= DESKTOP_VW ? 'desktop' : h >= 0.8 * w && h <= 1.2 * w ? 'foldable' : 'tablet');
   let MARGIN = 12, GAP = 10, EVAL_W = 20, EVAL_GAP = 8, EVAL_TOTAL = 28, PAD = [16, 22];
   const BAR_GAP = 4;
   // the full-width eval graph's largest height: thinner in a viewport under PLOT_WIDE px wide (desktops included); by the
@@ -22,8 +24,8 @@
   const PLOT_WIDE = 1181;
   const plotMax = (vw) => (vw >= PLOT_WIDE ? 110 : 80);
   // the tier's spacing, for the layout being worked out (compute and columns are called one at a time)
-  const useTier = (w, h) => {
-    const t = TIERS[tierOf(w, h)];
+  const useTier = (w, h, vw = w) => {
+    const t = TIERS[tierOf(w, h, vw)];
     MARGIN = t.margin; GAP = t.gap; EVAL_W = t.evalW; EVAL_GAP = t.evalGap; EVAL_TOTAL = EVAL_W + EVAL_GAP; PAD = t.pad;
     return t;
   };
@@ -88,7 +90,7 @@
   // fit a 200 px board beside the sidebar (a phone held sideways at Larger text), and always for a video, which must
   // fit; a paused page in a narrow short window (a phone with its keyboard up) takes one column, which scrolls.
   function columns({ w, h, text = 1, prevCols = null, video = false, vw = w }) {
-    const tier = useTier(w, h);
+    const tier = useTier(w, h, vw);
     text *= tier.scale;
     const boardW = w - 2 * MARGIN - GAP - SIDEBAR_MIN * text - EVAL_TOTAL;
     const aspect = 1.25 + (prevCols === 2 ? 0.05 : prevCols === 1 ? -0.05 : 0);
@@ -240,8 +242,8 @@
   function compute({ w, h, text = 1, view = 'replay', video = false, prevCols = null, cols = null, vw = w, vh = h, dock = false }) {
     const c = cols || columns({ w, h, text, prevCols, video, vw });
     boardMax = Math.max(BOARD_MIN, Math.min(BOARD_MAX, 0.5 * Math.max(vw, vh)));
-    const tier = useTier(w, h), t = text * tier.scale;
-    return Object.assign((c === 1 ? oneColumn : twoColumns)({ w, h, text: t, view, video, dock: c === 2 && dock, vw }), { text: t, tier: tierOf(w, h), pad: PAD });
+    const tier = useTier(w, h, vw), t = text * tier.scale;
+    return Object.assign((c === 1 ? oneColumn : twoColumns)({ w, h, text: t, view, video, dock: c === 2 && dock, vw }), { text: t, tier: tierOf(w, h, vw), pad: PAD });
   }
 
   // The export's pixel scale for a w × h page: the screen's density, held so the longer side stays within 1920 px
