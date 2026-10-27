@@ -54,14 +54,19 @@ function useEngine(hashMB, threads, kind = 'lite', onBroken) {
       // an engine that dies later is dropped too: the panels say so, and the next use starts a new one
       let mine = null;
       const k = has.current;
-      // one try with threads where the page allows them, and if that engine won't start, one without
-      const attempt = async (withThreads) => {
-        let make = sfMakeWorker(withThreads ? SF_FILE_THREADS : SF_FILE);
-        if (k === 'full') withThreads = false; // the full engine's threaded build comes with its own download
+      // one try with threads where the page allows them, and if that engine won't start, one without. kk: the engine
+      // kind to start (a full engine whose threaded build won't start, with no single-thread copy kept, falls back to lite)
+      const attempt = async (withThreads, kk = k) => {
+        threaded.current = false; // set once the files are there: a missing file is not the threads' fault
+        let make;
+        if (kk === 'full') {
+          try { make = await window.SFFull.start(withThreads ? 'threads' : 'single'); } catch (e) { if (broken.current) broken.current(); throw e; }
+        } else {
+          const file = withThreads ? SF_FILE_THREADS : SF_FILE;
+          if (!(await sfFilesPresent(file))) throw new Error('The Stockfish files are missing next to this page');
+          make = sfMakeWorker(file);
+        }
         threaded.current = withThreads;
-        if (k === 'full') {
-          try { make = await window.SFFull.start(); } catch (e) { if (broken.current) broken.current(); throw e; }
-        } else if (!(await sfFilesPresent(withThreads ? SF_FILE_THREADS : SF_FILE))) throw new Error('The Stockfish files are missing next to this page');
         // a threaded engine that dies before it is ready is start()'s to handle (ready() rejects, and it falls back)
         let up = false;
         const onFail = () => {
@@ -77,9 +82,9 @@ function useEngine(hashMB, threads, kind = 'lite', onBroken) {
       const start = async () => {
         if (!sfThreading.on) return attempt(false);
         try { return await attempt(true); } catch (e) {
-          if (!threaded.current) throw e; // not the threads' fault (a missing file, the full engine's copy)
+          if (!threaded.current) throw e;
           sfThreadsFailed('The threaded engine didn’t start');
-          return attempt(false);
+          return attempt(false, k === 'full' && !(await window.SFFull.present('single')) ? 'lite' : k);
         }
       };
       mine = ref.current = start().then((eng) => { if (ref.current === mine) setStatus('ready'); return eng; }, (e) => { if (ref.current === mine) { setStatus('unavailable'); ref.current = null; } throw e; });
@@ -94,19 +99,26 @@ function useEngine(hashMB, threads, kind = 'lite', onBroken) {
 // state: 'checking', 'absent', 'downloading' (got: bytes so far) or 'ready'; err: why the last download or start failed
 const SF_FULL_OFFERED = !!(window.SFFull && window.SFFull.supported());
 const sfMB = (bytes) => Math.round(bytes / 1e6);
+// build: the threaded one where the page allows threads; threads turned off later (the threaded engine wouldn't run)
+// look for the single-thread copy, and without one the viewer is back on Lite
 function useFullEngine() {
+  const threading = useSfThreading(), build = threading.on ? 'threads' : 'single';
   const [st, setSt] = React.useState({ state: SF_FULL_OFFERED ? 'checking' : 'absent', got: 0, err: '' });
-  const ctl = React.useRef(null);
+  const ctl = React.useRef(null), first = React.useRef(true);
   React.useEffect(() => {
-    if (SF_FULL_OFFERED) window.SFFull.present().then((ok) => setSt((s) => (s.state === 'checking' ? { ...s, state: ok ? 'ready' : 'absent' } : s)));
-  }, []);
+    if (!SF_FULL_OFFERED) return;
+    const again = !first.current;
+    first.current = false;
+    setSt((s) => (s.state === 'downloading' ? s : { ...s, state: 'checking' }));
+    window.SFFull.present(build).then((ok) => setSt((s) => (s.state === 'checking' ? { ...s, state: ok ? 'ready' : 'absent', err: !ok && again ? 'The threaded engine didn’t run here, so Lite is running. Download Full again to use it.' : s.err } : s)));
+  }, [build]);
   const download = async () => {
     if (ctl.current) return;
     const c = ctl.current = new AbortController();
     setSt({ state: 'downloading', got: 0, err: '' });
     try {
       // a render per megabyte, not per chunk
-      await window.SFFull.download({ signal: c.signal, onProgress: (got) => setSt((s) => (sfMB(got) === sfMB(s.got) ? s : { ...s, got })) });
+      await window.SFFull.download({ build, signal: c.signal, onProgress: (got) => setSt((s) => (sfMB(got) === sfMB(s.got) ? s : { ...s, got })) });
       setSt({ state: 'ready', got: 0, err: '' });
     } catch (e) {
       setSt({ state: 'absent', got: 0, err: c.signal.aborted ? '' : 'Download failed: ' + ((e && e.message) || e) });
@@ -115,7 +127,7 @@ function useFullEngine() {
   const cancel = () => { if (ctl.current) ctl.current.abort(); };
   const remove = async () => { cancel(); await window.SFFull.remove().catch(() => {}); setSt({ state: 'absent', got: 0, err: '' }); };
   const broken = React.useCallback(() => setSt({ state: 'absent', got: 0, err: 'The downloaded engine was missing, so Lite is running. Download it again to use Full.' }), []);
-  return { offered: SF_FULL_OFFERED, ...st, download, cancel, remove, broken };
+  return { offered: SF_FULL_OFFERED, ...st, build, total: window.SFFull ? window.SFFull.total(build) : 0, download, cancel, remove, broken };
 }
 
 const sfIsBrowserAnalysis = (analysis) => {

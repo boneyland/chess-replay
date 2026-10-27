@@ -220,9 +220,9 @@ function GameApp() {
   const [askRemove, setAskRemove] = React.useState(false);
   React.useEffect(() => setAskRemove(false), [full.state]);
   const sfKind = t.sfEngine === 'Full' && full.state === 'ready' ? 'full' : 'lite';
-  // threads where the page allows them (the full engine's threaded build comes with its own download)
-  const threading = useSfThreading(), sfThreads = { ...threading, on: threading.on && sfKind === 'lite' };
-  const ES = React.useMemo(() => window.AnalysisCore.engineSettings(t, sfKind, sfThreads), [t.sfDepth, t.sfTime, t.sfOwnDepth, t.sfOwnTime, t.sfHash, t.sfLines, t.sfThreads, sfKind, sfThreads.on, sfThreads.cores]);
+  // threads where the page allows them, lite or full
+  const threading = useSfThreading();
+  const ES = React.useMemo(() => window.AnalysisCore.engineSettings(t, sfKind, threading), [t.sfDepth, t.sfTime, t.sfOwnDepth, t.sfOwnTime, t.sfHash, t.sfLines, t.sfThreads, sfKind, threading]);
   const engine = useEngine(ES.game.hash_mb, ES.game.threads, sfKind, full.broken);
   const queenInVideo = t.queenInVideo !== false;
   const showCommentary = t.commentary !== false;
@@ -473,14 +473,14 @@ function GameApp() {
 
   // The Analysis panel's engine menu (EngineMenuContext): the Lite/Full choice in its title row, and these settings in
   // the panel while the menu is open; the explanations sit behind ⓘ. A game has no engine menu.
-  const MB = sfMB(window.SFFull.TOTAL), stopsAt = 'Each search stops at its depth or time limit, whichever comes first.';
+  const MB = sfMB(full.total), stopsAt = 'Each search stops at its depth or time limit, whichever comes first.';
   const engineBody = <>
     {full.offered && <>
       {t.sfEngine === 'Full' && full.state === 'absent' && <TweakButton label={`Download full Stockfish · ${MB} MB`} onClick={full.download}
         info={`Full Stockfish 19 is stronger than Lite, with the big neural network. It is a ${MB} MB download from unpkg.com, kept in this browser for next time and offline. Until it is downloaded, Lite runs.`} />}
       {full.state === 'downloading' && <>
         <div className="twk-note" role="status">Downloading full Stockfish · {sfMB(full.got)} of {MB} MB</div>
-        <div className="twk-progress"><i style={{ width: `${(100 * full.got / window.SFFull.TOTAL).toFixed(1)}%` }} /></div>
+        <div className="twk-progress"><i style={{ width: `${(100 * full.got / full.total).toFixed(1)}%` }} /></div>
         <TweakButton secondary label="Cancel the download" onClick={full.cancel} />
       </>}
       {full.err && <div className="twk-note twk-err">{full.err}</div>}

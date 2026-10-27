@@ -14,6 +14,7 @@ globalThis.caches = {
     return {
       async match(url) { return m.has(url) ? new Response(m.get(url)) : undefined; },
       async put(url, r) { if (globalThis.putFails) throw globalThis.putFails; m.set(url, new Uint8Array(await r.arrayBuffer())); },
+      async delete(url) { return m.delete(url); },
     };
   },
   async delete(name) { return store.delete(name); },
@@ -28,10 +29,10 @@ Object.defineProperty(navigator, 'storage', { configurable: true, value: {
 
 loadUnit('sf-full.js');
 const F = window.SFFull;
-const REAL = F.FILES.map((f) => ({ ...f }));
+const REAL = F.FILES.map((f) => ({ ...f })), REAL_THREADS = F.BUILDS.threads.map((f) => ({ ...f }));
 
 const bytes = (n, seed) => Uint8Array.from({ length: n }, (_, i) => (i * 31 + seed) & 255);
-const GLUE = bytes(300, 1), WASM = bytes(5000, 2);
+const GLUE = bytes(300, 1), WASM = bytes(5000, 2), GLUE2 = bytes(320, 3), WASM2 = bytes(4800, 4);
 const hex = (b) => crypto.createHash('sha256').update(b).digest('hex');
 // what unpkg serves, by file name; a body arrives in 1 KB chunks
 let served = {};
@@ -58,7 +59,9 @@ function reset() {
   F.remove();
   Object.assign(F.FILES[0], { size: GLUE.length, sha256: hex(GLUE) });
   Object.assign(F.FILES[1], { size: WASM.length, sha256: hex(WASM) });
-  served = { 'stockfish-19-single.js': GLUE, 'stockfish-19-single.wasm': WASM };
+  Object.assign(F.BUILDS.threads[0], { size: GLUE2.length, sha256: hex(GLUE2) });
+  Object.assign(F.BUILDS.threads[1], { size: WASM2.length, sha256: hex(WASM2) });
+  served = { 'stockfish-19-single.js': GLUE, 'stockfish-19-single.wasm': WASM, 'stockfish-19.js': GLUE2, 'stockfish-19.wasm': WASM2 };
 }
 
 test('the pinned files are stockfish.js v19.0.1 full single-threaded from unpkg', () => {
@@ -158,4 +161,36 @@ test('remove: the copy goes', async () => {
   await F.download();
   await F.remove();
   assert.equal(await F.present(), false);
+});
+
+test('the pinned threaded files are stockfish.js v19.0.1 full multi-threaded from unpkg, as LAYOUT.md pins them', () => {
+  assert.equal(F.FILES, F.BUILDS.single);
+  assert.deepEqual(REAL_THREADS.map((f) => [f.name, f.size]), [['stockfish-19.js', 33326], ['stockfish-19.wasm', 99076105]]);
+  const layout = require('fs').readFileSync(require('path').join(__dirname, '..', 'LAYOUT.md'), 'utf8');
+  for (const f of [...REAL, ...REAL_THREADS]) assert.ok(layout.split('\n').some((l) => l.includes('`' + f.name + '`') && l.includes(f.sha256)), f.name);
+  assert.equal(F.total('threads'), F.BUILDS.threads.reduce((s, f) => s + f.size, 0));
+});
+
+test('present, download and start are per build: the single copy doesn\'t make the threaded one present', async () => {
+  reset();
+  await F.download();
+  assert.equal(await F.present('single'), true);
+  assert.equal(await F.present('threads'), false);
+  const seen = [];
+  await F.download({ build: 'threads', onProgress: (got, total) => seen.push([got, total]) });
+  assert.deepEqual(seen.at(-1), [5120, 5120]);
+  assert.ok(fetched.some((u) => u.endsWith('/stockfish-19.wasm')));
+  assert.equal(await F.present('threads'), true);
+  // a broken threaded copy is dropped alone: the single one stays
+  await (await caches.open(F.CACHE)).put(F.BASE + 'stockfish-19.wasm', new Response(bytes(10, 2)));
+  await assert.rejects(F.start('threads'), /missing/);
+  assert.equal(await F.present('threads'), false);
+  assert.equal(await F.present('single'), true);
+  await F.download({ build: 'threads' });
+  const single = await F.start('single'), threads = await F.start('threads');
+  assert.notEqual(single, threads);
+  assert.notEqual(single().url, threads().url);
+  assert.equal(await F.start('threads'), threads);
+  await F.remove();
+  assert.equal(await F.present('single'), false);
 });

@@ -1945,8 +1945,10 @@ for (const name of BROWSERS) for (const site of SITES) {
     await t.test('desktop: the full engine downloads once, runs from its kept copy, and can be removed', { timeout: 420000 }, async (tt) => {
       const fe = await open(browser, { width: 1440, height: 900 });
       const p = fe.page;
+      await p.addInitScript(spyEngine, {});
       let hits = 0;
-      fe.ctx.on('request', (r) => { if (r.url().startsWith('https://unpkg.com/stockfish@19.0.1/bin/')) hits++; });
+      const files = [];
+      fe.ctx.on('request', (r) => { if (r.url().startsWith('https://unpkg.com/stockfish@19.0.1/bin/')) { hits++; files.push(r.url().split('/').pop()); } });
       await p.goto(base, { waitUntil: 'load' });
       await loadedOn(p);
       // the Analysis panel's engine menu (☰), opened if it isn't
@@ -1995,6 +1997,8 @@ for (const name of BROWSERS) for (const site of SITES) {
       }
       // a failed try may have fetched one file or both
       if (tries === 1) assert.equal(hits, 2, 'both files fetched once');
+      // the page is isolated, so the threaded build: its glue starts its threads' workers from the kept copy's Blob URL
+      assert.deepEqual([...new Set(files)].sort(), ['stockfish-19.js', 'stockfish-19.wasm']);
       const fetched = hits;
       await assert.doesNotReject(runs('Stockfish 19'));
       await p.screenshot({ path: path.join(OUT, host + '-engine-full.png') });
@@ -2005,6 +2009,9 @@ for (const name of BROWSERS) for (const site of SITES) {
       await p.waitForFunction(() => /depth \d+/i.test(document.body.innerText), null, { timeout: 60000 });
       await p.waitForFunction((re) => new RegExp(re, 'i').test(document.body.innerText), rated.source, { timeout: 60000 });
       assert.doesNotMatch(await p.getByText(/your move ·/i).innerText(), /can’t run here|stopped/i);
+      const seen = await p.evaluate(() => window.__sf);
+      assert.ok(seen.urls.some((u) => u.startsWith('blob:')), 'the full engine started: ' + seen.urls.join(' '));
+      assert.ok(seen.posted.filter((m) => m === 'setoption name Threads value 4').length >= 2, 'Threads sent to lite, then to full');
       // a reload finds the kept copy: nothing fetched again
       await p.reload({ waitUntil: 'load' });
       await loadedOn(p);
