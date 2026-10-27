@@ -1208,7 +1208,13 @@ for (const name of BROWSERS) for (const site of SITES) {
       const room = () => p.evaluate(() => { const e = document.querySelector('.book-head').parentElement.parentElement; return e.scrollHeight - e.clientHeight; });
       await p.waitForFunction(() => { const e = document.querySelector('.book-head').parentElement.parentElement; return e.scrollHeight - e.clientHeight >= 120; }, null, { timeout: 10000 }).catch(() => {});
       await p.evaluate(() => document.fonts.ready);
-      const from = await row(p, 'Nc3').boundingBox();
+      // from the lowest row wholly in view (the panel's height follows the layout, so no named row is sure to be)
+      const from = await p.evaluate(() => {
+        const r = document.querySelector('.book-head').parentElement.parentElement.getBoundingClientRect();
+        const rows = [...document.querySelectorAll('.book-moves [role="button"]')].map((e) => e.getBoundingClientRect()).filter((b) => b.top >= r.top && b.bottom <= r.bottom);
+        const b = rows[rows.length - 1];
+        return { x: b.x, y: b.y, height: b.height };
+      });
       await p.mouse.move(from.x + 40, from.y + from.height / 2);
       await p.mouse.down();
       await p.mouse.move(from.x + 40, from.y + from.height / 2 - 120, { steps: 8 });
