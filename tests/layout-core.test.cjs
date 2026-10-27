@@ -277,6 +277,13 @@ test('the eval graph runs under the board wherever that leaves the board its siz
     const L = LC.compute({ w: 910, h });
     assert.ok(L.plot && L.plot.x < L.board.x && L.plot.w > L.board.size + L.analysis.w, `910x${h}: the graph the full width`);
   }
+  // held by the width with less than the graph's 110 px under it (966x680): the graph shrinks to the room, from 80 px
+  for (const [w, h] of [[966, 680], [966, 690], [1000, 685]]) {
+    const L = LC.compute({ w, h }), alone = LC.compute({ w, h, view: 'free' }), at = `${w}x${h}`;
+    assert.ok(L.plot && L.plot.x < L.board.x && L.plot.h >= 80 && L.plot.h <= 110, `${at}: under the board ${JSON.stringify(L.plot)}`);
+    assert.ok(Math.abs(L.board.size - alone.board.size) < 0.5, `${at}: the board keeps its size`);
+    assert.ok(L.plot.y >= L.board.y + L.board.size + L.bars.gap + L.bars.h + 7.5 && L.plot.y + L.plot.h <= h, at);
+  }
   const s = LC.compute({ w: 1100, h: 690 }); // held by the height: the graph under it would shrink the board
   assert.ok(s.plot && s.plot.x > s.board.x + s.board.size, 'beside it in the sidebar');
 });

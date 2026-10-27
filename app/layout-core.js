@@ -58,19 +58,21 @@
   const sideW = (w, text) => Math.max(SIDEBAR_MIN * text, Math.min(SIDEBAR_W * text + GAP, w - 2 * MARGIN - GAP - EVAL_TOTAL - BOARD_OK));
   // what goes under a two-column board, and the height that leaves it. A square-ish window (not the editor, not with
   // the bar in the sidebar) has Analysis there. The replay's eval graph runs the full width under the board from 700 px
-  // high, and from 670 px wherever that doesn't make the board smaller (it is held by the width): a graph in the
-  // sidebar beside a board with room under it looked lopsided. cap: the board's largest size
+  // high, and from 670 px wherever that doesn't make the board smaller (it is held by the width), as short as the room
+  // under it there (PLOT_SIDE_H at least): a graph in the sidebar beside a board with room under it looked lopsided.
+  // cap: the board's largest size
   function under({ w, h, text, view, dock = false, cap }) {
     const square = !dock && view !== 'edit' && h >= SQUARE * w;
     const bare = h - 2 * MARGIN - barsTotal(text);
     const byWidth = Math.min(cap, w - 2 * MARGIN - GAP - sideW(w, text) - EVAL_TOTAL);
-    const plotBelow = view === 'replay' && !square && !dock && h >= PLOT_MIN_H && (h >= PLOT_BELOW_MIN_H || byWidth <= bare - GAP - PLOT_H);
+    const plotBelow = view === 'replay' && !square && !dock && h >= PLOT_MIN_H && (h >= PLOT_BELOW_MIN_H || byWidth <= bare - GAP - PLOT_SIDE_H);
+    const plotH = h >= PLOT_BELOW_MIN_H ? PLOT_H : Math.min(PLOT_H, bare - GAP - byWidth);
     // a square-ish window's eval graph, under Analysis, where Analysis keeps ANALYSIS_PLOT_MIN over it at the board's
     // size by the width (twoColumns() places it by the room actually left); as short as the sidebar's (PLOT_SIDE_H),
     // in a window narrower than a desktop's
     const plotRoom = 2 * GAP + PLOT_SIDE_H + ANALYSIS_PLOT_MIN * text;
     const plotUnder = square && view === 'replay' && byWidth <= bare - plotRoom;
-    return { square, plotBelow, byWidth, hLimit: bare - (plotBelow ? GAP + PLOT_H : plotUnder ? plotRoom : square ? GAP + ANALYSIS_BELOW_MIN * text : 0) };
+    return { square, plotBelow, plotH, byWidth, hLimit: bare - (plotBelow ? GAP + plotH : plotUnder ? plotRoom : square ? GAP + ANALYSIS_BELOW_MIN * text : 0) };
   }
   const box = (x, y, w, h) => ({ x, y, w: Math.max(0, w), h: Math.max(0, h), scroll: true });
 
@@ -107,7 +109,7 @@
   function twoColumns({ w, h, text, view, dock }) {
     if (dock) MARGIN = DOCK_MARGIN;
     const hasEval = view === 'replay' || view === 'free';
-    const { square, plotBelow, hLimit } = under({ w, h, text, view, dock, cap: boardMax });
+    const { square, plotBelow, plotH, hLimit } = under({ w, h, text, view, dock, cap: boardMax });
     const bar = barH(text);
     // the sidebar's share (sideW); the left column (board plus its eval bar) is what is left
     const wLimit = w - 2 * MARGIN - GAP - sideW(w, text);
@@ -118,7 +120,7 @@
     const boardY = MARGIN + bar + BAR_GAP;
     const sx = MARGIN + left + GAP, sw = w - MARGIN - sx;
     const top = MARGIN;
-    const plotY = h - MARGIN - PLOT_H;
+    const plotY = h - MARGIN - plotH;
     const analysisY = boardY + size + BAR_GAP + bar + GAP; // a square-ish window's Analysis, under the board
     const bottom = plotBelow ? plotY - GAP : square ? analysisY - GAP : dock ? h - MARGIN - DOCK_H - GAP : h - MARGIN;
     const L = {
@@ -148,7 +150,7 @@
     // a square-ish window's eval graph: at the bottom, under Analysis, where Analysis keeps its minimum
     const underH = h - MARGIN - analysisY, plotUnder = square && view === 'replay' && underH - GAP - PLOT_SIDE_H >= ANALYSIS_PLOT_MIN * text;
     L.analysis = square ? box(MARGIN, analysisY, w - 2 * MARGIN, plotUnder ? underH - GAP - PLOT_SIDE_H : underH) : box(sx, L.comment.y + commentH + GAP, sw, analysisH);
-    if (plotBelow) L.plot = box(MARGIN, plotY, w - 2 * MARGIN, PLOT_H);
+    if (plotBelow) L.plot = box(MARGIN, plotY, w - 2 * MARGIN, plotH);
     else if (plotUnder) L.plot = box(MARGIN, h - MARGIN - PLOT_SIDE_H, w - 2 * MARGIN, PLOT_SIDE_H);
     else if (plotSide) L.plot = box(sx, L.analysis.y + analysisH + GAP, sw, PLOT_SIDE_H);
     return L;
