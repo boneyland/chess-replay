@@ -20,9 +20,11 @@ What each part of the repo is, with the pinned SHA-256 of every vendored file. B
   - `sw.js`: the site's service worker (offline); `icons/`, `og-image.png`: web app icons and the link-preview image
 - `src/`: files from the original Claude Design project (`pieces.js`, `sample-game.js`, and `game-data.js`, which writes the sample game's commentary, `window.SAMPLE_NOTES`, all built into the page); `pieces/cburnett/` are Colin M.L. Burnett's pieces (GPL-2.0-or-later, as in Lichess)
 - `babel/babel.min.js`: @babel/standalone 7.29.0, used only to precompile the JSX (sha256 `2623a9e22809915ce789b4461154e277ddce520d5a4320c14d44332a5d0dcea0`)
-- `vendor/`: stockfish.js v19.0.1 `lite-single` (GPL-3.0, https://github.com/nmrugg/stockfish.js), unchanged release files
+- `vendor/`: stockfish.js v19.0.1 `lite-single` and `lite` (multi-threaded, run only where the page is cross-origin isolated) (GPL-3.0, https://github.com/nmrugg/stockfish.js), unchanged release files
   - `stockfish-19-lite-single.js` sha256 `ccb130d7ff29408531c47d859a49f91d59d4f482d05a53eb1a3231a4f624c91a`
   - `stockfish-19-lite-single.wasm` sha256 `ee4f115bdb2d32cadf96cada104a05b5ec257d7ad6f57582190b49bc71f096de`
+  - `stockfish-19-lite.js` (33,426 bytes) sha256 `dac939ff529668e0168b2f615145ec18b029b753deb6963fd7319d788f964333`
+  - `stockfish-19-lite.wasm` (1,697,617 bytes) sha256 `ddf06cdaf0b8e35c11b40530e44db96c2a99c9029c8d621dd9fca97e4872770c`
 - Not vendored: the full engine, stockfish.js v19.0.1 `single` (GPL-3.0), which the browser downloads from `https://unpkg.com/stockfish@19.0.1/bin/` when the viewer asks and checks against these (pinned in `app/sf-full.js`)
   - `stockfish-19-single.js` (28,130 bytes) sha256 `8071dee87312f74805a859de933e1a1ef465579ab1a51fbd597388cdce9d444d`
   - `stockfish-19-single.wasm` (99,169,054 bytes) sha256 `991bede2f253ebb08ff01fcc48270f4b9c8e66b12d5bd5f8d6f52eb3e3b3a740`

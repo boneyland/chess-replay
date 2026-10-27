@@ -144,3 +144,13 @@ test('the page asks the browser not to zoom', () => {
   const vp = page.match(/<meta name="viewport" content="([^"]*)">/)[1].split(/,\s*/);
   for (const v of ['width=device-width', 'initial-scale=1', 'maximum-scale=1', 'user-scalable=no']) assert.ok(vp.includes(v), v);
 });
+
+// threads need the multi-threaded build where the page is cross-origin isolated; the single-thread pair stays as the fallback
+test('the threaded lite engine is vendored, pinned in LAYOUT.md and copied next to the page', () => {
+  const layout = fs.readFileSync(path.join(ROOT, 'LAYOUT.md'), 'utf8');
+  for (const f of ['stockfish-19-lite.js', 'stockfish-19-lite.wasm']) {
+    const sha = require('crypto').createHash('sha256').update(fs.readFileSync(path.join(ROOT, 'vendor', f))).digest('hex');
+    assert.ok(layout.split('\n').some((l) => l.includes('`' + f + '`') && l.includes(sha)), f + ' pinned');
+    assert.ok(fs.existsSync(path.join(ROOT, 'out', 'site', f)), f + ' next to the page');
+  }
+});
