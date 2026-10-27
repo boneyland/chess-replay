@@ -195,15 +195,16 @@ test('the board stays within half the viewport', () => {
 });
 
 // Moves stands over Commentary, as wide, in every layout and view, and is never taller than its title and five lines
-test('Moves sits over Commentary, five lines at most', () => {
-  const cap = (L) => 0.8 * L.text * (2 * L.pad[0] + 15 * 1.4 + 12) + 2 + 5 * 38 * 0.8 * L.text + 0.5;
+// (three in one column)
+test('Moves sits over Commentary, five lines at most, three in one column', () => {
+  const cap = (L) => 0.8 * L.text * (2 * L.pad[0] + 15 * 1.4 + 12) + 2 + (L.cols === 1 ? 3 : 5) * 38 * 0.8 * L.text + 0.5;
   for (const [w, h] of [[1440, 900], [2560, 1400], [1024, 690], [820, 600], [390, 844], [768, 1024], [844, 390], [320, 500]]) {
     for (const text of [1, 1.3]) for (const video of [false, true]) for (const view of ['replay', 'free']) {
       const L = LC.compute({ w, h, text, video, view }), at = `${w}x${h} text ${text}${video ? ' video' : ''} ${view}`;
       assert.ok(L.moves.h <= cap(L), `${at}: moves ${L.moves.h} over ${cap(L)}`);
       assert.ok(Math.abs(L.moves.x - L.comment.x) < 0.5 && Math.abs(L.moves.w - L.comment.w) < 0.5, `${at}: not stacked`);
       const gap = L.tier === 'phone' ? 6 : L.tier === 'desktop' ? 10 : 8;
-      if (L.flow) assert.ok(L.moves.order < L.comment.order && L.moves.maxRows === 5, `${at}: flow order`);
+      if (L.flow) assert.ok(L.moves.order < L.comment.order && L.moves.maxRows === 3, `${at}: flow order`);
       // one column: Analysis between Moves and Commentary
       else if (L.cols === 1) assert.ok(Math.abs(L.analysis.y + L.analysis.h + gap - L.comment.y) < 0.5 && Math.abs(L.moves.y + L.moves.h + gap - L.analysis.y) < 0.5, `${at}: not Moves, Analysis, Commentary`);
       else assert.ok(Math.abs(L.moves.y + L.moves.h + gap - L.comment.y) < 0.5, `${at}: Commentary not under Moves`);

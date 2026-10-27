@@ -37,11 +37,12 @@
   const VIDEO_PREF = [96, 120, 96], PANEL_FLOOR = 48; // comment, analysis, moves under a video's board, times text
   // MoveList's chrome as it draws it (game-video-core.jsx, whose tx() sizes are 0.8 × the text size): a move row, and
   // the panel's padding, title row and its margin and the borders around the rows. All but the borders grow with the text
-  // Moves stands over Commentary in every layout, and is never taller than MOVE_LINES lines of moves
-  const MOVE_ROW = 38, MOVE_BORDER = 2, MOVE_LINES = 5, TX = 0.8;
+  // Moves stands over Commentary in every layout, and is never taller than MOVE_LINES lines of moves (MOVE_LINES_ONE in
+  // one column)
+  const MOVE_ROW = 38, MOVE_BORDER = 2, MOVE_LINES = 5, MOVE_LINES_ONE = 3, TX = 0.8;
   const moveRow = (text) => MOVE_ROW * TX * text;
   const moveChrome = (text) => (2 * PAD[0] + 15 * 1.4 + 12) * TX * text + MOVE_BORDER;
-  const movesMax = (text) => moveChrome(text) + MOVE_LINES * moveRow(text);
+  const movesMax = (text, lines = MOVE_LINES) => moveChrome(text) + lines * moveRow(text);
 
   const TEXT_SIZES = { Small: 0.9, Default: 1, Large: 1.15, Larger: 1.3 };
   const textScale = (name) => (Object.prototype.hasOwnProperty.call(TEXT_SIZES, name) ? TEXT_SIZES[name] : 1);
@@ -141,7 +142,7 @@
     if (view === 'edit') parts = [['tray'], ['panel', ONE_COL.panel * text, 120 * text, PANEL_FLOOR * text]];
     else {
       // Commentary last, at the bottom
-      parts = [['moves', movesMax(text), Math.min(movesMax(text), Math.max(VIDEO_PREF[2] * text, movesMin)), movesMin],
+      parts = [['moves', movesMax(text, MOVE_LINES_ONE), Math.min(movesMax(text, MOVE_LINES_ONE), Math.max(VIDEO_PREF[2] * text, movesMin)), movesMin],
         ['analysis', ONE_COL.analysis * text, VIDEO_PREF[1] * text, PANEL_FLOOR * text], ['comment', ONE_COL.comment * text, VIDEO_PREF[0] * text, PANEL_FLOOR * text]];
       if (!video) parts.unshift(['header', HEADER_H * text]);
     }
@@ -166,9 +167,9 @@
         // the room past the preferred heights goes to the panels in proportion, but Moves stops at its five lines
         const mi = sized.findIndex((p) => p[0] === 'moves');
         heights = prefs.map((p) => (p * avail) / sumPref);
-        if (mi >= 0 && heights[mi] > movesMax(text)) {
-          const extra = heights[mi] - movesMax(text), others = sumPref - prefs[mi];
-          heights = heights.map((x, i) => (i === mi ? movesMax(text) : x + (extra * prefs[i]) / others));
+        if (mi >= 0 && heights[mi] > movesMax(text, MOVE_LINES_ONE)) {
+          const extra = heights[mi] - movesMax(text, MOVE_LINES_ONE), others = sumPref - prefs[mi];
+          heights = heights.map((x, i) => (i === mi ? movesMax(text, MOVE_LINES_ONE) : x + (extra * prefs[i]) / others));
         }
       } else {
         const t = Math.max(0, (avail - floor) / (sumPref - floor));
@@ -185,7 +186,7 @@
     };
     let y = MARGIN + bars + size + GAP;
     // A paused page flows: the panels stack under the board in a column, each as tall as its contents (Moves up to
-    // MOVE_LINES lines, then it scrolls), and the page scrolls. The boxes keep their order and width; the heights here are
+    // MOVE_LINES_ONE lines, then it scrolls), and the page scrolls. The boxes keep their order and width; the heights here are
     // only the paused defaults, which the views don't use. L.flow says where the column starts
     if (!video) L.flow = { top: y, x: px, w: pw, gap: GAP, bottom: MARGIN };
     if (fixed) { L.tray = box(px, y, pw, trayH); y += trayH + GAP; }
@@ -193,7 +194,7 @@
     withMoves(L.moves, text);
     if (L.flow) {
       parts.forEach((p, i) => { if (L[p[0]]) Object.assign(L[p[0]], { flow: true, order: i, scroll: false }); });
-      if (L.moves) L.moves.maxRows = MOVE_LINES;
+      if (L.moves) L.moves.maxRows = MOVE_LINES_ONE;
     }
     return L;
   }
