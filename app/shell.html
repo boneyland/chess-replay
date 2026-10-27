@@ -267,6 +267,13 @@ body:has(.stage-one) .twk-panel { bottom: calc(51px + env(safe-area-inset-bottom
 }
 /* panels (Settings, Queen) open above the bar in the sidebar */
 body:has(.stage.stage-short) .twk-panel { bottom: calc(44px + env(safe-area-inset-bottom, 0px)); max-height: calc(100% - 52px); }
+/* a very small screen (the phone tier, upright or sideways): Settings takes all the room above the transport bar, 4 px
+   from the edges and 4 px over the bar (its top 41 px from the foot in one column, 38 px when it is in the sidebar) */
+@media (max-width: 599px), (max-height: 499px) {
+  body:has(.stage) .twk-panel.twk-tabbed { top: 4px; left: max(4px, var(--safe-l)); right: max(4px, var(--safe-r)); width: auto; height: auto; max-height: none; }
+  body:has(.stage.stage-one) .twk-panel.twk-tabbed.twk-tabbed { bottom: calc(45px + env(safe-area-inset-bottom, 0px)); height: auto; }
+  body:has(.stage.stage-short) .twk-panel.twk-tabbed.twk-tabbed { bottom: calc(42px + env(safe-area-inset-bottom, 0px)); height: auto; }
+}
 .twk-pair { display: flex; gap: 10px; }
 .twk-pair > * { flex: 1; min-width: 0; }
 .twk-row { display: flex; flex-direction: column; gap: 5px; }
