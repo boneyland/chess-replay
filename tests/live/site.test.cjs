@@ -1208,6 +1208,30 @@ for (const name of BROWSERS) for (const site of SITES) {
       assert.deepEqual(ce.errors.filter((e) => !/status of 404 .*lichess\.org\/api\/cloud-eval/.test(e)), []);
       await ce.ctx.close();
     });
+    // Go deeper on a loaded analysis's move asks the cloud (the setting on): stepping onto the move sends nothing, the
+    // analysis's eval stands until the press, and the cloud's deeper answer then shows, labelled
+    await t.test('desktop: Go deeper on an analysed move takes the cloud\'s answer', async () => {
+      const gd = await open(browser, { width: 1440, height: 900 });
+      const p = gd.page, sent = [];
+      gd.ctx.on('request', (r) => { if (r.url().startsWith('https://lichess.org/api/cloud-eval')) sent.push(new URL(r.url()).searchParams.get('fen')); });
+      await p.goto(base, { waitUntil: 'load' });
+      await loadedOn(p);
+      await p.getByRole('button', { name: 'Settings' }).click();
+      await p.getByRole('tab', { name: 'Online' }).click();
+      await p.getByRole('switch', { name: /Lichess cloud evaluation/ }).click();
+      await p.keyboard.press('Escape');
+      await p.locator('[data-ply="0"]').click();
+      const deeper = p.getByRole('button', { name: /^Go deeper/ });
+      await deeper.waitFor({ timeout: 20000 });
+      await p.waitForTimeout(800);
+      assert.deepEqual(sent, [], 'the analysis\'s eval stands until Go deeper');
+      await deeper.click();
+      await p.waitForFunction(() => /cloud depth \d+/i.test(document.body.innerText), null, { timeout: 20000 });
+      assert.equal(new Set(sent).size, 1, 'the move\'s position asked');
+      await p.screenshot({ path: path.join(OUT, host + '-cloud-go-deeper.png') });
+      assert.deepEqual(gd.errors, []);
+      await gd.ctx.close();
+    });
     // the tablebase in a game's analysis (the real service): every position of this KBN v K game has 7 pieces or fewer,
     // so the run asks Lichess (4 requests 4 s apart, the start's answer already shown) and searches none of them (with
     // 20 s a position, a search would show), and 2. Bc4+, which
