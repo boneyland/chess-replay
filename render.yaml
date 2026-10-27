@@ -42,3 +42,11 @@ services:
       - path: /*
         name: Referrer-Policy
         value: strict-origin-when-cross-origin
+      # cross-origin isolation, so the page gets SharedArrayBuffer and Stockfish can search with several threads; every
+      # cross-origin file the page loads must then be CORS or send Cross-Origin-Resource-Policy. Rollback: delete these two
+      - path: /*
+        name: Cross-Origin-Opener-Policy
+        value: same-origin
+      - path: /*
+        name: Cross-Origin-Embedder-Policy
+        value: require-corp

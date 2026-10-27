@@ -193,6 +193,20 @@ for (const name of BROWSERS) for (const site of SITES) {
       assert.equal(wasm.sha, crypto.createHash('sha256').update(fs.readFileSync(path.join(ROOT, 'vendor', SF + '.wasm'))).digest('hex'));
     });
 
+    // the isolation headers (render.yaml) let Stockfish use threads; every outside file the page loads must still load
+    await t.test('desktop: the page is cross-origin isolated, and fonts, React and the engine still load', async () => {
+      await page.goto(base, { waitUntil: 'load' });
+      await loaded();
+      assert.equal(await page.evaluate(() => crossOriginIsolated), true, 'crossOriginIsolated');
+      assert.ok(await page.evaluate(async () => { await document.fonts.ready; return document.fonts.check('16px "IBM Plex Sans"'); }), 'IBM Plex Sans loaded');
+      assert.equal(await page.evaluate(() => typeof React), 'object');
+      for (const p of [PAGE, 'stockfish-19-lite.js', 'stockfish-19-lite.wasm']) {
+        const h = await page.evaluate(async (u) => { const r = await fetch(u, { method: 'HEAD', cache: 'no-store' }); return [r.status, r.headers.get('cross-origin-embedder-policy'), r.headers.get('cross-origin-opener-policy')]; }, base + p);
+        assert.deepEqual(h, [200, 'require-corp', 'same-origin'], p);
+      }
+      assert.deepEqual(errors, []);
+    });
+
     await t.test('the live page against a local build of this checkout', async () => {
       const live = (await get(PAGE)).text;
       t.diagnostic(base + (live === built ? ': same as this checkout' : ': differs from this checkout (deploy not published yet, or the checkout is ahead)'));
@@ -1843,6 +1857,7 @@ for (const name of BROWSERS) for (const site of SITES) {
       await loadedOn(p);
       await assert.doesNotReject(p.locator('.net-chip').waitFor({ timeout: 5000 }));
       await assert.doesNotReject(p.locator('.net-note').filter({ hasText: /offline/ }).waitFor({ timeout: 5000 }));
+      assert.equal(await p.evaluate(() => crossOriginIsolated), true, 'the kept copy is isolated too');
       // Firefox's offline emulation (WebDriver BiDi) fails the page's no-store requests even when the service worker
       // answers them, and Stockfish checks its file with one; with the server really gone, Firefox runs it as Chromium does
       if (name !== 'firefox') {

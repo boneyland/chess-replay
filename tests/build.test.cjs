@@ -154,3 +154,22 @@ test('the threaded lite engine is vendored, pinned in LAYOUT.md and copied next 
     assert.ok(fs.existsSync(path.join(ROOT, 'out', 'site', f)), f + ' next to the page');
   }
 });
+
+// threads need SharedArrayBuffer, which a browser gives only a cross-origin isolated page
+test('render.yaml isolates the page: COOP same-origin and COEP require-corp on every path', () => {
+  const yaml = fs.readFileSync(path.join(ROOT, 'render.yaml'), 'utf8');
+  const h = Object.fromEntries([...yaml.matchAll(/- path: \/\*\n\s+name: (.+)\n\s+value: (.+)/g)].map((m) => [m[1].trim(), m[2].trim()]));
+  assert.equal(h['Cross-Origin-Opener-Policy'], 'same-origin');
+  assert.equal(h['Cross-Origin-Embedder-Policy'], 'require-corp');
+});
+
+// a copy kept before the headers existed, or a HEAD made from a kept GET, still answers isolated
+test('the service worker gives its own files the isolation headers', () => {
+  const sw = fs.readFileSync(path.join(ROOT, 'app', 'sw.js'), 'utf8');
+  const run = new Function('self', 'caches', 'fetch', sw.replace(/__VERSION__/, 'x').replace('__LOCAL__', '[]').replace('__REMOTE__', '[]') + '\nreturn isolated;');
+  const isolated = run({ addEventListener() {} }, {}, () => {});
+  const r = isolated(new Response('x', { status: 200, headers: { 'content-type': 'text/html' } }));
+  assert.equal(r.headers.get('cross-origin-opener-policy'), 'same-origin');
+  assert.equal(r.headers.get('cross-origin-embedder-policy'), 'require-corp');
+  assert.equal(r.headers.get('content-type'), 'text/html');
+});
