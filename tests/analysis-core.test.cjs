@@ -173,11 +173,11 @@ test('runAnalysis resumes from earlier searches and reports each search so far',
 test('engineSettings: the defaults, the viewer’s values in range, and the defaults again for anything else', () => {
   const d = A.engineSettings({});
   assert.deepEqual(d.game, A.ENGINE);
-  assert.deepEqual(d.own, { name: A.ENGINE.name, depth: null, time_limit: 5, lines: 1 });
+  assert.deepEqual(d.own, { name: A.ENGINE.name, depth: null, time_limit: 5, lines: 1, threads: 1 });
   assert.equal(d.game.depth, null, 'no depth limit by default');
   const s = A.engineSettings({ sfDepth: 16, sfTime: 1, sfOwnDepth: 30, sfOwnTime: 20, sfHash: 256, sfLines: 5 });
   assert.deepEqual([s.game.depth, s.game.time_limit, s.game.hash_mb, s.game.name], [16, 1, 256, A.ENGINE.name]);
-  assert.deepEqual(s.own, { name: A.ENGINE.name, depth: 30, time_limit: 20, lines: 5 });
+  assert.deepEqual(s.own, { name: A.ENGINE.name, depth: 30, time_limit: 20, lines: 5, threads: 1 });
   assert.equal(s.game.lines, 1, 'a game\'s analysis always searches one line');
   for (const bad of [0, 6, 2.5, 'x', null]) assert.equal(A.engineSettings({ sfLines: bad }).own.lines, 1, String(bad));
   assert.equal(A.engineSettings({ sfLines: '3' }).own.lines, 3);
@@ -249,4 +249,29 @@ test('runAnalysis searches and records the settings it is given', async () => {
   assert.deepEqual(out.engine, settings);
   const M = window.ChessCore.buildGame({ pgn: '1. e4 e5 2. Bc4 Nc6 3. Qh5 Nf6 4. Qxf7# 1-0', analysis: out });
   assert.match(M.engine, /depth 16, max 1s per position/);
+});
+
+test('threadChoices: 1 to one less than the cores, at most 8, at least 1', () => {
+  const A = window.AnalysisCore;
+  assert.deepEqual(A.threadChoices(8), [1, 2, 3, 4, 5, 6, 7]);
+  assert.deepEqual(A.threadChoices(16), [1, 2, 3, 4, 5, 6, 7, 8]);
+  assert.deepEqual(A.threadChoices(2), [1]);
+  assert.deepEqual(A.threadChoices(1), [1]);
+  assert.deepEqual(A.threadChoices(undefined), [1]);
+});
+
+test('defaultThreads: half the cores, at most 4, at least 1', () => {
+  const A = window.AnalysisCore;
+  assert.deepEqual([8, 12, 4, 2, 1].map(A.defaultThreads), [4, 4, 2, 1, 1]);
+});
+
+test('engineSettings carries threads into game and own searches, 1 where threads can\'t run', () => {
+  const A = window.AnalysisCore, on = { on: true, cores: 8 };
+  assert.equal(A.engineSettings({}, 'lite', on).game.threads, 4);
+  assert.equal(A.engineSettings({}, 'lite', on).own.threads, 4);
+  assert.equal(A.engineSettings({ sfThreads: 6 }, 'lite', on).game.threads, 6);
+  assert.equal(A.engineSettings({ sfThreads: 9 }, 'lite', on).game.threads, 4);
+  assert.equal(A.engineSettings({ sfThreads: 6 }, 'lite', { on: false, cores: 8 }).own.threads, 1);
+  assert.equal(A.engineSettings({ sfThreads: 6 }).game.threads, 1);
+  assert.equal(A.engineSettings({}).own.threads, 1);
 });
