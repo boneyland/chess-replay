@@ -51,12 +51,21 @@ function Stage({ menu, top, onLayout, duration, background, playback, nav, still
   React.useLayoutEffect(() => {
     const el = areaRef.current;
     if (!el) return;
+    // what each column count leaves of the window for the area (other bars, a scrollbar), as last seen. A switch resizes
+    // the area, which can cross columns()'s line the other way (the eval graph goes under the board from 700 px high):
+    // the page flipped between layouts for good at about 820×755. So it switches only where columns() would still say
+    // so for the area the new layout will have
+    const off = {};
     const measure = () => {
       // sh: the whole stage's height, which the slim bar doesn't change (the area's does), so it can decide the bar
       const w = el.clientWidth, h = el.clientHeight, sh = el.parentElement.clientHeight;
       // the viewport, which caps the board's size (LayoutCore)
       const vw = document.documentElement.clientWidth, vh = document.documentElement.clientHeight;
-      const cols = LayoutCore.columns({ w, h, text, video, prevCols: colsRef.current });
+      const iw = window.innerWidth, ih = window.innerHeight, was = colsRef.current;
+      if (was != null) off[was] = [iw - w, ih - h];
+      let cols = LayoutCore.columns({ w, h, text, video, prevCols: was });
+      const o = off[cols];
+      if (was != null && cols !== was && o && LayoutCore.columns({ w: iw - o[0], h: ih - o[1], text, video, prevCols: cols }) !== cols) cols = was;
       colsRef.current = cols;
       setArea((a) => (a.w === w && a.h === h && a.cols === cols && a.sh === sh && a.vw === vw && a.vh === vh ? a : { w, h, cols, sh, vw, vh }));
     };
