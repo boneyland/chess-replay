@@ -724,10 +724,22 @@ for (const name of BROWSERS) for (const site of SITES) {
       const onBoard = () => p.evaluate(() => [...document.querySelectorAll('img')].filter((i) => !i.closest('button') && i.getBoundingClientRect().width > 10).length);
       await p.goto(base, { waitUntil: 'load' });
       await loadedOn(p);
+      // it opens on the position on the board; Empty clears it
       await p.getByRole('button', { name: 'Play/Explore' }).click();
       await p.getByRole('button', { name: 'Edit position' }).click();
       const field = p.getByRole('textbox', { name: 'FEN' });
       await assert.doesNotReject(field.waitFor({ timeout: 5000 }));
+      assert.notEqual(await field.inputValue(), '8/8/8/8/8/8/8/8 w - - 0 1', 'not an empty board');
+      assert.ok(await onBoard() > 2, 'the replay\'s pieces');
+      await p.keyboard.press('Escape');
+      await field.waitFor({ state: 'detached', timeout: 5000 });
+      await p.getByRole('button', { name: 'Play/Explore' }).click();
+      await p.getByRole('button', { name: 'Starting position' }).click();
+      await p.getByRole('button', { name: 'Play/Explore' }).click();
+      await p.getByRole('button', { name: 'Edit position' }).click();
+      await assert.doesNotReject(field.waitFor({ timeout: 5000 }));
+      assert.equal(await field.inputValue(), 'rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1', 'the free board\'s position');
+      await p.getByRole('button', { name: 'Empty', exact: true }).click();
       assert.equal(await field.inputValue(), '8/8/8/8/8/8/8/8 w - - 0 1', 'an empty board');
       assert.match(await status.innerText(), /Drag pieces from the tray, or tap one and then tap squares\./);
       assert.equal(await done.isDisabled(), true);
@@ -843,6 +855,7 @@ for (const name of BROWSERS) for (const site of SITES) {
         await p.getByRole('button', { name: 'Edit position' }).click();
         const field = p.getByRole('textbox', { name: 'FEN' }), tray = (n) => p.getByRole('button', { name: n, exact: true });
         await assert.doesNotReject(field.waitFor({ timeout: 5000 }));
+        await p.getByRole('button', { name: 'Empty', exact: true }).click();
         // the editor's own board gives the squares (flipped too)
         const b = await editBox(p), sqAt = (s) => square(b, s, flip);
         const tap = async (s) => { const c = sqAt(s); await p.mouse.click(c.x, c.y); };
@@ -886,6 +899,7 @@ for (const name of BROWSERS) for (const site of SITES) {
         await p.getByRole('button', { name: 'Edit position' }).click();
         const field = p.getByRole('textbox', { name: 'FEN' }), tray = (n) => p.getByRole('button', { name: n, exact: true });
         await assert.doesNotReject(field.waitFor({ timeout: 5000 }));
+        await p.getByRole('button', { name: 'Empty', exact: true }).click();
         const key = async (k, n = 1) => { for (let i = 0; i < n; i++) await p.keyboard.press(k); };
         // the arrows as the viewer sees the board: Down is towards White's side unless flipped
         const down = flip ? 'ArrowUp' : 'ArrowDown', up = flip ? 'ArrowDown' : 'ArrowUp', left = flip ? 'ArrowRight' : 'ArrowLeft', right = flip ? 'ArrowLeft' : 'ArrowRight';
@@ -920,6 +934,7 @@ for (const name of BROWSERS) for (const site of SITES) {
       await p.getByRole('button', { name: 'Edit position' }).click();
       const field = p.getByRole('textbox', { name: 'FEN' });
       await assert.doesNotReject(field.waitFor({ timeout: 5000 }));
+      await p.getByRole('button', { name: 'Empty', exact: true }).click();
       // the editor's board is centred (no eval bar): its squares from its own box, measured after the tray's click,
       // which can scroll the page (Playwright's Firefox scrolled it ~29 px)
       await p.getByRole('button', { name: 'White king', exact: true }).click();
