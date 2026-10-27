@@ -244,3 +244,18 @@ test('two-column Moves holds whole lines', () => {
     if (n >= 1 - 1e-6) assert.ok(Math.abs(n - Math.round(n)) < 1e-6, `${at}: ${n} lines`);
   }
 });
+
+test('a short window docks the transport bar at the foot of the sidebar', () => {
+  for (const [w, h] of [[814, 366], [844, 390], [568, 320]]) {
+    const L = LC.compute({ w, h, dock: true }), plain = LC.compute({ w, h });
+    assert.equal(L.cols, 2);
+    assert.equal(L.header, null, 'no header');
+    assert.ok(L.board.size > plain.board.size, `${w}x${h}: the board grows`);
+    const d = L.dock, a = L.analysis;
+    assert.equal(d.x, a.x); assert.equal(d.w, a.w);
+    assert.ok(a.y + a.h <= d.y, 'the bar under the panels');
+    assert.ok(Math.abs(d.y + d.h - (L.board.y + L.board.size + L.bars.gap + L.bars.h)) < 1, 'its foot level with the bottom player bar');
+    assert.equal(LC.compute({ w, h, dock: true, view: 'edit' }).panel.y + LC.compute({ w, h, dock: true, view: 'edit' }).panel.h <= d.y, true);
+  }
+  assert.equal(LC.compute({ w: 1440, h: 818 }).dock, null);
+});

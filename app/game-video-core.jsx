@@ -39,7 +39,7 @@ const SQ = 96, BW = SQ * 8;
 // sizes, times 0.8 and the viewer's text size, through tx().
 let L = window.LayoutCore.compute({ w: 1440, h: 900 }), TX = 0.8, TEXT = 1;
 const setLayout = (frame, view = 'replay') => {
-  L = window.LayoutCore.compute({ w: frame.w, h: frame.h, text: frame.text, view, video: frame.video, cols: frame.cols, vw: frame.vw, vh: frame.vh });
+  L = window.LayoutCore.compute({ w: frame.w, h: frame.h, text: frame.text, view, video: frame.video, cols: frame.cols, dock: frame.dock, vw: frame.vw, vh: frame.vh });
   TEXT = L.text; TX = 0.8 * TEXT; // the viewer's text size, times the device tier's (smaller on phones and tablets)
 };
 const tx = (px) => Math.round(px * TX * 10) / 10;

@@ -20,11 +20,11 @@ function useMoveSounds(M, T, S, tw, playing, vline) {
   }, [M, ply, lineKey]);
 }
 
-// the speaker in the transport bar: move sounds on or off
-function SoundButton({ on, onChange }) {
+// the speaker in the transport bar (in the folded menu when the bar is in the sidebar): move sounds on or off
+function SoundButton({ on, onChange, className = 'pbtn' }) {
   const label = on ? 'Mute move sounds' : 'Turn move sounds on';
   return (
-    <button type="button" className="pbtn" onClick={() => onChange(!on)} aria-label={label} title={label} aria-pressed={!on}>
+    <button type="button" className={className} onClick={() => onChange(!on)} aria-label={label} title={label} aria-pressed={!on}>
       <svg width="16" height="16" viewBox="0 0 16 16" fill="none" aria-hidden="true">
         <path d="M2 6h3l4-3v10l-4-3H2V6z" fill="currentColor" />
         {on
