@@ -29,7 +29,10 @@
   // the sidebar: 320 px at least, and 380 px and a gap while the board keeps 360 px (the width that once held the moves
   // list and the commentary side by side, which Analysis's lines still use)
   const SIDEBAR_MIN = 320, SIDEBAR_W = 380;
-  const HEADER_H = 76, PLOT_H = 110, PLOT_SIDE_H = 80, PLOT_BELOW_MIN_H = 700, PLOT_MIN_H = 500; // no eval graph under 500 px high
+  const HEADER_H = 76, PLOT_H = 110, PLOT_SIDE_H = 80, PLOT_BELOW_MIN_H = 700, PLOT_MIN_H = 670; // no eval graph under 670 px high
+  // a square-ish two-column window (at least 0.8 times as tall as wide) has no eval graph: Analysis runs the full width
+  // under the board, at least ANALYSIS_BELOW_MIN high (times text), and the sidebar keeps the header, Moves and Commentary
+  const SQUARE = 0.8, ANALYSIS_BELOW_MIN = 160;
   const ONE_COL = { comment: 200, analysis: 260, panel: 260 }; // paused heights, times text (Moves: its five lines)
   const VIDEO_PREF = [96, 120, 96], PANEL_FLOOR = 48; // comment, analysis, moves under a video's board, times text
   // MoveList's chrome as it draws it (game-video-core.jsx, whose tx() sizes are 0.8 × the text size): a move row, and
@@ -80,9 +83,10 @@
 
   function twoColumns({ w, h, text, view }) {
     const hasEval = view === 'replay' || view === 'free';
-    const plotBelow = view === 'replay' && h >= PLOT_BELOW_MIN_H;
+    const square = view !== 'edit' && h >= SQUARE * w;
+    const plotBelow = view === 'replay' && !square && h >= PLOT_BELOW_MIN_H;
     const bar = barH(text);
-    const hLimit = h - 2 * MARGIN - barsTotal(text) - (plotBelow ? GAP + PLOT_H : 0);
+    const hLimit = h - 2 * MARGIN - barsTotal(text) - (plotBelow ? GAP + PLOT_H : square ? GAP + ANALYSIS_BELOW_MIN * text : 0);
     // the sidebar's share, as long as the board keeps 360 px; never under the minimum. The left column (board plus its
     // eval bar) is what is left
     const side = Math.max(SIDEBAR_MIN * text, Math.min(SIDEBAR_W * text + GAP, w - 2 * MARGIN - GAP - EVAL_TOTAL - BOARD_OK));
@@ -95,7 +99,8 @@
     const sx = MARGIN + left + GAP, sw = w - MARGIN - sx;
     const top = MARGIN;
     const plotY = h - MARGIN - PLOT_H;
-    const bottom = plotBelow ? plotY - GAP : h - MARGIN;
+    const analysisY = boardY + size + BAR_GAP + bar + GAP; // a square-ish window's Analysis, under the board
+    const bottom = plotBelow ? plotY - GAP : square ? analysisY - GAP : h - MARGIN;
     const L = {
       cols: 2, w, h,
       board: { x: boardX, y: boardY, size },
@@ -107,16 +112,16 @@
     L.header = box(sx, top, sw, HEADER_H * text);
     let rest = bottom - top - L.header.h - GAP; // under the header
     let plotSide = false;
-    if (view === 'replay' && !plotBelow && h >= PLOT_MIN_H && rest - GAP - PLOT_SIDE_H >= 190 * text) { plotSide = true; rest -= GAP + PLOT_SIDE_H; }
+    if (view === 'replay' && !plotBelow && !square && h >= PLOT_MIN_H && rest - GAP - PLOT_SIDE_H >= 190 * text) { plotSide = true; rest -= GAP + PLOT_SIDE_H; }
     // Moves (a third of the room, between its title and one line and its five lines), then Commentary and Analysis
-    // sharing what's left, 45:55
-    const avail = Math.max(0, rest - 2 * GAP);
+    // sharing what's left, 45:55 (Commentary all of it where Analysis is under the board)
+    const avail = Math.max(0, rest - (square ? GAP : 2 * GAP));
     const movesH = Math.min(avail, Math.max(moveChrome(text) + moveRow(text), Math.min(movesMax(text), avail * 0.3)));
-    const commentH = Math.max(0, Math.round((avail - movesH) * 0.45)), analysisH = Math.max(0, avail - movesH - commentH);
+    const commentH = Math.max(0, square ? avail - movesH : Math.round((avail - movesH) * 0.45)), analysisH = Math.max(0, avail - movesH - commentH);
     const rowY = top + L.header.h + GAP;
     L.moves = withMoves(box(sx, rowY, sw, movesH), text);
     L.comment = box(sx, rowY + movesH + GAP, sw, commentH);
-    L.analysis = box(sx, L.comment.y + commentH + GAP, sw, analysisH);
+    L.analysis = square ? box(MARGIN, analysisY, w - 2 * MARGIN, h - MARGIN - analysisY) : box(sx, L.comment.y + commentH + GAP, sw, analysisH);
     if (plotBelow) L.plot = box(MARGIN, plotY, w - 2 * MARGIN, PLOT_H);
     else if (plotSide) L.plot = box(sx, L.analysis.y + analysisH + GAP, sw, PLOT_SIDE_H);
     return L;
@@ -135,8 +140,9 @@
     const movesMin = moveChrome(text) + moveRow(text);
     if (view === 'edit') parts = [['tray'], ['panel', ONE_COL.panel * text, 120 * text, PANEL_FLOOR * text]];
     else {
+      // Commentary last, at the bottom
       parts = [['moves', movesMax(text), Math.min(movesMax(text), Math.max(VIDEO_PREF[2] * text, movesMin)), movesMin],
-        ['comment', ONE_COL.comment * text, VIDEO_PREF[0] * text, PANEL_FLOOR * text], ['analysis', ONE_COL.analysis * text, VIDEO_PREF[1] * text, PANEL_FLOOR * text]];
+        ['analysis', ONE_COL.analysis * text, VIDEO_PREF[1] * text, PANEL_FLOOR * text], ['comment', ONE_COL.comment * text, VIDEO_PREF[0] * text, PANEL_FLOOR * text]];
       if (!video) parts.unshift(['header', HEADER_H * text]);
     }
     const cell = Math.min(56, Math.floor((pw - 5 * 4) / 6));
