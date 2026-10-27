@@ -505,7 +505,7 @@ function GameApp() {
     <TweakSelect id="tw-sf-hash" label="Hash table" value={ES.game.hash_mb + ' MB'} options={window.AnalysisCore.HASH_MB.map((x) => x + ' MB')} onChange={(v) => setTweak('sfHash', parseInt(v, 10))} info="Helps long searches; a phone may run out of memory." />
     {/* sfThreads null (the default): half the cores, at most 4 */}
     <TweakSelect id="tw-sf-threads" label="Threads" value={String(ES.game.threads)} options={window.AnalysisCore.threadChoices(threading.cores).map(String)} disabled={!threading.on} onChange={(v) => setTweak('sfThreads', parseInt(v, 10))}
-      info="Stockfish searches on this many of your processor’s threads at once: more search more positions in the same time and judge hard positions better, but keep the computer busier." />
+      info="How many of your processor’s threads Stockfish uses. More threads let it look at more positions in the same time, which helps most in sharp positions, but keep your computer busier." />
     {!threading.on && <div className="twk-note">{threading.reason}</div>}
     {sfChanged && <TweakButton secondary label="Reset engine settings" onClick={() => SF_KEYS.forEach((k) => setTweak(k, window.TWEAK_DEFAULTS[k]))} />}
     {!board && (analysis.state === 'running'

@@ -802,18 +802,24 @@ for (const name of BROWSERS) for (const site of SITES) {
       }
     });
 
-    // no shared memory (an old browser, or a page that isn't isolated): the single-thread build, and own moves still rated
-    await t.test('desktop: a page that can’t run threads runs one thread and says why', async () => {
+    // no shared memory (an old browser, or a page that isn't isolated), or Safari 26.2 (threads refused by version, shared
+    // memory still there, the page isolated): the single-thread build, and own moves still rated
+    for (const [why, spy, ua] of [['no shared memory', { noSharedMemory: true }, null], ['Safari 26.2', {}, 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/26.2 Safari/605.1.15']]) await t.test(`desktop: a page that can’t run threads runs one thread and says why (${why})`, async () => {
       const nb = await open(browser, { width: 1440, height: 900 });
       const p = nb.page;
-      await p.addInitScript(spyEngine, { noSharedMemory: true });
+      await p.addInitScript(spyEngine, spy);
+      if (ua) await p.addInitScript((ua) => Object.defineProperty(Navigator.prototype, 'userAgent', { get: () => ua }), ua);
       await p.addInitScript(() => { try { localStorage.setItem('chess-video.tweaks.v1', JSON.stringify({ sfThreads: 4, sfOwnTime: 1 })); } catch (e) {} });
       await p.goto(base, { waitUntil: 'load' });
       await loadedOn(p);
       const b = await boardBox(p);
       const f = square(b, 'd2'), tt = square(b, 'd4');
       await p.mouse.move(f.x, f.y); await p.mouse.down(); await p.mouse.move(tt.x, tt.y, { steps: 8 }); await p.mouse.up();
-      await p.waitForFunction(() => /your move · .*(stockfish’s choice|cp vs|as good as|can’t run here|stopped)/i.test(document.body.innerText), null, { timeout: 45000 });
+      // what the page saw, if the verdict never comes (WebKit timed out here on GitHub, 2026-10-27)
+      await p.waitForFunction(() => /your move · .*(stockfish’s choice|cp vs|as good as|can’t run here|stopped)/i.test(document.body.innerText), null, { timeout: 45000 }).catch(async (e) => {
+        const at = await p.evaluate(() => ({ isolated: crossOriginIsolated, urls: window.__sf.urls, posted: window.__sf.posted.slice(-6), text: (document.body.innerText.match(/(your move|thinking|Starting|Stockfish)[^\n]{0,80}/gi) || []).slice(0, 6) }));
+        throw new Error(`${e.message}\n${JSON.stringify(at)}\nerrors: ${JSON.stringify(nb.errors)}`);
+      });
       assert.doesNotMatch(await p.getByText(/your move ·/i).innerText(), /can’t run here|stopped/i);
       const seen = await p.evaluate(() => window.__sf);
       assert.ok(seen.urls.some((u) => /stockfish-19-lite-single\.js$/.test(u)) && !seen.urls.some((u) => /stockfish-19-lite\.js$/.test(u)), seen.urls.join(' '));
@@ -821,7 +827,7 @@ for (const name of BROWSERS) for (const site of SITES) {
       // Threads is off in the engine menu, with the reason
       await p.getByRole('button', { name: 'Engine options' }).click();
       assert.equal(await p.locator('#tw-sf-threads').isDisabled(), true);
-      await assert.doesNotReject(p.getByText('This browser has no shared memory').waitFor({ timeout: 3000 }));
+      await assert.doesNotReject(p.getByText(why === 'Safari 26.2' ? 'Safari 26.2 crashes with threads' : 'This browser has no shared memory').waitFor({ timeout: 3000 }));
       assert.deepEqual(nb.errors, []);
       await nb.ctx.close();
     });
