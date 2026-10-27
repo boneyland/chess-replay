@@ -304,9 +304,21 @@ test('a tall square-ish window shows the eval graph under Analysis', () => {
 // narrower than the viewport, and judging the tier by it once made a second breakpoint (1024 in CSS, ~1056 here)
 test('the desktop tier starts at a 1055 px viewport', () => {
   assert.equal(LC.compute({ w: 1023, h: 818, vw: 1055, vh: 900 }).tier, 'desktop');
-  assert.equal(LC.compute({ w: 1034, h: 818, vw: 1054, vh: 900 }).tier, 'tablet');
+  assert.notEqual(LC.compute({ w: 1034, h: 818, vw: 1054, vh: 900 }).tier, 'desktop');
   assert.equal(LC.compute({ w: 1408, h: 818, vw: 1440, vh: 900 }).tier, 'desktop');
   const css = require('fs').readFileSync(require('path').join(__dirname, '../app/shell.html'), 'utf8');
   assert.match(css, /@media \(max-width: 1054px\) \{\n  html \{ font-size/);
   assert.doesNotMatch(css, /max-width: 1023px/);
+});
+
+// the phone tier by the viewport too, as shell.html's @media (max-width: 599px), (max-height: 499px) judge it: by the
+// stage (narrower, and shorter by the transport bar) a 620x844 or 1000x560 window was a phone in the layout only
+test('the phone tier starts under a 600 px wide or 500 px high viewport', () => {
+  assert.equal(LC.compute({ w: 576, h: 795, vw: 599, vh: 844 }).tier, 'phone');
+  assert.notEqual(LC.compute({ w: 577, h: 795, vw: 600, vh: 844 }).tier, 'phone');
+  assert.equal(LC.compute({ w: 992, h: 499, vw: 1000, vh: 499 }).tier, 'phone');
+  assert.equal(LC.compute({ w: 980, h: 432, vw: 1000, vh: 500 }).tier, 'tablet');
+  assert.equal(LC.compute({ w: 980, h: 492, vw: 1000, vh: 560 }).tier, 'tablet');
+  const css = require('fs').readFileSync(require('path').join(__dirname, '../app/shell.html'), 'utf8');
+  assert.match(css, /@media \(max-width: 599px\), \(max-height: 499px\) \{\n  html \{ font-size/);
 });

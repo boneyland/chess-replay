@@ -64,9 +64,9 @@ function Stage({ menu, top, onLayout, duration, background, playback, nav, still
       const vw = document.documentElement.clientWidth, vh = document.documentElement.clientHeight;
       const iw = window.innerWidth, ih = window.innerHeight, was = colsRef.current;
       if (was != null) off[was] = [iw - w, ih - h];
-      let cols = LayoutCore.columns({ w, h, text, video, prevCols: was, vw });
+      let cols = LayoutCore.columns({ w, h, text, video, prevCols: was, vw, vh });
       const o = off[cols];
-      if (was != null && cols !== was && o && LayoutCore.columns({ w: iw - o[0], h: ih - o[1], text, video, prevCols: cols, vw }) !== cols) cols = was;
+      if (was != null && cols !== was && o && LayoutCore.columns({ w: iw - o[0], h: ih - o[1], text, video, prevCols: cols, vw, vh }) !== cols) cols = was;
       colsRef.current = cols;
       setArea((a) => (a.w === w && a.h === h && a.cols === cols && a.sh === sh && a.vw === vw && a.vh === vh && a.ox === ox && a.oy === oy ? a : { w, h, cols, sh, vw, vh, ox, oy }));
     };
@@ -81,7 +81,7 @@ function Stage({ menu, top, onLayout, duration, background, playback, nav, still
   // its buttons into the menu, however wide the window (a large phone is 932 px wide on its side)
   const short = cols === 2 && sh < 500;
   const narrow = w < 900, phone = cols === 1 || narrow || short;
-  const dock = short ? LayoutCore.compute({ w, h, text, video, cols, dock: true }).dock : null;
+  const dock = short ? LayoutCore.compute({ w, h, text, video, cols, dock: true, vw: area.vw, vh: area.vh }).dock : null;
   // the export's pixel width: the area's size at the device's pixel ratio, held to 1920 on its longer side
   const exportW = LayoutCore.exportPx(w, LayoutCore.exportScale(w, h, window.devicePixelRatio));
   // onLayout(true, w, short): a phone layout (one column, under 900 px wide, or the bar in the sidebar), where the page folds its buttons into a
