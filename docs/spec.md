@@ -445,6 +445,7 @@ Deferred by the per-plan reviews; each was true when recorded and may since have
 - 2026-10-27: in two columns the Moves box is rounded down to whole lines (Commentary takes the rest).
 - 2026-10-27: a square-ish window's Moves takes 40% of the sidebar's room under the game info (30% elsewhere), from Commentary.
 - 2026-10-27: in one column Moves is at most three lines tall (five in two columns).
+- 2026-10-28: the device tier is judged by the viewport alone (`LayoutCore`'s `tierOf(vw, vh)`), as `shell.html`'s @media are: by the stage, narrower and shorter by the transport bar, the layout went phone below about a 623 px wide or 568 px high viewport while the CSS did below 600 and 500.
 - 2026-10-28: one desktop breakpoint, a viewport from 1055 px wide, for `LayoutCore`'s device tier and `shell.html`'s @media alike (was 1024 px for both, but the layout judged it by the stage, 32 px narrower than the viewport, so between 1024 and 1055 the page had desktop CSS with tablet spacing).
 - 2026-10-28: the full-width eval graph is 80 px high (as in the sidebar) in a viewport under 1181 px wide, 110 px from there: the taller graph read as heavy at tablet and small desktop sizes. By the viewport's width (as the viewer measures it), not the stage's or the device tier.
 - 2026-10-28: between 670 and 700 px high the full-width eval graph under a board held by the width shrinks to the room under it (80 px at least) instead of moving to the sidebar: a 966×680 stage had 104 px there, short of the 110 px it asked for, and left it empty.
