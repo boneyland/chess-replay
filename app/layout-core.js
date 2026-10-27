@@ -114,10 +114,10 @@
     let rest = bottom - top - L.header.h - GAP; // under the header
     let plotSide = false;
     if (view === 'replay' && !plotBelow && !square && h >= PLOT_MIN_H && rest - GAP - PLOT_SIDE_H >= 190 * text) { plotSide = true; rest -= GAP + PLOT_SIDE_H; }
-    // Moves (a third of the room, between its title and one line and its five lines), then Commentary and Analysis
-    // sharing what's left, 45:55 (Commentary all of it where Analysis is under the board)
+    // Moves (30% of the room, 40% where Analysis is under the board, between its title and one line and its five lines),
+    // then Commentary and Analysis sharing what's left, 45:55 (Commentary all of it where Analysis is under the board)
     const avail = Math.max(0, rest - (square ? GAP : 2 * GAP));
-    const movesH = Math.min(avail, Math.max(moveChrome(text) + moveRow(text), Math.min(movesMax(text), avail * 0.3)));
+    const movesH = Math.min(avail, Math.max(moveChrome(text) + moveRow(text), Math.min(movesMax(text), avail * (square ? 0.4 : 0.3))));
     const commentH = Math.max(0, square ? avail - movesH : Math.round((avail - movesH) * 0.45)), analysisH = Math.max(0, avail - movesH - commentH);
     const rowY = top + L.header.h + GAP;
     L.moves = withMoves(box(sx, rowY, sw, movesH), text);

@@ -224,6 +224,9 @@ test('eval graph height floor, square-ish and portrait layouts', () => {
     assert.ok(Math.abs(L.analysis.x - L.eval.x) < 0.5 && Math.abs(L.analysis.w - (w - 2 * L.analysis.x)) < 0.5, `${at}: analysis not full width`);
     assert.ok(L.analysis.y >= L.board.y + L.board.size + L.bars.h && L.analysis.h >= 160 * L.text - 0.5, `${at}: analysis ${JSON.stringify(L.analysis)}`);
     assert.ok(L.comment.y + L.comment.h <= L.analysis.y, at);
+    // Moves takes 40% of the sidebar's room under the header there (30% elsewhere), up to its five lines
+    const room = L.moves.h + L.comment.h, cap = 0.8 * L.text * (2 * L.pad[0] + 15 * 1.4 + 12) + 2 + 5 * 38 * 0.8 * L.text;
+    assert.ok(Math.abs(L.moves.h - Math.min(cap, 0.4 * room)) < 1, `${at}: moves ${L.moves.h} of ${room}`);
   }
   assert.ok(LC.compute({ w: 1440, h: 900 }).plot); // landscape keeps it
   const p = LC.compute({ w: 390, h: 844 });
