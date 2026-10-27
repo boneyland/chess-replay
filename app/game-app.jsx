@@ -275,11 +275,13 @@ function GameApp() {
     return () => window.removeEventListener('pagehide', hide);
   }, []);
   const newBoard = () => { setNewMenu(false); setMenu(false); guard(() => { setQueenOpen(false); commitBoard(window.BoardCore.fromFen()); }); };
-  // the editor opens on an empty board; a game in progress is paused for it (and kept, when it has moves, by guard's
-  // Leave). play: the Play dialog's { mode, tc, you } when its Set-up position opened the editor, whose Done starts that game
+  // the editor opens on the position on the board (empty when there is none); a game in progress is paused for it (and
+  // kept, when it has moves, by guard's Leave). play: the Play dialog's { mode, tc, you } when its Set-up position opened
+  // the editor, whose Done starts that game
   const openEditor = (play) => {
     // the board as it is now: Stockfish may have replied, or a flag fallen, while the Leave dialog was up
-    const E = window.EditCore, P = window.PlayCore, s = E.empty(), b = boardRef.current;
+    const E = window.EditCore, P = window.PlayCore, b = boardRef.current, fen = nav.current && nav.current.fen && nav.current.fen();
+    const s = (fen && E.fromFen(fen).setup) || E.empty();
     const resume = editing ? editing.resume : b && P.inProgress(b) ? P.pause(b, Date.now()) : null;
     if (resume && !editing) commitBoard(resume);
     setQueenOpen(false); setEditing({ setup: s, text: E.toFen(s), msg: '', resume, play: play || null });
