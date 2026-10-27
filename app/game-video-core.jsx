@@ -191,7 +191,9 @@ function FitOrHide({ style, children }) {
   React.useLayoutEffect(() => {
     const el = ref.current, panel = el && el.offsetParent;
     if (!panel) return;
-    const fits = el.offsetTop + el.offsetHeight <= panel.clientHeight - parseFloat(getComputedStyle(panel).paddingBottom);
+    // a flowing panel grows to fit, so it always fits there; elsewhere a pixel allows for the offsets' rounding (hidden,
+    // it still holds its line, which showed as an empty line under the Analysis panel's lines)
+    const fits = !!L.flow || el.offsetTop + el.offsetHeight <= panel.clientHeight - parseFloat(getComputedStyle(panel).paddingBottom) + 1;
     el.style.visibility = fits ? '' : 'hidden';
   });
   return <span ref={ref} style={style}>{children}</span>;
