@@ -26,7 +26,9 @@
   const BOARD_MAX = 900, BOARD_MIN = 200, BOARD_OK = 360, BOARD_BACK = 380;
   // the board is never more than half the viewport's longer side (its height upright, its width held sideways), nor 900 px
   let boardMax = BOARD_MAX;
-  const SIDEBAR_MIN = 320, MOVES_W = 230, COMMENT_MIN = 150;
+  // the moves list beside the commentary: 230 px wide, giving way first, to 200 (still room for a six-character move on
+  // both sides), while the commentary keeps 230; then the commentary, to 150; then the list again
+  const SIDEBAR_MIN = 320, MOVES_W = 230, MOVES_MIN = 200, COMMENT_W = 230, COMMENT_MIN = 150;
   const HEADER_H = 76, PLOT_H = 110, PLOT_SIDE_H = 80, PLOT_BELOW_MIN_H = 700, PLOT_MIN_H = 500; // no eval graph under 500 px high
   const ONE_COL = { comment: 200, analysis: 260, moves: 240, panel: 260 }; // paused heights, times text
   const VIDEO_PREF = [96, 120, 96], PANEL_FLOOR = 48; // comment, analysis, moves under a video's board, times text
@@ -108,7 +110,7 @@
     const analysisH = Math.max(0, Math.round((rest - GAP) * 0.45));
     const rowH = Math.max(0, rest - GAP - analysisH);
     const rowY = top + L.header.h + GAP;
-    const movesW = Math.max(0, Math.min(MOVES_W * text, sw - COMMENT_MIN * text - GAP));
+    const movesW = Math.max(0, Math.min(MOVES_W * text, Math.max(MOVES_MIN * text, sw - COMMENT_W * text - GAP), sw - COMMENT_MIN * text - GAP));
     L.moves = withMoves(box(sx, rowY, movesW, rowH), text);
     L.comment = box(sx + movesW + GAP, rowY, sw - movesW - GAP, rowH);
     L.analysis = box(sx, rowY + rowH + GAP, sw, analysisH);
