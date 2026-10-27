@@ -247,21 +247,21 @@ body:has(.stage-one) .twk-panel { bottom: calc(51px + env(safe-area-inset-bottom
 .twk-tabs button:hover { color: var(--ink); }
 .twk-tabs button[aria-selected="true"] { color: var(--ink); background: color-mix(in srgb, var(--accent) 22%, transparent); box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--accent) 50%, transparent); }
 .twk-tabs button:focus-visible { outline: 2px solid var(--accent); outline-offset: 1px; }
-/* a phone on its side: Settings is wide and reaches down to the transport bar, with its title, tabs and close button in
-   one row and each tab's rows in two columns. The columns are an inner box of natural height that the body scrolls: a
-   multi-column box of capped height adds columns past its right edge in Firefox */
-@media (max-height: 560px) and (min-width: 600px) {
-  body:has(.stage:not(.stage-one)) .twk-tabbed { width: min(760px, calc(100% - 32px)); bottom: calc(52px + env(safe-area-inset-bottom, 0px)); height: calc(100% - 68px - env(safe-area-inset-bottom, 0px)); max-height: none; display: grid; grid-template-columns: auto 1fr auto; grid-template-rows: auto minmax(0, 1fr); align-items: center; }
-  body:has(.stage:not(.stage-one)) .twk-tabbed .twk-hd { display: contents; }
-  body:has(.stage:not(.stage-one)) .twk-tabbed .twk-hd b { grid-row: 1; grid-column: 1; padding: 0 4px 0 14px; }
-  body:has(.stage:not(.stage-one)) .twk-tabbed .twk-tabs { grid-row: 1; grid-column: 2; margin: 8px 6px; grid-template-columns: none; grid-auto-flow: column; grid-auto-columns: 1fr; }
-  body:has(.stage:not(.stage-one)) .twk-tabbed .twk-x { grid-row: 1; grid-column: 3; margin-right: 8px; }
-  body:has(.stage:not(.stage-one)) .twk-tabbed .twk-body { grid-row: 2; grid-column: 1 / -1; align-self: stretch; display: block; padding-bottom: 4px; }
-  body:has(.stage:not(.stage-one)) .twk-tabbed .twk-flow { display: block; columns: 2; column-gap: 28px; }
-  body:has(.stage:not(.stage-one)) .twk-tabbed .twk-group { display: block; }
-  body:has(.stage:not(.stage-one)) .twk-tabbed :is(.twk-flow > :not(.twk-group), .twk-group > *) { break-inside: avoid; margin-bottom: 10px; }
-  body:has(.stage:not(.stage-one)) .twk-tabbed .twk-sect { break-after: avoid; }
-  body:has(.stage:not(.stage-one)) .twk-tabbed .twk-btn { display: block; width: 100%; }
+/* a phone on its side (or a short window): Settings is wide and reaches down to the transport bar, with its title, tabs
+   and close button in one row and each tab's rows in two columns. The columns are an inner box of natural height that
+   the body scrolls: a multi-column box of capped height adds columns past its right edge in Firefox */
+@media (max-height: 560px) and (min-width: 600px), (max-height: 499px) and (orientation: landscape) {
+  body:has(.stage) .twk-panel.twk-tabbed { width: min(760px, calc(100% - 32px)); bottom: calc(52px + env(safe-area-inset-bottom, 0px)); height: calc(100% - 68px - env(safe-area-inset-bottom, 0px)); max-height: none; display: grid; grid-template-columns: auto 1fr auto; grid-template-rows: auto minmax(0, 1fr); align-items: center; }
+  body:has(.stage) .twk-panel.twk-tabbed .twk-hd { display: contents; }
+  body:has(.stage) .twk-panel.twk-tabbed .twk-hd b { grid-row: 1; grid-column: 1; padding: 0 4px 0 14px; }
+  body:has(.stage) .twk-panel.twk-tabbed .twk-tabs { grid-row: 1; grid-column: 2; margin: 8px 6px; grid-template-columns: none; grid-auto-flow: column; grid-auto-columns: 1fr; }
+  body:has(.stage) .twk-panel.twk-tabbed .twk-x { grid-row: 1; grid-column: 3; margin-right: 8px; }
+  body:has(.stage) .twk-panel.twk-tabbed .twk-body { grid-row: 2; grid-column: 1 / -1; align-self: stretch; display: block; padding-bottom: 4px; }
+  body:has(.stage) .twk-panel.twk-tabbed .twk-flow { display: block; columns: 2; column-gap: 28px; }
+  body:has(.stage) .twk-panel.twk-tabbed .twk-group { display: block; }
+  body:has(.stage) .twk-panel.twk-tabbed :is(.twk-flow > :not(.twk-group), .twk-group > *) { break-inside: avoid; margin-bottom: 10px; }
+  body:has(.stage) .twk-panel.twk-tabbed .twk-sect { break-after: avoid; }
+  body:has(.stage) .twk-panel.twk-tabbed .twk-btn { display: block; width: 100%; }
   /* the bar in the sidebar: 4 px margin, 34 px high */
   body:has(.stage.stage-short) .twk-panel.twk-tabbed { bottom: calc(44px + env(safe-area-inset-bottom, 0px)); height: calc(100% - 52px - env(safe-area-inset-bottom, 0px)); }
 }
@@ -273,6 +273,14 @@ body:has(.stage.stage-short) .twk-panel { bottom: calc(44px + env(safe-area-inse
   body:has(.stage) .twk-panel.twk-tabbed { top: 4px; left: max(4px, var(--safe-l)); right: max(4px, var(--safe-r)); width: auto; height: auto; max-height: none; }
   body:has(.stage.stage-one) .twk-panel.twk-tabbed.twk-tabbed { bottom: calc(45px + env(safe-area-inset-bottom, 0px)); height: auto; }
   body:has(.stage.stage-short) .twk-panel.twk-tabbed.twk-tabbed { bottom: calc(42px + env(safe-area-inset-bottom, 0px)); height: auto; }
+}
+/* a phone held sideways: Settings covers the transport bar too, and drops its title (the panel keeps it as its label) so
+   the tabs get the row; they wrap only where one row can't hold them */
+@media (max-height: 499px) and (orientation: landscape) {
+  body:has(.stage) .twk-panel.twk-tabbed.twk-tabbed.twk-tabbed { bottom: calc(4px + env(safe-area-inset-bottom, 0px)); height: auto; }
+  body:has(.stage) .twk-panel.twk-tabbed .twk-hd b { display: none; }
+  body:has(.stage) .twk-panel.twk-tabbed .twk-tabs { display: flex; flex-wrap: wrap; margin-left: 8px; }
+  body:has(.stage) .twk-panel.twk-tabbed .twk-tabs button { flex: 1 1 auto; }
 }
 .twk-pair { display: flex; gap: 10px; }
 .twk-pair > * { flex: 1; min-width: 0; }
