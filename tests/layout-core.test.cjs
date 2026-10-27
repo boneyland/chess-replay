@@ -89,7 +89,7 @@ test('larger text stacks sooner', () => {
 test('board stops at 900', () => {
   const a = LC.compute({ w: 2560, h: 1400 }), b = LC.compute({ w: 1920, h: 1400 });
   assert.equal(a.board.size, 900);
-  assert.ok(a.moves.w + a.comment.w > b.moves.w + b.comment.w);
+  assert.ok(a.moves.w > b.moves.w);
 });
 
 test('video fits the screen', () => {
@@ -154,15 +154,12 @@ test('cols override and moves rows', () => {
   assert.equal(LC.columns({ w: 1440, h: 818 }), 2);
 });
 
-// a laptop's window: the board gives up some size so the moves list keeps its width (200 px at least, 230 where the
-// commentary beside it has 230) beside a commentary of at least 150 px; never below the 360 px that keeps two columns
-test('the sidebar keeps room for the moves and commentary', () => {
-  for (const [w, h, text] of [[1024, 690, 1], [1024, 690, 1.3], [1100, 900, 1], [960, 800, 1]]) {
+// the sidebar keeps 380 px and a gap where the board can stay at 360 px or more beside it
+test('the sidebar keeps its width while the board keeps 360 px', () => {
+  for (const [w, h, text] of [[1024, 690, 1], [1100, 900, 1], [960, 800, 1]]) {
     const L = LC.compute({ w, h, text });
     assert.equal(L.cols, 2, `${w}x${h}`);
-    assert.ok(L.moves.w >= 200 * L.text - 0.5 && L.moves.w <= 230 * L.text + 0.5, `${w}x${h} moves ${L.moves.w}`);
-    if (L.moves.w < 230 * L.text - 0.5) assert.ok(Math.abs(L.comment.w - 230 * L.text) < 0.5 || L.moves.w <= 200 * L.text + 0.5, `${w}x${h} comment ${L.comment.w}`);
-    assert.ok(L.comment.w >= 150 * L.text - 0.5, `${w}x${h} comment ${L.comment.w}`);
+    assert.ok(L.moves.w >= 380 * L.text - 0.5, `${w}x${h} sidebar ${L.moves.w}`);
   }
   for (let w = 700; w <= 1200; w += 5) {
     const L = LC.compute({ w, h: 800 });
@@ -197,14 +194,16 @@ test('the board stays within half the viewport', () => {
   assert.equal(LC.compute({ w: 768, h: 975, vw: 768, vh: 1024 }).board.size, 512);
 });
 
-// as the window narrows the moves list gives way first (230 → 200 px) while the commentary keeps 230, then the commentary
-test('the moves list narrows before the commentary', () => {
-  let prev = null;
-  for (let w = 1300; w >= 800; w -= 5) {
-    const L = LC.compute({ w, h: 620, cols: 2 }), t = L.text, m = L.moves.w / t, c = L.comment.w / t;
-    if (m < 230 - 0.5 && m > 200 + 0.5) assert.ok(Math.abs(c - 230) < 0.5, `${w}: moves ${m}, comment ${c}`);
-    if (c < 230 - 0.5) assert.ok(m <= 200 + 0.5, `${w}: comment ${c} narrowed before moves ${m}`);
-    if (prev) assert.ok(m <= prev.m + 0.5 || L.text !== prev.t, `${w}: moves widened`);
-    prev = { m, t };
+// Moves stands over Commentary, as wide, in every layout and view, and is never taller than its title and five lines
+test('Moves sits over Commentary, five lines at most', () => {
+  const cap = (L) => 0.8 * L.text * (2 * L.pad[0] + 15 * 1.4 + 12) + 2 + 5 * 38 * 0.8 * L.text + 0.5;
+  for (const [w, h] of [[1440, 900], [2560, 1400], [1024, 690], [820, 600], [390, 844], [768, 1024], [844, 390], [320, 500]]) {
+    for (const text of [1, 1.3]) for (const video of [false, true]) for (const view of ['replay', 'free']) {
+      const L = LC.compute({ w, h, text, video, view }), at = `${w}x${h} text ${text}${video ? ' video' : ''} ${view}`;
+      assert.ok(L.moves.h <= cap(L), `${at}: moves ${L.moves.h} over ${cap(L)}`);
+      assert.ok(Math.abs(L.moves.x - L.comment.x) < 0.5 && Math.abs(L.moves.w - L.comment.w) < 0.5, `${at}: not stacked`);
+      if (L.flow) assert.ok(L.moves.order < L.comment.order && L.moves.maxRows === 5, `${at}: flow order`);
+      else assert.ok(Math.abs(L.moves.y + L.moves.h + (L.tier === 'phone' ? 6 : L.tier === 'desktop' ? 10 : 8) - L.comment.y) < 0.5, `${at}: Commentary not under Moves`);
+    }
   }
 });

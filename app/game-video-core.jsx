@@ -547,20 +547,21 @@ function Header({ M, a }) {
 function MoveList({ M, T, S, a, paused, onPick }) {
   const c = lastPly(T, S);
   // the moves wrap in lines, as the Analysis panel's lines do: a light chip for White's move, a dark one for Black's,
-  // the move number before White's (and before the first, when the game starts on Black's)
-  const ROW = tx(38), GAP = tx(6);
+  // the move number before White's (and before the first, when the game starts on Black's). A line is a chip (CHIP)
+  // and the gap under it: ROW, the line LayoutCore counts
+  const ROW = tx(38), CHIP = tx(28), GAP = tx(6);
   // a flowing list grows up to maxRows lines, then scrolls; a placed one takes all the box's height under its title
   const listH = L.moves.flow ? null : Math.max(ROW, L.moves.h - 2 * tx(L.pad[0]) - tx(15) * 1.4 - tx(12) - 2);
   const k = c >= 0 ? MOTION.move(cl01((T - S.tp[c]) / 0.35)) : 1, listRef = React.useRef(null);
-  // a new move scrolls the list so the move's line keeps about two lines under it (sliding there as the move plays),
-  // and leaves it where the viewer put it (wheel, finger, a mouse drag) until the next
+  // a new move scrolls the list by whole lines so the move's line keeps two lines under it (sliding there as the move
+  // plays), and leaves it where the viewer put it (wheel, finger, a mouse drag) until the next
   const applied = React.useRef(null);
   React.useLayoutEffect(() => {
     const el = listRef.current;
     if (!el) return;
     const at = (i) => {
       const m = i >= 0 && el.querySelector(`[data-ply="${i}"]`);
-      return m ? Math.max(0, m.offsetTop + m.offsetHeight + 2 * (m.offsetHeight + GAP) - el.clientHeight) : 0;
+      return m ? Math.max(0, Math.round(m.offsetTop / ROW) + 3 - Math.max(1, Math.floor(el.clientHeight / ROW))) * ROW : 0;
     };
     const scroll = Math.round(lerp(at(c - 1), at(c), k));
     if (applied.current !== scroll) { el.scrollTop = scroll; applied.current = scroll; }
@@ -599,14 +600,14 @@ function MoveList({ M, T, S, a, paused, onPick }) {
         {(white || i === 0) && <span style={{ color: C.dim, marginLeft: i ? tx(6) : 0, font: `500 ${tx(15)}px ${MONO}` }}>{window.ChessCore.moveNo(M.ply0 + i)}</span>}
         <span className="mv" role="button" data-ply={i} tabIndex={i === focusPly ? 0 : -1} title={`Go to ${label(M, i)}`} onClick={(e) => { e.stopPropagation(); onPick(i); }}
           onKeyDown={(e) => moveKey(e, i)}
-          style={{ opacity: ahead ? 0.5 : 1, padding: `${tx(2)}px ${tx(8)}px`, borderRadius: 2, cursor: 'pointer', font: `${cur ? 700 : 600} ${tx(16)}px ${MONO}`, background: white ? '#f1ebe1' : '#2a2320', color: white ? '#15100d' : '#efe8de', border: edge, boxShadow: cur ? `0 0 0 3px ${C.last}` : 'none' }}>{P.san}{P.mark || ''}</span>
+          style={{ opacity: ahead ? 0.5 : 1, height: CHIP, boxSizing: 'border-box', display: 'flex', alignItems: 'center', padding: `0 ${tx(8)}px`, borderRadius: 2, cursor: 'pointer', font: `${cur ? 700 : 600} ${tx(16)}px ${MONO}`, background: white ? '#f1ebe1' : '#2a2320', color: white ? '#15100d' : '#efe8de', border: edge, boxShadow: cur ? `0 0 0 3px ${C.last}` : 'none' }}>{P.san}{P.mark || ''}</span>
       </span>
     );
   }
   return (
     <Panel box={L.moves} a={a} title="Moves">
       <div ref={listRef} className="moves-list" style={{ position: 'relative', height: listH ?? 'auto', maxHeight: listH == null ? L.moves.maxRows * ROW : undefined, overflowY: 'auto', scrollbarWidth: 'thin' }}>
-        <div style={{ display: 'flex', flexWrap: 'wrap', alignItems: 'center', columnGap: GAP, rowGap: tx(8), padding: 4 }}>{moves}</div>
+        <div style={{ display: 'flex', flexWrap: 'wrap', alignItems: 'center', columnGap: GAP, rowGap: ROW - CHIP, padding: 4 }}>{moves}</div>
       </div>
     </Panel>
   );
