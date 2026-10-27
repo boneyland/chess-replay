@@ -52,6 +52,12 @@ const textWidth = (() => {
 const panelPad = () => `${tx(L.pad[0])}px ${tx(L.pad[1])}px`;
 // the move and eval headline in Analysis (and the free board's and a game's)
 const HEADLINE = 28;
+// a short Analysis panel (one column below a desktop, a phone held sideways) packs tighter: a smaller headline, about
+// half the vertical spacing, and thinner padding at its top and bottom (Moves and Commentary take the padding and the
+// title row's gap too: Panel's tight)
+const tightAn = () => L.tier !== 'desktop' && (L.cols === 1 || L.tier === 'phone');
+const headline = () => tx(tightAn() ? 22 : HEADLINE);
+const anGap = (px) => tx(tightAn() ? Math.round(px / 2) : px);
 // A paused one-column page flows (L.flow): the panels stack under the board as a column, each as tall as its contents,
 // and the page scrolls. flowStyle() makes a view's container that column (its absolutely placed board and bars stay
 // out of it); useFlowHeight reports how tall it came out, so the stage can scroll that far.
@@ -151,7 +157,7 @@ function SideScroll({ style, children }) {
 // extra: a node after right that never scrolls with it (Analysis: Go deeper beside the search's depth)
 // head: the title row's own contents, in place of title, right and extra (the Analysis panel's)
 // progress: 0–1, drawn along the top border (the Analysis panel's while Stockfish searches); null draws none
-function Panel({ box, title, right, extra, head, a, style, progress, children }) {
+function Panel({ box, title, right, extra, head, a, style, progress, tight, children }) {
   const { x, y, w, h } = box;
   // the entrance slide only while it fades in (a video's): a settled panel has no transform. A flowing panel (a paused
   // one-column page) takes its place in the view's column, as tall as its contents
@@ -162,9 +168,9 @@ function Panel({ box, title, right, extra, head, a, style, progress, children })
   // a box whose contents can outgrow it scrolls, and hands the wheel or finger on to the page at its ends
   return (
     <>
-    <div style={{ ...place, background: C.panel, border: `1px solid ${C.line}`, padding: panelPad(), ...(box.scroll && { overflowY: 'auto', scrollbarWidth: 'thin' }), ...style }}>
+    <div style={{ ...place, background: C.panel, border: `1px solid ${C.line}`, padding: tight && tightAn() ? `${tx(L.pad[0] * 0.6)}px ${tx(L.pad[1])}px` : panelPad(), ...(box.scroll && { overflowY: 'auto', scrollbarWidth: 'thin' }), ...style }}>
       {(title || head) && (
-        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: tx(16), font: `600 ${tx(15)}px ${MONO}`, letterSpacing: '0.12em', textTransform: 'uppercase', color: C.dim, marginBottom: tx(12) }}>
+        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: tx(16), font: `600 ${tx(15)}px ${MONO}`, letterSpacing: '0.12em', textTransform: 'uppercase', color: C.dim, marginBottom: tight ? anGap(12) : tx(12) }}>
           {head || <><span style={{ flex: '0 1 auto', minWidth: 0, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{title}</span><SideScroll style={{ minWidth: 0, flex: 1, textAlign: 'right', letterSpacing: '0.04em' }}>{right}</SideScroll>{extra}</>}
         </div>
       )}
@@ -360,7 +366,7 @@ function AnalysisPanel({ box, a, depth, deep, paused, style, children }) {
     </span>
   );
   return (
-    <Panel box={shown && !box.flow ? { ...box, scroll: true } : box} a={a} style={style} head={head} progress={!shown && deep && deep.pending ? deep.progress || 0 : null}>
+    <Panel box={shown && !box.flow ? { ...box, scroll: true } : box} a={a} style={style} tight head={head} progress={!shown && deep && deep.pending ? deep.progress || 0 : null}>
       {shown ? <div className="an-engine" onClick={stopHere} onPointerDown={stopHere}><div className="twk-flow">{E.body}</div></div> : children}
     </Panel>
   );
@@ -610,7 +616,7 @@ function MoveList({ M, T, S, a, paused, onPick }) {
     );
   }
   return (
-    <Panel box={L.moves} a={a} title="Moves">
+    <Panel box={L.moves} a={a} tight title="Moves">
       <div ref={listRef} className="moves-list" style={{ position: 'relative', height: listH ?? 'auto', maxHeight: listH == null ? L.moves.maxRows * ROW : undefined, overflowY: 'auto', scrollbarWidth: 'thin' }}>
         <div style={{ display: 'flex', flexWrap: 'wrap', alignItems: 'center', columnGap: GAP, rowGap: ROW - CHIP, padding: 4 }}>{moves}</div>
       </div>
@@ -638,7 +644,7 @@ function Commentary({ M, T, S, a, book, line }) {
   const size = tx(qtxt ? (txt.length > 90 ? 26 : 30) : txt.length > 140 ? 28 : 34) * ph;
   const qsize = tx(qtxt.length > 200 ? 20 : 22) * ph;
   return (
-    <Panel box={L.comment} a={a} title="Commentary" right={bookAt ? `${bookAt.eco} ${bookAt.name}` : null}>
+    <Panel box={L.comment} a={a} tight title="Commentary" right={bookAt ? `${bookAt.eco} ${bookAt.name}` : null}>
       {total ? (
         <div style={{ display: 'flex', flexDirection: 'column', gap: tx(14) }}>
           {/* the Analysis panel names the move, unless the game has no analysis */}
@@ -697,7 +703,7 @@ function Analysis({ M, T, S, a, vline, onLine, paused, sf, own, onReply, deep, t
   const k = cl01((T - S.tp[c] - S.md[c]) / 0.25);
   const { cp } = evalNow(M, T, S);
   const col = cls === 'none' ? C.ink : clsColor(cls);
-  const big = tx(HEADLINE);
+  const big = headline();
   // Queen's line from before this move (its scores are left out: often off, and they squeezed the move's labels onto more lines)
   const Qp = P.queen || {};
   // P.best: the engine preferred another move (a mistake, or an equally good move rated best with 0 cp lost)
@@ -718,11 +724,11 @@ function Analysis({ M, T, S, a, vline, onLine, paused, sf, own, onReply, deep, t
         </div>
         {/* the verdict spans the panel under the move and the eval; spaced parts rather than " · " separators, so a
             line too long for a narrow panel breaks between them */}
-        <div style={{ marginTop: tx(6), display: 'flex', flexWrap: 'wrap', columnGap: tx(14), font: `600 ${tx(16)}px ${MONO}`, letterSpacing: '0.08em', textTransform: 'uppercase', color: col }}>
+        <div style={{ marginTop: anGap(6), display: 'flex', flexWrap: 'wrap', columnGap: tx(14), font: `600 ${tx(16)}px ${MONO}`, letterSpacing: '0.08em', textTransform: 'uppercase', color: col }}>
           {[P.checkmate ? 'Checkmate' : CLASS_LABEL[cls], P.loss > 0 && `−${P.loss} cp`, cls === 'best' && P.best && P.best.line[0] && `as good as ${P.best.line[0]}`].filter(Boolean).map((t) => <span key={t} style={{ whiteSpace: 'nowrap' }}>{t}</span>)}
         </div>
       </div>
-      <div style={{ marginTop: tx(16), paddingTop: tx(14), borderTop: `1px solid ${C.line}`, font: `500 ${tx(18)}px ${MONO}`, color: C.dim, display: 'flex', flexDirection: 'column', gap: tx(8), opacity: k }}>
+      <div style={{ marginTop: anGap(16), paddingTop: anGap(14), borderTop: `1px solid ${C.line}`, font: `500 ${tx(18)}px ${MONO}`, color: C.dim, display: 'flex', flexDirection: 'column', gap: anGap(8), opacity: k }}>
         {P.best && P.best.line.length ? (
           <LineChips name="Best line" nameColor={C.ink} accent={C.best} moves={P.best.line.slice(0, 8)} ply0={M.ply0} c={c} legal={sfLegal.length}
             sel={vline && vline.src === 'sf' ? vline.upto : null} onPick={(j) => onLine('sf', sfLegal, j)} />
