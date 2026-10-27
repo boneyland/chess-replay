@@ -6,21 +6,21 @@
   // wide, or under 500 px high when held sideways), a foldable or square-ish window (600–1023 wide, between 0.8 and 1.2
   // times as tall as wide: an unfolded foldable), a tablet (600–1023 otherwise) and a desktop (1024 up). Smaller devices
   // are tighter, not just rearranged: thinner margins, gaps and panel padding, a thinner eval bar, and text a little
-  // smaller (scale multiplies the viewer's text size). A foldable is spaced as a tablet; whether either keeps the sidebar
+  // smaller (scale multiplies the viewer's text size), and the full-width eval graph thinner (plot, its largest height). A foldable is spaced as a tablet; whether either keeps the sidebar
   // is columns()'s call, by the room
   const TIERS = {
-    phone: { margin: 6, gap: 6, evalW: 14, evalGap: 4, pad: [10, 13], scale: 0.9 },
-    foldable: { margin: 8, gap: 8, evalW: 16, evalGap: 6, pad: [12, 16], scale: 0.95 },
-    tablet: { margin: 8, gap: 8, evalW: 16, evalGap: 6, pad: [12, 16], scale: 0.95 },
-    desktop: { margin: 12, gap: 10, evalW: 20, evalGap: 8, pad: [16, 22], scale: 1 },
+    phone: { margin: 6, gap: 6, evalW: 14, evalGap: 4, pad: [10, 13], scale: 0.9, plot: 80 },
+    foldable: { margin: 8, gap: 8, evalW: 16, evalGap: 6, pad: [12, 16], scale: 0.95, plot: 80 },
+    tablet: { margin: 8, gap: 8, evalW: 16, evalGap: 6, pad: [12, 16], scale: 0.95, plot: 80 },
+    desktop: { margin: 12, gap: 10, evalW: 20, evalGap: 8, pad: [16, 22], scale: 1, plot: 110 },
   };
   const tierOf = (w, h) => (w < 600 || h < 500 ? 'phone' : w >= 1024 ? 'desktop' : h >= 0.8 * w && h <= 1.2 * w ? 'foldable' : 'tablet');
-  let MARGIN = 12, GAP = 10, EVAL_W = 20, EVAL_GAP = 8, EVAL_TOTAL = 28, PAD = [16, 22];
+  let MARGIN = 12, GAP = 10, EVAL_W = 20, EVAL_GAP = 8, EVAL_TOTAL = 28, PAD = [16, 22], PLOT_H = 110;
   const BAR_GAP = 4;
   // the tier's spacing, for the layout being worked out (compute and columns are called one at a time)
   const useTier = (w, h) => {
     const t = TIERS[tierOf(w, h)];
-    MARGIN = t.margin; GAP = t.gap; EVAL_W = t.evalW; EVAL_GAP = t.evalGap; EVAL_TOTAL = EVAL_W + EVAL_GAP; PAD = t.pad;
+    MARGIN = t.margin; GAP = t.gap; EVAL_W = t.evalW; EVAL_GAP = t.evalGap; EVAL_TOTAL = EVAL_W + EVAL_GAP; PAD = t.pad; PLOT_H = t.plot;
     return t;
   };
   const BOARD_MAX = 900, BOARD_MIN = 200, BOARD_OK = 360, BOARD_BACK = 380;
@@ -29,7 +29,7 @@
   // the sidebar: 320 px at least, and 380 px and a gap while the board keeps 360 px (the width that once held the moves
   // list and the commentary side by side, which Analysis's lines still use)
   const SIDEBAR_MIN = 320, SIDEBAR_W = 380;
-  const HEADER_H = 76, PLOT_H = 110, PLOT_SIDE_H = 80, PLOT_BELOW_MIN_H = 700, PLOT_MIN_H = 670; // no eval graph under 670 px high
+  const HEADER_H = 76, PLOT_SIDE_H = 80, PLOT_BELOW_MIN_H = 700, PLOT_MIN_H = 670; // no eval graph under 670 px high
   // a square-ish two-column window (at least 0.77 times as tall as wide: a 760 px wide window from about 640 px high) has
   // the eval graph only where Analysis keeps ANALYSIS_PLOT_MIN (times text) over it: Analysis runs the full width
   // under the board, at least ANALYSIS_BELOW_MIN high (times text), and the sidebar keeps the header, Moves and Commentary
