@@ -30,9 +30,9 @@
   // list and the commentary side by side, which Analysis's lines still use)
   const SIDEBAR_MIN = 320, SIDEBAR_W = 380;
   const HEADER_H = 76, PLOT_H = 110, PLOT_SIDE_H = 80, PLOT_BELOW_MIN_H = 700, PLOT_MIN_H = 670; // no eval graph under 670 px high
-  // a square-ish two-column window (at least 0.8 times as tall as wide) has no eval graph: Analysis runs the full width
+  // a square-ish two-column window (at least 0.77 times as tall as wide: a 760 px wide window from about 640 px high) has no eval graph: Analysis runs the full width
   // under the board, at least ANALYSIS_BELOW_MIN high (times text), and the sidebar keeps the header, Moves and Commentary
-  const SQUARE = 0.8, ANALYSIS_BELOW_MIN = 160;
+  const SQUARE = 0.77, ANALYSIS_BELOW_MIN = 160;
   // a short two-column window (a phone held sideways; Stage's call, as dock): the transport bar sits at the foot of the
   // sidebar rather than under the whole page, the header goes and the margins are slimmer, so the board gets the height.
   // DOCK_H is the bar's height (shell.html's .pbar-dock: 28 px buttons, 2 px padding and a border)
@@ -53,6 +53,19 @@
 
   const barH = (text) => 40 * text * 0.8;
   const barsTotal = (text) => 2 * barH(text) + 2 * BAR_GAP;
+  // the sidebar's width in two columns: 380 px and a gap while the board keeps 360 px; never under the minimum
+  const sideW = (w, text) => Math.max(SIDEBAR_MIN * text, Math.min(SIDEBAR_W * text + GAP, w - 2 * MARGIN - GAP - EVAL_TOTAL - BOARD_OK));
+  // what goes under a two-column board, and the height that leaves it. A square-ish window (not the editor, not with
+  // the bar in the sidebar) has Analysis there. The replay's eval graph runs the full width under the board from 700 px
+  // high, and from 670 px wherever that doesn't make the board smaller (it is held by the width): a graph in the
+  // sidebar beside a board with room under it looked lopsided. cap: the board's largest size
+  function under({ w, h, text, view, dock = false, cap }) {
+    const square = !dock && view !== 'edit' && h >= SQUARE * w;
+    const bare = h - 2 * MARGIN - barsTotal(text);
+    const byWidth = Math.min(cap, w - 2 * MARGIN - GAP - sideW(w, text) - EVAL_TOTAL);
+    const plotBelow = view === 'replay' && !square && !dock && h >= PLOT_MIN_H && (h >= PLOT_BELOW_MIN_H || byWidth <= bare - GAP - PLOT_H);
+    return { square, plotBelow, byWidth, hLimit: bare - (plotBelow ? GAP + PLOT_H : square ? GAP + ANALYSIS_BELOW_MIN * text : 0) };
+  }
   const box = (x, y, w, h) => ({ x, y, w: Math.max(0, w), h: Math.max(0, h), scroll: true });
 
   // 1 or 2 columns. One column when the window is tall for its width (over 1.15 times as tall as wide; 0.05 more to leave
@@ -70,9 +83,8 @@
     const tall = prevCols === 1 ? h >= aspect * w : h > aspect * w;
     const narrow = boardW < (prevCols === 1 ? BOARD_BACK : BOARD_OK);
     // the two-column board as twoColumns() sizes it by the width (the sidebar's share), against the height it could have
-    const side = Math.max(SIDEBAR_MIN * text, Math.min(SIDEBAR_W * text + GAP, w - 2 * MARGIN - GAP - EVAL_TOTAL - BOARD_OK));
-    const byWidth = Math.min(BOARD_MAX, w - 2 * MARGIN - GAP - side - EVAL_TOTAL);
-    const hLimit = h - 2 * MARGIN - barsTotal(text) - (h >= PLOT_BELOW_MIN_H ? GAP + PLOT_H : 0);
+    // under what twoColumns() puts below it (Analysis in a square-ish window, or the eval graph)
+    const { byWidth, hLimit } = under({ w, h, text, view: 'replay', cap: BOARD_MAX });
     const wasted = byWidth < BOARD_MAX && (hLimit - byWidth) / h > (prevCols === 1 ? 0.25 : 0.3);
     const short = h < 2 * MARGIN + barsTotal(text) + BOARD_MIN + GAP + 3 * PANEL_FLOOR + 2 * GAP;
     const keepTwo = short && (video || boardW >= BOARD_MIN);
@@ -89,14 +101,10 @@
   function twoColumns({ w, h, text, view, dock }) {
     if (dock) MARGIN = DOCK_MARGIN;
     const hasEval = view === 'replay' || view === 'free';
-    const square = !dock && view !== 'edit' && h >= SQUARE * w;
-    const plotBelow = view === 'replay' && !square && h >= PLOT_BELOW_MIN_H;
+    const { square, plotBelow, hLimit } = under({ w, h, text, view, dock, cap: boardMax });
     const bar = barH(text);
-    const hLimit = h - 2 * MARGIN - barsTotal(text) - (plotBelow ? GAP + PLOT_H : square ? GAP + ANALYSIS_BELOW_MIN * text : 0);
-    // the sidebar's share, as long as the board keeps 360 px; never under the minimum. The left column (board plus its
-    // eval bar) is what is left
-    const side = Math.max(SIDEBAR_MIN * text, Math.min(SIDEBAR_W * text + GAP, w - 2 * MARGIN - GAP - EVAL_TOTAL - BOARD_OK));
-    const wLimit = w - 2 * MARGIN - GAP - side;
+    // the sidebar's share (sideW); the left column (board plus its eval bar) is what is left
+    const wLimit = w - 2 * MARGIN - GAP - sideW(w, text);
     // 200 px at least by width; a window too short for that (a video in a phone held sideways at its smallest) shrinks the board to the height
     const size = Math.max(40, Math.min(Math.max(BOARD_MIN, Math.min(boardMax, wLimit - EVAL_TOTAL)), hLimit));
     const left = size + EVAL_TOTAL; // same sidebar position whether or not the view draws an eval bar

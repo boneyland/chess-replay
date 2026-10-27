@@ -259,3 +259,22 @@ test('a short window docks the transport bar at the foot of the sidebar', () => 
   }
   assert.equal(LC.compute({ w: 1440, h: 818 }).dock, null);
 });
+
+test('a square-ish window keeps two columns, Analysis under the board, while it shrinks in height', () => {
+  // 760 px wide windows from 770 down to 642 px high once went to one column part of the way (the room under the board
+  // was judged as if the eval graph went there)
+  for (let h = 572; h <= 720; h += 4) {
+    const L = LC.compute({ w: 740, h });
+    assert.equal(L.cols, 2, `740x${h}`);
+    assert.ok(L.analysis.x < L.board.x && L.analysis.y > L.board.y + L.board.size, `740x${h}: Analysis under the board`);
+  }
+});
+
+test('the eval graph runs under the board wherever that leaves the board its size', () => {
+  for (const h of [670, 690]) {
+    const L = LC.compute({ w: 910, h });
+    assert.ok(L.plot && L.plot.x < L.board.x && L.plot.w > L.board.size + L.analysis.w, `910x${h}: the graph the full width`);
+  }
+  const s = LC.compute({ w: 1100, h: 690 }); // held by the height: the graph under it would shrink the board
+  assert.ok(s.plot && s.plot.x > s.board.x + s.board.size, 'beside it in the sidebar');
+});
