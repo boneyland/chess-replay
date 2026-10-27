@@ -131,15 +131,20 @@ const editBox = async (page) => {
 // dialog this replaced stayed open in GitHub Actions' stock Firefox (WebDriver BiDi), as if the page never saw the text
 // Records the engine workers' files, the commands the page sends them and the nodes per second they report
 // (window.__sf); cores: what navigator.hardwareConcurrency says, so the Threads choices are the same on every machine;
-// hang: how many threaded engines (the first ones) never get a search, as Firefox's first one in a page sometimes doesn't
-function spyEngine({ cores = 8, noSharedMemory = false, hang = 0 } = {}) {
+// hang: how many threaded engines (the first ones) never get a search, as Firefox's first one in a page sometimes doesn't;
+// hangReady: how many never answer at all (they never get uci)
+function spyEngine({ cores = 8, noSharedMemory = false, hang = 0, hangReady = 0 } = {}) {
   const seen = window.__sf = { urls: [], posted: [], nps: [] };
   Object.defineProperty(Navigator.prototype, 'hardwareConcurrency', { get: () => cores });
   if (noSharedMemory) delete window.SharedArrayBuffer;
   const W = window.Worker;
   window.Worker = class extends W {
-    constructor(url, ...rest) { super(url, ...rest); seen.urls.push(String(url)); this.hangs = /stockfish-19-lite\.js$/.test(String(url)) && hang-- > 0; }
-    postMessage(m, ...rest) { if (typeof m === 'string') seen.posted.push(m); if (this.hangs && typeof m === 'string' && m.startsWith('go')) return; return super.postMessage(m, ...rest); }
+    constructor(url, ...rest) {
+      super(url, ...rest); seen.urls.push(String(url));
+      const threaded = /stockfish-19-lite\.js$/.test(String(url));
+      this.mute = threaded && hangReady-- > 0 ? /^uci$/ : threaded && hang-- > 0 ? /^go/ : null;
+    }
+    postMessage(m, ...rest) { if (typeof m === 'string') seen.posted.push(m); if (this.mute && typeof m === 'string' && this.mute.test(m)) return; return super.postMessage(m, ...rest); }
     get onmessage() { return super.onmessage; }
     set onmessage(f) { super.onmessage = f && ((e) => { const m = typeof e.data === 'string' && e.data.match(/ nps (\d+)/); if (m) seen.nps.push(+m[1]); return f(e); }); }
   };
@@ -714,27 +719,83 @@ for (const name of BROWSERS) for (const site of SITES) {
       await nb.ctx.close();
     });
 
-    // Firefox's first threaded engine in a page can hang on its first search: the page tries a second one, and after two
-    // that hang, runs one thread and says why
-    await t.test('desktop: a threaded engine that never searches is replaced, and after two, one thread runs', async () => {
-      for (const hang of [1, 2]) {
+    // Firefox's threaded engine can hang (before uci, starting its threads, or on its first search): the page tries a fresh
+    // one, up to three, then runs one thread
+    const ownMoveRated = async (p) => {
+      const b = await boardBox(p);
+      const f = square(b, 'd2'), tt = square(b, 'd4');
+      await p.mouse.move(f.x, f.y); await p.mouse.down(); await p.mouse.move(tt.x, tt.y, { steps: 8 }); await p.mouse.up();
+      await p.waitForFunction(() => /your move · .*(stockfish’s choice|cp vs|as good as|can’t run here|stopped)/i.test(document.body.innerText), null, { timeout: 60000 });
+      assert.doesNotMatch(await p.getByText(/your move ·/i).innerText(), /can’t run here|stopped/i);
+      return p.evaluate(() => window.__sf);
+    };
+    const threadedOf = (seen) => seen.urls.filter((u) => /stockfish-19-lite\.js$/.test(u)).length, singleOf = (seen) => seen.urls.filter((u) => /stockfish-19-lite-single\.js$/.test(u)).length;
+    await t.test('desktop: a threaded engine that never searches is replaced, and after three, one thread runs', async () => {
+      for (const hang of [1, 3]) {
         const nb = await open(browser, { width: 1440, height: 900 });
         const p = nb.page;
         await p.addInitScript(spyEngine, { hang });
         await p.addInitScript(() => { try { localStorage.setItem('chess-video.tweaks.v1', JSON.stringify({ sfOwnTime: 1 })); } catch (e) {} });
         await p.goto(base, { waitUntil: 'load' });
         await loadedOn(p);
+        const seen = await ownMoveRated(p);
+        // Firefox's own hang can add a try after the simulated ones
+        assert.ok(threadedOf(seen) >= hang + (hang === 3 ? 0 : 1) && threadedOf(seen) <= 3, seen.urls.join(' '));
+        if (hang === 3) assert.equal(singleOf(seen), 1, seen.urls.join(' '));
+        await p.getByRole('button', { name: 'Engine options' }).click();
+        assert.equal(await p.locator('#tw-sf-threads').isDisabled(), singleOf(seen) > 0);
+        if (hang === 3) await assert.doesNotReject(p.getByText('The threaded engine didn’t start').waitFor({ timeout: 3000 }));
+        assert.deepEqual(nb.errors, []);
+        await nb.ctx.close();
+      }
+    });
+
+    await t.test('desktop: a threaded engine that never answers uci is replaced after 10 s', { timeout: 120000 }, async () => {
+      const nb = await open(browser, { width: 1440, height: 900 });
+      const p = nb.page;
+      await p.addInitScript(spyEngine, { hangReady: 1 });
+      await p.addInitScript(() => { try { localStorage.setItem('chess-video.tweaks.v1', JSON.stringify({ sfOwnTime: 1 })); } catch (e) {} });
+      await p.goto(base, { waitUntil: 'load' });
+      await loadedOn(p);
+      const t0 = Date.now(), seen = await ownMoveRated(p);
+      assert.ok(threadedOf(seen) >= 2 && singleOf(seen) === 0, seen.urls.join(' '));
+      assert.ok(Date.now() - t0 < 30000, 'within the lite load time, not the 30 s ready timeout');
+      assert.deepEqual(nb.errors, []);
+      await nb.ctx.close();
+    });
+
+    // Full kept as the threaded build, and its threaded engine never searches: Full's single-thread copy runs where it is
+    // kept, else Lite with a note; either way the move is rated (switching engines once quit the one just started).
+    // A stand-in SFFull serves the lite files, so nothing is downloaded
+    await t.test('desktop: Full whose threaded engine never searches falls back without losing the search', async () => {
+      for (const single of [true, false]) {
+        const nb = await open(browser, { width: 1440, height: 900 });
+        const p = nb.page;
+        await p.addInitScript(spyEngine, { hang: 3 });
+        await p.addInitScript((single) => {
+          let real;
+          const fake = () => ({ ...real, supported: () => true, present: async (b) => b === 'threads' || single,
+            start: async (b) => () => new Worker(b === 'threads' ? 'stockfish-19-lite.js' : 'stockfish-19-lite-single.js') });
+          Object.defineProperty(window, 'SFFull', { configurable: true, get: () => real && fake(), set: (v) => { real = v; } });
+          try { localStorage.setItem('chess-video.tweaks.v1', JSON.stringify({ sfEngine: 'Full', sfOwnTime: 1 })); } catch (e) {}
+        }, single);
+        await p.goto(base, { waitUntil: 'load' });
+        await loadedOn(p);
+        await p.getByRole('button', { name: 'Engine options' }).click();
+        const engineSelect = p.getByRole('combobox', { name: 'Engine', exact: true });
+        assert.equal(await engineSelect.inputValue(), 'Full');
+        await p.getByRole('button', { name: 'Engine options' }).click();
         const b = await boardBox(p);
         const f = square(b, 'd2'), tt = square(b, 'd4');
         await p.mouse.move(f.x, f.y); await p.mouse.down(); await p.mouse.move(tt.x, tt.y, { steps: 8 }); await p.mouse.up();
-        await p.waitForFunction(() => /your move · .*(stockfish’s choice|cp vs|as good as|can’t run here|stopped)/i.test(document.body.innerText), null, { timeout: 45000 });
-        assert.doesNotMatch(await p.getByText(/your move ·/i).innerText(), /can’t run here|stopped/i);
+        await p.waitForFunction(() => /your move · .*(stockfish’s choice|cp vs|as good as|can’t run here|stopped)/i.test(document.body.innerText), null, { timeout: 60000 });
+        assert.doesNotMatch(await p.getByText(/your move ·/i).innerText(), /can’t run here|stopped/i, single ? 'single kept' : 'not kept');
         const seen = await p.evaluate(() => window.__sf);
-        assert.equal(seen.urls.filter((u) => /stockfish-19-lite\.js$/.test(u)).length, 2, seen.urls.join(' '));
-        assert.equal(seen.urls.some((u) => /stockfish-19-lite-single\.js$/.test(u)), hang === 2, seen.urls.join(' '));
+        assert.equal(seen.urls.filter((u) => /stockfish-19-lite\.js$/.test(u)).length, 3, seen.urls.join(' '));
+        assert.equal(seen.urls.filter((u) => /stockfish-19-lite-single\.js$/.test(u)).length, 1, 'one engine after the threads, never quit and restarted: ' + seen.urls.join(' '));
         await p.getByRole('button', { name: 'Engine options' }).click();
-        assert.equal(await p.locator('#tw-sf-threads').isDisabled(), hang === 2);
-        if (hang === 2) await assert.doesNotReject(p.getByText('The threaded engine didn’t start').waitFor({ timeout: 3000 }));
+        if (single) assert.equal(await p.getByRole('button', { name: /^Download full Stockfish/ }).count(), 0, 'Full still kept');
+        else await assert.doesNotReject(p.getByText(/^Full’s threaded build didn’t run here, so Lite is running/).waitFor({ timeout: 3000 }));
         assert.deepEqual(nb.errors, []);
         await nb.ctx.close();
       }

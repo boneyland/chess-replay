@@ -5,9 +5,13 @@ const SF_FILE = 'stockfish-19-lite-single', SF_FILE_THREADS = 'stockfish-19-lite
 const sfMakeWorker = (file) => () => new Worker(file + '.js');
 // A missing engine file only shows up inside the worker (it never reaches the page as an error), so the
 // page checks the wasm is there first rather than waiting out the start timeout
-// a threaded engine must answer a depth-1 search this soon after it is ready (SFEngine's probeMs: in Firefox the first
-// one in a page can hang, and the next one works, so it gets one more try)
-const SF_PROBE_MS = 1500, SF_THREADED_TRIES = 2;
+// A threaded engine must start its threads and answer a depth-1 search this soon after it loads (SFEngine's probeMs:
+// about 0.9 s a thread in Firefox on a laptop; a slow phone has room), and the lite one load this soon (its 1.7 MB,
+// against 30 s for the single-thread one on a slow connection). In Firefox one can hang before it answers uci, while it
+// starts its threads, or on its first search, and a fresh one then mostly works (2026-10-28, Firefox 159: about 1 load
+// in 4 needed a second), so it gets up to three tries; then this page runs one thread. Nothing is remembered: a hang
+// can't be told from a browser that can't run threads, and remembering one would turn threads off in Firefox for good
+const SF_PROBE_MS = (threads) => 3000 + 1500 * threads, SF_LITE_LOAD_MS = 10000, SF_THREADED_TRIES = 3;
 const sfFilesPresent = (file) => fetch(file + '.wasm', { method: 'HEAD', cache: 'no-store' }).then((r) => r.ok, () => false);
 
 // Whether Stockfish may search with threads on this page ({ on, cores, reason }, SFEngine.threadSupport); a threaded
@@ -37,7 +41,7 @@ function useEngine(hashMB, threads, kind = 'lite', onBroken) {
   want.current = kind;
   broken.current = onBroken;
   React.useEffect(() => { if (ref.current) ref.current.then((eng) => eng.setHash(hashMB), () => {}); }, [hashMB]);
-  React.useEffect(() => { if (ref.current) ref.current.then((eng) => { if (threaded.current) eng.setThreads(threads); }, () => {}); }, [threads]);
+  React.useEffect(() => { if (ref.current) ref.current.then((eng) => eng.setThreads(threads), () => {}); }, [threads]);
   const [status, setStatus] = React.useState('idle');
   // the engine of the other kind, quit (its running search answers null)
   const drop = React.useCallback(() => {
@@ -77,7 +81,8 @@ function useEngine(hashMB, threads, kind = 'lite', onBroken) {
           if (withThreads) sfThreadsFailed('The threaded engine stopped');
           if (ref.current === mine) { ref.current = null; setStatus('stopped'); }
         };
-        const eng = window.SFEngine.create(make, { hashMB: hash.current, threads: withThreads ? nThreads.current : 1, probeMs: withThreads ? SF_PROBE_MS : 0, onFail });
+        const eng = window.SFEngine.create(make, { hashMB: hash.current, threaded: withThreads, threads: withThreads ? nThreads.current : 1, probeMs: withThreads ? SF_PROBE_MS(nThreads.current) : 0,
+          ...(withThreads && kk === 'lite' ? { readyTimeoutMs: SF_LITE_LOAD_MS } : {}), onFail });
         await eng.ready();
         up = true;
         return eng;
@@ -87,8 +92,12 @@ function useEngine(hashMB, threads, kind = 'lite', onBroken) {
         for (let i = 0; i < SF_THREADED_TRIES; i++) {
           try { return await attempt(true); } catch (e) { if (!threaded.current) throw e; }
         }
+        // Full with no single-thread copy kept runs Lite: marked as running before the threads turn off, so the switch
+        // to Lite that follows (useFullEngine) doesn't quit this engine
+        const kk = k === 'full' && !(await window.SFFull.present('single')) ? 'lite' : k;
+        if (kk !== k) has.current = kk;
         sfThreadsFailed('The threaded engine didn’t start');
-        return attempt(false, k === 'full' && !(await window.SFFull.present('single')) ? 'lite' : k);
+        return attempt(false, kk);
       };
       mine = ref.current = start().then((eng) => { if (ref.current === mine) setStatus('ready'); return eng; }, (e) => { if (ref.current === mine) { setStatus('unavailable'); ref.current = null; } throw e; });
       mine.catch(() => {});
@@ -102,35 +111,45 @@ function useEngine(hashMB, threads, kind = 'lite', onBroken) {
 // state: 'checking', 'absent', 'downloading' (got: bytes so far) or 'ready'; err: why the last download or start failed
 const SF_FULL_OFFERED = !!(window.SFFull && window.SFFull.supported());
 const sfMB = (bytes) => Math.round(bytes / 1e6);
-// build: the threaded one where the page allows threads; threads turned off later (the threaded engine wouldn't run)
-// look for the single-thread copy, and without one the viewer is back on Lite
+// build: the threaded one where the page allows threads. Which builds are kept is checked once, so the state follows the
+// build at once when threads turn off (the threaded engine wouldn't run): Full stays where its single-thread copy is
+// kept, else the viewer is back on Lite (a state passing through 'checking' would switch engines twice, quitting the
+// one just started)
 function useFullEngine() {
   const threading = useSfThreading(), build = threading.on ? 'threads' : 'single';
-  const [st, setSt] = React.useState({ state: SF_FULL_OFFERED ? 'checking' : 'absent', got: 0, err: '' });
-  const ctl = React.useRef(null), first = React.useRef(true);
+  const [kept, setKept] = React.useState(null); // { single, threads } once checked
+  const [st, setSt] = React.useState({ downloading: false, got: 0, err: '' });
+  const ctl = React.useRef(null), wasReady = React.useRef(false);
   React.useEffect(() => {
-    if (!SF_FULL_OFFERED) return;
-    const again = !first.current;
-    first.current = false;
-    setSt((s) => (s.state === 'downloading' ? s : { ...s, state: 'checking' }));
-    window.SFFull.present(build).then((ok) => setSt((s) => (s.state === 'checking' ? { ...s, state: ok ? 'ready' : 'absent', err: !ok && again ? 'The threaded engine didn’t run here, so Lite is running. Download Full again to use it.' : s.err } : s)));
+    if (SF_FULL_OFFERED) Promise.all([window.SFFull.present('single'), window.SFFull.present('threads')]).then(([single, threads]) => setKept((k) => k || { single, threads }));
+  }, []);
+  const state = !SF_FULL_OFFERED ? 'absent' : st.downloading ? 'downloading' : !kept ? 'checking' : kept[build] ? 'ready' : 'absent';
+  // (this runs before the next effect, so wasReady is still the last build's)
+  React.useEffect(() => {
+    if (state === 'absent' && wasReady.current) setSt((s) => ({ ...s, err: 'Full’s threaded build didn’t run here, so Lite is running. Download Full again to use it.' }));
   }, [build]);
+  React.useEffect(() => { if (state !== 'checking') wasReady.current = state === 'ready'; }, [state]);
   const download = async () => {
     if (ctl.current) return;
-    const c = ctl.current = new AbortController();
-    setSt({ state: 'downloading', got: 0, err: '' });
+    const c = ctl.current = new AbortController(), b = build;
+    setSt({ downloading: true, got: 0, err: '' });
     try {
       // a render per megabyte, not per chunk
-      await window.SFFull.download({ build, signal: c.signal, onProgress: (got) => setSt((s) => (sfMB(got) === sfMB(s.got) ? s : { ...s, got })) });
-      setSt({ state: 'ready', got: 0, err: '' });
+      await window.SFFull.download({ build: b, signal: c.signal, onProgress: (got) => setSt((s) => (sfMB(got) === sfMB(s.got) ? s : { ...s, got })) });
+      setKept({ single: b === 'single', threads: b === 'threads' }); // a download replaces the other build
+      setSt({ downloading: false, got: 0, err: '' });
     } catch (e) {
-      setSt({ state: 'absent', got: 0, err: c.signal.aborted ? '' : 'Download failed: ' + ((e && e.message) || e) });
+      setKept({ single: false, threads: false }); // the other build went before the download began
+      setSt({ downloading: false, got: 0, err: c.signal.aborted ? '' : 'Download failed: ' + ((e && e.message) || e) });
     } finally { ctl.current = null; }
   };
   const cancel = () => { if (ctl.current) ctl.current.abort(); };
-  const remove = async () => { cancel(); await window.SFFull.remove().catch(() => {}); setSt({ state: 'absent', got: 0, err: '' }); };
-  const broken = React.useCallback(() => setSt({ state: 'absent', got: 0, err: 'The downloaded engine was missing, so Lite is running. Download it again to use Full.' }), []);
-  return { offered: SF_FULL_OFFERED, ...st, build, total: window.SFFull ? window.SFFull.total(build) : 0, download, cancel, remove, broken };
+  const remove = async () => { cancel(); await window.SFFull.remove().catch(() => {}); setKept({ single: false, threads: false }); setSt({ downloading: false, got: 0, err: '' }); };
+  const broken = React.useCallback(() => {
+    setKept((k) => ({ ...k, [build]: false }));
+    setSt({ downloading: false, got: 0, err: 'The downloaded engine was missing, so Lite is running. Download it again to use Full.' });
+  }, [build]);
+  return { offered: SF_FULL_OFFERED, state, got: st.got, err: st.err, build, total: window.SFFull ? window.SFFull.total(build) : 0, download, cancel, remove, broken };
 }
 
 const sfIsBrowserAnalysis = (analysis) => {
@@ -195,7 +214,8 @@ function useGameAnalysis(M, files, getFiles, commit, engine, settings, tbOn) {
     const me = { signal: { aborted: false } };
     run.current = me;
     const ucis = M.plies.map((p) => p.uci), sans = M.plies.map((p) => p.san), N = ucis.length;
-    const S = settings, T = tb, earlier = readSfPartial(ucis, S, M.start.fen, T), d0 = Math.max(0, earlier.length - 1), prior = perPos;
+    const T = tb, prior = perPos;
+    let S = settings, earlier = readSfPartial(ucis, S, M.start.fen, T), d0 = Math.max(0, earlier.length - 1);
     // the run's own pace: positions timed from when the engine is ready (its start-up isn't a position's cost)
     const timed = { n: 0, sec: 0, last: 0 };
     // { sec, at }: the latest estimate and when it was made; a timer counts it down in between
@@ -203,6 +223,8 @@ function useGameAnalysis(M, files, getFiles, commit, engine, settings, tbOn) {
     setSt({ state: 'running', done: d0, total: N, etaSec: Math.round(me.eta.sec), err: '' });
     try {
       const eng = await engine.get();
+      // an engine that fell back to one thread searches, records and resumes as one
+      if (eng && !eng.threaded && S.threads !== 1) { S = { ...S, threads: 1 }; earlier = readSfPartial(ucis, S, M.start.fen, T); d0 = Math.max(0, earlier.length - 1); }
       timed.last = Date.now();
       const json = await window.AnalysisCore.runAnalysis({
         engine: eng, ucis, sans, headers: M.headers, signal: me.signal, earlier, settings: S, startFen: M.start.fen, tablebase: T ? TB : null, tablebaseOn: () => tbRef.current,

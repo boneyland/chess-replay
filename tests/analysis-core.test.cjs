@@ -116,6 +116,12 @@ test('runAnalysis searches each position for 3 s, no depth limit, as game priori
   assert.deepEqual(reqs[3].moves, SCHOLAR.ucis.slice(0, 3));
 });
 
+test('runAnalysis searches with the threads it started with', async () => {
+  const reqs = [];
+  await A.runAnalysis({ engine: fakeEngine((r) => reqs.push(r)), ...SCHOLAR, headers: {}, signal: { aborted: false }, onProgress: () => {}, settings: { ...A.ENGINE, threads: 4 } });
+  assert.deepEqual([...new Set(reqs.map((r) => r.threads))], [4]);
+});
+
 test('runAnalysis with the real engine rates a mating game like Python', { timeout: 120000 }, async () => {
   const engine = window.SFEngine.create(nodeWorker, {});
   try {

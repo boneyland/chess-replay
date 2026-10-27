@@ -8,14 +8,14 @@ loadUnit('sf-engine.js');
 const SF = window.SFEngine;
 
 // A scripted engine: answers uci/isready (unless silent); each `go` waits for finish(best, infoLine)
-function fakeWorker({ silent = false } = {}) {
+function fakeWorker({ silent = false, noReady = false } = {}) {
   const w = { posted: [], onmessage: null, onerror: null };
   const say = (line) => setTimeout(() => w.onmessage && w.onmessage({ data: line }), 0);
   w.postMessage = (s) => {
     w.posted.push(s);
     if (silent) return;
     if (s === 'uci') say('uciok');
-    if (s === 'isready') say('readyok');
+    if (s === 'isready' && !noReady) say('readyok');
   };
   w.finish = (best, info = 'info depth 5 score cp 10 pv ' + best) => { say(info); say('bestmove ' + best); };
   w.terminate = () => {};
@@ -338,7 +338,7 @@ test('real engine: three lines at the start begin with three different moves', {
 
 test('ready sets Threads after Hash when more than one, and not at all for one', async () => {
   let w;
-  const e = SF.create(() => (w = fakeWorker()), { threads: 4 });
+  const e = SF.create(() => (w = fakeWorker()), { threaded: true, threads: 4 });
   await e.ready();
   const t = w.posted.indexOf('setoption name Threads value 4');
   assert.ok(t > w.posted.indexOf('setoption name Hash value 64'), w.posted.join(' | '));
@@ -349,7 +349,7 @@ test('ready sets Threads after Hash when more than one, and not at all for one',
 
 test('setThreads waits for the running search, then applies before the next one, only on change', async () => {
   let w;
-  const e = SF.create(() => (w = fakeWorker()), {});
+  const e = SF.create(() => (w = fakeWorker()), { threaded: true });
   await e.ready();
   const a = e.search({ moves: [], depth: 5, movetimeMs: 100 });
   await tick();
@@ -376,7 +376,7 @@ test('threadSupport: isolation, shared memory, Safari 26.2, and the cores', () =
 });
 
 test('real engine: threaded lite searches more nodes with 4 threads than 1', { timeout: 60000 }, async () => {
-  const e = SF.create(() => nodeWorker('stockfish-19-lite.js'), {});
+  const e = SF.create(() => nodeWorker('stockfish-19-lite.js'), { threaded: true });
   const fen = 'r1bq1rk1/pp2ppbp/2np1np1/8/3NP3/2N1BP2/PPPQ2PP/R3KB1R w KQ - 3 9';
   try {
     await e.ready();
@@ -391,7 +391,7 @@ test('real engine: threaded lite searches more nodes with 4 threads than 1', { t
 // after stop); a fresh worker then works. probeMs: ready() waits for a depth-1 search, else the engine fails
 test('probeMs: ready waits for a depth-1 search after readyok', async () => {
   let w, ok = false;
-  const e = SF.create(() => (w = fakeWorker()), { threads: 4, probeMs: 1000 });
+  const e = SF.create(() => (w = fakeWorker()), { threaded: true, threads: 4, probeMs: 1000 });
   const r = e.ready().then(() => { ok = true; });
   await tick();
   assert.equal(ok, false, 'not ready before the probe answers');
@@ -409,7 +409,39 @@ test('probeMs: ready waits for a depth-1 search after readyok', async () => {
 
 test('probeMs: a probe that never answers fails the engine and terminates it', async () => {
   let w, terminated = false;
-  const e = SF.create(() => { w = fakeWorker(); w.terminate = () => { terminated = true; }; return w; }, { threads: 4, probeMs: 30 });
+  const e = SF.create(() => { w = fakeWorker(); w.terminate = () => { terminated = true; }; return w; }, { threaded: true, threads: 4, probeMs: 30 });
   await assert.rejects(e.ready(), /threads didn’t start/);
   assert.equal(terminated, true);
+});
+
+// a game's analysis keeps the threads it started with (search({ threads })), whatever the setting does meanwhile;
+// a single-thread build never gets Threads
+test('a search that asks for threads gets them before it; other searches get the engine\'s', async () => {
+  let w;
+  const e = SF.create(() => (w = fakeWorker()), { threaded: true, threads: 2 });
+  await e.ready();
+  assert.equal(e.threaded, true);
+  const a = e.search({ moves: [], depth: 5, movetimeMs: 100, threads: 4 });
+  await tick();
+  assert.ok(w.posted.indexOf('setoption name Threads value 4') < w.posted.indexOf('position startpos'));
+  w.finish('e2e4'); await a.promise;
+  const b = e.search({ moves: ['e2e4'], depth: 5, movetimeMs: 100 });
+  await tick();
+  const i = w.posted.lastIndexOf('setoption name Threads value 2');
+  assert.ok(i > w.posted.indexOf('setoption name Threads value 4') && i < w.posted.indexOf('position startpos moves e2e4'), w.posted.join(' | '));
+  w.finish('e7e5'); await b.promise;
+  let w1;
+  const one = SF.create(() => (w1 = fakeWorker()), { threads: 4 });
+  await one.ready();
+  assert.equal(one.threaded, false);
+  one.setThreads(3);
+  const c = one.search({ moves: [], depth: 5, movetimeMs: 100, threads: 4 });
+  await tick(); w1.finish('e2e4'); await c.promise;
+  assert.ok(!w1.posted.some((m) => m.startsWith('setoption name Threads')), w1.posted.join(' | '));
+});
+
+// Firefox can also hang while it starts the threads (readyok never comes after Threads): that is the probe's too
+test('probeMs: from uciok on, a missing readyok fails as the probe does', async () => {
+  const e = SF.create(() => fakeWorker({ noReady: true }), { threaded: true, threads: 4, probeMs: 30 });
+  await assert.rejects(e.ready(), /threads didn’t start/);
 });

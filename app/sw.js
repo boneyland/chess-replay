@@ -75,7 +75,7 @@ async function page(req) {
 // answered from here carry them too, also from a copy kept before they existed (a worker without them isn't isolated)
 const ISOLATION = { 'Cross-Origin-Opener-Policy': 'same-origin', 'Cross-Origin-Embedder-Policy': 'require-corp' };
 function isolated(r) {
-  if (!r || r.type === 'opaque' || Object.keys(ISOLATION).every((k) => r.headers.has(k))) return r;
+  if (!r || r.type === 'opaque' || r.type === 'opaqueredirect' || r.status === 0 || Object.keys(ISOLATION).every((k) => r.headers.has(k))) return r;
   const headers = new Headers(r.headers);
   for (const [k, v] of Object.entries(ISOLATION)) headers.set(k, v);
   return new Response(r.body, { status: r.status, statusText: r.statusText, headers });

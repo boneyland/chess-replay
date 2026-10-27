@@ -36,29 +36,31 @@
     return { ok: true, cores, reason: '' };
   }
 
-  // onFail(err): called once when the engine dies, before or after it started; threads: more than 1 only for the threaded build.
-  // probeMs: ready() also waits for a depth-1 search, failing the engine without an answer by then: in Firefox the first
-  // threaded engine in a page can answer readyok and then never search (no info, no bestmove, even after stop), while
-  // a fresh worker works (found 2026-10-28, Firefox 159)
-  function create(makeWorker, { hashMB = 64, threads = 1, readyTimeoutMs = READY_TIMEOUT_MS, probeMs = 0, onFail } = {}) {
+  // onFail(err): called once when the engine dies, before or after it started. threaded: the multi-threaded build, the only
+  // one sent Threads; threads: its count for searches that don't ask for their own (search({ threads })).
+  // probeMs: from uciok, ready() also waits for the threads to start and a depth-1 search to answer, failing the engine
+  // without them by then: in Firefox a threaded engine can hang while it starts its threads, or answer readyok and then
+  // never search (no info, no bestmove, even after stop), while a fresh worker mostly works (found 2026-10-28, Firefox 159)
+  function create(makeWorker, { hashMB = 64, threads = 1, readyTimeoutMs = READY_TIMEOUT_MS, probeMs = 0, threaded = false, onFail } = {}) {
     const worker = makeWorker();
     const waiting = []; // [regex, resolve] for ready()
     const queue = [];
     let cur = null, readyP = null, rejectReady = null, isReady = false, failed = null;
     let hashWant = hashMB, hashSet = null; // a new hash size waits for the engine to be between searches
-    let threadsWant = threads, threadsSet = 1; // Stockfish starts with one
+    let threadsWant = threaded ? threads : 1, threadsSet = 1; // Stockfish starts with one
     let linesSet = 1; // MultiPV, Stockfish's default until a search asks for more
 
     const pump = () => {
       if (cur || !isReady || failed) return;
       if (hashWant !== hashSet) { worker.postMessage(`setoption name Hash value ${hashWant}`); hashSet = hashWant; }
-      if (threadsWant !== threadsSet) { worker.postMessage(`setoption name Threads value ${threadsWant}`); threadsSet = threadsWant; }
       let i = queue.findIndex((q) => q.priority === 'play');
       if (i < 0) i = queue.findIndex((q) => q.priority === 'own');
       if (i < 0) i = 0;
       const q = queue.splice(i, 1)[0];
       if (!q) return;
       cur = q;
+      const n = !threaded ? 1 : q.threads || threadsWant;
+      if (n !== threadsSet) { worker.postMessage(`setoption name Threads value ${n}`); threadsSet = n; }
       if (q.lines !== linesSet) { worker.postMessage(`setoption name MultiPV value ${q.lines}`); linesSet = q.lines; }
       worker.postMessage(positionCommand(q.moves, q.fen));
       worker.postMessage(`go ${q.depth == null ? '' : `depth ${q.depth} `}movetime ${q.movetimeMs}`);
@@ -108,12 +110,14 @@
         const timer = setTimeout(() => fail(new Error('Stockfish did not start')), readyTimeoutMs);
         (async () => {
           const ok = expect(/^uciok/); worker.postMessage('uci'); await ok;
+          // loaded: from here a threaded engine has probeMs to start its threads and answer a depth-1 search
+          let probe = null;
+          if (probeMs && !failed) { clearTimeout(timer); probe = setTimeout(() => fail(new Error('Stockfish’s threads didn’t start')), probeMs); }
           worker.postMessage(`setoption name Hash value ${hashWant}`); hashSet = hashWant;
           if (threadsWant !== threadsSet) { worker.postMessage(`setoption name Threads value ${threadsWant}`); threadsSet = threadsWant; }
           const rd = expect(/^readyok/); worker.postMessage('isready'); await rd;
           clearTimeout(timer);
-          if (probeMs && !failed) {
-            const probe = setTimeout(() => fail(new Error('Stockfish’s threads didn’t start')), probeMs);
+          if (probe) {
             const bm = expect(/^bestmove/); worker.postMessage('position startpos'); worker.postMessage('go depth 1'); await bm;
             clearTimeout(probe);
           }
@@ -124,9 +128,10 @@
     }
 
     // lines: how many lines to search (MultiPV); the result's cp, pv and best stay line 1's, and lines lists them all
-    function search({ moves, fen, depth, movetimeMs, priority = 'game', onInfo, lines = 1 }) {
+    // threads: this search's (a game's analysis keeps the count it started with), else the engine's (setThreads)
+    function search({ moves, fen, depth, movetimeMs, priority = 'game', onInfo, lines = 1, threads }) {
       let q;
-      const promise = new Promise((resolve) => { q = { moves, fen, depth, movetimeMs, priority, onInfo, resolve, last: null, lines, byK: [] }; });
+      const promise = new Promise((resolve) => { q = { moves, fen, depth, movetimeMs, priority, onInfo, resolve, last: null, lines, threads, byK: [] }; });
       if (failed) q.resolve(null); else { queue.push(q); pump(); }
       return {
         promise,
@@ -139,7 +144,7 @@
 
     // takes effect before the next search (the one running keeps its table)
     function setHash(mb) { hashWant = mb; pump(); }
-    function setThreads(n) { threadsWant = n; pump(); }
+    function setThreads(n) { if (threaded) threadsWant = n; pump(); }
 
     // the running search answers null too, as a dead engine's would (the page switching engines quits this one mid-search)
     function quit() {
@@ -151,7 +156,7 @@
       try { worker.terminate(); } catch (e) {}
     }
 
-    return { ready, search, setHash, setThreads, quit, failed: () => failed };
+    return { ready, search, setHash, setThreads, threaded, quit, failed: () => failed };
   }
 
   window.SFEngine = { create, threadSupport, positionCommand, READY_TIMEOUT_MS };

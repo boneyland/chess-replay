@@ -176,21 +176,33 @@ test('present, download and start are per build: the single copy doesn\'t make t
   await F.download();
   assert.equal(await F.present('single'), true);
   assert.equal(await F.present('threads'), false);
+  const single = await F.start('single');
   const seen = [];
   await F.download({ build: 'threads', onProgress: (got, total) => seen.push([got, total]) });
   assert.deepEqual(seen.at(-1), [5120, 5120]);
   assert.ok(fetched.some((u) => u.endsWith('/stockfish-19.wasm')));
   assert.equal(await F.present('threads'), true);
-  // a broken threaded copy is dropped alone: the single one stays
+  const threads = await F.start('threads');
+  assert.notEqual(single().url, threads().url);
+  assert.equal(await F.start('threads'), threads);
+  // a broken copy is dropped and refused
+  await F.remove();
+  await F.download({ build: 'threads' });
   await (await caches.open(F.CACHE)).put(F.BASE + 'stockfish-19.wasm', new Response(bytes(10, 2)));
   await assert.rejects(F.start('threads'), /missing/);
   assert.equal(await F.present('threads'), false);
-  assert.equal(await F.present('single'), true);
-  await F.download({ build: 'threads' });
-  const single = await F.start('single'), threads = await F.start('threads');
-  assert.notEqual(single, threads);
-  assert.notEqual(single().url, threads().url);
-  assert.equal(await F.start('threads'), threads);
   await F.remove();
   assert.equal(await F.present('single'), false);
+});
+
+// the build that can't run here only takes space (and the storage check counts it): a download replaces it
+test('download: a build replaces the other, before the storage check', async () => {
+  reset();
+  await F.download();
+  storage.usage = 0;
+  await F.download({ build: 'threads' });
+  assert.equal(await F.present('threads'), true);
+  assert.equal(await F.present('single'), false);
+  await F.download({ build: 'single' });
+  assert.equal(await F.present('threads'), false);
 });

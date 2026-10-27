@@ -73,9 +73,13 @@
 
   // Downloads and keeps both files; nothing is kept unless both arrive whole and match. onProgress(bytes, total bytes).
   // Asks the browser to keep the copy when storage runs low (Chrome decides by itself, Firefox asks the viewer).
+  // Keeping one build drops the other: only one of them runs on a page, and the other's 99 MB would count against the
+  // storage check with no way to remove it.
   async function download({ build = 'single', onProgress = () => {}, signal } = {}) {
     const FILES = BUILDS[build];
     if (!supported()) throw new Error('This browser can’t keep the engine');
+    const cache0 = await caches.open(CACHE);
+    for (const b of Object.keys(BUILDS)) if (b !== build) await drop(cache0, BUILDS[b]);
     if (navigator.storage && navigator.storage.estimate) {
       try {
         const { quota, usage } = await navigator.storage.estimate();

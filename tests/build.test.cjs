@@ -173,3 +173,11 @@ test('the service worker gives its own files the isolation headers', () => {
   assert.equal(r.headers.get('cross-origin-embedder-policy'), 'require-corp');
   assert.equal(r.headers.get('content-type'), 'text/html');
 });
+
+// a navigation fetched with redirect: 'manual' answers an opaqueredirect (status 0), which can't be rebuilt
+test('the service worker passes a navigation redirect through untouched', () => {
+  const sw = fs.readFileSync(path.join(ROOT, 'app', 'sw.js'), 'utf8');
+  const isolated = new Function('self', 'caches', 'fetch', sw.replace(/__VERSION__/, 'x').replace('__LOCAL__', '[]').replace('__REMOTE__', '[]') + '\nreturn isolated;')({ addEventListener() {} }, {}, () => {});
+  const redirect = { type: 'opaqueredirect', status: 0, headers: new Headers() };
+  assert.equal(isolated(redirect), redirect);
+});

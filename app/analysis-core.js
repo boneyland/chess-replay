@@ -219,7 +219,7 @@
     const backedOff = () => !!(tablebase.backedOff && tablebase.backedOff('tablebase'));
     let searches = 0, tbMs = 0;
     const search = async (k) => {
-      const r = await engine.search({ moves: ucis.slice(0, k), fen: startFen, depth: settings.depth, movetimeMs: settings.time_limit * 1000, priority: 'game' }).promise;
+      const r = await engine.search({ moves: ucis.slice(0, k), fen: startFen, depth: settings.depth, movetimeMs: settings.time_limit * 1000, threads: settings.threads, priority: 'game' }).promise;
       searches++;
       if (!signal.aborted && (!r || r.cp == null)) throw new Error('Stockfish stopped before the analysis finished');
       return r;
