@@ -49,8 +49,8 @@ self.addEventListener('fetch', (e) => {
   const req = e.request, url = new URL(req.url);
   if (req.method !== 'GET' && req.method !== 'HEAD') return;
   const here = url.origin === self.location.origin;
-  if (req.mode === 'navigate' && here) return e.respondWith(page(req));
-  if (here) return e.respondWith(cacheFirst(req));
+  if (req.mode === 'navigate' && here) return e.respondWith(page(req).then(isolated));
+  if (here) return e.respondWith(cacheFirst(req).then(isolated));
   if (KEEP_HOSTS.includes(url.hostname) && req.method === 'GET') return e.respondWith(cacheFirst(req));
   // anything else (Hugging Face, Lichess's tablebase: live data, never kept) goes to the network as usual
 });
@@ -69,6 +69,16 @@ async function page(req) {
     if (r) return r;
   } catch (err) {}
   return (await cache.match(PAGE)) || net;
+}
+
+// The site sends the cross-origin isolation headers (render.yaml) that let Stockfish use threads; the page and its files
+// answered from here carry them too, also from a copy kept before they existed (a worker without them isn't isolated)
+const ISOLATION = { 'Cross-Origin-Opener-Policy': 'same-origin', 'Cross-Origin-Embedder-Policy': 'require-corp' };
+function isolated(r) {
+  if (!r || r.type === 'opaque' || r.type === 'opaqueredirect' || r.status === 0 || Object.keys(ISOLATION).every((k) => r.headers.has(k))) return r;
+  const headers = new Headers(r.headers);
+  for (const [k, v] of Object.entries(ISOLATION)) headers.set(k, v);
+  return new Response(r.body, { status: r.status, statusText: r.statusText, headers });
 }
 
 // a kept GET answers a HEAD too (Stockfish checks its file with one), without its body (Firefox refuses one with a body)

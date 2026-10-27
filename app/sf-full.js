@@ -1,15 +1,23 @@
-// The full Stockfish 19 (single-threaded, with the big NNUE net) for the site, downloaded only when the viewer asks
+// The full Stockfish 19 (with the big NNUE net; the multi-threaded build where the page allows threads, else the single-thread one) for the site, downloaded only when the viewer asks
 // (the Analysis panel's engine drop-down): stockfish.js v19.0.1 from unpkg, both files checked against pinned SHA-256s, then kept in their own
 // cache, which sw.js never clears on a deploy. The engine then starts from the kept copy, offline too, as Blob URLs
 // (the glue reads its wasm URL from the worker's #hash).
 (function () {
   const BASE = 'https://unpkg.com/stockfish@19.0.1/bin/';
-  const FILES = [
-    { name: 'stockfish-19-single.js', size: 28130, type: 'text/javascript', sha256: '8071dee87312f74805a859de933e1a1ef465579ab1a51fbd597388cdce9d444d' },
-    { name: 'stockfish-19-single.wasm', size: 99169054, type: 'application/wasm', sha256: '991bede2f253ebb08ff01fcc48270f4b9c8e66b12d5bd5f8d6f52eb3e3b3a740' },
-  ];
+  // each build is kept apart in the one cache: a viewer who had the single-thread copy downloads the threaded one too
+  const BUILDS = {
+    single: [
+      { name: 'stockfish-19-single.js', size: 28130, type: 'text/javascript', sha256: '8071dee87312f74805a859de933e1a1ef465579ab1a51fbd597388cdce9d444d' },
+      { name: 'stockfish-19-single.wasm', size: 99169054, type: 'application/wasm', sha256: '991bede2f253ebb08ff01fcc48270f4b9c8e66b12d5bd5f8d6f52eb3e3b3a740' },
+    ],
+    threads: [
+      { name: 'stockfish-19.js', size: 33326, type: 'text/javascript', sha256: '623ee70a10d6dc202375127b49e2e1822635f9ab07693ae7be28e50a787f6218' },
+      { name: 'stockfish-19.wasm', size: 99076105, type: 'application/wasm', sha256: 'a599d78d72e0722d8895be84aca8b492d12e8bba3cdfcbcbc4a64017888c6667' },
+    ],
+  };
+  const FILES = BUILDS.single;
   const CACHE = 'stockfish-full-19';
-  const total = () => FILES.reduce((s, f) => s + f.size, 0), TOTAL = total();
+  const total = (build = 'single') => BUILDS[build].reduce((s, f) => s + f.size, 0), TOTAL = total();
   // the browser's room for the copy: the files, plus a margin for the cache's own records
   const ROOM_FACTOR = 1.1;
 
@@ -17,12 +25,12 @@
   const sha256 = async (bytes) => [...new Uint8Array(await crypto.subtle.digest('SHA-256', bytes))].map((b) => b.toString(16).padStart(2, '0')).join('');
   const urlOf = (f) => BASE + f.name;
 
-  // Both files kept (checked when downloaded)
-  async function present() {
+  // Both files of a build kept (checked when downloaded)
+  async function present(build = 'single') {
     if (!supported()) return false;
     try {
       const cache = await caches.open(CACHE);
-      for (const f of FILES) if (!(await cache.match(urlOf(f)))) return false;
+      for (const f of BUILDS[build]) if (!(await cache.match(urlOf(f)))) return false;
       return true;
     } catch (e) { return false; }
   }
@@ -65,23 +73,28 @@
 
   // Downloads and keeps both files; nothing is kept unless both arrive whole and match. onProgress(bytes, total bytes).
   // Asks the browser to keep the copy when storage runs low (Chrome decides by itself, Firefox asks the viewer).
-  async function download({ onProgress = () => {}, signal } = {}) {
+  // Keeping one build drops the other: only one of them runs on a page, and the other's 99 MB would count against the
+  // storage check with no way to remove it.
+  async function download({ build = 'single', onProgress = () => {}, signal } = {}) {
+    const FILES = BUILDS[build];
     if (!supported()) throw new Error('This browser can’t keep the engine');
+    const cache0 = await caches.open(CACHE);
+    for (const b of Object.keys(BUILDS)) if (b !== build) await drop(cache0, BUILDS[b]);
     if (navigator.storage && navigator.storage.estimate) {
       try {
         const { quota, usage } = await navigator.storage.estimate();
-        if (quota != null && quota - (usage || 0) < total() * ROOM_FACTOR) throw new Error('Not enough storage space in this browser');
+        if (quota != null && quota - (usage || 0) < total(build) * ROOM_FACTOR) throw new Error('Not enough storage space in this browser');
       } catch (e) { if (/storage space/.test(e.message)) throw e; }
     }
     let got = 0;
-    onProgress(0, total());
+    onProgress(0, total(build));
     const bodies = [];
-    for (const f of FILES) bodies.push(await fetchFile(f, signal, (n) => { got += n; onProgress(got, total()); }));
+    for (const f of FILES) bodies.push(await fetchFile(f, signal, (n) => { got += n; onProgress(got, total(build)); }));
     const cache = await caches.open(CACHE);
     try {
       for (let i = 0; i < FILES.length; i++) await cache.put(urlOf(FILES[i]), new Response(bodies[i], { headers: { 'content-type': FILES[i].type } }));
     } catch (e) {
-      await caches.delete(CACHE).catch(() => {});
+      await drop(cache, FILES);
       throw new Error(/quota/i.test(e.name + e.message) ? 'Not enough storage space in this browser' : 'The browser would not keep the engine');
     }
     if (navigator.storage && navigator.storage.persist) navigator.storage.persist().catch(() => {});
@@ -89,10 +102,12 @@
 
   // The kept copy → a makeWorker for SFEngine.create. It was checked when downloaded, so it is trusted now: only its sizes
   // are compared (a missing or cut-short copy is dropped), and its Blobs are passed on without reading the 99 MB into the
-  // page. Once per page: an engine started again (a dead one, a new hash size) reuses the Blob URLs
-  let started = null, blobs = [];
-  const start = () => started || (started = load().catch((e) => { started = null; throw e; }));
-  async function load() {
+  // page. Once per page and build: an engine started again (a dead one, a new hash size) reuses the Blob URLs
+  let started = {}, blobs = [];
+  const start = (build = 'single') => started[build] || (started[build] = load(BUILDS[build]).catch((e) => { delete started[build]; throw e; }));
+  // a build's files out of the cache, the other build's left alone
+  const drop = async (cache, files) => { for (const f of files) await cache.delete(urlOf(f)).catch(() => {}); };
+  async function load(FILES) {
     const cache = await caches.open(CACHE);
     const urls = [];
     for (const f of FILES) {
@@ -100,12 +115,12 @@
       const blob = r && await r.blob();
       if (!blob || blob.size !== f.size) {
         urls.forEach((u) => URL.revokeObjectURL(u));
-        await caches.delete(CACHE).catch(() => {});
+        await drop(cache, FILES);
         throw new Error('The downloaded engine is missing');
       }
       urls.push(URL.createObjectURL(blob.type === f.type ? blob : new Blob([blob], { type: f.type })));
     }
-    blobs = urls;
+    blobs = blobs.concat(urls);
     const [glue, wasm] = urls;
     return () => new Worker(glue + '#' + encodeURIComponent(wasm));
   }
@@ -113,9 +128,9 @@
   function remove() {
     blobs.forEach((u) => URL.revokeObjectURL(u));
     blobs = [];
-    started = null;
+    started = {};
     return caches.delete(CACHE);
   }
 
-  window.SFFull = { BASE, FILES, CACHE, TOTAL, limits, supported, present, download, start, remove };
+  window.SFFull = { BASE, BUILDS, FILES, CACHE, TOTAL, total, limits, supported, present, download, start, remove };
 })();

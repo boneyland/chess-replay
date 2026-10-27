@@ -20,12 +20,16 @@ What each part of the repo is, with the pinned SHA-256 of every vendored file. B
   - `sw.js`: the site's service worker (offline); `icons/`, `og-image.png`: web app icons and the link-preview image
 - `src/`: files from the original Claude Design project (`pieces.js`, `sample-game.js`, and `game-data.js`, which writes the sample game's commentary, `window.SAMPLE_NOTES`, all built into the page); `pieces/cburnett/` are Colin M.L. Burnett's pieces (GPL-2.0-or-later, as in Lichess)
 - `babel/babel.min.js`: @babel/standalone 7.29.0, used only to precompile the JSX (sha256 `2623a9e22809915ce789b4461154e277ddce520d5a4320c14d44332a5d0dcea0`)
-- `vendor/`: stockfish.js v19.0.1 `lite-single` (GPL-3.0, https://github.com/nmrugg/stockfish.js), unchanged release files
+- `vendor/`: stockfish.js v19.0.1 `lite-single` and `lite` (multi-threaded, run only where the page is cross-origin isolated) (GPL-3.0, https://github.com/nmrugg/stockfish.js), unchanged release files
   - `stockfish-19-lite-single.js` sha256 `ccb130d7ff29408531c47d859a49f91d59d4f482d05a53eb1a3231a4f624c91a`
   - `stockfish-19-lite-single.wasm` sha256 `ee4f115bdb2d32cadf96cada104a05b5ec257d7ad6f57582190b49bc71f096de`
-- Not vendored: the full engine, stockfish.js v19.0.1 `single` (GPL-3.0), which the browser downloads from `https://unpkg.com/stockfish@19.0.1/bin/` when the viewer asks and checks against these (pinned in `app/sf-full.js`)
+  - `stockfish-19-lite.js` (33,426 bytes) sha256 `dac939ff529668e0168b2f615145ec18b029b753deb6963fd7319d788f964333`
+  - `stockfish-19-lite.wasm` (1,697,617 bytes) sha256 `ddf06cdaf0b8e35c11b40530e44db96c2a99c9029c8d621dd9fca97e4872770c`
+- Not vendored: the full engine, stockfish.js v19.0.1 `single` and, where the page allows threads, the multi-threaded build (GPL-3.0), which the browser downloads from `https://unpkg.com/stockfish@19.0.1/bin/` when the viewer asks and checks against these (pinned in `app/sf-full.js`)
   - `stockfish-19-single.js` (28,130 bytes) sha256 `8071dee87312f74805a859de933e1a1ef465579ab1a51fbd597388cdce9d444d`
   - `stockfish-19-single.wasm` (99,169,054 bytes) sha256 `991bede2f253ebb08ff01fcc48270f4b9c8e66b12d5bd5f8d6f52eb3e3b3a740`
+  - `stockfish-19.js` (33,326 bytes) sha256 `623ee70a10d6dc202375127b49e2e1822635f9ab07693ae7be28e50a787f6218`
+  - `stockfish-19.wasm` (99,076,105 bytes) sha256 `a599d78d72e0722d8895be84aca8b492d12e8bba3cdfcbcbc4a64017888c6667`
 - `vendor/webp_enc_simd.*`: the WebP export's encoder, libwebp 1.1.0 (BSD-3-Clause, `webp_enc_simd.LICENSE`) built to WebAssembly by Squoosh, unchanged files from `codec/enc/` in @jsquash/webp 1.5.0 (Apache-2.0, https://github.com/jamsinclair/jSquash); the site serves them next to the page. `tests/fixtures/webp_dec.*` is the same package's decoder, used only by the tests
   - `webp_enc_simd.js` sha256 `3038e60ebba6252baba08c691e31d1efe5036a185435daa7b4afaef3cc9273f9`
   - `webp_enc_simd.wasm` sha256 `39c279269ec1163b987b6d69749458e3d5b03b9585f58b6ca5455b76b504a305`

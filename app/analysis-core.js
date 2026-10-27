@@ -155,15 +155,21 @@
   // own.lines: the lines (MultiPV) the viewer's own searches show; a game's analysis always searches one
   const LINES = [1, 2, 3, 4, 5];
   const OWN = { depth: null, time_limit: 5, lines: 1 };
-  function engineSettings(t = {}, kind = 'lite') {
+  // Threads (one setting for every search): 1 to one less than the browser's cores, at most 8; by default half of
+  // them, at most 4, so a search leaves the computer room (decided 2026-10-28)
+  const threadChoices = (cores) => [...Array(Math.max(1, Math.min((cores | 0) - 1, 8))).keys()].map((i) => i + 1);
+  const defaultThreads = (cores) => Math.max(1, Math.min(4, Math.floor((cores | 0) / 2)));
+  // threading: { on, cores } (SFEngine.threadSupport): off, every search runs one thread
+  function engineSettings(t = {}, kind = 'lite', threading = { on: false, cores: 1 }) {
     const pick = (v, [lo, hi], step, dflt) => { const x = +v; return Number.isFinite(x) && x >= lo && x <= hi ? Math.round(x / step) * step : dflt; };
     const pickDepth = (v, dflt) => (v === null ? null : pick(v, SEARCH_LIMITS.depth, 1, dflt));
     // a time limit in range snaps to the nearest stop
     const pickTime = (v, dflt) => { const x = +v; return Number.isFinite(x) && x >= SECONDS[0] && x <= SECONDS[SECONDS.length - 1] ? SECONDS.reduce((a, b) => (Math.abs(b - x) < Math.abs(a - x) ? b : a)) : dflt; };
     const name = ENGINE_NAMES[kind] || ENGINE.name;
+    const threads = !threading || !threading.on ? 1 : threadChoices(threading.cores).includes(+t.sfThreads) ? +t.sfThreads : defaultThreads(threading.cores);
     return {
-      game: { ...ENGINE, name, depth: pickDepth(t.sfDepth, ENGINE.depth), time_limit: pickTime(t.sfTime, ENGINE.time_limit), hash_mb: HASH_MB.includes(+t.sfHash) ? +t.sfHash : ENGINE.hash_mb },
-      own: { name, depth: pickDepth(t.sfOwnDepth, OWN.depth), time_limit: pickTime(t.sfOwnTime, OWN.time_limit), lines: LINES.includes(+t.sfLines) ? +t.sfLines : OWN.lines },
+      game: { ...ENGINE, name, threads, depth: pickDepth(t.sfDepth, ENGINE.depth), time_limit: pickTime(t.sfTime, ENGINE.time_limit), hash_mb: HASH_MB.includes(+t.sfHash) ? +t.sfHash : ENGINE.hash_mb },
+      own: { name, depth: pickDepth(t.sfOwnDepth, OWN.depth), time_limit: pickTime(t.sfOwnTime, OWN.time_limit), lines: LINES.includes(+t.sfLines) ? +t.sfLines : OWN.lines, threads },
     };
   }
   // Rough seconds a game position takes: 1.3 s measured on a laptop at depth 22 / 3 s, each depth about 1.45 times
@@ -213,7 +219,7 @@
     const backedOff = () => !!(tablebase.backedOff && tablebase.backedOff('tablebase'));
     let searches = 0, tbMs = 0;
     const search = async (k) => {
-      const r = await engine.search({ moves: ucis.slice(0, k), fen: startFen, depth: settings.depth, movetimeMs: settings.time_limit * 1000, priority: 'game' }).promise;
+      const r = await engine.search({ moves: ucis.slice(0, k), fen: startFen, depth: settings.depth, movetimeMs: settings.time_limit * 1000, threads: settings.threads, priority: 'game' }).promise;
       searches++;
       if (!signal.aborted && (!r || r.cp == null)) throw new Error('Stockfish stopped before the analysis finished');
       return r;
@@ -310,5 +316,5 @@
     return { result: { cp, depth: 0, pv: best ? [best] : [], best, nodes: null, timeMs: null, tb: { category: t.category, dtz: t.dtz, dtm: t.dtm } }, failed: false };
   }
 
-  window.AnalysisCore = { C, TB_GAP_MS, ENGINE, ENGINE_NAMES, SEARCH_LIMITS, DEPTHS, SECONDS, HASH_MB, LINES, engineSettings, secondsPerPosition, paceFactor, blendPace, deeperSearch, canGoDeeper, bestOf, winningChances, infoToScore, infoStats, rateMove, rateByOutcome, tbWonOnly, mateLine, positionFens, playerStats, buildAnalysisJson, runAnalysis };
+  window.AnalysisCore = { C, TB_GAP_MS, ENGINE, ENGINE_NAMES, SEARCH_LIMITS, DEPTHS, SECONDS, HASH_MB, LINES, threadChoices, defaultThreads, engineSettings, secondsPerPosition, paceFactor, blendPace, deeperSearch, canGoDeeper, bestOf, winningChances, infoToScore, infoStats, rateMove, rateByOutcome, tbWonOnly, mateLine, positionFens, playerStats, buildAnalysisJson, runAnalysis };
 })();

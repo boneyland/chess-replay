@@ -44,7 +44,7 @@ fs.mkdirSync(path.join(dir, 'out', 'site'), { recursive: true });
 const DESCRIPTION = 'Replay an annotated chess game as a broadcast-style video: move ratings, best lines, commentary and an eval graph, with Stockfish in your browser.';
 // A link preview's image needs an absolute URL: the host's own (Render sets RENDER_EXTERNAL_URL; a local build points at Render)
 const SITE_URL = (process.env.RENDER_EXTERNAL_URL || 'https://chess-replay.onrender.com').replace(/\/$/, '');
-const VENDOR = ['stockfish-19-lite-single.js', 'stockfish-19-lite-single.wasm', 'webp_enc_simd.js', 'webp_enc_simd.wasm', 'mediabunny.min.js'];
+const VENDOR = ['stockfish-19-lite-single.js', 'stockfish-19-lite-single.wasm', 'stockfish-19-lite.js', 'stockfish-19-lite.wasm', 'webp_enc_simd.js', 'webp_enc_simd.wasm', 'mediabunny.min.js'];
 const ICON = 'data:image/svg+xml,' + encodeURIComponent('<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 32 32"><rect width="32" height="32" rx="6" fill="#9a6a1c"/><circle cx="16" cy="9.5" r="4" fill="#fffaf2"/><path d="M12.5 14h7l1.5 9h-10z M8.5 24h15v3h-15z" fill="#fffaf2"/></svg>');
 // The document shell around the page. It doesn't zoom (maximum-scale, user-scalable): a browser set to ignore that (iPhone Safari, Chrome's Force
 // enable zoom) still lets the viewer pinch

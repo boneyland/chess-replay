@@ -220,8 +220,10 @@ function GameApp() {
   const [askRemove, setAskRemove] = React.useState(false);
   React.useEffect(() => setAskRemove(false), [full.state]);
   const sfKind = t.sfEngine === 'Full' && full.state === 'ready' ? 'full' : 'lite';
-  const ES = React.useMemo(() => window.AnalysisCore.engineSettings(t, sfKind), [t.sfDepth, t.sfTime, t.sfOwnDepth, t.sfOwnTime, t.sfHash, t.sfLines, sfKind]);
-  const engine = useEngine(ES.game.hash_mb, sfKind, full.broken);
+  // threads where the page allows them, lite or full
+  const threading = useSfThreading();
+  const ES = React.useMemo(() => window.AnalysisCore.engineSettings(t, sfKind, threading), [t.sfDepth, t.sfTime, t.sfOwnDepth, t.sfOwnTime, t.sfHash, t.sfLines, t.sfThreads, sfKind, threading]);
+  const engine = useEngine(ES.game.hash_mb, ES.game.threads, sfKind, full.broken);
   const queenInVideo = t.queenInVideo !== false;
   const showCommentary = t.commentary !== false;
   const sayFrom = { pgn: t.commentPgn !== false, notes: t.commentNotes !== false, queen: t.commentQueen !== false };
@@ -448,8 +450,8 @@ function GameApp() {
   const clipSuffix = clipFrom < 0 && clipTo >= NP ? '' : `_${clipFrom < 0 ? 'start' : plyTag(clipFrom)}-${clipTo >= NP ? 'end' : plyTag(clipTo)}`;
   const exportVideo = () => { setPanel(false); setQueenOpen(false); video.run({ start: clipT.start, end: clipT.end, suffix: clipSuffix, audio: t.sound === false || webp ? null
     : () => window.Sfx.renderTrack(window.SFX_DATA || {}, soundSet, window.Sfx.track(MV, clipOpts.S, clipT.start, clipT.end), soundVolume, clipT.end - clipT.start) }); };
-  const depthText = (d) => (d == null ? 'No limit' : String(d)), SF_KEYS = ['sfDepth', 'sfTime', 'sfOwnDepth', 'sfOwnTime', 'sfLines', 'sfHash'];
-  const sfChanged = JSON.stringify(ES) !== JSON.stringify(window.AnalysisCore.engineSettings(window.TWEAK_DEFAULTS, sfKind));
+  const depthText = (d) => (d == null ? 'No limit' : String(d)), SF_KEYS = ['sfDepth', 'sfTime', 'sfOwnDepth', 'sfOwnTime', 'sfLines', 'sfHash', 'sfThreads'];
+  const sfChanged = JSON.stringify(ES) !== JSON.stringify(window.AnalysisCore.engineSettings(window.TWEAK_DEFAULTS, sfKind, threading));
   const askQueen = () => { setQueenOpen((q) => !q); setPanel(false); };
   // the Queen panel opens centred over its button in the transport bar, or over the menu button when the dock is folded
   // into a menu (a phone frame, or a window under 900 px), kept on screen
@@ -471,14 +473,14 @@ function GameApp() {
 
   // The Analysis panel's engine menu (EngineMenuContext): the Lite/Full choice in its title row, and these settings in
   // the panel while the menu is open; the explanations sit behind ⓘ. A game has no engine menu.
-  const MB = sfMB(window.SFFull.TOTAL), stopsAt = 'Each search stops at its depth or time limit, whichever comes first.';
+  const MB = sfMB(full.total), stopsAt = 'Each search stops at its depth or time limit, whichever comes first.';
   const engineBody = <>
     {full.offered && <>
       {t.sfEngine === 'Full' && full.state === 'absent' && <TweakButton label={`Download full Stockfish · ${MB} MB`} onClick={full.download}
         info={`Full Stockfish 19 is stronger than Lite, with the big neural network. It is a ${MB} MB download from unpkg.com, kept in this browser for next time and offline. Until it is downloaded, Lite runs.`} />}
       {full.state === 'downloading' && <>
         <div className="twk-note" role="status">Downloading full Stockfish · {sfMB(full.got)} of {MB} MB</div>
-        <div className="twk-progress"><i style={{ width: `${(100 * full.got / window.SFFull.TOTAL).toFixed(1)}%` }} /></div>
+        <div className="twk-progress"><i style={{ width: `${(100 * full.got / full.total).toFixed(1)}%` }} /></div>
         <TweakButton secondary label="Cancel the download" onClick={full.cancel} />
       </>}
       {full.err && <div className="twk-note twk-err">{full.err}</div>}
@@ -501,6 +503,10 @@ function GameApp() {
     <TweakSelect id="tw-sf-lines" label="Your moves: lines" value={String(ES.own.lines)} options={window.AnalysisCore.LINES.map(String)} onChange={(v) => setTweak('sfLines', parseInt(v, 10))}
       info="Above one, Stockfish shows that many best moves, with an arrow each. Every line takes its share of the search, so each one goes less deep in the same time." />
     <TweakSelect id="tw-sf-hash" label="Hash table" value={ES.game.hash_mb + ' MB'} options={window.AnalysisCore.HASH_MB.map((x) => x + ' MB')} onChange={(v) => setTweak('sfHash', parseInt(v, 10))} info="Helps long searches; a phone may run out of memory." />
+    {/* sfThreads null (the default): half the cores, at most 4 */}
+    <TweakSelect id="tw-sf-threads" label="Threads" value={String(ES.game.threads)} options={window.AnalysisCore.threadChoices(threading.cores).map(String)} disabled={!threading.on} onChange={(v) => setTweak('sfThreads', parseInt(v, 10))}
+      info="How many of your processor’s threads Stockfish uses. More threads let it look at more positions in the same time, which helps most in sharp positions, but keep your computer busier." />
+    {!threading.on && <div className="twk-note">{threading.reason}</div>}
     {sfChanged && <TweakButton secondary label="Reset engine settings" onClick={() => SF_KEYS.forEach((k) => setTweak(k, window.TWEAK_DEFAULTS[k]))} />}
     {!board && (analysis.state === 'running'
       ? <>

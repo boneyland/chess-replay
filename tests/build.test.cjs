@@ -144,3 +144,40 @@ test('the page asks the browser not to zoom', () => {
   const vp = page.match(/<meta name="viewport" content="([^"]*)">/)[1].split(/,\s*/);
   for (const v of ['width=device-width', 'initial-scale=1', 'maximum-scale=1', 'user-scalable=no']) assert.ok(vp.includes(v), v);
 });
+
+// threads need the multi-threaded build where the page is cross-origin isolated; the single-thread pair stays as the fallback
+test('the threaded lite engine is vendored, pinned in LAYOUT.md and copied next to the page', () => {
+  const layout = fs.readFileSync(path.join(ROOT, 'LAYOUT.md'), 'utf8');
+  for (const f of ['stockfish-19-lite.js', 'stockfish-19-lite.wasm']) {
+    const sha = require('crypto').createHash('sha256').update(fs.readFileSync(path.join(ROOT, 'vendor', f))).digest('hex');
+    assert.ok(layout.split('\n').some((l) => l.includes('`' + f + '`') && l.includes(sha)), f + ' pinned');
+    assert.ok(fs.existsSync(path.join(ROOT, 'out', 'site', f)), f + ' next to the page');
+  }
+});
+
+// threads need SharedArrayBuffer, which a browser gives only a cross-origin isolated page
+test('render.yaml isolates the page: COOP same-origin and COEP require-corp on every path', () => {
+  const yaml = fs.readFileSync(path.join(ROOT, 'render.yaml'), 'utf8');
+  const h = Object.fromEntries([...yaml.matchAll(/- path: \/\*\n\s+name: (.+)\n\s+value: (.+)/g)].map((m) => [m[1].trim(), m[2].trim()]));
+  assert.equal(h['Cross-Origin-Opener-Policy'], 'same-origin');
+  assert.equal(h['Cross-Origin-Embedder-Policy'], 'require-corp');
+});
+
+// a copy kept before the headers existed, or a HEAD made from a kept GET, still answers isolated
+test('the service worker gives its own files the isolation headers', () => {
+  const sw = fs.readFileSync(path.join(ROOT, 'app', 'sw.js'), 'utf8');
+  const run = new Function('self', 'caches', 'fetch', sw.replace(/__VERSION__/, 'x').replace('__LOCAL__', '[]').replace('__REMOTE__', '[]') + '\nreturn isolated;');
+  const isolated = run({ addEventListener() {} }, {}, () => {});
+  const r = isolated(new Response('x', { status: 200, headers: { 'content-type': 'text/html' } }));
+  assert.equal(r.headers.get('cross-origin-opener-policy'), 'same-origin');
+  assert.equal(r.headers.get('cross-origin-embedder-policy'), 'require-corp');
+  assert.equal(r.headers.get('content-type'), 'text/html');
+});
+
+// a navigation fetched with redirect: 'manual' answers an opaqueredirect (status 0), which can't be rebuilt
+test('the service worker passes a navigation redirect through untouched', () => {
+  const sw = fs.readFileSync(path.join(ROOT, 'app', 'sw.js'), 'utf8');
+  const isolated = new Function('self', 'caches', 'fetch', sw.replace(/__VERSION__/, 'x').replace('__LOCAL__', '[]').replace('__REMOTE__', '[]') + '\nreturn isolated;')({ addEventListener() {} }, {}, () => {});
+  const redirect = { type: 'opaqueredirect', status: 0, headers: new Headers() };
+  assert.equal(isolated(redirect), redirect);
+});
