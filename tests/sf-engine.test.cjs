@@ -335,3 +335,54 @@ test('real engine: three lines at the start begin with three different moves', {
     assert.ok(r.lines.every((l) => l.depth >= 11), JSON.stringify(r.lines.map((l) => l.depth)));
   } finally { e.quit(); }
 });
+
+test('ready sets Threads after Hash when more than one, and not at all for one', async () => {
+  let w;
+  const e = SF.create(() => (w = fakeWorker()), { threads: 4 });
+  await e.ready();
+  const t = w.posted.indexOf('setoption name Threads value 4');
+  assert.ok(t > w.posted.indexOf('setoption name Hash value 64'), w.posted.join(' | '));
+  let w1;
+  await SF.create(() => (w1 = fakeWorker()), {}).ready();
+  assert.ok(!w1.posted.some((s) => s.startsWith('setoption name Threads')));
+});
+
+test('setThreads waits for the running search, then applies before the next one, only on change', async () => {
+  let w;
+  const e = SF.create(() => (w = fakeWorker()), {});
+  await e.ready();
+  const a = e.search({ moves: [], depth: 5, movetimeMs: 100 });
+  await tick();
+  e.setThreads(4);
+  assert.ok(!w.posted.includes('setoption name Threads value 4'), 'not mid-search');
+  const b = e.search({ moves: ['e2e4'], depth: 5, movetimeMs: 100 });
+  w.finish('e2e4'); await a.promise; await tick();
+  const i = w.posted.indexOf('setoption name Threads value 4');
+  assert.ok(i > 0 && i < w.posted.indexOf('position startpos moves e2e4'), 'set before the next position');
+  w.finish('e7e5'); await b.promise;
+  e.setThreads(4); e.search({ moves: [], depth: 5, movetimeMs: 100 }); await tick();
+  assert.equal(w.posted.filter((s) => s === 'setoption name Threads value 4').length, 1, 'only when it changes');
+});
+
+test('threadSupport: isolation, shared memory, Safari 26.2, and the cores', () => {
+  const env = (o = {}) => ({ crossOriginIsolated: true, Atomics, SharedArrayBuffer, WebAssembly, navigator: { hardwareConcurrency: 8, userAgent: 'Mozilla/5.0 Firefox/150.0' }, ...o });
+  assert.deepEqual(SF.threadSupport(env()), { ok: true, cores: 8, reason: '' });
+  assert.deepEqual(SF.threadSupport(env({ crossOriginIsolated: false })), { ok: false, cores: 8, reason: 'This page isn’t cross-origin isolated' });
+  assert.equal(SF.threadSupport(env({ SharedArrayBuffer: undefined })).reason, 'This browser has no shared memory');
+  assert.equal(SF.threadSupport(env({ WebAssembly: { Memory: function () { throw new Error('no'); } } })).reason, 'This browser has no shared memory');
+  const safari = { hardwareConcurrency: 8, userAgent: 'Mozilla/5.0 (iPhone; CPU iPhone OS 26_2 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/26.2 Mobile/15E148 Safari/604.1' };
+  assert.equal(SF.threadSupport(env({ navigator: safari })).reason, 'Safari 26.2 crashes with threads');
+  assert.equal(SF.threadSupport(env({ navigator: { userAgent: 'x' } })).cores, 1);
+});
+
+test('real engine: threaded lite searches more nodes with 4 threads than 1', { timeout: 60000 }, async () => {
+  const e = SF.create(() => nodeWorker('stockfish-19-lite.js'), {});
+  const fen = 'r1bq1rk1/pp2ppbp/2np1np1/8/3NP3/2N1BP2/PPPQ2PP/R3KB1R w KQ - 3 9';
+  try {
+    await e.ready();
+    const one = await e.search({ moves: [], fen, depth: null, movetimeMs: 1500 }).promise;
+    e.setThreads(4);
+    const four = await e.search({ moves: [], fen, depth: null, movetimeMs: 1500 }).promise;
+    assert.ok(four.nodes > 2 * one.nodes, `${one.nodes} → ${four.nodes}`);
+  } finally { e.quit(); }
+});
