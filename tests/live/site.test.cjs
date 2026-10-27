@@ -1442,8 +1442,10 @@ for (const name of BROWSERS) for (const site of SITES) {
       await p.getByRole('button', { name: /^Analyse with Stockfish/ }).first().click();
       // the run ends (its progress and the Analyse button gone) before a move is picked: the panel's own tablebase
       // lookup of a picked position would otherwise race the run's for the same position
-      await p.waitForFunction(() => !/Analysing \d|Starting Stockfish|Analyse with Stockfish/i.test(document.body.innerText), null, { timeout: 19000 });
-      assert.ok(Date.now() - t0 < 19000, 'no 20 s search');
+      // the five requests' gaps alone take 16 s, and the run waits for the engine to start (a threaded one in Firefox takes
+      // a few seconds, more when one hangs and is replaced); a 20 s search would take it past 36 s
+      await p.waitForFunction(() => !/Analysing \d|Starting Stockfish|Analyse with Stockfish/i.test(document.body.innerText), null, { timeout: 30000 });
+      assert.ok(Date.now() - t0 < 30000, 'no 20 s search');
       assert.equal(sent.filter((u) => u.includes('/standard?')).length, 5, 'each position asked once');
       assert.equal(sent.length, 5, 'nothing else asked');
       // on 2. Bc4+ the title row says "Tablebase" in place of a depth
