@@ -1,21 +1,40 @@
 // ---------- Stockfish in the browser ----------
 // One engine per page, started on first use; a full-game analysis on request; the viewer's own moves.
-// the engine sits next to the page
-const SF_FILE = 'stockfish-19-lite-single';
-const sfMakeWorker = () => new Worker(SF_FILE + '.js');
+// the engine sits next to the page: the multi-threaded build where the page allows threads, else the single-thread one
+const SF_FILE = 'stockfish-19-lite-single', SF_FILE_THREADS = 'stockfish-19-lite';
+const sfMakeWorker = (file) => () => new Worker(file + '.js');
 // A missing engine file only shows up inside the worker (it never reaches the page as an error), so the
 // page checks the wasm is there first rather than waiting out the start timeout
-const sfFilesPresent = () => fetch(SF_FILE + '.wasm', { method: 'HEAD', cache: 'no-store' }).then((r) => r.ok, () => false);
+const sfFilesPresent = (file) => fetch(file + '.wasm', { method: 'HEAD', cache: 'no-store' }).then((r) => r.ok, () => false);
+
+// Whether Stockfish may search with threads on this page ({ on, cores, reason }, SFEngine.threadSupport); a threaded
+// engine that won't start or dies turns them off for the rest of the page, with the reason the engine menu shows
+let sfThreading = (() => { const s = window.SFEngine.threadSupport(); return { on: s.ok, cores: s.cores, reason: s.reason }; })();
+const sfThreadingSubs = new Set();
+function sfThreadsFailed(reason) {
+  if (!sfThreading.on) return;
+  sfThreading = { ...sfThreading, on: false, reason };
+  sfThreadingSubs.forEach((f) => f(sfThreading));
+}
+function useSfThreading() {
+  const [v, setV] = React.useState(sfThreading);
+  React.useEffect(() => { sfThreadingSubs.add(setV); setV(sfThreading); return () => { sfThreadingSubs.delete(setV); }; }, []);
+  return v;
+}
 
 // kind: 'lite' (next to the page) or 'full' (the viewer's download, sf-full.js); a change quits the engine running, and
-// the next use starts the other. onBroken: the full engine's kept copy turned out missing (it is dropped)
-function useEngine(hashMB, kind = 'lite', onBroken) {
+// the next use starts the other. onBroken: the full engine's kept copy turned out missing (it is dropped).
+// threads: Threads (engineSettings), changed between searches without a restart; a single-thread engine ignores it
+function useEngine(hashMB, threads, kind = 'lite', onBroken) {
   const ref = React.useRef(null), hash = React.useRef(hashMB), want = React.useRef(kind), has = React.useRef(kind), broken = React.useRef(onBroken);
+  const nThreads = React.useRef(threads), threaded = React.useRef(false);
   hash.current = hashMB;
+  nThreads.current = threads;
   // set while rendering, not in an effect: the panels' effects run before this one and must not get the engine being replaced
   want.current = kind;
   broken.current = onBroken;
   React.useEffect(() => { if (ref.current) ref.current.then((eng) => eng.setHash(hashMB), () => {}); }, [hashMB]);
+  React.useEffect(() => { if (ref.current) ref.current.then((eng) => { if (threaded.current) eng.setThreads(threads); }, () => {}); }, [threads]);
   const [status, setStatus] = React.useState('idle');
   // the engine of the other kind, quit (its running search answers null)
   const drop = React.useCallback(() => {
@@ -35,14 +54,33 @@ function useEngine(hashMB, kind = 'lite', onBroken) {
       // an engine that dies later is dropped too: the panels say so, and the next use starts a new one
       let mine = null;
       const k = has.current;
-      const start = async () => {
-        let make = sfMakeWorker;
+      // one try with threads where the page allows them, and if that engine won't start, one without
+      const attempt = async (withThreads) => {
+        let make = sfMakeWorker(withThreads ? SF_FILE_THREADS : SF_FILE);
+        if (k === 'full') withThreads = false; // the full engine's threaded build comes with its own download
+        threaded.current = withThreads;
         if (k === 'full') {
           try { make = await window.SFFull.start(); } catch (e) { if (broken.current) broken.current(); throw e; }
-        } else if (!(await sfFilesPresent())) throw new Error('The Stockfish files are missing next to this page');
-        const eng = window.SFEngine.create(make, { hashMB: hash.current, onFail: () => { if (ref.current === mine) { ref.current = null; setStatus('stopped'); } } });
+        } else if (!(await sfFilesPresent(withThreads ? SF_FILE_THREADS : SF_FILE))) throw new Error('The Stockfish files are missing next to this page');
+        // a threaded engine that dies before it is ready is start()'s to handle (ready() rejects, and it falls back)
+        let up = false;
+        const onFail = () => {
+          if (!up && withThreads) return;
+          if (withThreads) sfThreadsFailed('The threaded engine stopped');
+          if (ref.current === mine) { ref.current = null; setStatus('stopped'); }
+        };
+        const eng = window.SFEngine.create(make, { hashMB: hash.current, threads: withThreads ? nThreads.current : 1, onFail });
         await eng.ready();
+        up = true;
         return eng;
+      };
+      const start = async () => {
+        if (!sfThreading.on) return attempt(false);
+        try { return await attempt(true); } catch (e) {
+          if (!threaded.current) throw e; // not the threads' fault (a missing file, the full engine's copy)
+          sfThreadsFailed('The threaded engine didn’t start');
+          return attempt(false);
+        }
       };
       mine = ref.current = start().then((eng) => { if (ref.current === mine) setStatus('ready'); return eng; }, (e) => { if (ref.current === mine) { setStatus('unavailable'); ref.current = null; } throw e; });
       mine.catch(() => {});
@@ -105,9 +143,10 @@ const sfTbPositions = (M) => [M.start.fen, ...M.plies.map((p) => p.fen)].map((f)
 // This device's pace against the model's (AnalysisCore.paceFactor), from the last run that timed enough positions, for
 // each engine (name: the settings' engine name; the full engine searches fewer nodes a second)
 const SF_PACE_STORE = 'chess-video.sf-pace.v1', SF_PACE_MIN_POSITIONS = 10;
-const sfPaceKey = (name) => (name === window.AnalysisCore.ENGINE_NAMES.full ? SF_PACE_STORE + '.full' : SF_PACE_STORE);
-function readSfPace(name) { try { const f = +localStorage.getItem(sfPaceKey(name)); return f > 0 ? f : 1; } catch (e) { return 1; } }
-function writeSfPace(name, f) { try { localStorage.setItem(sfPaceKey(name), String(f)); } catch (e) {} }
+// and thread count (one thread keeps the key it always had)
+const sfPaceKey = (name, threads) => (name === window.AnalysisCore.ENGINE_NAMES.full ? SF_PACE_STORE + '.full' : SF_PACE_STORE) + (threads > 1 ? '.t' + threads : '');
+function readSfPace(name, threads) { try { const f = +localStorage.getItem(sfPaceKey(name, threads)); return f > 0 ? f : 1; } catch (e) { return 1; } }
+function writeSfPace(name, threads, f) { try { localStorage.setItem(sfPaceKey(name, threads), String(f)); } catch (e) {} }
 
 // The full-game analysis. Loading other files (another game, the sample) abandons a run in progress; its searches
 // so far are kept, and starting it again resumes from them.
@@ -116,8 +155,8 @@ function writeSfPace(name, f) { try { localStorage.setItem(sfPaceKey(name), Stri
 // tbOn: Settings › Online data › Endgame tablebase: positions of 7 pieces or fewer ask it first (runAnalysis)
 function useGameAnalysis(M, files, getFiles, commit, engine, settings, tbOn) {
   const A = window.AnalysisCore, tb = !!(tbOn && TB), setKey = JSON.stringify(settings) + (tb ? ' tablebase' : '');
-  const [pace, setPace] = React.useState(() => readSfPace(settings.name));
-  React.useEffect(() => { setPace(readSfPace(settings.name)); }, [settings.name]);
+  const [pace, setPace] = React.useState(() => readSfPace(settings.name, settings.threads));
+  React.useEffect(() => { setPace(readSfPace(settings.name, settings.threads)); }, [settings.name, settings.threads]);
   const perPos = A.secondsPerPosition(settings, pace);
   const idle = { state: 'idle', done: 0, total: 0, etaSec: null, err: '' };
   const [st, setSt] = React.useState(idle);
@@ -169,7 +208,7 @@ function useGameAnalysis(M, files, getFiles, commit, engine, settings, tbOn) {
       writeSfPartial(ucis, S, null, M.start.fen, T);
       setResumeAt(0);
       // with no depth limit every position takes its time limit, which says nothing about this device's pace
-      if (S.depth != null && timed.n >= SF_PACE_MIN_POSITIONS) { const f = A.paceFactor(S, timed.sec / timed.n); writeSfPace(S.name, f); setPace(f); }
+      if (S.depth != null && timed.n >= SF_PACE_MIN_POSITIONS) { const f = A.paceFactor(S, timed.sec / timed.n); writeSfPace(S.name, S.threads, f); setPace(f); }
       const name = (M.white.short + '_' + M.black.short).replace(/[^\w-]+/g, '_') + '_analysis.json';
       setSt(idle);
       commit({ ...getFiles(), analysis: json, analysisName: name, evalSource: null }); // shown, even over PGN evals

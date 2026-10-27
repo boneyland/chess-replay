@@ -220,8 +220,10 @@ function GameApp() {
   const [askRemove, setAskRemove] = React.useState(false);
   React.useEffect(() => setAskRemove(false), [full.state]);
   const sfKind = t.sfEngine === 'Full' && full.state === 'ready' ? 'full' : 'lite';
-  const ES = React.useMemo(() => window.AnalysisCore.engineSettings(t, sfKind), [t.sfDepth, t.sfTime, t.sfOwnDepth, t.sfOwnTime, t.sfHash, t.sfLines, sfKind]);
-  const engine = useEngine(ES.game.hash_mb, sfKind, full.broken);
+  // threads where the page allows them (the full engine's threaded build comes with its own download)
+  const threading = useSfThreading(), sfThreads = { ...threading, on: threading.on && sfKind === 'lite' };
+  const ES = React.useMemo(() => window.AnalysisCore.engineSettings(t, sfKind, sfThreads), [t.sfDepth, t.sfTime, t.sfOwnDepth, t.sfOwnTime, t.sfHash, t.sfLines, t.sfThreads, sfKind, sfThreads.on, sfThreads.cores]);
+  const engine = useEngine(ES.game.hash_mb, ES.game.threads, sfKind, full.broken);
   const queenInVideo = t.queenInVideo !== false;
   const showCommentary = t.commentary !== false;
   const sayFrom = { pgn: t.commentPgn !== false, notes: t.commentNotes !== false, queen: t.commentQueen !== false };

@@ -129,6 +129,20 @@ const editBox = async (page) => {
 };
 // A FEN typed into Edit position's FEN field with the keyboard, as a person would: with locator.fill(), the Paste FEN
 // dialog this replaced stayed open in GitHub Actions' stock Firefox (WebDriver BiDi), as if the page never saw the text
+// Records the engine workers' files, the commands the page sends them and the nodes per second they report
+// (window.__sf); cores: what navigator.hardwareConcurrency says, so the Threads choices are the same on every machine
+function spyEngine({ cores = 8, noSharedMemory = false } = {}) {
+  const seen = window.__sf = { urls: [], posted: [], nps: [] };
+  Object.defineProperty(Navigator.prototype, 'hardwareConcurrency', { get: () => cores });
+  if (noSharedMemory) delete window.SharedArrayBuffer;
+  const W = window.Worker;
+  window.Worker = class extends W {
+    constructor(url, ...rest) { super(url, ...rest); seen.urls.push(String(url)); }
+    postMessage(m, ...rest) { if (typeof m === 'string') seen.posted.push(m); return super.postMessage(m, ...rest); }
+    get onmessage() { return super.onmessage; }
+    set onmessage(f) { super.onmessage = f && ((e) => { const m = typeof e.data === 'string' && e.data.match(/ nps (\d+)/); if (m) seen.nps.push(+m[1]); return f(e); }); }
+  };
+}
 async function typeFen(field, fen) {
   await field.click();
   await field.press('ControlOrMeta+a');
@@ -643,6 +657,54 @@ for (const name of BROWSERS) for (const site of SITES) {
       await p.screenshot({ path: path.join(OUT, host + '-board-lines.png') });
       await p.getByRole('button', { name: 'Engine options' }).click();
       assert.equal(await p.locator('#tw-sf-lines').inputValue(), '3');
+      assert.deepEqual(nb.errors, []);
+      await nb.ctx.close();
+    });
+
+    // Threads (Analysis › ☰): the threaded build where the page is isolated, Threads sent to it; and more nodes a second than one thread
+    await t.test('desktop: Threads 4 searches with four threads and Lines 3 still shows three lines', async () => {
+      const npsWith = async (threads) => {
+        const nb = await open(browser, { width: 1440, height: 900 });
+        const p = nb.page;
+        await p.addInitScript(spyEngine, {});
+        await p.addInitScript((n) => { try { localStorage.setItem('chess-video.tweaks.v1', JSON.stringify({ sfLines: 3, sfOwnTime: 3, sfThreads: n })); } catch (e) {} }, threads);
+        await p.goto(base, { waitUntil: 'load' });
+        await loadedOn(p);
+        await p.getByRole('button', { name: 'Play/Explore' }).click();
+        await p.getByRole('button', { name: 'Starting position' }).click();
+        await assert.doesNotReject(p.getByRole('button', { name: 'Play (space)' }).waitFor({ state: 'detached', timeout: 5000 }));
+        const b = await boardBox(p);
+        const f = square(b, 'e2'), tt = square(b, 'e4');
+        await p.mouse.move(f.x, f.y); await p.mouse.down(); await p.mouse.move(tt.x, tt.y, { steps: 8 }); await p.mouse.up();
+        await p.waitForFunction(() => (document.body.innerText.match(/^[+−]?\d+\.\d\d( d\d+)?\s+1…/gm) || []).length === 3, null, { timeout: 45000 });
+        const seen = await p.evaluate(() => window.__sf);
+        assert.ok(seen.urls.some((u) => /stockfish-19-lite\.js$/.test(u)), 'the threaded build: ' + seen.urls.join(' '));
+        assert.equal(seen.posted.includes(`setoption name Threads value ${threads}`), threads > 1, seen.posted.filter((m) => m.startsWith('setoption')).join(' | '));
+        assert.deepEqual(nb.errors, []);
+        await nb.ctx.close();
+        return Math.max(...seen.nps);
+      };
+      const one = await npsWith(1), four = await npsWith(4);
+      t.diagnostic(`nodes/s: 1 thread ${one}, 4 threads ${four}`);
+      assert.ok(four > 1.5 * one, `${one} → ${four}`);
+    });
+
+    // no shared memory (an old browser, or a page that isn't isolated): the single-thread build, and own moves still rated
+    await t.test('desktop: a page that can’t run threads runs one thread and says why', async () => {
+      const nb = await open(browser, { width: 1440, height: 900 });
+      const p = nb.page;
+      await p.addInitScript(spyEngine, { noSharedMemory: true });
+      await p.addInitScript(() => { try { localStorage.setItem('chess-video.tweaks.v1', JSON.stringify({ sfThreads: 4, sfOwnTime: 1 })); } catch (e) {} });
+      await p.goto(base, { waitUntil: 'load' });
+      await loadedOn(p);
+      const b = await boardBox(p);
+      const f = square(b, 'd2'), tt = square(b, 'd4');
+      await p.mouse.move(f.x, f.y); await p.mouse.down(); await p.mouse.move(tt.x, tt.y, { steps: 8 }); await p.mouse.up();
+      await p.waitForFunction(() => /your move · .*(stockfish’s choice|cp vs|as good as|can’t run here|stopped)/i.test(document.body.innerText), null, { timeout: 45000 });
+      assert.doesNotMatch(await p.getByText(/your move ·/i).innerText(), /can’t run here|stopped/i);
+      const seen = await p.evaluate(() => window.__sf);
+      assert.ok(seen.urls.some((u) => /stockfish-19-lite-single\.js$/.test(u)) && !seen.urls.some((u) => /stockfish-19-lite\.js$/.test(u)), seen.urls.join(' '));
+      assert.ok(!seen.posted.some((m) => m.startsWith('setoption name Threads')));
       assert.deepEqual(nb.errors, []);
       await nb.ctx.close();
     });
