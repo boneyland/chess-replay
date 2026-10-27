@@ -284,8 +284,8 @@ test('the eval graph runs under the board wherever that leaves the board its siz
     assert.ok(Math.abs(L.board.size - alone.board.size) < 0.5, `${at}: the board keeps its size`);
     assert.ok(L.plot.y >= L.board.y + L.board.size + L.bars.gap + L.bars.h + 7.5 && L.plot.y + L.plot.h <= h, at);
   }
-  // thinner short of a desktop: 80 px, as in the sidebar, against a desktop's 110
-  for (const [w, h, ph] of [[966, 684, 80], [1000, 760, 80], [1440, 900, 110], [1100, 720, 110]]) {
+  // thinner under 1181 px wide: 80 px, as in the sidebar, against 110
+  for (const [w, h, ph] of [[966, 684, 80], [1000, 760, 80], [1100, 720, 80], [1180, 760, 80], [1181, 760, 110], [1440, 900, 110]]) {
     const L = LC.compute({ w, h });
     assert.ok(L.plot && L.plot.x < L.board.x && L.plot.h === ph, `${w}x${h}: ${JSON.stringify(L.plot)}`);
   }
