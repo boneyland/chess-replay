@@ -148,9 +148,9 @@ test('cols override and moves rows', () => {
   const L = LC.compute({ w: 1440, h: 818 });
   // rows: what fits under the title at MoveList's sizes, which are tx() sizes (0.8 × the text): 38 px rows, the panel's
   // padding (2 × 16), title row (15 × 1.4) and its margin (12), and the borders (2, not scaled)
-  assert.equal(L.moves.rows, Math.floor((L.moves.h - (0.8 * (2 * 16 + 15 * 1.4 + 12) + 2)) / (38 * 0.8)));
+  assert.equal(L.moves.rows, Math.floor((L.moves.h - (0.8 * (2 * 16 + 15 * 1.4 + 12) + 2)) / (38 * 0.8) + 1e-6));
   const big = LC.compute({ w: 1440, h: 818, text: 1.3 });
-  assert.equal(big.moves.rows, Math.floor((big.moves.h - (0.8 * 1.3 * (2 * 16 + 15 * 1.4 + 12) + 2)) / (38 * 0.8 * 1.3)));
+  assert.equal(big.moves.rows, Math.floor((big.moves.h - (0.8 * 1.3 * (2 * 16 + 15 * 1.4 + 12) + 2)) / (38 * 0.8 * 1.3) + 1e-6));
   assert.equal(LC.columns({ w: 1440, h: 818 }), 2);
 });
 
@@ -226,9 +226,21 @@ test('eval graph height floor, square-ish and portrait layouts', () => {
     assert.ok(L.comment.y + L.comment.h <= L.analysis.y, at);
     // Moves takes 40% of the sidebar's room under the header there (30% elsewhere), up to its five lines
     const room = L.moves.h + L.comment.h, cap = 0.8 * L.text * (2 * L.pad[0] + 15 * 1.4 + 12) + 2 + 5 * 38 * 0.8 * L.text;
-    assert.ok(Math.abs(L.moves.h - Math.min(cap, 0.4 * room)) < 1, `${at}: moves ${L.moves.h} of ${room}`);
+    const line = 38 * 0.8 * L.text, chrome = cap - 5 * line;
+    assert.ok(L.moves.h <= Math.min(cap, 0.4 * room) + 0.5 && L.moves.h > Math.min(cap, 0.4 * room) - line, `${at}: moves ${L.moves.h} of ${room}`);
   }
   assert.ok(LC.compute({ w: 1440, h: 900 }).plot); // landscape keeps it
   const p = LC.compute({ w: 390, h: 844 });
   assert.ok(p.moves.order < p.analysis.order && p.analysis.order < p.comment.order);
+});
+
+// two columns: the Moves box holds whole lines, none cut off
+test('two-column Moves holds whole lines', () => {
+  for (const [w, h] of [[1440, 900], [1440, 818], [1024, 690], [1000, 960], [900, 860], [1280, 520], [844, 390], [2560, 1400]]) for (const text of [0.9, 1, 1.15, 1.3]) for (const video of [false, true]) {
+    const L = LC.compute({ w, h, text, video }), at = `${w}x${h} text ${text}${video ? ' video' : ''}`;
+    if (L.cols !== 2) continue;
+    const line = 38 * 0.8 * L.text, chrome = 0.8 * L.text * (2 * L.pad[0] + 15 * 1.4 + 12) + 2;
+    const n = (L.moves.h - chrome) / line;
+    if (n >= 1 - 1e-6) assert.ok(Math.abs(n - Math.round(n)) < 1e-6, `${at}: ${n} lines`);
+  }
 });
