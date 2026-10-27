@@ -66,8 +66,9 @@
     const byWidth = Math.min(cap, w - 2 * MARGIN - GAP - sideW(w, text) - EVAL_TOTAL);
     const plotBelow = view === 'replay' && !square && !dock && h >= PLOT_MIN_H && (h >= PLOT_BELOW_MIN_H || byWidth <= bare - GAP - PLOT_H);
     // a square-ish window's eval graph, under Analysis, where Analysis keeps ANALYSIS_PLOT_MIN over it at the board's
-    // size by the width (twoColumns() places it by the room actually left)
-    const plotRoom = 2 * GAP + PLOT_H + ANALYSIS_PLOT_MIN * text;
+    // size by the width (twoColumns() places it by the room actually left); as short as the sidebar's (PLOT_SIDE_H),
+    // in a window narrower than a desktop's
+    const plotRoom = 2 * GAP + PLOT_SIDE_H + ANALYSIS_PLOT_MIN * text;
     const plotUnder = square && view === 'replay' && byWidth <= bare - plotRoom;
     return { square, plotBelow, byWidth, hLimit: bare - (plotBelow ? GAP + PLOT_H : plotUnder ? plotRoom : square ? GAP + ANALYSIS_BELOW_MIN * text : 0) };
   }
@@ -145,9 +146,10 @@
     L.moves = withMoves(box(sx, rowY, sw, movesH), text);
     L.comment = box(sx, rowY + movesH + GAP, sw, commentH);
     // a square-ish window's eval graph: at the bottom, under Analysis, where Analysis keeps its minimum
-    const underH = h - MARGIN - analysisY, plotUnder = square && view === 'replay' && underH - GAP - PLOT_H >= ANALYSIS_PLOT_MIN * text;
-    L.analysis = square ? box(MARGIN, analysisY, w - 2 * MARGIN, plotUnder ? underH - GAP - PLOT_H : underH) : box(sx, L.comment.y + commentH + GAP, sw, analysisH);
-    if (plotBelow || plotUnder) L.plot = box(MARGIN, plotY, w - 2 * MARGIN, PLOT_H);
+    const underH = h - MARGIN - analysisY, plotUnder = square && view === 'replay' && underH - GAP - PLOT_SIDE_H >= ANALYSIS_PLOT_MIN * text;
+    L.analysis = square ? box(MARGIN, analysisY, w - 2 * MARGIN, plotUnder ? underH - GAP - PLOT_SIDE_H : underH) : box(sx, L.comment.y + commentH + GAP, sw, analysisH);
+    if (plotBelow) L.plot = box(MARGIN, plotY, w - 2 * MARGIN, PLOT_H);
+    else if (plotUnder) L.plot = box(MARGIN, h - MARGIN - PLOT_SIDE_H, w - 2 * MARGIN, PLOT_SIDE_H);
     else if (plotSide) L.plot = box(sx, L.analysis.y + analysisH + GAP, sw, PLOT_SIDE_H);
     return L;
   }
