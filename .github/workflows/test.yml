@@ -18,48 +18,44 @@ jobs:
       - run: node build.cjs
       - run: node --test --test-concurrency=1 tests/*.test.cjs
   # The smoke tests (tests/live/site.test.cjs) against this commit's build, served the way render.yaml has Render
-  # serve it, in the runner's own Google Chrome and Firefox (Firefox over WebDriver BiDi): no browser download. Failures
-  # are also reported as annotations (@reporters/github), which a token that can't read the job's log can still read
+  # serve it: in the runner's own Google Chrome and Firefox (Firefox over WebDriver BiDi; no browser download), and in
+  # Playwright's WebKit, the engine of iPhone Safari (its phone tests get the iPhone 13 profile). One job per browser and
+  # part, side by side: the engine part is the tests that wait out engines starting (Stockfish's threads failing and
+  # falling back, the full engine's 99 MB download), the rest is everything else. Failures are also reported as
+  # annotations (@reporters/github), which a token that can't read the job's log can still read
   browsers:
     runs-on: ubuntu-24.04
-    timeout-minutes: 15
+    timeout-minutes: 20
+    strategy:
+      fail-fast: false
+      matrix:
+        browser: [chromium, firefox, webkit]
+        part: [main, engine]
+    env:
+      LIVE_URLS: local
+      LIVE_BROWSERS: ${{ matrix.browser }}
+      ENGINE_TESTS: '^desktop: (a threaded engine that never|Full whose threaded engine|the full engine downloads)'
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
       - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
         with:
           node-version: 22
       - run: npm install --no-save --no-package-lock playwright@1.63.0 @reporters/github@2.1.4
-      - run: |
-          google-chrome --version && firefox --version
-          echo "FIREFOX_PATH=$(readlink -f "$(command -v firefox)")" >> "$GITHUB_ENV"
+      - if: matrix.browser == 'chromium'
+        run: google-chrome --version && echo "CHROMIUM_CHANNEL=chrome" >> "$GITHUB_ENV"
+      - if: matrix.browser == 'firefox'
+        run: firefox --version && echo "FIREFOX_PATH=$(readlink -f "$(command -v firefox)")" >> "$GITHUB_ENV"
+      - if: matrix.browser == 'webkit'
+        run: npx playwright install --with-deps webkit
+      - if: matrix.part == 'engine'
+        run: echo "LIVE_ONLY=$ENGINE_TESTS" >> "$GITHUB_ENV"
+      - if: matrix.part == 'main'
+        run: echo "LIVE_SKIP=$ENGINE_TESTS" >> "$GITHUB_ENV"
       - run: node --test --test-reporter=spec --test-reporter-destination=stdout --test-reporter=@reporters/github --test-reporter-destination=stdout tests/live/site.test.cjs
-        env:
-          LIVE_URLS: local
-          CHROMIUM_CHANNEL: chrome
       - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
         if: always()
         with:
-          name: screenshots
-          path: tests/out/live/
-  # The same smoke tests in Playwright's WebKit, the engine of iPhone Safari (its phone tests get the iPhone 13 profile)
-  webkit:
-    runs-on: ubuntu-24.04
-    timeout-minutes: 15
-    steps:
-      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
-      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
-        with:
-          node-version: 22
-      - run: npm install --no-save --no-package-lock playwright@1.63.0 @reporters/github@2.1.4
-      - run: npx playwright install --with-deps webkit
-      - run: node --test --test-reporter=spec --test-reporter-destination=stdout --test-reporter=@reporters/github --test-reporter-destination=stdout tests/live/site.test.cjs
-        env:
-          LIVE_URLS: local
-          LIVE_BROWSERS: webkit
-      - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
-        if: always()
-        with:
-          name: webkit-screenshots
+          name: screenshots-${{ matrix.browser }}-${{ matrix.part }}
           path: tests/out/live/
   # tests/live/android.test.cjs: Chrome on an Android emulator (KVM on the runner). The google_apis image has Chrome
   # and is debuggable, so Playwright can give Chrome its command line without chrome://flags
