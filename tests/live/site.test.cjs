@@ -134,16 +134,18 @@ const editBox = async (page) => {
 // hang: how many threaded engines (the first ones) never get a search, as Firefox's first one in a page sometimes doesn't;
 // hangReady: how many never answer at all (they never get uci)
 function spyEngine({ cores = 8, noSharedMemory = false, hang = 0, hangReady = 0 } = {}) {
-  const seen = window.__sf = { urls: [], posted: [], nps: [] };
+  // at: when each worker started, ended: [which, when] each was terminated (ms since the page began)
+  const seen = window.__sf = { urls: [], posted: [], nps: [], at: [], ended: [] };
   Object.defineProperty(Navigator.prototype, 'hardwareConcurrency', { get: () => cores });
   if (noSharedMemory) delete window.SharedArrayBuffer;
   const W = window.Worker;
   window.Worker = class extends W {
     constructor(url, ...rest) {
-      super(url, ...rest); seen.urls.push(String(url));
+      super(url, ...rest); this.n = seen.urls.push(String(url)) - 1; seen.at.push(Math.round(performance.now()));
       const threaded = /stockfish-19-lite\.js$/.test(String(url));
       this.mute = threaded && hangReady-- > 0 ? /^uci$/ : threaded && hang-- > 0 ? /^go/ : null;
     }
+    terminate() { seen.ended.push([this.n, Math.round(performance.now())]); return super.terminate(); }
     postMessage(m, ...rest) { if (typeof m === 'string') seen.posted.push(m); if (this.mute && typeof m === 'string' && this.mute.test(m)) return; return super.postMessage(m, ...rest); }
     get onmessage() { return super.onmessage; }
     set onmessage(f) { super.onmessage = f && ((e) => { const m = typeof e.data === 'string' && e.data.match(/ nps (\d+)/); if (m) seen.nps.push(+m[1]); return f(e); }); }
@@ -722,11 +724,16 @@ for (const name of BROWSERS) for (const site of SITES) {
 
     // Firefox's threaded engine can hang (before uci, starting its threads, or on its first search): the page tries a fresh
     // one, up to three, then runs one thread
-    const ownMoveRated = async (p) => {
+    // the verdict on the move just made, and what the page's engines did if it never comes
+    const verdictOn = (p, timeout) => p.waitForFunction(() => /your move · .*(stockfish’s choice|cp vs|as good as|can’t run here|stopped)/i.test(document.body.innerText), null, { timeout }).catch(async (e) => {
+      const at = await p.evaluate(() => ({ now: Math.round(performance.now()), urls: window.__sf.urls.map((u) => u.split('/').pop()), at: window.__sf.at, ended: window.__sf.ended, posted: window.__sf.posted.slice(-6), text: (document.body.innerText.match(/(your move|thinking|Starting|Stockfish)[^\n]{0,80}/gi) || []).slice(0, 6) }));
+      throw new Error(`${e.message}\n${JSON.stringify(at)}`);
+    });
+    const ownMoveRated = async (p, timeout = 60000) => {
       const b = await boardBox(p);
       const f = square(b, 'd2'), tt = square(b, 'd4');
       await p.mouse.move(f.x, f.y); await p.mouse.down(); await p.mouse.move(tt.x, tt.y, { steps: 8 }); await p.mouse.up();
-      await p.waitForFunction(() => /your move · .*(stockfish’s choice|cp vs|as good as|can’t run here|stopped)/i.test(document.body.innerText), null, { timeout: 60000 });
+      await verdictOn(p, timeout);
       assert.doesNotMatch(await p.getByText(/your move ·/i).innerText(), /can’t run here|stopped/i);
       return p.evaluate(() => window.__sf);
     };
@@ -751,16 +758,21 @@ for (const name of BROWSERS) for (const site of SITES) {
       }
     });
 
-    await t.test('desktop: a threaded engine that never answers uci is replaced after 10 s', { timeout: 120000 }, async () => {
+    // the browser's own hangs (Firefox's, and WebKit's on GitHub) can use up the other tries, each up to the 10 s load
+    // time and the 9 s probe, before the single-thread engine's start: hence the long wait
+    await t.test('desktop: a threaded engine that never answers uci is replaced after 10 s', { timeout: 180000 }, async () => {
       const nb = await open(browser, { width: 1440, height: 900 });
       const p = nb.page;
       await p.addInitScript(spyEngine, { hangReady: 1 });
       await p.addInitScript(() => { try { localStorage.setItem('chess-video.tweaks.v1', JSON.stringify({ sfOwnTime: 1 })); } catch (e) {} });
       await p.goto(base, { waitUntil: 'load' });
       await loadedOn(p);
-      const t0 = Date.now(), seen = await ownMoveRated(p);
-      assert.ok(threadedOf(seen) >= 2 && singleOf(seen) === 0, seen.urls.join(' '));
-      assert.ok(Date.now() - t0 < 30000, 'within the lite load time, not the 30 s ready timeout');
+      const seen = await ownMoveRated(p, 120000), log = `${seen.urls.join(' ')} at ${seen.at.join(' ')}`;
+      // the second engine starts at the lite load time after the first, not the 30 s ready timeout
+      const gap = seen.at[1] - seen.at[0];
+      assert.ok(threadedOf(seen) >= 2 && /stockfish-19-lite\.js$/.test(seen.urls[1]) && gap >= 9000 && gap < 20000, log);
+      // one thread only once three threaded engines didn't start
+      assert.ok(singleOf(seen) === 0 || (threadedOf(seen) === 3 && singleOf(seen) === 1), log);
       assert.deepEqual(nb.errors, []);
       await nb.ctx.close();
     });
@@ -768,7 +780,7 @@ for (const name of BROWSERS) for (const site of SITES) {
     // Full kept as the threaded build, and its threaded engine never searches: Full's single-thread copy runs where it is
     // kept, else Lite with a note; either way the move is rated (switching engines once quit the one just started).
     // A stand-in SFFull serves the lite files, so nothing is downloaded
-    await t.test('desktop: Full whose threaded engine never searches falls back without losing the search', async () => {
+    await t.test('desktop: Full whose threaded engine never searches falls back without losing the search', { timeout: 330000 }, async () => {
       for (const single of [true, false]) {
         const nb = await open(browser, { width: 1440, height: 900 });
         const p = nb.page;
@@ -789,7 +801,8 @@ for (const name of BROWSERS) for (const site of SITES) {
         const b = await boardBox(p);
         const f = square(b, 'd2'), tt = square(b, 'd4');
         await p.mouse.move(f.x, f.y); await p.mouse.down(); await p.mouse.move(tt.x, tt.y, { steps: 8 }); await p.mouse.up();
-        await p.waitForFunction(() => /your move · .*(stockfish’s choice|cp vs|as good as|can’t run here|stopped)/i.test(document.body.innerText), null, { timeout: 60000 });
+        // three threaded tries, each up to Full's 30 s load timeout and the 9 s probe, then the single-thread engine's start
+        await verdictOn(p, 150000);
         assert.doesNotMatch(await p.getByText(/your move ·/i).innerText(), /can’t run here|stopped/i, single ? 'single kept' : 'not kept');
         const seen = await p.evaluate(() => window.__sf);
         assert.equal(seen.urls.filter((u) => /stockfish-19-lite\.js$/.test(u)).length, 3, seen.urls.join(' '));
@@ -1010,12 +1023,21 @@ for (const name of BROWSERS) for (const site of SITES) {
       const clocks = async () => (await p.locator('.game-clock').allInnerTexts()).join(' ');
       const field = p.getByRole('textbox', { name: 'FEN' });
       await assert.doesNotReject(field.waitFor({ timeout: 5000 }));
-      await p.waitForTimeout(2500);
+      // the time Black had when the editor paused the game, as stored: the menu clicks before it take seconds in WebKit
+      const paused = await p.evaluate(() => JSON.parse(localStorage.getItem('chess-video.files.v1')).board.game.clock);
+      assert.equal(paused.since, null, 'the clock stopped for the editor');
+      assert.ok(paused.left.b < 300000 && paused.left.w === 303000, JSON.stringify(paused));
+      await p.waitForTimeout(4000);
+      const t0 = Date.now();
       await p.keyboard.press('Escape');
       await assert.doesNotReject(field.waitFor({ state: 'detached', timeout: 5000 }));
-      const back = await clocks();
-      // Black had thought about 1.5 s before Edit position; 2.5 s more in the editor would read 4:5x or less
-      assert.match(back, /5:0[0-3] 4:5[7-9]|4:5[7-9] 5:0[0-3]/, back);
+      const back = await clocks(), since = Date.now() - t0;
+      // Black's clock runs again from Cancel; the 4 s in the editor would read at least 4 s lower
+      const mmss = (ms) => { const s = Math.floor(ms / 1000); return `${Math.floor(s / 60)}:${String(s % 60).padStart(2, '0')}`; };
+      const ok = new Set(); for (let ms = paused.left.b - since; ms < paused.left.b + 1000; ms += 1000) ok.add(mmss(Math.min(ms, paused.left.b)));
+      assert.ok(since < 4000, `${since} ms from Cancel to the clocks read: too long to tell the editor's time apart`);
+      const black = back.split(' ').find((s) => s !== '5:03');
+      assert.ok(back.includes('5:03') && ok.has(black), `${back}: Black had ${paused.left.b} ms, ${since} ms since Cancel`);
       assert.deepEqual(ep.errors, []);
       await ep.ctx.close();
     });
