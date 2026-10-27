@@ -26,17 +26,19 @@
   const BOARD_MAX = 900, BOARD_MIN = 200, BOARD_OK = 360, BOARD_BACK = 380;
   // the board is never more than half the viewport's longer side (its height upright, its width held sideways), nor 900 px
   let boardMax = BOARD_MAX;
-  // the moves list beside the commentary: 230 px wide, giving way first, to 200 (still room for a six-character move on
-  // both sides), while the commentary keeps 230; then the commentary, to 150; then the list again
-  const SIDEBAR_MIN = 320, MOVES_W = 230, MOVES_MIN = 200, COMMENT_W = 230, COMMENT_MIN = 150;
+  // the sidebar: 320 px at least, and 380 px and a gap while the board keeps 360 px (the width that once held the moves
+  // list and the commentary side by side, which Analysis's lines still use)
+  const SIDEBAR_MIN = 320, SIDEBAR_W = 380;
   const HEADER_H = 76, PLOT_H = 110, PLOT_SIDE_H = 80, PLOT_BELOW_MIN_H = 700, PLOT_MIN_H = 500; // no eval graph under 500 px high
-  const ONE_COL = { comment: 200, analysis: 260, moves: 240, panel: 260 }; // paused heights, times text
+  const ONE_COL = { comment: 200, analysis: 260, panel: 260 }; // paused heights, times text (Moves: its five lines)
   const VIDEO_PREF = [96, 120, 96], PANEL_FLOOR = 48; // comment, analysis, moves under a video's board, times text
   // MoveList's chrome as it draws it (game-video-core.jsx, whose tx() sizes are 0.8 × the text size): a move row, and
   // the panel's padding, title row and its margin and the borders around the rows. All but the borders grow with the text
-  const MOVE_ROW = 38, MOVE_BORDER = 2, FLOW_ROWS = 10, TX = 0.8;
+  // Moves stands over Commentary in every layout, and is never taller than MOVE_LINES lines of moves
+  const MOVE_ROW = 38, MOVE_BORDER = 2, MOVE_LINES = 5, TX = 0.8;
   const moveRow = (text) => MOVE_ROW * TX * text;
   const moveChrome = (text) => (2 * PAD[0] + 15 * 1.4 + 12) * TX * text + MOVE_BORDER;
+  const movesMax = (text) => moveChrome(text) + MOVE_LINES * moveRow(text);
 
   const TEXT_SIZES = { Small: 0.9, Default: 1, Large: 1.15, Larger: 1.3 };
   const textScale = (name) => (Object.prototype.hasOwnProperty.call(TEXT_SIZES, name) ? TEXT_SIZES[name] : 1);
@@ -60,7 +62,7 @@
     const tall = prevCols === 1 ? h >= aspect * w : h > aspect * w;
     const narrow = boardW < (prevCols === 1 ? BOARD_BACK : BOARD_OK);
     // the two-column board as twoColumns() sizes it by the width (the sidebar's share), against the height it could have
-    const side = Math.max(SIDEBAR_MIN * text, Math.min((MOVES_W + COMMENT_MIN) * text + GAP, w - 2 * MARGIN - GAP - EVAL_TOTAL - BOARD_OK));
+    const side = Math.max(SIDEBAR_MIN * text, Math.min(SIDEBAR_W * text + GAP, w - 2 * MARGIN - GAP - EVAL_TOTAL - BOARD_OK));
     const byWidth = Math.min(BOARD_MAX, w - 2 * MARGIN - GAP - side - EVAL_TOTAL);
     const hLimit = h - 2 * MARGIN - barsTotal(text) - (h >= PLOT_BELOW_MIN_H ? GAP + PLOT_H : 0);
     const wasted = byWidth < BOARD_MAX && (hLimit - byWidth) / h > (prevCols === 1 ? 0.25 : 0.3);
@@ -69,10 +71,9 @@
     return !keepTwo && (tall || narrow || wasted) ? 1 : 2;
   }
 
-  // moves.cols / moves.rows: the list shows two columns of moves from 480 px wide; rows is how many fit under its title
+  // moves.rows: how many lines of moves fit under the list's title
   function withMoves(m, text) {
     if (!m) return m;
-    m.cols = m.w >= 480 ? 2 : 1;
     m.rows = Math.max(0, Math.floor((m.h - moveChrome(text)) / moveRow(text) + 1e-6));
     return m;
   }
@@ -82,9 +83,9 @@
     const plotBelow = view === 'replay' && h >= PLOT_BELOW_MIN_H;
     const bar = barH(text);
     const hLimit = h - 2 * MARGIN - barsTotal(text) - (plotBelow ? GAP + PLOT_H : 0);
-    // the sidebar's share: room for the moves list and a commentary beside it, as long as the board keeps 360 px; never
-    // under the minimum. The left column (board plus its eval bar) is what is left
-    const side = Math.max(SIDEBAR_MIN * text, Math.min((MOVES_W + COMMENT_MIN) * text + GAP, w - 2 * MARGIN - GAP - EVAL_TOTAL - BOARD_OK));
+    // the sidebar's share, as long as the board keeps 360 px; never under the minimum. The left column (board plus its
+    // eval bar) is what is left
+    const side = Math.max(SIDEBAR_MIN * text, Math.min(SIDEBAR_W * text + GAP, w - 2 * MARGIN - GAP - EVAL_TOTAL - BOARD_OK));
     const wLimit = w - 2 * MARGIN - GAP - side;
     // 200 px at least by width; a window too short for that (a video in a phone held sideways at its smallest) shrinks the board to the height
     const size = Math.max(40, Math.min(Math.max(BOARD_MIN, Math.min(boardMax, wLimit - EVAL_TOTAL)), hLimit));
@@ -107,13 +108,15 @@
     let rest = bottom - top - L.header.h - GAP; // under the header
     let plotSide = false;
     if (view === 'replay' && !plotBelow && h >= PLOT_MIN_H && rest - GAP - PLOT_SIDE_H >= 190 * text) { plotSide = true; rest -= GAP + PLOT_SIDE_H; }
-    const analysisH = Math.max(0, Math.round((rest - GAP) * 0.45));
-    const rowH = Math.max(0, rest - GAP - analysisH);
+    // Moves (a third of the room, between its title and one line and its five lines), then Commentary and Analysis
+    // sharing what's left, 45:55
+    const avail = Math.max(0, rest - 2 * GAP);
+    const movesH = Math.min(avail, Math.max(moveChrome(text) + moveRow(text), Math.min(movesMax(text), avail * 0.3)));
+    const commentH = Math.max(0, Math.round((avail - movesH) * 0.45)), analysisH = Math.max(0, avail - movesH - commentH);
     const rowY = top + L.header.h + GAP;
-    const movesW = Math.max(0, Math.min(MOVES_W * text, Math.max(MOVES_MIN * text, sw - COMMENT_W * text - GAP), sw - COMMENT_MIN * text - GAP));
-    L.moves = withMoves(box(sx, rowY, movesW, rowH), text);
-    L.comment = box(sx + movesW + GAP, rowY, sw - movesW - GAP, rowH);
-    L.analysis = box(sx, rowY + rowH + GAP, sw, analysisH);
+    L.moves = withMoves(box(sx, rowY, sw, movesH), text);
+    L.comment = box(sx, rowY + movesH + GAP, sw, commentH);
+    L.analysis = box(sx, L.comment.y + commentH + GAP, sw, analysisH);
     if (plotBelow) L.plot = box(MARGIN, plotY, w - 2 * MARGIN, PLOT_H);
     else if (plotSide) L.plot = box(sx, L.analysis.y + analysisH + GAP, sw, PLOT_SIDE_H);
     return L;
@@ -132,8 +135,8 @@
     const movesMin = moveChrome(text) + moveRow(text);
     if (view === 'edit') parts = [['tray'], ['panel', ONE_COL.panel * text, 120 * text, PANEL_FLOOR * text]];
     else {
-      parts = [['comment', ONE_COL.comment * text, VIDEO_PREF[0] * text, PANEL_FLOOR * text], ['analysis', ONE_COL.analysis * text, VIDEO_PREF[1] * text, PANEL_FLOOR * text],
-        ['moves', ONE_COL.moves * text, Math.max(VIDEO_PREF[2] * text, movesMin), movesMin]];
+      parts = [['moves', movesMax(text), Math.min(movesMax(text), Math.max(VIDEO_PREF[2] * text, movesMin)), movesMin],
+        ['comment', ONE_COL.comment * text, VIDEO_PREF[0] * text, PANEL_FLOOR * text], ['analysis', ONE_COL.analysis * text, VIDEO_PREF[1] * text, PANEL_FLOOR * text]];
       if (!video) parts.unshift(['header', HEADER_H * text]);
     }
     const cell = Math.min(56, Math.floor((pw - 5 * 4) / 6));
@@ -153,8 +156,15 @@
       const tiers = [sized.map((p) => p[3]), sized.map(() => PANEL_FLOOR * text), sized.map(() => PANEL_FLOOR)];
       const floors = tiers.find((f) => avail >= sum(f)) || tiers[2];
       const floor = sum(floors);
-      if (avail >= sumPref) heights = prefs.map((p) => (p * avail) / sumPref);
-      else {
+      if (avail >= sumPref) {
+        // the room past the preferred heights goes to the panels in proportion, but Moves stops at its five lines
+        const mi = sized.findIndex((p) => p[0] === 'moves');
+        heights = prefs.map((p) => (p * avail) / sumPref);
+        if (mi >= 0 && heights[mi] > movesMax(text)) {
+          const extra = heights[mi] - movesMax(text), others = sumPref - prefs[mi];
+          heights = heights.map((x, i) => (i === mi ? movesMax(text) : x + (extra * prefs[i]) / others));
+        }
+      } else {
         const t = Math.max(0, (avail - floor) / (sumPref - floor));
         heights = prefs.map((p, i) => floors[i] + (p - floors[i]) * t);
       }
@@ -169,7 +179,7 @@
     };
     let y = MARGIN + bars + size + GAP;
     // A paused page flows: the panels stack under the board in a column, each as tall as its contents (Moves up to
-    // FLOW_ROWS rows, then it scrolls), and the page scrolls. The boxes keep their order and width; the heights here are
+    // MOVE_LINES lines, then it scrolls), and the page scrolls. The boxes keep their order and width; the heights here are
     // only the paused defaults, which the views don't use. L.flow says where the column starts
     if (!video) L.flow = { top: y, x: px, w: pw, gap: GAP, bottom: MARGIN };
     if (fixed) { L.tray = box(px, y, pw, trayH); y += trayH + GAP; }
@@ -177,7 +187,7 @@
     withMoves(L.moves, text);
     if (L.flow) {
       parts.forEach((p, i) => { if (L[p[0]]) Object.assign(L[p[0]], { flow: true, order: i, scroll: false }); });
-      if (L.moves) L.moves.maxRows = FLOW_ROWS;
+      if (L.moves) L.moves.maxRows = MOVE_LINES;
     }
     return L;
   }

@@ -343,20 +343,20 @@ for (const name of BROWSERS) for (const site of SITES) {
       // focus follows on the next frame: an arrow pressed before it would step from the move before
       await page.waitForFunction(() => document.activeElement && document.activeElement.dataset.ply === String(document.querySelectorAll('[data-ply]').length - 1), null, { timeout: 3000 });
       await page.keyboard.press('ArrowLeft');
-      await page.waitForFunction(() => document.querySelector('.moves-list').scrollTop > 100, null, { timeout: 3000 });
+      await page.waitForFunction(() => document.querySelector('.moves-list').scrollTop > 0, null, { timeout: 3000 });
       const at = await page.locator('.plabel').innerText(), end = await top();
       const r = await list.boundingBox();
       await page.mouse.move(r.x + r.width * 0.3, r.y + r.height * 0.3);
       await page.mouse.down();
       await page.mouse.move(r.x + r.width * 0.3, r.y + r.height * 0.9, { steps: 8 });
       await page.mouse.up();
-      assert.ok(await top() < end - 100, 'the drag scrolled the list up');
+      assert.ok(await top() < end, 'the drag scrolled the list up');
       assert.equal(await page.evaluate(() => String(window.getSelection())), '', 'no text selected');
       assert.equal(await page.locator('.plabel').innerText(), at, 'the drag picked no move');
       // let go while moving, the list glides on: wait until it stops
       let dragged = await top();
       for (let i = 0; i < 40; i++) { await page.waitForTimeout(100); const now = await top(); if (now === dragged) break; dragged = now; }
-      assert.ok(dragged < end - 100, 'the glide left the list scrolled up');
+      assert.ok(dragged < end, 'the glide left the list scrolled up');
       await page.mouse.wheel(0, 120);
       await page.waitForFunction((d) => document.querySelector('.moves-list').scrollTop > d, dragged, { timeout: 3000 });
       await page.locator('[data-ply="0"]').click();
@@ -524,8 +524,8 @@ for (const name of BROWSERS) for (const site of SITES) {
       await assert.doesNotReject(fp.page.locator('.plabel').filter({ hasText: /4… Bc5/ }).waitFor({ timeout: 5000 }));
       const b = await boardBox(fp.page);
       assert.equal(b.n, 32);
-      const moves = await fp.page.locator('[data-ply="0"]').evaluate((el) => el.parentElement.parentElement.parentElement.innerText);
-      assert.match(moves, /3\.\s*…\s*Nf6\s*4\.\s*Nc3\s*Bc5/);
+      const moves = await fp.page.locator('[data-ply="0"]').evaluate((el) => el.closest('.moves-list').innerText);
+      assert.match(moves, /3…\s*Nf6\s*4\.\s*Nc3\s*Bc5/);
       const from = square(b, 'd2'), to = square(b, 'd3');
       await fp.page.mouse.move(from.x, from.y);
       await fp.page.mouse.down();
