@@ -52,14 +52,14 @@ test('a very short video keeps everything inside', () => {
 
 test('stacking thresholds', () => {
   assert.equal(LC.compute({ w: 1024, h: 690 }).cols, 2);
-  assert.equal(LC.compute({ w: 768, h: 950 }).cols, 1);
+  assert.equal(LC.compute({ w: 748, h: 958 }).cols, 1); // an iPad upright (768x1024), less the stage's padding and bar
   const s = LC.compute({ w: 844, h: 340 });
   assert.equal(s.cols, 2);
   assert.ok(s.plot === null || s.plot.x >= s.board.x + s.board.size);
 });
 
 test('device tiers: smaller screens are tighter', () => {
-  const d = LC.compute({ w: 1440, h: 818 }), t = LC.compute({ w: 768, h: 950 }), f = LC.compute({ w: 900, h: 860 }), p = LC.compute({ w: 390, h: 770 });
+  const d = LC.compute({ w: 1440, h: 818 }), t = LC.compute({ w: 748, h: 958 }), f = LC.compute({ w: 900, h: 860 }), p = LC.compute({ w: 390, h: 770 });
   assert.deepEqual([d.tier, t.tier, f.tier, p.tier], ['desktop', 'tablet', 'foldable', 'phone']);
   assert.equal(LC.compute({ w: 844, h: 340 }).tier, 'phone'); // held sideways
   assert.ok(p.eval.w < t.eval.w && t.eval.w < d.eval.w);
@@ -70,11 +70,12 @@ test('device tiers: smaller screens are tighter', () => {
   assert.equal(t.cols, 1);
 });
 
-// a squarish window whose sidebar would hold the board small by the width, with the height empty under it, stacks
-test('a sidebar that would waste the height stacks', () => {
+// a squarish window keeps the sidebar, Analysis and the eval graph filling the height under the board (it stacked,
+// for a larger board, until 2026-10-28)
+test('a squarish window keeps the sidebar, Analysis and the graph under the board', () => {
   const L = LC.compute({ w: 772, h: 905 });
-  assert.equal(L.cols, 1);
-  assert.ok(L.board.size > 400, `board ${L.board.size}`);
+  assert.equal(L.cols, 2);
+  assert.ok(L.analysis.x < L.board.x && L.plot && L.plot.y > L.analysis.y, JSON.stringify([L.analysis, L.plot]));
   // a window just as tall but wide enough for a big board keeps the sidebar
   assert.equal(LC.compute({ w: 1440, h: 818 }).cols, 2);
   assert.equal(LC.compute({ w: 1024, h: 690 }).cols, 2);
@@ -119,13 +120,13 @@ test('hysteresis, by width and by aspect', () => {
   const w = 370 + 22 + 16 + 8 + 320 * 0.95;
   assert.equal(LC.compute({ w, h: w * 0.7, prevCols: 2 }).cols, 2);
   assert.equal(LC.compute({ w, h: w * 0.7, prevCols: 1 }).cols, 1);
-  // aspect rule: a window 1.15 times as tall as wide
+  // aspect rule: a window 1.25 times as tall as wide
   // (a window wide enough for the 900 px board beside the sidebar, so the empty-height rule stays out of it)
-  const h = Math.round(1.17 * 1600); // over 1.15, under 1.2
+  const h = Math.round(1.27 * 1600); // over 1.25, under 1.3
   assert.equal(LC.compute({ w: 1600, h, prevCols: null }).cols, 1);
   assert.equal(LC.compute({ w: 1600, h, prevCols: 2 }).cols, 2);
-  const h2 = 1.05 * 1600; // under 1.1 w
-  assert.equal(LC.compute({ w: 1600, h: Math.round(1.12 * 1600), prevCols: 1 }).cols, 1);
+  const h2 = 1.15 * 1600; // under 1.2 w
+  assert.equal(LC.compute({ w: 1600, h: Math.round(1.22 * 1600), prevCols: 1 }).cols, 1);
   assert.equal(LC.compute({ w: 1600, h: h2, prevCols: 1 }).cols, 2);
 });
 
@@ -220,7 +221,8 @@ test('eval graph height floor, square-ish and portrait layouts', () => {
   for (const [w, h] of [[900, 860], [1000, 1000], [1280, 1100], [1100, 900]]) for (const video of [false, true]) {
     const L = LC.compute({ w, h, video }), at = `${w}x${h}${video ? ' video' : ''}`;
     assert.equal(L.cols, 2, at);
-    assert.equal(L.plot, null, at);
+    // the eval graph, if any, under Analysis, the full width, where Analysis keeps 240 px (times text) over it
+    if (L.plot) assert.ok(L.plot.y >= L.analysis.y + L.analysis.h && L.plot.x === L.analysis.x && L.plot.w === L.analysis.w && L.analysis.h >= 240 * L.text - 0.5, `${at}: graph ${JSON.stringify(L.plot)}`);
     assert.ok(Math.abs(L.analysis.x - L.eval.x) < 0.5 && Math.abs(L.analysis.w - (w - 2 * L.analysis.x)) < 0.5, `${at}: analysis not full width`);
     assert.ok(L.analysis.y >= L.board.y + L.board.size + L.bars.h && L.analysis.h >= 160 * L.text - 0.5, `${at}: analysis ${JSON.stringify(L.analysis)}`);
     assert.ok(L.comment.y + L.comment.h <= L.analysis.y, at);
@@ -277,4 +279,11 @@ test('the eval graph runs under the board wherever that leaves the board its siz
   }
   const s = LC.compute({ w: 1100, h: 690 }); // held by the height: the graph under it would shrink the board
   assert.ok(s.plot && s.plot.x > s.board.x + s.board.size, 'beside it in the sidebar');
+});
+
+test('a tall square-ish window shows the eval graph under Analysis', () => {
+  const s = LC.compute({ w: 738, h: 700 }), t = LC.compute({ w: 738, h: 800 });
+  assert.equal(s.plot, null, 'not while Analysis would be under 240 px');
+  assert.ok(t.plot && t.plot.y > t.analysis.y + t.analysis.h && t.plot.y + t.plot.h <= 800 && t.plot.w === t.analysis.w);
+  assert.equal(LC.compute({ w: 738, h: 800, view: 'free' }).plot, null, 'the replay only');
 });

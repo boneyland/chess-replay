@@ -30,9 +30,10 @@
   // list and the commentary side by side, which Analysis's lines still use)
   const SIDEBAR_MIN = 320, SIDEBAR_W = 380;
   const HEADER_H = 76, PLOT_H = 110, PLOT_SIDE_H = 80, PLOT_BELOW_MIN_H = 700, PLOT_MIN_H = 670; // no eval graph under 670 px high
-  // a square-ish two-column window (at least 0.77 times as tall as wide: a 760 px wide window from about 640 px high) has no eval graph: Analysis runs the full width
+  // a square-ish two-column window (at least 0.77 times as tall as wide: a 760 px wide window from about 640 px high) has
+  // the eval graph only where Analysis keeps ANALYSIS_PLOT_MIN (times text) over it: Analysis runs the full width
   // under the board, at least ANALYSIS_BELOW_MIN high (times text), and the sidebar keeps the header, Moves and Commentary
-  const SQUARE = 0.77, ANALYSIS_BELOW_MIN = 160;
+  const SQUARE = 0.77, ANALYSIS_BELOW_MIN = 160, ANALYSIS_PLOT_MIN = 240;
   // a short two-column window (a phone held sideways; Stage's call, as dock): the transport bar sits at the foot of the
   // sidebar rather than under the whole page, the header goes and the margins are slimmer, so the board gets the height.
   // DOCK_H is the bar's height (shell.html's .pbar-dock: 28 px buttons, 2 px padding and a border)
@@ -64,11 +65,15 @@
     const bare = h - 2 * MARGIN - barsTotal(text);
     const byWidth = Math.min(cap, w - 2 * MARGIN - GAP - sideW(w, text) - EVAL_TOTAL);
     const plotBelow = view === 'replay' && !square && !dock && h >= PLOT_MIN_H && (h >= PLOT_BELOW_MIN_H || byWidth <= bare - GAP - PLOT_H);
-    return { square, plotBelow, byWidth, hLimit: bare - (plotBelow ? GAP + PLOT_H : square ? GAP + ANALYSIS_BELOW_MIN * text : 0) };
+    // a square-ish window's eval graph, under Analysis, where Analysis keeps ANALYSIS_PLOT_MIN over it at the board's
+    // size by the width (twoColumns() places it by the room actually left)
+    const plotRoom = 2 * GAP + PLOT_H + ANALYSIS_PLOT_MIN * text;
+    const plotUnder = square && view === 'replay' && byWidth <= bare - plotRoom;
+    return { square, plotBelow, byWidth, hLimit: bare - (plotBelow ? GAP + PLOT_H : plotUnder ? plotRoom : square ? GAP + ANALYSIS_BELOW_MIN * text : 0) };
   }
   const box = (x, y, w, h) => ({ x, y, w: Math.max(0, w), h: Math.max(0, h), scroll: true });
 
-  // 1 or 2 columns. One column when the window is tall for its width (over 1.15 times as tall as wide; 0.05 more to leave
+  // 1 or 2 columns. One column when the window is tall for its width (over 1.25 times as tall as wide; 0.05 more to leave
   // two columns and 0.05 less to come back), or the board beside the sidebar would be under 360 px (380 to come back),
   // or it would be held small by the width and leave over 30% of the height empty under it (25% to come back: a
   // squarish window such as 772×965, where the board under the panels is the larger one). By the room left, not by device. A window too
@@ -79,7 +84,7 @@
     const tier = useTier(w, h);
     text *= tier.scale;
     const boardW = w - 2 * MARGIN - GAP - SIDEBAR_MIN * text - EVAL_TOTAL;
-    const aspect = 1.15 + (prevCols === 2 ? 0.05 : prevCols === 1 ? -0.05 : 0);
+    const aspect = 1.25 + (prevCols === 2 ? 0.05 : prevCols === 1 ? -0.05 : 0);
     const tall = prevCols === 1 ? h >= aspect * w : h > aspect * w;
     const narrow = boardW < (prevCols === 1 ? BOARD_BACK : BOARD_OK);
     // the two-column board as twoColumns() sizes it by the width (the sidebar's share), against the height it could have
@@ -139,8 +144,10 @@
     const rowY = L.header ? top + L.header.h + GAP : top;
     L.moves = withMoves(box(sx, rowY, sw, movesH), text);
     L.comment = box(sx, rowY + movesH + GAP, sw, commentH);
-    L.analysis = square ? box(MARGIN, analysisY, w - 2 * MARGIN, h - MARGIN - analysisY) : box(sx, L.comment.y + commentH + GAP, sw, analysisH);
-    if (plotBelow) L.plot = box(MARGIN, plotY, w - 2 * MARGIN, PLOT_H);
+    // a square-ish window's eval graph: at the bottom, under Analysis, where Analysis keeps its minimum
+    const underH = h - MARGIN - analysisY, plotUnder = square && view === 'replay' && underH - GAP - PLOT_H >= ANALYSIS_PLOT_MIN * text;
+    L.analysis = square ? box(MARGIN, analysisY, w - 2 * MARGIN, plotUnder ? underH - GAP - PLOT_H : underH) : box(sx, L.comment.y + commentH + GAP, sw, analysisH);
+    if (plotBelow || plotUnder) L.plot = box(MARGIN, plotY, w - 2 * MARGIN, PLOT_H);
     else if (plotSide) L.plot = box(sx, L.analysis.y + analysisH + GAP, sw, PLOT_SIDE_H);
     return L;
   }
