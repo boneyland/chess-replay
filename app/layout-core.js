@@ -15,14 +15,16 @@
     desktop: { margin: 12, gap: 10, evalW: 20, evalGap: 8, pad: [16, 22], scale: 1 },
   };
   const tierOf = (w, h) => (w < 600 || h < 500 ? 'phone' : w >= 1024 ? 'desktop' : h >= 0.8 * w && h <= 1.2 * w ? 'foldable' : 'tablet');
-  let MARGIN = 12, GAP = 10, EVAL_W = 20, EVAL_GAP = 8, EVAL_TOTAL = 28, PAD = [16, 22], PLOT_H = 110;
+  let MARGIN = 12, GAP = 10, EVAL_W = 20, EVAL_GAP = 8, EVAL_TOTAL = 28, PAD = [16, 22];
   const BAR_GAP = 4;
-  // the full-width eval graph's largest height: thinner in a window under PLOT_WIDE px wide (desktops included)
+  // the full-width eval graph's largest height: thinner in a viewport under PLOT_WIDE px wide (desktops included); by the
+  // viewport's width (vw), as the viewer measures it, not the stage's
   const PLOT_WIDE = 1181;
+  const plotMax = (vw) => (vw >= PLOT_WIDE ? 110 : 80);
   // the tier's spacing, for the layout being worked out (compute and columns are called one at a time)
   const useTier = (w, h) => {
     const t = TIERS[tierOf(w, h)];
-    MARGIN = t.margin; GAP = t.gap; EVAL_W = t.evalW; EVAL_GAP = t.evalGap; EVAL_TOTAL = EVAL_W + EVAL_GAP; PAD = t.pad; PLOT_H = w >= PLOT_WIDE ? 110 : 80;
+    MARGIN = t.margin; GAP = t.gap; EVAL_W = t.evalW; EVAL_GAP = t.evalGap; EVAL_TOTAL = EVAL_W + EVAL_GAP; PAD = t.pad;
     return t;
   };
   const BOARD_MAX = 900, BOARD_MIN = 200, BOARD_OK = 360, BOARD_BACK = 380;
@@ -63,12 +65,12 @@
   // high, and from 670 px wherever that doesn't make the board smaller (it is held by the width), as short as the room
   // under it there (PLOT_SIDE_H at least): a graph in the sidebar beside a board with room under it looked lopsided.
   // cap: the board's largest size
-  function under({ w, h, text, view, dock = false, cap }) {
+  function under({ w, h, text, view, dock = false, cap, vw = w }) {
     const square = !dock && view !== 'edit' && h >= SQUARE * w;
     const bare = h - 2 * MARGIN - barsTotal(text);
     const byWidth = Math.min(cap, w - 2 * MARGIN - GAP - sideW(w, text) - EVAL_TOTAL);
     const plotBelow = view === 'replay' && !square && !dock && h >= PLOT_MIN_H && (h >= PLOT_BELOW_MIN_H || byWidth <= bare - GAP - PLOT_SIDE_H);
-    const plotH = h >= PLOT_BELOW_MIN_H ? PLOT_H : Math.min(PLOT_H, bare - GAP - byWidth);
+    const plotH = h >= PLOT_BELOW_MIN_H ? plotMax(vw) : Math.min(plotMax(vw), bare - GAP - byWidth);
     // a square-ish window's eval graph, under Analysis, where Analysis keeps ANALYSIS_PLOT_MIN over it at the board's
     // size by the width (twoColumns() places it by the room actually left); as short as the sidebar's (PLOT_SIDE_H),
     // in a window narrower than a desktop's
@@ -85,7 +87,7 @@
   // short for the one-column layout (board, bars and three panels at their floors) keeps two columns where they still
   // fit a 200 px board beside the sidebar (a phone held sideways at Larger text), and always for a video, which must
   // fit; a paused page in a narrow short window (a phone with its keyboard up) takes one column, which scrolls.
-  function columns({ w, h, text = 1, prevCols = null, video = false }) {
+  function columns({ w, h, text = 1, prevCols = null, video = false, vw = w }) {
     const tier = useTier(w, h);
     text *= tier.scale;
     const boardW = w - 2 * MARGIN - GAP - SIDEBAR_MIN * text - EVAL_TOTAL;
@@ -94,7 +96,7 @@
     const narrow = boardW < (prevCols === 1 ? BOARD_BACK : BOARD_OK);
     // the two-column board as twoColumns() sizes it by the width (the sidebar's share), against the height it could have
     // under what twoColumns() puts below it (Analysis in a square-ish window, or the eval graph)
-    const { byWidth, hLimit } = under({ w, h, text, view: 'replay', cap: BOARD_MAX });
+    const { byWidth, hLimit } = under({ w, h, text, view: 'replay', cap: BOARD_MAX, vw });
     const wasted = byWidth < BOARD_MAX && (hLimit - byWidth) / h > (prevCols === 1 ? 0.25 : 0.3);
     const short = h < 2 * MARGIN + barsTotal(text) + BOARD_MIN + GAP + 3 * PANEL_FLOOR + 2 * GAP;
     const keepTwo = short && (video || boardW >= BOARD_MIN);
@@ -108,10 +110,10 @@
     return m;
   }
 
-  function twoColumns({ w, h, text, view, dock }) {
+  function twoColumns({ w, h, text, view, dock, vw }) {
     if (dock) MARGIN = DOCK_MARGIN;
     const hasEval = view === 'replay' || view === 'free';
-    const { square, plotBelow, plotH, hLimit } = under({ w, h, text, view, dock, cap: boardMax });
+    const { square, plotBelow, plotH, hLimit } = under({ w, h, text, view, dock, cap: boardMax, vw });
     const bar = barH(text);
     // the sidebar's share (sideW); the left column (board plus its eval bar) is what is left
     const wLimit = w - 2 * MARGIN - GAP - sideW(w, text);
@@ -236,10 +238,10 @@
   // vw, vh: the viewport's size (the stage area's when not given), which caps the board.
   // dock: a short two-column window whose transport bar sits in the sidebar (L.dock is its box)
   function compute({ w, h, text = 1, view = 'replay', video = false, prevCols = null, cols = null, vw = w, vh = h, dock = false }) {
-    const c = cols || columns({ w, h, text, prevCols, video });
+    const c = cols || columns({ w, h, text, prevCols, video, vw });
     boardMax = Math.max(BOARD_MIN, Math.min(BOARD_MAX, 0.5 * Math.max(vw, vh)));
     const tier = useTier(w, h), t = text * tier.scale;
-    return Object.assign((c === 1 ? oneColumn : twoColumns)({ w, h, text: t, view, video, dock: c === 2 && dock }), { text: t, tier: tierOf(w, h), pad: PAD });
+    return Object.assign((c === 1 ? oneColumn : twoColumns)({ w, h, text: t, view, video, dock: c === 2 && dock, vw }), { text: t, tier: tierOf(w, h), pad: PAD });
   }
 
   // The export's pixel scale for a w × h page: the screen's density, held so the longer side stays within 1920 px
