@@ -267,8 +267,8 @@ const CLOUD_DEBOUNCE_MS = 300; // after the last position change (stepping throu
 // stored: a loaded analysis's result for after (with before the same moves), standing in for the first search, which
 // then never runs: only a press of Go deeper searches. Results from it carry stored: true; its src names the evals it
 // comes from, so presses on one analysis's move don't carry over to another's (or the PGN's) once it is removed
-// cloud: Settings › Online › Lichess cloud evaluation ({ on, prefer }), never for a stored analysis: each position
-// asks the cloud (after CLOUD_DEBOUNCE_MS, at once when cached) while the local search runs; whichever comes first
+// cloud: Settings › Online › Lichess cloud evaluation ({ on, prefer }); with stored, only once Go deeper is pressed
+// (the analysis's own eval stands until then, and its ratings are never touched): each position asks the cloud (after CLOUD_DEBOUNCE_MS, at once when cached) while the local search runs; whichever comes first
 // shows, and a finished local search replaces the cloud's only when deeper. prefer: a position the cloud has as deep
 // as the local depth limit (No limit: the slider's top stop) isn't searched locally. A miss falls back silently
 const cloudSetting = (tw) => ({ on: !!(tw && tw.cloudEval), prefer: !!(tw && tw.cloudPrefer) });
@@ -282,7 +282,7 @@ function useMoveEval(engine, before, after, own, fen, stored, cloud) {
   const level = SF_DEEPER.get(baseKey) || 0;
   const search = toSearch(A.deeperSearch(own, level));
   const sfKey = (moves) => keyOf(search, moves);
-  const cloudOn = !!(cloud && cloud.on && CLOUD && after && !stored), prefer = cloudOn && !!cloud.prefer;
+  const cloudOn = !!(cloud && cloud.on && CLOUD && after && (!stored || level > 0)), prefer = cloudOn && !!cloud.prefer;
   const key = after ? sfKey(after) + (cloudOn ? (prefer ? '|cloud+' : '|cloud') : '') : '';
   const empty = { key: '', before: null, after: null, cloud: {}, pending: false, progress: 0 };
   const [st, setSt] = React.useState(empty);
@@ -309,7 +309,7 @@ function useMoveEval(engine, before, after, own, fen, stored, cloud) {
     const handles = [], cached = (which) => at(level, which);
     // the result a press of Go deeper started from, shown until the deeper search passes its depth
     const prev = (which) => (level > 0 ? at(level - 1, which) : null);
-    const shown = (which) => cached(which) || (prev(which) && { ...prev(which), partial: true });
+    const shown = (which) => cached(which) || (prev(which) && { ...prev(which), partial: true, held: true });
     setSt({ key, before: shown('before'), after: shown('after'), cloud: { before: cloudHit.before || null, after: cloudHit.after || null }, pending: !cached('after') || !cached('before'), progress: 0 });
     // the searches to run (the start position's two are one)
     const todo = [...new Set(['after', 'before'].filter((w) => !cached(w)).map((w) => keyAt(level, w)))].length;
@@ -345,8 +345,9 @@ function useMoveEval(engine, before, after, own, fen, stored, cloud) {
     return () => { live = false; handles.forEach((h) => h.cancel()); timers.forEach(clearTimeout); ctl.abort(); };
   }, [key]);
   const raw = st.key === key ? st : { ...empty, pending: !!after };
-  // the cloud's answer stands until a finished local search goes deeper
-  const pick = (loc, cl) => (cl && (!loc || loc.partial || cl.depth >= loc.depth) ? cl : loc);
+  // the cloud's answer stands until a finished local search goes deeper; it replaces the result a Go deeper started
+  // from (the stored analysis's among them) only when deeper
+  const pick = (loc, cl) => (cl && (!loc || cl.depth >= loc.depth || (loc.partial && !loc.held)) ? cl : loc);
   const out = { ...raw, before: pick(raw.before, raw.cloud.before), after: pick(raw.after, raw.cloud.after) };
   const fromCloud = (r) => !!(r && r.source === 'cloud');
   const done = out.after && !out.after.partial && out.before && !out.before.partial && !out.pending;
