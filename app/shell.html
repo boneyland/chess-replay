@@ -115,10 +115,13 @@ body:has(.stage-one) .twk-panel { bottom: calc(51px + env(safe-area-inset-bottom
 .stage-one .pbtn { width: 30px; height: 30px; }
 .stage-one .ptrack { min-width: 96px; }
 @media (max-width: 359px) { .stage-one .pbtn-end { display: none; } }
-/* a short two-column window (a phone held sideways): the slim bar and padding, so the board gets the height */
-.stage-short { padding-block: 2px 4px; gap: 4px; }
-.stage-short .pbar { padding: 2px 6px; gap: 6px; }
-.stage-short .pbtn { width: 36px; height: 28px; }
+/* a short two-column window (a phone held sideways): the slim bar sits at the foot of the sidebar, as wide as its panels
+   (Stage places it at LayoutCore's L.dock, whose DOCK_H is its height), and the area takes the whole height. A narrow
+   sidebar drops the first and last move buttons, rather than the seek bar */
+.stage-short { padding-block: 0 env(safe-area-inset-bottom, 0px); gap: 0; padding-left: max(4px, var(--safe-l)); padding-right: max(4px, var(--safe-r)); }
+.stage-short .pbar-dock { position: absolute; max-width: none; padding: 2px 6px; gap: 6px; }
+.stage-short .pbtn { width: 34px; height: 28px; }
+.stage-short .pbar-narrow .pbtn-end { display: none; }
 .stage-short .pdock .dock-btn:not(.dock-pop .dock-btn) { height: 28px; }
 /* Device tiers, the same breakpoints as LayoutCore's (app/layout-core.js): a tablet or foldable (under 1024 px wide) and
    a phone (under 600 px wide, or under 500 px high held sideways) are tighter than a desktop, not just rearranged. The
@@ -150,10 +153,10 @@ body:has(.stage-one) .twk-panel { bottom: calc(51px + env(safe-area-inset-bottom
 .pmenu .dock-icons .dock-queen { flex: 1; text-align: center; }
 .pmenu .dock-menu-status { display: block; max-width: 240px; padding: 2px 4px 4px; font: 500 0.6875rem/1.4 var(--mono); color: var(--dim); white-space: normal; }
 .pmenu-err .dock-menu-status { color: var(--danger); }
-/* a screen held sideways: the menu is as wide as Settings there, Explore and Play side by side, the last row under Play
+/* a screen held sideways: the menu is 560 px wide at most, Explore and Play side by side, the last row under Play
    (the folded menu shows in the wide layout too, as at 800×480, so this goes by orientation, not by stage class) */
 @media (orientation: landscape) {
-  .pmenu-open .dock-items { display: grid; grid-template-columns: 1fr 1fr; grid-template-areas: "st st" "load load" "ex pl" "ex tail"; align-items: start; width: min(760px, calc(100vw - 32px)); }
+  .pmenu-open .dock-items { display: grid; grid-template-columns: 1fr 1fr; grid-template-areas: "st st" "load load" "ex pl" "ex tail"; align-items: start; width: min(560px, calc(100vw - 32px)); }
   .pmenu .dock-menu-status { grid-area: st; max-width: none; }
   .pmenu .dock-primary { grid-area: load; }
   .pmenu .dock-group { display: flex; flex-direction: column; gap: 6px; }
@@ -259,7 +262,11 @@ body:has(.stage-one) .twk-panel { bottom: calc(51px + env(safe-area-inset-bottom
   body:has(.stage:not(.stage-one)) .twk-tabbed :is(.twk-flow > :not(.twk-group), .twk-group > *) { break-inside: avoid; margin-bottom: 10px; }
   body:has(.stage:not(.stage-one)) .twk-tabbed .twk-sect { break-after: avoid; }
   body:has(.stage:not(.stage-one)) .twk-tabbed .twk-btn { display: block; width: 100%; }
+  /* the bar in the sidebar: 4 px margin, 34 px high */
+  body:has(.stage.stage-short) .twk-panel.twk-tabbed { bottom: calc(44px + env(safe-area-inset-bottom, 0px)); height: calc(100% - 52px - env(safe-area-inset-bottom, 0px)); }
 }
+/* panels (Settings, Queen) open above the bar in the sidebar */
+body:has(.stage.stage-short) .twk-panel { bottom: calc(44px + env(safe-area-inset-bottom, 0px)); max-height: calc(100% - 52px); }
 .twk-pair { display: flex; gap: 10px; }
 .twk-pair > * { flex: 1; min-width: 0; }
 .twk-row { display: flex; flex-direction: column; gap: 5px; }

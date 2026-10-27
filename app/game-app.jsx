@@ -144,8 +144,9 @@ function GameApp() {
   const [queenArrow, setQueenArrow] = React.useState(null);
   // the phone layouts (portrait, or a narrow one held sideways) fold the dock's buttons into a menu in the transport bar; it closes on a pick, an outside tap or Esc,
   // and opening it closes Settings or Queen, which would otherwise cover it
-  const [phone, setPhone] = React.useState(false), [frameW, setFrameW] = React.useState(1920);
-  const onLayout = React.useCallback((isPhone, w) => { setPhone(isPhone); setFrameW(w); }, []);
+  // short: a phone held sideways, whose transport bar sits in the sidebar; its sound toggle moves into the menu
+  const [phone, setPhone] = React.useState(false), [frameW, setFrameW] = React.useState(1920), [short, setShort] = React.useState(false);
+  const onLayout = React.useCallback((isPhone, w, isShort) => { setPhone(isPhone); setFrameW(w); setShort(!!isShort); }, []);
   const [menu, setMenu] = React.useState(false);
   React.useEffect(() => { if (!phone) setMenu(false); }, [phone]);
   // the dock's Play/Explore menu (landscape); on a phone its items sit in the folded menu instead
@@ -549,6 +550,7 @@ function GameApp() {
       <button type="button" className="dock-btn dock-iconic" aria-label="Settings" title="Settings" aria-expanded={panel} onClick={() => { setMenu(false); setPanel((p) => !p); setQueenOpen(false); }}>
         <svg className="dock-icon" width="16" height="16" viewBox="0 0 16 16" aria-hidden="true"><path fill="currentColor" fillRule="evenodd" d={GEAR} /></svg>
       </button>
+      {phone && short && <SoundButton className="dock-btn dock-iconic" on={t.sound !== false} onChange={(v) => setTweak('sound', v)} />}
       {fullscreen.ok && <button type="button" className="dock-btn dock-iconic" aria-label={fsLabel} title={fsLabel} onClick={() => { setMenu(false); fullscreen.toggle(); }}>
         <svg className="dock-icon" width="16" height="16" viewBox="0 0 16 16" fill="none" aria-hidden="true">
           <path d={fullscreen.on ? 'M6 2v4H2M10 2v4h4M14 10h-4v4M2 10h4v4' : 'M2 6V2h4M10 2h4v4M14 10v4h-4M6 14H2v-4'} stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" />
@@ -580,7 +582,7 @@ function GameApp() {
   return (
     <React.Fragment>
       <EngineMenuContext.Provider value={board && board.game ? null : engineMenu}>
-      <CompositionStage nav={nav} forceVideo={video.busy} text={LayoutCore.textScale(t.textSize)} top={!net.online && <span className="net-chip" role="status" title={OFFLINE_NOTE}>Offline</span>} menu={<React.Fragment><SoundButton on={t.sound !== false} onChange={(v) => setTweak('sound', v)} />{phone ? menuEl : deskDock}</React.Fragment>} onLayout={onLayout} scenes={scenes} playback={PLAYBACK} bg={C.bg} still={!!board || !!editing}>
+      <CompositionStage nav={nav} forceVideo={video.busy} text={LayoutCore.textScale(t.textSize)} top={!net.online && <span className="net-chip" role="status" title={OFFLINE_NOTE}>Offline</span>} menu={<React.Fragment>{!(phone && short) && <SoundButton on={t.sound !== false} onChange={(v) => setTweak('sound', v)} />}{phone ? menuEl : deskDock}</React.Fragment>} onLayout={onLayout} scenes={scenes} playback={PLAYBACK} bg={C.bg} still={!!board || !!editing}>
         {editing
           ? <EditBoard setup={editing.setup} onChange={editTo} onDone={editDone} onCancel={editCancel} fenText={editing.text} onFenText={editText} fenMsg={editing.msg} doneLabel={editing.play ? 'Start game' : 'Done'} orient={t.flip ? 'b' : 'w'} nav={nav} overlay={panel || newMenu || menu || queenOpen} />
           : board
