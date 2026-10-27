@@ -76,14 +76,15 @@ function Stage({ menu, top, onLayout, duration, background, playback, nav, still
     return () => ro.disconnect();
   }, [text, video]);
   const { w, h, cols, sh } = area;
-  const narrow = w < 900, phone = cols === 1 || narrow;
   // a short two-column window (a phone held sideways): the transport bar goes in the sidebar, under the panels, so the
-  // board gets the whole height; it is placed over the area at the box the layout keeps for it
+  // board gets the whole height; it is placed over the area at the box the layout keeps for it. There it always folds
+  // its buttons into the menu, however wide the window (a large phone is 932 px wide on its side)
   const short = cols === 2 && sh < 500;
+  const narrow = w < 900, phone = cols === 1 || narrow || short;
   const dock = short ? LayoutCore.compute({ w, h, text, video, cols, dock: true }).dock : null;
   // the export's pixel width: the area's size at the device's pixel ratio, held to 1920 on its longer side
   const exportW = LayoutCore.exportPx(w, LayoutCore.exportScale(w, h, window.devicePixelRatio));
-  // onLayout(true, w, short): a phone layout (one column, or under 900 px wide), where the page folds its buttons into a
+  // onLayout(true, w, short): a phone layout (one column, under 900 px wide, or the bar in the sidebar), where the page folds its buttons into a
   // menu; w is the export's width; short: the transport bar is in the sidebar
   React.useLayoutEffect(() => { if (onLayout) onLayout(phone, exportW, short); }, [phone, exportW, short]);
 
