@@ -1,8 +1,10 @@
 // Lichess's public data (window.LichessCore): URLs, parsers, and a client that caches answers, sends one request at a
-// time per endpoint and backs off for a minute after an HTTP 429, as Lichess asks. Only the endgame tablebase so far.
-// No React here: the page's hooks (tablebase.jsx) debounce position changes and draw the answers.
+// time per endpoint and backs off for a minute after an HTTP 429, as Lichess asks: the endgame tablebase and the cloud
+// evaluation. No React here: the page's hooks (tablebase.jsx, stockfish.jsx) debounce position changes and draw the answers.
 (function () {
   const TB_URL = 'https://tablebase.lichess.ovh/standard';
+  const CLOUD_URL = 'https://lichess.org/api/cloud-eval';
+  const MATE_CP = 10000, MATE_STEP = 10; // AnalysisCore's mate scores: mate in N as ±(10000 − 10·N)
   const TB_MAX_PIECES = 7; // the Syzygy tables Lichess serves; never asked above this
   const BACKOFF_MS = 60000, TIMEOUT_MS = 10000, CACHE_SIZE = 300;
 
@@ -83,6 +85,36 @@
     return ['win', 'draw', 'loss', 'unknown'].filter((k) => by[k].length).map((k) => ({ outcome: k, moves: by[k] }));
   }
 
+  // the cloud's key: the board, side, castling and en passant square (the clocks don't change its answer), and the lines
+  const cloudKey = (fen, lines = 1) => String(fen).trim().split(/\s+/).slice(0, 4).join(' ') + '|' + lines;
+  const cloudUrl = (fen, lines = 1) => CLOUD_URL + '?fen=' + encodeURIComponent(fen) + '&multiPv=' + lines;
+  // A cloud line's moves as the page's UCI: Lichess writes castling as the king taking its rook (e1h1), the engine and
+  // the board as the king's two steps (e1g1); walked from fen, stopping at the first move that isn't legal
+  function cloudMoves(fen, moves) {
+    const CC = window.ChessCore, out = [];
+    let pos = CC.posFromFen(fen);
+    for (let u of String(moves || '').trim().split(/\s+/).filter(Boolean)) {
+      const from = CC.sqIndex(u.slice(0, 2)), to = CC.sqIndex(u.slice(2, 4)), k = pos.b[from], r = pos.b[to];
+      if (k && r && k.toLowerCase() === 'k' && r === (k === 'K' ? 'R' : 'r')) u = u.slice(0, 2) + (to % 8 > from % 8 ? 'g' : 'c') + u[3];
+      const a = CC.applyUci(pos, u);
+      if (!a) break;
+      out.push(u); pos = a.pos;
+    }
+    return out;
+  }
+  // A cloud answer as an engine search's result (sf-engine.js): { cp (White's side, as the API gives it; a mate as
+  // ±(10000 − 10·N)), depth, pv, best, lines: [{ k, cp, depth, pv }], nodes, timeMs: null, source: 'cloud' }
+  function parseCloud(j, fen) {
+    if (!j || typeof j !== 'object' || typeof j.depth !== 'number' || !Array.isArray(j.pvs) || !j.pvs.length) throw new Error('Not a cloud evaluation');
+    const lines = j.pvs.map((p, i) => {
+      const cp = typeof p.mate === 'number' ? (p.mate > 0 ? 1 : -1) * (MATE_CP - MATE_STEP * Math.abs(p.mate)) : typeof p.cp === 'number' ? p.cp : null;
+      return { k: i + 1, cp, depth: j.depth, pv: cloudMoves(fen, p.moves) };
+    }).filter((l) => l.cp != null);
+    if (!lines.length) throw new Error('Not a cloud evaluation');
+    const top = lines[0];
+    return { cp: top.cp, depth: j.depth, maxDepth: j.depth, pv: top.pv, best: top.pv[0] || null, lines, nodes: typeof j.knodes === 'number' ? j.knodes * 1000 : null, timeMs: null, source: 'cloud' };
+  }
+
   // A client: fetchFn (window.fetch), now (Date.now). tablebase(fen, { signal }) → the parsed answer or null (more
   // than 7 pieces, offline, an error, a 429 back-off, or aborted); answers are cached by FEN, errors aren't
   function create({ fetchFn, now = Date.now } = {}) {
@@ -90,7 +122,8 @@
     const remember = (k, v) => { cache.delete(k); cache.set(k, v); if (cache.size > CACHE_SIZE) cache.delete(cache.keys().next().value); };
     // one request at a time per endpoint, the next waiting for the last to settle; a 429 closes the gate for a minute
     const gate = (name) => gates[name] || (gates[name] = { busy: Promise.resolve(), until: 0 });
-    async function get(name, key, url, parse, signal) {
+    // missing: an HTTP status meaning "no answer for this position" (the cloud's 404), cached as null so it isn't asked again
+    async function get(name, key, url, parse, signal, missing) {
       if (cache.has(key)) { const v = cache.get(key); remember(key, v); return v; }
       const g = gate(name);
       const prev = g.busy;
@@ -107,6 +140,7 @@
         try {
           const r = await (fetchFn || window.fetch)(url, { signal: ctl.signal, headers: { Accept: 'application/json' } });
           if (r.status === 429) { g.until = now() + BACKOFF_MS; return null; }
+          if (missing && r.status === missing) { remember(key, null); return null; }
           if (!r.ok) return null;
           const v = parse(await r.json());
           remember(key, v);
@@ -118,9 +152,14 @@
       tablebase: (fen, { signal } = {}) => (pieceCount(fen) > TB_MAX_PIECES ? Promise.resolve(null) : get('tablebase', tbKey(fen), tablebaseUrl(fen), parseTablebase, signal)),
       // the cached answer, or undefined (so a position seen before shows at once, without the debounce)
       tablebaseCached: (fen) => cache.get(tbKey(fen)),
+      // fen's cloud evaluation of lines lines (the cloud may have fewer), or null: never analysed there (a 404, cached),
+      // offline, an error, a 429 back-off, or aborted
+      cloudEval: (fen, lines = 1, { signal } = {}) => get('cloud', 'cloud ' + cloudKey(fen, lines), cloudUrl(fen, lines), (j) => parseCloud(j, fen), signal, 404),
+      // the cached answer (null: not in the cloud), or undefined when it hasn't been asked
+      cloudCached: (fen, lines = 1) => cache.get('cloud ' + cloudKey(fen, lines)),
       backedOff: (name) => now() < gate(name).until,
     };
   }
 
-  window.LichessCore = { TB_URL, TB_MAX_PIECES, BACKOFF_MS, pieceCount, fenOf, tbKey, tablebaseUrl, parseTablebase, flip, outcome, verdict, bar, evalCp, groups, create };
+  window.LichessCore = { TB_URL, CLOUD_URL, TB_MAX_PIECES, BACKOFF_MS, pieceCount, fenOf, tbKey, tablebaseUrl, parseTablebase, flip, outcome, verdict, bar, evalCp, groups, cloudKey, cloudUrl, cloudMoves, parseCloud, create };
 })();

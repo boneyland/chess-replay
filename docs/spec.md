@@ -7,7 +7,7 @@ The one spec for the app: what it does now, what is planned, and the decisions b
 ## Contents
 
 - [Principles](#principles)
-- [Built](#built): replay and browser analysis, opening names, custom starts and flip, free board and explorer, edit position, play vs human, My games, play vs Stockfish, full Stockfish download, lines (MultiPV), endgame tablebase (in game analysis too), responsive layout
+- [Built](#built): replay and browser analysis, opening names, custom starts and flip, free board and explorer, edit position, play vs human, My games, play vs Stockfish, full Stockfish download, lines (MultiPV), endgame tablebase (in game analysis too), Lichess cloud evaluation, responsive layout
 - [Roadmap](#roadmap): square layouts and breakpoints, Lichess data and multi-threaded Stockfish, player names, Chess960, typed commentary, Maia3, dead positions, chasolver, background music, peer-to-peer online play, app walk-through
 - [Known gaps](#known-gaps)
 - [Decisions log](#decisions-log)
@@ -187,6 +187,18 @@ Positions of 7 pieces or fewer get Lichess's Syzygy tablebase (`https://tablebas
 - Never in Play vs Stockfish (its opponent and critique don't use `runAnalysis`) or for the viewer's own-move ratings.
 - Tests: `tests/tablebase-analysis.test.cjs` (fake client: no search for tablebase positions, fields, the outcome table, a cursed win, an uncertain or failed answer searched and the asking stopped, a 429 back-off searched through and asked again, the requests' pacing, the setting off and 8 pieces send nothing, the setting turned off mid-run, a win without DTM beside a searched position rated on two searches, the tablebase's time reported apart, a resumed run, `buildGame`); `tests/check_browser_json.py` also loads its JSON (`tests/out/tb_analysis.json`) in Python, which has no tablebase.
 
+### Lichess cloud evaluation
+
+Built 2026-10-27 (PR 3 of Lichess data): the positions Stockfish searches for the viewer's own moves also ask Lichess's cloud (`https://lichess.org/api/cloud-eval?fen=<FEN>&multiPv=<N>`, no auth), which keeps deep evaluations of many positions.
+
+- The API as verified 2026-10-27: `{ fen, knodes, depth, pvs: [{ moves, cp | mate }] }`, scores from White's side (as the page's), `pvs` as many as it has up to `multiPv` (fewer is not a miss), castling written as the king taking its rook (`e1h1`), the clocks ignored; a position it never analysed is HTTP 404 `{ error }`. CORS open.
+- `LichessCore` (`app/lichess-core.js`): `parseCloud(json, fen)` → the engine-result shape (`cp`, `depth`, `pv`, `best`, `lines: [{ k, cp, depth, pv }]`, `nodes`), tagged `source: 'cloud'`; a mate as ±(10000 − 10·N); `cloudMoves` turns the king-takes-rook castling into the board's `e1g1` and stops a line at the first illegal move. The client's `cloudEval(fen, lines)` shares the tablebase's machinery under its own gate (one request at a time, its own 429 back-off, the 10 s timeout), caches by board, side, castling, en passant and line count, and caches a 404 as null, so a miss is never asked again; `cloudCached` shows a known answer at once.
+- `useMoveEval` (`app/stockfish.jsx`) with `cloud: { on, prefer }`: each of its positions (before and after the viewer's move, the line count as the search's) asks the cloud 300 ms after the last change (at once when cached) while the local search runs; whichever comes first shows, and a finished local search replaces the cloud's answer only when deeper. A cloud answer is final, so the move is rated as soon as both positions have one. **Prefer cloud** skips the local search of a position the cloud has at least as deep as the depth limit (No limit counts as the slider's top stop, 30). Go deeper isn't offered when both positions show the cloud's answer. A miss, an error or a back-off falls back silently.
+- Shown as Stockfish's result: eval, lines, arrows, the eval bar; the Analysis title row says **cloud depth 60** (Cloud D60 where narrow; the tooltip "Lichess cloud, depth 60"), the lines' tooltips "Lichess cloud's line".
+- Where: the free board and moves the viewer tries in the replay. Never for "Analyse with Stockfish", Go deeper on a loaded analysis's move, the Stockfish opponent or its critique, nor during a game.
+- Settings › **Online** › **Lichess cloud evaluation** (`TWEAK_DEFAULTS.cloudEval = false`) and, under it, **Prefer cloud** (`cloudPrefer = false`); off sends nothing. `lichess.org` added to the CSP's `connect-src`; `sw.js` passes it through (not in `KEEP_HOSTS`).
+- Tests: `tests/lichess-core.test.cjs` (real answers in `tests/fixtures/cloud-*.json`: three lines, a mate, castling in a line, a miss; the key, the 404 cached, errors not, its own 429 back-off), live: off sends nothing, on asks the start position once and shows `cloud depth`, a miss falls back to Stockfish, Prefer cloud leaves Stockfish idle on a cached position.
+
 ### Responsive layout
 
 Built 2026-10-26 (designed the same day), replacing the fixed video frames (1920×1080, compact, square, sideways and 840-wide portrait, scaled as a whole to the window) with a normal responsive page. Text keeps one comfortable size whatever the window, extra room goes to the board and the panels together, and nothing is cut off at any size (the anti-goal; a live test sweeps nine sizes for overflow).
@@ -220,7 +232,7 @@ Unverified facts are marked **verify**.
 | 1 | `claude/multipv`: Lines setting, multi-line engine panel and arrows (built, see Lines (MultiPV)) | none | low |
 | 2 | `claude/tablebase`: endgame tablebase (built, see Endgame tablebase) | none | low |
 | 2b | `claude/tablebase-analysis`: the tablebase in game analysis and move ratings (built, see Endgame tablebase) | 2 | medium |
-| 3 | `claude/cloud-eval`: Lichess cloud evaluation | 1 | low |
+| 3 | `claude/cloud-eval`: Lichess cloud evaluation (built, see Lichess cloud evaluation) | 1 | low |
 | 4 | `claude/lichess-explorer`: opening explorer and Lichess sign-in | none | medium |
 | 5 | `claude/threads`: cross-origin isolation, multi-thread engine, Threads setting | 1 | high |
 
@@ -261,7 +273,7 @@ Ship 1 to 4 first (2b right after 2); 5 last and alone, since its headers affect
 - Privacy: a game's endgame positions are sent one by one during the run; README's Lichess data note says so.
 - Tests: fake client in `runAnalysis` (tablebase positions skip the engine, an uncertain or null answer searches, the setting off sends nothing), the rating table (win → draw a blunder, same outcome no loss, cursed counted as draw), JSON fields and the partial key, live: analysing a short KBN v K game makes no engine search for its positions and rates a drawing move a blunder.
 
-**PR 3: Cloud evaluation.** `https://lichess.org/api/cloud-eval?fen=<FEN>&multiPv=<N>` (no auth, 404 when never analysed, rate limited) **verify** `variant`, `multiPv` limits and shape (`depth`, `knodes`, `pvs[{ moves, cp | mate }]`).
+**PR 3: Cloud evaluation.** Built 2026-10-27, see Lichess cloud evaluation; the plan as it was: `https://lichess.org/api/cloud-eval?fen=<FEN>&multiPv=<N>` (no auth, 404 when never analysed, rate limited) **verify** `variant`, `multiPv` limits and shape (`depth`, `knodes`, `pvs[{ moves, cp | mate }]`).
 
 - `LichessCore.cloudEval(fen, lines)` returns the engine-result shape tagged `source: 'cloud'`; mates mapped to `±(10000 − 10·N)`.
 - With the toggle on, each position asks the cloud (debounced) and runs the local search at the same time; whichever arrives first shows, the deeper replaces it, labelled "Lichess cloud, depth 40". "Prefer cloud" skips the local search when the cloud depth meets the local limit. A miss falls back silently.
@@ -436,4 +448,5 @@ Deferred by the per-plan reviews; each was true when recorded and may since have
 - 2026-10-28: square-ish two columns hold up to 1.25 times as tall as wide (was 1.15), the eval graph under Analysis where it keeps 240·text px: the viewer prefers that layout to one column at sizes like 758×929 (it showed there only when the window grew into it). Reverses the 2026-10-27 call that 772×905 stacks for its larger board.
 - 2026-10-28: square-ish from 0.77 times as tall as wide (was 0.8), and the one-column check counts what goes under a two-column board as that layout has it (Analysis when square-ish): a 760 px wide window shrinking from 770 to 642 px high had flipped to one column part of the way. The eval graph goes full width under the board from 670 px high where that doesn't shrink the board (it sat in the sidebar beside a board with empty room under it).
 - 2026-10-27: no eval graph under 670 px high; a square-ish two-column window puts Analysis full width under the board in place of the eval graph; one column puts Commentary at the bottom, under Analysis.
+- 2026-10-27: PR 3 (cloud evaluation) built: the cloud asks for the positions of the viewer's own moves only (the live engine's), never a loaded analysis's; a 404 is cached so a miss isn't asked again; Prefer cloud with No limit wants depth 30 (the slider's top stop); a finished local search replaces the cloud's answer only when deeper (a partial one never does, so the rating doesn't flicker).
 - 2026-10-27: Moves stands over Commentary in every layout (in two columns no longer beside it; in one column first under the board, Commentary under it, then Analysis), at most five lines tall; the sidebar keeps its width.

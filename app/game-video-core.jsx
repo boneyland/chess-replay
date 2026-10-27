@@ -311,6 +311,7 @@ const engineLabel = (name) => (name || 'Stockfish').replace(/\s*\(browser\)$/, '
 // the Analysis title row's word on a search: the depth it reached, or the tablebase that answered it
 function searchDepth(s) {
   if (s && s.tablebase) return 'Tablebase'; // a game analysis's position the tablebase answered
+  if (s && s.source === 'cloud') return 'cloud depth ' + s.depth; // Lichess's cloud evaluation
   return s && s.depth ? 'depth ' + s.depth : null;
 }
 
@@ -328,10 +329,11 @@ function AnalysisPanel({ box, a, depth, deep, paused, style, children }) {
   const [open, setOpen] = React.useState(false);
   const live = !!E && paused, shown = open && live, pick = live && E.pick;
   const name = E ? E.name : 'Stockfish';
-  // a narrow panel (a laptop's sidebar, a phone) shortens the depth to D22 (the tablebase to TB), so the title and the
-  // controls share one line
+  // a narrow panel (a laptop's sidebar, a phone) shortens the depth to D22 (the tablebase to TB, the cloud to Cloud
+  // D40), so the title and the controls share one line
   const roomy = box.w >= 440 * TEXT;
-  const depthText = !depth || roomy ? depth : depth.startsWith('depth ') ? 'D' + depth.slice(6) : 'TB';
+  const depthText = !depth || roomy ? depth : depth.startsWith('depth ') ? 'D' + depth.slice(6) : depth.startsWith('cloud depth ') ? 'Cloud D' + depth.slice(12) : 'TB';
+  const depthTip = depth && depth.startsWith('cloud ') ? 'Lichess cloud, depth ' + depth.slice(12) : depth;
   const head = (
     // the controls go under the title rather than over it where even then they don't fit (a small phone, large text)
     <span style={{ flex: 1, minWidth: 0, display: 'flex', flexWrap: 'wrap', alignItems: 'center', justifyContent: 'space-between', columnGap: tx(16), rowGap: tx(8) }}>
@@ -340,7 +342,7 @@ function AnalysisPanel({ box, a, depth, deep, paused, style, children }) {
           desktop's heading whatever the layout's title gap (the phone's wide one left the depth no room) */}
       <span style={{ flex: '1 1 auto', minWidth: 0, display: 'flex', alignItems: 'center', justifyContent: 'flex-end', gap: tx(16) }}>
       {!shown && paused && <DeeperButton ev={deep} />}
-      {!shown && depthText && <span title={depth} style={{ flex: 'none', whiteSpace: 'nowrap', letterSpacing: '0.04em' }}>{depthText}</span>}
+      {!shown && depthText && <span title={depthTip} style={{ flex: 'none', whiteSpace: 'nowrap', letterSpacing: '0.04em' }}>{depthText}</span>}
       {/* smaller on the phone, where the row is tight */}
       {pick
         ? <select aria-label="Engine" value={pick.value} onChange={(e) => { const go = pick.onChange(e.target.value); if (go) setOpen(true); }} onClick={stopHere} onPointerDown={stopHere}
@@ -1004,7 +1006,7 @@ function GameVideo({ M, tw, d, probe, queen, nav, scheme, sf, orient }) {
   const ownOn = !!(sf && vline && vline.src === 'you' && vline.upto >= 0);
   const ownBefore = ownOn ? M.plies.slice(0, vline.at).map((p) => p.uci).concat(vline.moves.slice(0, vline.upto).map((m) => m.uci)) : null;
   const ownAfter = ownOn ? ownBefore.concat([vline.moves[vline.upto].uci]) : null;
-  const ownEval = useMoveEval(sf ? sf.engine : null, ownBefore, ownAfter, sf ? sf.own : window.AnalysisCore.engineSettings().own, M.start.fen);
+  const ownEval = useMoveEval(sf ? sf.engine : null, ownBefore, ownAfter, sf ? sf.own : window.AnalysisCore.engineSettings().own, M.start.fen, null, cloudSetting(tw));
   // Go deeper on a move of the loaded analysis, while paused on it: from its own search (else the game settings), the
   // eval it shows only (the ratings, graph and accuracy stay the analysis's). Not on a PGN's own evals, which have no
   // best lines for it to go with: those come from analysing the game
