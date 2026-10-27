@@ -53,7 +53,8 @@ const panelPad = () => `${tx(L.pad[0])}px ${tx(L.pad[1])}px`;
 // the move and eval headline in Analysis (and the free board's and a game's)
 const HEADLINE = 28;
 // a short Analysis panel (one column below a desktop, a phone held sideways) packs tighter: a smaller headline, about
-// half the vertical spacing, and thinner padding at its top and bottom
+// half the vertical spacing, and thinner padding at its top and bottom (Moves and Commentary take the padding and the
+// title row's gap too: Panel's tight)
 const tightAn = () => L.tier !== 'desktop' && (L.cols === 1 || L.tier === 'phone');
 const headline = () => tx(tightAn() ? 22 : HEADLINE);
 const anGap = (px) => tx(tightAn() ? Math.round(px / 2) : px);
@@ -615,7 +616,7 @@ function MoveList({ M, T, S, a, paused, onPick }) {
     );
   }
   return (
-    <Panel box={L.moves} a={a} title="Moves">
+    <Panel box={L.moves} a={a} tight title="Moves">
       <div ref={listRef} className="moves-list" style={{ position: 'relative', height: listH ?? 'auto', maxHeight: listH == null ? L.moves.maxRows * ROW : undefined, overflowY: 'auto', scrollbarWidth: 'thin' }}>
         <div style={{ display: 'flex', flexWrap: 'wrap', alignItems: 'center', columnGap: GAP, rowGap: ROW - CHIP, padding: 4 }}>{moves}</div>
       </div>
@@ -643,7 +644,7 @@ function Commentary({ M, T, S, a, book, line }) {
   const size = tx(qtxt ? (txt.length > 90 ? 26 : 30) : txt.length > 140 ? 28 : 34) * ph;
   const qsize = tx(qtxt.length > 200 ? 20 : 22) * ph;
   return (
-    <Panel box={L.comment} a={a} title="Commentary" right={bookAt ? `${bookAt.eco} ${bookAt.name}` : null}>
+    <Panel box={L.comment} a={a} tight title="Commentary" right={bookAt ? `${bookAt.eco} ${bookAt.name}` : null}>
       {total ? (
         <div style={{ display: 'flex', flexDirection: 'column', gap: tx(14) }}>
           {/* the Analysis panel names the move, unless the game has no analysis */}
