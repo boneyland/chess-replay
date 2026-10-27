@@ -131,7 +131,7 @@ const ready = async (page) => { await page.locator('.dock-primary').waitFor({ st
       await rec.hold(1200);
       // 1. load the Game of the Century
       const chooser = page.waitForEvent('filechooser');
-      await glide(page, page.getByRole('button', { name: 'Load game…' }));
+      await glide(page, page.getByRole('button', { name: 'Load game' }));
       await (await chooser).setFiles({ name: 'Byrne-Fischer_1956.pgn', mimeType: 'application/x-chess-pgn', buffer: PGN });
       await page.getByText('Donald Byrne').first().waitFor();
       await rec.hold(1800);

@@ -460,7 +460,7 @@ function PgnDialog({ onLoad, onClose }) {
         placeholder={'[Event "…"]\n\n1. e4 e5 2. Nf3 Nc6 …'} value={text} onKeyDown={onKey} onChange={(e) => { setText(e.target.value); setMsg(''); }} />
       <div className="fen-info">
         <div id="pgn-msg" className="fen-msg" role="alert">{msg}</div>
-        {!msg && <div className="fen-note">Opens as a loaded game, as Load game… does: tags, comments, evals and a [FEN] start are read. Ctrl+Enter loads it.</div>}
+        {!msg && <div className="fen-note">Opens as a loaded game, as Load game does: tags, comments, evals and a [FEN] start are read. Ctrl+Enter loads it.</div>}
       </div>
       <div className="fen-btns">
         <button type="button" className="twk-btn secondary" onClick={onClose}>Cancel</button>

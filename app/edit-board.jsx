@@ -1,5 +1,5 @@
 // ---------- position editor ----------
-// Play/Explore › Edit position…: a board to set up by hand, its rules in EditCore (app/edit-core.js). A view of its own,
+// Play/Explore › Edit position: a board to set up by hand, its rules in EditCore (app/edit-core.js). A view of its own,
 // as the free board is: the board where the free board draws it, the editor in the panels' room beside it (on the
 // portrait frame under it, the piece tray right under the board). GameApp holds the setup and the FEN field's text.
 

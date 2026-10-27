@@ -191,7 +191,9 @@ function FitOrHide({ style, children }) {
   React.useLayoutEffect(() => {
     const el = ref.current, panel = el && el.offsetParent;
     if (!panel) return;
-    const fits = el.offsetTop + el.offsetHeight <= panel.clientHeight - parseFloat(getComputedStyle(panel).paddingBottom);
+    // a flowing panel grows to fit, so it always fits there; elsewhere a pixel allows for the offsets' rounding (hidden,
+    // it still holds its line, which showed as an empty line under the Analysis panel's lines)
+    const fits = !!L.flow || el.offsetTop + el.offsetHeight <= panel.clientHeight - parseFloat(getComputedStyle(panel).paddingBottom) + 1;
     el.style.visibility = fits ? '' : 'hidden';
   });
   return <span ref={ref} style={style}>{children}</span>;
@@ -561,7 +563,8 @@ function MoveList({ M, T, S, a, paused, onPick }) {
     if (!el) return;
     const at = (i) => {
       const m = i >= 0 && el.querySelector(`[data-ply="${i}"]`);
-      return m ? Math.max(0, Math.round(m.offsetTop / ROW) + 3 - Math.max(1, Math.floor(el.clientHeight / ROW))) * ROW : 0;
+      // the lines in view: clientHeight is rounded to whole pixels, so a box of exactly n lines can read a pixel short
+      return m ? Math.max(0, Math.round(m.offsetTop / ROW) + 3 - Math.max(1, Math.floor((el.clientHeight + 1) / ROW))) * ROW : 0;
     };
     const scroll = Math.round(lerp(at(c - 1), at(c), k));
     if (applied.current !== scroll) { el.scrollTop = scroll; applied.current = scroll; }

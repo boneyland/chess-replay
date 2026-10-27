@@ -151,7 +151,7 @@ function GameApp() {
   // the dock's Play/Explore menu (landscape); on a phone its items sit in the folded menu instead
   const [newMenu, setNewMenu] = React.useState(false);
   const [pgnOpen, setPgnOpen] = React.useState(false);
-  // Edit position…: { setup, text, msg, resume } while the editor shows in place of the board or the loaded game; text is
+  // Edit position: { setup, text, msg, resume } while the editor shows in place of the board or the loaded game; text is
   // the FEN field's, msg why it doesn't parse, resume the paused game in progress left to open it (Cancel goes back to it)
   const [editing, setEditing] = React.useState(null);
   const [fenNote, setFenNote] = React.useState(null); // { fen, ok } after Copy FEN; a copy that failed stays up to select
@@ -382,7 +382,7 @@ function GameApp() {
       e.preventDefault(); clearTimeout(dragTimer.current); setDrag(false);
       let list = Array.from(e.dataTransfer.files || []);
       if (!list.length) list = Array.from(e.dataTransfer.items || []).filter((it) => it.kind === 'file').map((it) => it.getAsFile()).filter(Boolean);
-      if (list.length) guardRef.current(() => loadRef.current(list)); else setErr('The drop arrived without a file. Use “Load game…” to pick the files instead.');
+      if (list.length) guardRef.current(() => loadRef.current(list)); else setErr('The drop arrived without a file. Use “Load game” to pick the files instead.');
     };
     const end = () => { clearTimeout(dragTimer.current); setDrag(false); };
     window.addEventListener('dragover', over); window.addEventListener('dragleave', leave); window.addEventListener('drop', drop); window.addEventListener('dragend', end);
@@ -521,8 +521,8 @@ function GameApp() {
   const status = boardStatus || `${M.white.short} – ${M.black.short} · ${M.plies.length} plies` + (M.evalSource === 'analysis' ? ' · analysis evals' : M.evalSource === 'pgn' ? ' · PGN evals' : '') + (M.hasNotes ? ' · notes' : '') + (files.sample ? ' (sample)' : '') + ' · ' + fmtLen(TM.total);
   const shownErr = err || built.error;
 
-  const newGroups = [{ label: 'Explore', items: [{ label: 'Starting position', run: newBoard }, { label: 'Edit position…', run: editPosition }, { label: 'Paste PGN…', run: pastePgn }, { label: 'Copy FEN', run: copyFen }] },
-    { label: 'Play', items: [{ label: 'Play vs human…', run: playHuman }, { label: 'Play vs Stockfish…', run: playSf }, { label: 'My games…', run: myGames }] }];
+  const newGroups = [{ label: 'Explore', items: [{ label: 'Starting position', run: newBoard }, { label: 'Edit position', run: editPosition }, { label: 'Paste PGN', run: pastePgn }, { label: 'Copy FEN', run: copyFen }] },
+    { label: 'Play', items: [{ label: 'Play vs human', run: playHuman }, { label: 'Play vs Stockfish', run: playSf }, { label: 'My games', run: myGames }] }];
   const newItems = newGroups.map((g) => <div key={g.label} className={`dock-group dock-group-${g.label.toLowerCase()}`}>
     <span className="dock-menu-label">{g.label}</span>
     {g.items.map((it) => <button key={it.label} type="button" className="dock-btn" onClick={it.run}>{it.label}</button>)}
@@ -531,7 +531,7 @@ function GameApp() {
   const dockItems = (
     <div id="dock-items" className="dock-items">
       {phone && <span className="dock-menu-status">{shownErr || status}</span>}
-      <button type="button" className="dock-btn dock-primary" onClick={() => { setMenu(false); loadGame(); }}>Load game…</button>
+      <button type="button" className="dock-btn dock-primary" onClick={() => { setMenu(false); loadGame(); }}>Load game</button>
       {/* a list of starting points in two groups, each under its heading; on the phone they sit in the folded menu */}
       {phone ? newItems : (
         <div ref={newRef} className="dock-new">
@@ -603,7 +603,7 @@ function GameApp() {
       )}
       {drag && (
         <div className="drop">
-          <div className="drop-box">Drop a PGN<br /><span>with this page’s analysis or notes files too, if you have them · if dropping doesn’t work here, use Load game…</span></div>
+          <div className="drop-box">Drop a PGN<br /><span>with this page’s analysis or notes files too, if you have them · if dropping doesn’t work here, use Load game</span></div>
         </div>
       )}
       <ExportOverlay x={video} />
@@ -615,7 +615,7 @@ function GameApp() {
       <TweaksPanel open={panel} onClose={closePanel} tab={panelTab} onTab={setPanelTab} tabs={[
         { id: 'game', label: 'Game', body: <>
           <div className={shownErr ? 'twk-note twk-err' : 'twk-note'}>{shownErr || status}</div>
-          <TweakButton label="Load game…" onClick={loadGame} />
+          <TweakButton label="Load game" onClick={loadGame} />
           {board && board.game && <div className="twk-note">{board.game.mode === 'stockfish' ? 'Stockfish 19 plays the other side at full strength (there is no strength setting) and quietly rates your moves; Analyse on the free board shows its eval once the game ends.' : 'Stockfish is off during a game; Analyse on the free board brings it back once the game ends.'}</div>}
           {!board && <div className="twk-note">Uses the PGN’s own evals (Lichess [%eval] or cutechess +0.25/20). Without them, run “Analyse with Stockfish” from the Analysis panel’s ☰ menu. Saved analysis, notes and Queen files load here too.</div>}
           {board && !window.PlayCore.inProgress(board) && <TweakButton label="Replay these moves as a game" disabled={!board.steps.length} onClick={boardAsGame} />}
