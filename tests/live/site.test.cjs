@@ -1305,6 +1305,9 @@ for (const name of BROWSERS) for (const site of SITES) {
       await p.mouse.down();
       await p.mouse.move(from.x + 40, from.y + from.height / 2 - 120, { steps: 8 });
       await p.mouse.up();
+      // CI's Firefox can still be applying the drag's last moves (and the glide after it) when mouse.up resolves: it
+      // read 66–99 px there straight away, so wait for the list to get there rather than reading it once
+      await p.waitForFunction(() => document.querySelector('.book-head').parentElement.parentElement.scrollTop >= 100, null, { timeout: 3000 }).catch(() => {});
       assert.ok(await listTop() >= 100, `the list scrolled (${await listTop()} px of ${await room()} px it can)`);
       assert.match(await label.innerText(), /^Start$/, 'the drag played no move');
       assert.equal(await p.evaluate(() => String(window.getSelection())), '', 'and selected no text');
