@@ -135,14 +135,12 @@ test('video one column: board shrinks first, panels keep a floor', () => {
   const s = LC.compute({ w: 320, h: 500, video: true });
   assert.ok(s.board.size >= 200);
   for (const k of ['comment', 'analysis', 'moves']) assert.ok(s[k].h >= 48 - 0.5, k);
-  assert.equal(LC.compute({ w: 390, h: 770, video: true }).moves.cols, 1);
   // Moves keeps room for its title and one row at every text size, as MoveList draws them (MoveList takes its rows from here)
   for (const [name, text] of Object.entries(LC.TEXT_SIZES)) {
     assert.ok(LC.compute({ w: 390, h: 760, text, video: true }).moves.rows >= 1, `Moves at 390x760 ${name}`);
     const L = LC.compute({ w: 390, h: 770, text, video: true });
     assert.ok(L.board.size >= 200 && L.h === 770, `390x770 ${name}: board ${L.board.size}`);
   }
-  assert.equal(LC.compute({ w: 768, h: 950 }).moves.cols, 2);
 });
 
 test('cols override and moves rows', () => {

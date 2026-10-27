@@ -546,57 +546,67 @@ function Header({ M, a }) {
 
 function MoveList({ M, T, S, a, paused, onPick }) {
   const c = lastPly(T, S);
-  // COLS move pairs to a row (two in a list 480 px wide or more), VIS rows in view: as many as fit under the title
-  // (LayoutCore counts them from the panel's chrome), at least one
-  const ROW = tx(38), COLS = L.moves.cols || 1, NUM = tx(50); // NUM: the move number's column
-  const pairRows = Math.ceil((Math.ceil((S.N + M.ply0 % 2) / 2)) / COLS);
-  // a flowing list shows every row up to maxRows; a placed one as many as fit
-  const VIS = L.moves.flow ? clamp(pairRows, 1, L.moves.maxRows) : Math.max(1, L.moves.rows);
-  // a placed list takes all the box's height under its title (the part of a row past the last whole one too), a flowing one its rows
-  const listH = L.moves.flow ? VIS * ROW : Math.max(ROW, L.moves.h - 2 * tx(L.pad[0]) - tx(15) * 1.4 - tx(12) - 2);
-  const odd = M.ply0 % 2, scrollFor = (i) => Math.max(0, Math.floor((Math.max(i, 0) + odd) / (2 * COLS)) - Math.max(0, VIS - (COLS > 1 ? 2 : 3))) * ROW;
-  const k = c >= 0 ? MOTION.move(cl01((T - S.tp[c]) / 0.35)) : 1;
-  const scroll = lerp(scrollFor(c - 1), scrollFor(c), k), listRef = React.useRef(null);
-  // the list scrolls (wheel, finger, a mouse drag); a new move scrolls it to that move, and leaves it where the viewer put it until the next
+  // the moves wrap in lines, as the Analysis panel's lines do: a light chip for White's move, a dark one for Black's,
+  // the move number before White's (and before the first, when the game starts on Black's)
+  const ROW = tx(38), GAP = tx(6);
+  // a flowing list grows up to maxRows lines, then scrolls; a placed one takes all the box's height under its title
+  const listH = L.moves.flow ? null : Math.max(ROW, L.moves.h - 2 * tx(L.pad[0]) - tx(15) * 1.4 - tx(12) - 2);
+  const k = c >= 0 ? MOTION.move(cl01((T - S.tp[c]) / 0.35)) : 1, listRef = React.useRef(null);
+  // a new move scrolls the list so the move's line keeps about two lines under it (sliding there as the move plays),
+  // and leaves it where the viewer put it (wheel, finger, a mouse drag) until the next
   const applied = React.useRef(null);
-  React.useLayoutEffect(() => { const el = listRef.current; if (el && applied.current !== scroll) { el.scrollTop = scroll; applied.current = scroll; } });
-  // one Tab stop for the whole list (the current move); the arrows move between moves, and focus follows
+  React.useLayoutEffect(() => {
+    const el = listRef.current;
+    if (!el) return;
+    const at = (i) => {
+      const m = i >= 0 && el.querySelector(`[data-ply="${i}"]`);
+      return m ? Math.max(0, m.offsetTop + m.offsetHeight + 2 * (m.offsetHeight + GAP) - el.clientHeight) : 0;
+    };
+    const scroll = Math.round(lerp(at(c - 1), at(c), k));
+    if (applied.current !== scroll) { el.scrollTop = scroll; applied.current = scroll; }
+  });
+  // one Tab stop for the whole list (the current move); the arrows move between moves (up and down a line), and focus follows
   const focusPly = Math.max(0, c);
+  const lineStep = (i, dir) => {
+    const el = listRef.current, from = el && el.querySelector(`[data-ply="${i}"]`);
+    if (!from) return i + dir;
+    const x = from.offsetLeft + from.offsetWidth / 2, chips = [...el.querySelectorAll('[data-ply]')];
+    const tops = chips.map((m) => m.offsetTop).filter((t) => (dir > 0 ? t > from.offsetTop + 1 : t < from.offsetTop - 1));
+    if (!tops.length) return dir > 0 ? S.N - 1 : 0;
+    const top = dir > 0 ? Math.min(...tops) : Math.max(...tops);
+    const near = chips.filter((m) => Math.abs(m.offsetTop - top) <= 1).sort((p, q) => Math.abs(p.offsetLeft + p.offsetWidth / 2 - x) - Math.abs(q.offsetLeft + q.offsetWidth / 2 - x))[0];
+    return +near.dataset.ply;
+  };
   const moveKey = (e, i) => {
     if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); onPick(i); return; }
-    const j = { ArrowLeft: i - 1, ArrowRight: i + 1, ArrowUp: i - 2 * COLS, ArrowDown: i + 2 * COLS, Home: 0, End: S.N - 1 }[e.key];
-    if (j == null || e.shiftKey || e.altKey || e.metaKey || e.ctrlKey) return;
+    if (e.shiftKey || e.altKey || e.metaKey || e.ctrlKey) return;
+    const j = { ArrowLeft: () => i - 1, ArrowRight: () => i + 1, ArrowUp: () => lineStep(i, -1), ArrowDown: () => lineStep(i, 1), Home: () => 0, End: () => S.N - 1 }[e.key];
+    if (!j) return;
     e.preventDefault(); e.stopPropagation();
-    const to = clamp(j, 0, S.N - 1);
+    const to = clamp(j(), 0, S.N - 1);
     onPick(to);
     requestAnimationFrame(() => { const el = listRef.current && listRef.current.querySelector(`[data-ply="${to}"]`); if (el) el.focus({ preventScroll: true }); });
   };
-  const cell = (i) => {
-    if (i < 0) return <span key={i} style={{ color: C.dim }}>…</span>; // the White move before a game that starts on Black's
-    if (i >= S.N) return <span key={i} />;
-    // moves still to come (seen while paused) are dim rather than faded, so they stay readable
-    const P = M.plies[i], cur = i === c, ahead = T < S.tp[i];
-    const shown = cl01((T - S.tp[i]) / 0.15);
-    return (
-      <span key={i} className="mv" role="button" data-ply={i} tabIndex={i === focusPly ? 0 : -1} title={`Go to ${label(M, i)}`} onClick={(e) => { e.stopPropagation(); onPick(i); }}
-        onKeyDown={(e) => moveKey(e, i)}
-        style={{ opacity: paused ? 1 : shown, padding: `${tx(3)}px ${tx(8)}px`, borderRadius: 2, justifySelf: 'start', cursor: 'pointer', boxShadow: cur ? `inset 0 0 0 2px ${C.last}` : 'none', color: ahead ? C.dim : P.cls === 'none' ? C.ink : clsColor(P.cls), fontWeight: cur ? 700 : 500 }}>{P.san}{P.mark || ''}</span>
-    );
-  };
-  const pairs = Math.ceil((S.N + odd) / 2), rows = [], first = Math.floor(M.ply0 / 2);
-  for (let r = 0; r * COLS < pairs; r++) {
-    const cells = [];
-    for (let q = r * COLS; q < Math.min(pairs, (r + 1) * COLS); q++) {
-      cells.push(<span key={'n' + q} style={{ color: C.dim, opacity: T >= S.tp[Math.max(0, 2 * q - odd)] || paused ? 1 : 0 }}>{first + q + 1}.</span>, cell(2 * q - odd), cell(2 * q + 1 - odd));
-    }
-    rows.push(
-      <div key={r} style={{ display: 'grid', gridTemplateColumns: COLS > 1 ? `repeat(${COLS}, ${NUM}px 1fr 1fr)` : `${NUM}px 1fr 1fr`, height: ROW, alignItems: 'center' }}>{cells}</div>
+  const moves = [];
+  for (let i = 0; i < S.N; i++) {
+    // moves still to come are hidden while the game plays (keeping their place, so the lines don't reflow) and faded,
+    // but readable, while paused; a flagged move's chip (not a best one: most are) is edged in its class colour
+    const P = M.plies[i], cur = i === c, ahead = T < S.tp[i], white = (M.ply0 + i) % 2 === 0;
+    const shown = paused ? 1 : cl01((T - S.tp[i]) / 0.15);
+    const edge = P.cls !== 'none' && P.cls !== 'best' ? `2px solid ${clsColor(P.cls)}` : `1px solid ${white ? 'rgba(60,40,20,0.22)' : 'rgba(255,236,214,0.22)'}`;
+    moves.push(
+      <span key={i} style={{ display: 'flex', alignItems: 'center', gap: tx(5), opacity: shown }}>
+        {(white || i === 0) && <span style={{ color: C.dim, marginLeft: i ? tx(6) : 0, font: `500 ${tx(15)}px ${MONO}` }}>{window.ChessCore.moveNo(M.ply0 + i)}</span>}
+        <span className="mv" role="button" data-ply={i} tabIndex={i === focusPly ? 0 : -1} title={`Go to ${label(M, i)}`} onClick={(e) => { e.stopPropagation(); onPick(i); }}
+          onKeyDown={(e) => moveKey(e, i)}
+          style={{ opacity: ahead ? 0.5 : 1, padding: `${tx(2)}px ${tx(8)}px`, borderRadius: 2, cursor: 'pointer', font: `${cur ? 700 : 600} ${tx(16)}px ${MONO}`, background: white ? '#f1ebe1' : '#2a2320', color: white ? '#15100d' : '#efe8de', border: edge, boxShadow: cur ? `0 0 0 3px ${C.last}` : 'none' }}>{P.san}{P.mark || ''}</span>
+      </span>
     );
   }
   return (
     <Panel box={L.moves} a={a} title="Moves">
-      <div ref={listRef} className="moves-list" style={{ position: 'relative', height: listH, overflowY: 'auto', scrollbarWidth: 'thin', font: `500 ${tx(19)}px ${MONO}` }}>
-        <div>{rows}</div>
+      <div ref={listRef} className="moves-list" style={{ position: 'relative', height: listH ?? 'auto', maxHeight: listH == null ? L.moves.maxRows * ROW : undefined, overflowY: 'auto', scrollbarWidth: 'thin' }}>
+        <div style={{ display: 'flex', flexWrap: 'wrap', alignItems: 'center', columnGap: GAP, rowGap: tx(8), padding: 4 }}>{moves}</div>
       </div>
     </Panel>
   );

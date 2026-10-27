@@ -69,10 +69,9 @@
     return !keepTwo && (tall || narrow || wasted) ? 1 : 2;
   }
 
-  // moves.cols / moves.rows: the list shows two columns of moves from 480 px wide; rows is how many fit under its title
+  // moves.rows: how many lines of moves fit under the list's title
   function withMoves(m, text) {
     if (!m) return m;
-    m.cols = m.w >= 480 ? 2 : 1;
     m.rows = Math.max(0, Math.floor((m.h - moveChrome(text)) / moveRow(text) + 1e-6));
     return m;
   }

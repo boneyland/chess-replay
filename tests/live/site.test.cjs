@@ -524,8 +524,8 @@ for (const name of BROWSERS) for (const site of SITES) {
       await assert.doesNotReject(fp.page.locator('.plabel').filter({ hasText: /4… Bc5/ }).waitFor({ timeout: 5000 }));
       const b = await boardBox(fp.page);
       assert.equal(b.n, 32);
-      const moves = await fp.page.locator('[data-ply="0"]').evaluate((el) => el.parentElement.parentElement.parentElement.innerText);
-      assert.match(moves, /3\.\s*…\s*Nf6\s*4\.\s*Nc3\s*Bc5/);
+      const moves = await fp.page.locator('[data-ply="0"]').evaluate((el) => el.closest('.moves-list').innerText);
+      assert.match(moves, /3…\s*Nf6\s*4\.\s*Nc3\s*Bc5/);
       const from = square(b, 'd2'), to = square(b, 'd3');
       await fp.page.mouse.move(from.x, from.y);
       await fp.page.mouse.down();
