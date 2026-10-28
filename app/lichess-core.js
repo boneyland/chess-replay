@@ -4,6 +4,7 @@
 (function () {
   const TB_URL = 'https://tablebase.lichess.ovh/standard';
   const CLOUD_URL = 'https://lichess.org/api/cloud-eval';
+  const EXPLORER_URL = 'https://explorer.lichess.ovh';
   const MATE_CP = 10000, MATE_STEP = 10; // AnalysisCore's mate scores: mate in N as ±(10000 − 10·N)
   const TB_MAX_PIECES = 7; // the Syzygy tables Lichess serves; never asked above this
   const BACKOFF_MS = 60000, TIMEOUT_MS = 10000, CACHE_SIZE = 300;
@@ -115,6 +116,35 @@
     return { cp: top.cp, depth: j.depth, maxDepth: j.depth, pv: top.pv, best: top.pv[0] || null, lines, nodes: typeof j.knodes === 'number' ? j.knodes * 1000 : null, timeMs: null, source: 'cloud' };
   }
 
+  // The opening explorer (needs a Lichess token: 401 without). db: 'lichess' or 'masters'; ratings (lichess only): the
+  // rating groups to count, e.g. [1600, 1800, 2000, 2200, 2500]; speeds (lichess only): ['blitz', 'rapid', ...]; empty = all
+  const explorerDb = (o) => (o && o.db === 'masters' ? 'masters' : 'lichess');
+  const explorerQuery = (fen, o = {}) => {
+    const q = new URLSearchParams({ fen, moves: '12', topGames: '4', recentGames: '0' });
+    if (explorerDb(o) === 'lichess') {
+      if (o.ratings && o.ratings.length) q.set('ratings', o.ratings.join(','));
+      if (o.speeds && o.speeds.length) q.set('speeds', o.speeds.join(','));
+    }
+    return q.toString();
+  };
+  const explorerUrl = (fen, o) => EXPLORER_URL + '/' + explorerDb(o) + '?' + explorerQuery(fen, o);
+  // the cache's key: the position (no move counters) and the filters, never the token
+  const explorerKey = (fen, o = {}) => 'explorer ' + explorerDb(o) + ' ' + String(fen).trim().split(/\s+/).slice(0, 4).join(' ') + ' ' + (explorerDb(o) === 'lichess' ? [(o.ratings || []).join(','), (o.speeds || []).join(',')].join('|') : '');
+  // { total, white, draws, black, moves: [{ uci, san, white, draws, black, total, averageRating }], games: [{ id, white, black,
+  // winner, year }], opening: { eco, name } | null }; throws on an answer that isn't the explorer's
+  function parseExplorer(j) {
+    if (!j || !Array.isArray(j.moves)) throw new Error('not an explorer answer');
+    const n = (x) => (x | 0);
+    const total = (o) => n(o.white) + n(o.draws) + n(o.black);
+    const name = (p) => (p && p.name ? p.name + (p.rating ? ' (' + p.rating + ')' : '') : '?');
+    return {
+      total: total(j), white: n(j.white), draws: n(j.draws), black: n(j.black),
+      moves: j.moves.map((m) => ({ uci: m.uci, san: m.san, white: n(m.white), draws: n(m.draws), black: n(m.black), total: total(m), averageRating: m.averageRating == null ? null : n(m.averageRating) })),
+      games: (j.topGames || []).map((g) => ({ id: g.id, white: name(g.white), black: name(g.black), winner: g.winner || null, year: g.year || null })),
+      opening: j.opening && j.opening.name ? { eco: j.opening.eco || '', name: j.opening.name } : null,
+    };
+  }
+
   // A client: fetchFn (window.fetch), now (Date.now). tablebase(fen, { signal }) → the parsed answer or null (more
   // than 7 pieces, offline, an error, a 429 back-off, or aborted); answers are cached by FEN, errors aren't
   function create({ fetchFn, now = Date.now } = {}) {
@@ -123,7 +153,7 @@
     // one request at a time per endpoint, the next waiting for the last to settle; a 429 closes the gate for a minute
     const gate = (name) => gates[name] || (gates[name] = { busy: Promise.resolve(), until: 0 });
     // missing: an HTTP status meaning "no answer for this position" (the cloud's 404), cached as null so it isn't asked again
-    async function get(name, key, url, parse, signal, missing) {
+    async function get(name, key, url, parse, signal, missing, extra = {}) {
       if (cache.has(key)) { const v = cache.get(key); remember(key, v); return v; }
       const g = gate(name);
       const prev = g.busy;
@@ -138,8 +168,9 @@
         if (signal) signal.addEventListener('abort', stop);
         const timer = setTimeout(stop, TIMEOUT_MS);
         try {
-          const r = await (fetchFn || window.fetch)(url, { signal: ctl.signal, headers: { Accept: 'application/json' } });
+          const r = await (fetchFn || window.fetch)(url, { signal: ctl.signal, headers: { Accept: 'application/json', ...extra.headers } });
           if (r.status === 429) { g.until = now() + BACKOFF_MS; return null; }
+          if (extra.special && extra.special[r.status]) return extra.special[r.status]; // answered, but not kept
           if (missing && r.status === missing) { remember(key, null); return null; }
           if (!r.ok) return null;
           const v = parse(await r.json());
@@ -157,9 +188,14 @@
       cloudEval: (fen, lines = 1, { signal } = {}) => get('cloud', 'cloud ' + cloudKey(fen, lines), cloudUrl(fen, lines), (j) => parseCloud(j, fen), signal, 404),
       // the cached answer (null: not in the cloud), or undefined when it hasn't been asked
       cloudCached: (fen, lines = 1) => cache.get('cloud ' + cloudKey(fen, lines)),
+      // fen's explorer answer (see parseExplorer), { auth: true } when Lichess wants a token (none, or one it refuses; not
+      // cached), or null: offline, an error, a 429 back-off, or aborted. Answers are cached whatever token asked
+      explorer: (fen, o = {}, { signal, token } = {}) => get('explorer', explorerKey(fen, o), explorerUrl(fen, o), parseExplorer, signal, null,
+        { headers: token ? { Authorization: 'Bearer ' + token } : {}, special: { 401: { auth: true } } }),
+      explorerCached: (fen, o = {}) => cache.get(explorerKey(fen, o)),
       backedOff: (name) => now() < gate(name).until,
     };
   }
 
-  window.LichessCore = { TB_URL, CLOUD_URL, TB_MAX_PIECES, BACKOFF_MS, pieceCount, fenOf, tbKey, tablebaseUrl, parseTablebase, flip, outcome, verdict, bar, evalCp, groups, cloudKey, cloudUrl, cloudMoves, parseCloud, create };
+  window.LichessCore = { EXPLORER_URL, explorerUrl, explorerKey, parseExplorer, TB_URL, CLOUD_URL, TB_MAX_PIECES, BACKOFF_MS, pieceCount, fenOf, tbKey, tablebaseUrl, parseTablebase, flip, outcome, verdict, bar, evalCp, groups, cloudKey, cloudUrl, cloudMoves, parseCloud, create };
 })();
