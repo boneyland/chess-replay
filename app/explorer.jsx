@@ -108,8 +108,16 @@ function ResultBar({ w, d, b, height }) {
 // panel, for an answer that can't come (offline, a back-off)
 function LichessExplorer({ x, tw, posKey, onPlay, white, fallback }) {
   const LA = useLichessAuth();
-  const top = React.useRef(null);
+  const top = React.useRef(null), loading = x.state === 'loading';
   React.useLayoutEffect(() => { const box = top.current && top.current.parentElement; if (box) box.scrollTop = 0; }, [posKey]);
+  // the progress line under the title, as the Analysis panel's: the answer's time isn't known, so it creeps towards the end
+  const [pr, setPr] = React.useState(0);
+  React.useEffect(() => {
+    if (!loading) { setPr(0); return; }
+    setPr(0.05);
+    const id = setInterval(() => setPr((v) => v + (0.9 - v) * 0.12), 250);
+    return () => clearInterval(id);
+  }, [loading, posKey]);
   if (x.state === 'none' && fallback) return fallback;
   const heading = (txt, dim) => <span className="book-head" style={{ display: 'block', font: `400 ${tx(30)}px/1.14 ${SERIF}`, color: dim ? C.dim : C.ink, textWrap: 'pretty' }}>{txt}</span>;
   const note = (txt) => <span style={{ display: 'block', marginTop: tx(8), font: `500 ${tx(15)}px ${MONO}`, color: C.dim }}>{txt}</span>;
@@ -124,14 +132,13 @@ function LichessExplorer({ x, tw, posKey, onPlay, white, fallback }) {
         <button type="button" className="twk-btn" style={{ marginTop: tx(12) }} onClick={LA.signIn}>Sign in with Lichess</button>
       </React.Fragment>
     );
-  } else if (x.state === 'loading') body = heading('Looking up…', true);
+  } else if (loading) body = null;
   else if (x.state === 'none') body = <React.Fragment>{heading('Not available', true)}{note('Lichess can’t be reached: offline, or busy for a minute.')}</React.Fragment>;
   else {
     const e = x.x;
     right = e.opening ? `${e.opening.eco} ${e.opening.name}` : null;
     body = (
       <React.Fragment>
-        {heading(e.opening ? e.opening.name : e.total ? 'Not named' : 'No games', !e.opening)}
         {note(`${nf(e.total)} games · ${masters ? 'masters' : 'Lichess'}`)}
         <div className="expl-moves" style={{ display: 'flex', flexDirection: 'column', gap: tx(2), marginTop: tx(10) }}>
           {e.moves.map((m) => {
@@ -158,7 +165,7 @@ function LichessExplorer({ x, tw, posKey, onPlay, white, fallback }) {
     );
   }
   return (
-    <Panel box={{ ...L.comment, scroll: !L.comment.flow }} a={1} title="Opening explorer" right={right}>
+    <Panel box={{ ...L.comment, scroll: !L.comment.flow }} a={1} title="Opening explorer" right={right} progress={loading ? pr : null}>
       <div ref={top}>{body}</div>
     </Panel>
   );

@@ -1486,9 +1486,9 @@ for (const name of BROWSERS) for (const site of SITES) {
       await p.getByRole('tab', { name: 'Online' }).click();
       await p.getByLabel('Lichess personal token').fill('lip_testtoken123');
       pasted = true;
-      await p.keyboard.press('Enter');
+      await p.getByRole('button', { name: 'Use this token' }).click();
       await p.keyboard.press('Escape');
-      await p.waitForFunction(() => /Lichess Test Opening/.test(document.body.innerText), null, { timeout: 10000 });
+      await p.waitForFunction(() => /Lichess Test Opening/i.test(document.body.innerText), null, { timeout: 10000 });
       assert.ok(seen.length >= 1);
       const sent = await p.evaluate(() => window.__expl);
       assert.ok(sent.length >= 1 && sent.every((a) => a === 'Bearer lip_testtoken123'), 'the token goes with every request: ' + JSON.stringify(sent));
