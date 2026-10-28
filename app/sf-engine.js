@@ -20,6 +20,8 @@
   // makeWorker: () => a Worker (or anything with postMessage, onmessage, onerror, terminate)
   // the 1.8 MB wasm downloads and compiles inside this window, so it allows a slow phone connection
   const READY_TIMEOUT_MS = 30000;
+  // A search still running this long past its movetime has hung (Stockfish stops within a few ms of it)
+  const HANG_MS = 5000, HANG_TRIES = 3;
 
   // Whether the threaded builds can run here, as Lichess decides it (lila's sharedMemoryTest): the page cross-origin
   // isolated, shared memory a WebAssembly module can use, and not Safari 26.2 (a WebKit crash). g: the page's globals
@@ -41,8 +43,11 @@
   // probeMs: from uciok, ready() also waits for the threads to start and a depth-1 search to answer, failing the engine
   // without them by then: in Firefox a threaded engine can hang while it starts its threads, or answer readyok and then
   // never search (no info, no bestmove, even after stop), while a fresh worker mostly works (found 2026-10-28, Firefox 159)
-  function create(makeWorker, { hashMB = 64, threads = 1, readyTimeoutMs = READY_TIMEOUT_MS, probeMs = 0, threaded = false, onFail } = {}) {
-    const worker = makeWorker();
+  // hangMs: a search can hang after the probe too (WebKit's threaded engine, GitHub Actions 2026-10-28); one still running
+  // this long past its movetime moves to a fresh worker (started and probed as the first was), the same engine to the
+  // page; HANG_TRIES workers in a row that hang on searches fail the engine
+  function create(makeWorker, { hashMB = 64, threads = 1, readyTimeoutMs = READY_TIMEOUT_MS, probeMs = 0, threaded = false, hangMs = HANG_MS, onFail } = {}) {
+    let worker = null, hangs = 0;
     const waiting = []; // [regex, resolve] for ready()
     const queue = [];
     let cur = null, readyP = null, rejectReady = null, isReady = false, failed = null;
@@ -64,9 +69,13 @@
       if (q.lines !== linesSet) { worker.postMessage(`setoption name MultiPV value ${q.lines}`); linesSet = q.lines; }
       worker.postMessage(positionCommand(q.moves, q.fen));
       worker.postMessage(`go ${q.depth == null ? '' : `depth ${q.depth} `}movetime ${q.movetimeMs}`);
+      q.watch = setTimeout(() => hung(q), q.movetimeMs + hangMs);
     };
-    worker.onmessage = (e) => {
-      const line = String(e.data);
+    const resultOf = (q, best) => {
+      const l = q.last;
+      return { cp: l ? l.cp : null, depth: l ? l.depth : 0, lines: linesOf(q), maxDepth: q.maxDepth == null ? (l ? l.depth : 0) : q.maxDepth, pv: l ? l.pv : [], nodes: q.nodes == null ? null : q.nodes, timeMs: q.timeMs == null ? null : q.timeMs, best: !best || best === '(none)' ? null : best };
+    };
+    const onLine = (line) => {
       for (let i = waiting.length - 1; i >= 0; i--) if (waiting[i][0].test(line)) waiting.splice(i, 1)[0][1]();
       if (!cur) return;
       if (line.startsWith('info')) {
@@ -82,9 +91,10 @@
         if (s && s.multipv <= cur.lines) { cur.byK[s.multipv] = { k: s.multipv, cp: s.cp, depth: s.depth, pv: s.pv }; if (s.multipv === 1) cur.last = s; }
         if (cur.onInfo && cur.last && (s || st)) cur.onInfo({ ...cur.last, lines: linesOf(cur), nodes: cur.nodes, timeMs: cur.timeMs, maxDepth: cur.maxDepth });
       } else if (line.startsWith('bestmove')) {
-        const best = line.split(/\s+/)[1], q = cur, l = q.last;
-        cur = null;
-        q.resolve({ cp: l ? l.cp : null, depth: l ? l.depth : 0, lines: linesOf(q), maxDepth: q.maxDepth == null ? (l ? l.depth : 0) : q.maxDepth, pv: l ? l.pv : [], nodes: q.nodes == null ? null : q.nodes, timeMs: q.timeMs == null ? null : q.timeMs, best: !best || best === '(none)' ? null : best });
+        const q = cur;
+        cur = null; hangs = 0;
+        clearTimeout(q.watch);
+        q.resolve(resultOf(q, line.split(/\s+/)[1]));
         pump();
       }
     };
@@ -94,35 +104,59 @@
       failed = failed || e || new Error('engine error');
       const pending = (cur ? [cur] : []).concat(queue.splice(0));
       cur = null;
-      pending.forEach((q) => q.resolve(null));
+      pending.forEach((q) => { clearTimeout(q.watch); q.resolve(null); });
       if (rejectReady) { rejectReady(failed); rejectReady = null; }
       try { worker.terminate(); } catch (err) {} // a late-loading worker would otherwise hold its memory
       if (first && onFail) onFail(failed);
     };
-    worker.onerror = (e) => fail(e);
+    // messages from a worker already replaced are dropped
+    const spawn = () => {
+      const w = worker = makeWorker();
+      w.onmessage = (e) => { if (w === worker) onLine(String(e.data)); };
+      w.onerror = (e) => { if (w === worker) fail(e); };
+    };
+    // q has hung: a fresh worker, which gets every option again before q runs on it (a stopped search answers its last score)
+    const hung = (q) => {
+      if (cur !== q || failed) return;
+      if (++hangs >= HANG_TRIES) return fail(new Error('Stockfish stopped answering'));
+      cur = null; isReady = false;
+      if (q.stopped) q.resolve(resultOf(q, null));
+      else { Object.assign(q, { last: null, byK: [], maxDepth: null, nodes: null, timeMs: null }); queue.unshift(q); }
+      waiting.length = 0;
+      try { worker.terminate(); } catch (err) {}
+      hashSet = null; threadsSet = 1; linesSet = 1;
+      try { spawn(); } catch (err) { return fail(err); }
+      boot().then(() => { isReady = true; pump(); });
+    };
+    spawn();
 
     const expect = (re) => new Promise((res) => waiting.push([re, res]));
+    // uci, the options and (probeMs) the probe on the current worker: resolves once it answers, and fail() ends the
+    // engine if it doesn't in time
+    const boot = () => new Promise((resolve) => {
+      const timer = setTimeout(() => fail(new Error('Stockfish did not start')), readyTimeoutMs);
+      (async () => {
+        const ok = expect(/^uciok/); worker.postMessage('uci'); await ok;
+        // loaded: from here a threaded engine has probeMs to start its threads and answer a depth-1 search
+        let probe = null;
+        if (probeMs && !failed) { clearTimeout(timer); probe = setTimeout(() => fail(new Error('Stockfish’s threads didn’t start')), probeMs); }
+        worker.postMessage(`setoption name Hash value ${hashWant}`); hashSet = hashWant;
+        if (threadsWant !== threadsSet) { worker.postMessage(`setoption name Threads value ${threadsWant}`); threadsSet = threadsWant; }
+        const rd = expect(/^readyok/); worker.postMessage('isready'); await rd;
+        clearTimeout(timer);
+        if (probe) {
+          const bm = expect(/^bestmove/); worker.postMessage('position startpos'); worker.postMessage('go depth 1'); await bm;
+          clearTimeout(probe);
+        }
+        if (!failed) resolve();
+      })();
+    });
     function ready() {
       if (readyP) return readyP;
       if (failed) return (readyP = Promise.reject(failed)); // the engine died before anyone waited for it
       readyP = new Promise((resolve, reject) => {
         rejectReady = reject;
-        const timer = setTimeout(() => fail(new Error('Stockfish did not start')), readyTimeoutMs);
-        (async () => {
-          const ok = expect(/^uciok/); worker.postMessage('uci'); await ok;
-          // loaded: from here a threaded engine has probeMs to start its threads and answer a depth-1 search
-          let probe = null;
-          if (probeMs && !failed) { clearTimeout(timer); probe = setTimeout(() => fail(new Error('Stockfish’s threads didn’t start')), probeMs); }
-          worker.postMessage(`setoption name Hash value ${hashWant}`); hashSet = hashWant;
-          if (threadsWant !== threadsSet) { worker.postMessage(`setoption name Threads value ${threadsWant}`); threadsSet = threadsWant; }
-          const rd = expect(/^readyok/); worker.postMessage('isready'); await rd;
-          clearTimeout(timer);
-          if (probe) {
-            const bm = expect(/^bestmove/); worker.postMessage('position startpos'); worker.postMessage('go depth 1'); await bm;
-            clearTimeout(probe);
-          }
-          if (!failed) { isReady = true; rejectReady = null; resolve(); pump(); }
-        })();
+        boot().then(() => { isReady = true; rejectReady = null; resolve(); pump(); });
       });
       return readyP;
     }
@@ -137,7 +171,7 @@
         promise,
         cancel() {
           const i = queue.indexOf(q);
-          if (i >= 0) { queue.splice(i, 1); q.resolve(null); } else if (cur === q) { q.onInfo = null; worker.postMessage('stop'); }
+          if (i >= 0) { queue.splice(i, 1); q.resolve(null); } else if (cur === q) { q.onInfo = null; q.stopped = true; worker.postMessage('stop'); }
         },
       };
     }
@@ -151,7 +185,7 @@
       const pending = (cur ? [cur] : []).concat(queue.splice(0));
       cur = null;
       failed = failed || new Error('Stockfish was closed'); // later searches answer null at once
-      pending.forEach((q) => q.resolve(null));
+      pending.forEach((q) => { clearTimeout(q.watch); q.resolve(null); });
       try { worker.postMessage('quit'); } catch (e) {}
       try { worker.terminate(); } catch (e) {}
     }
@@ -159,5 +193,5 @@
     return { ready, search, setHash, setThreads, threaded, quit, failed: () => failed };
   }
 
-  window.SFEngine = { create, threadSupport, positionCommand, READY_TIMEOUT_MS };
+  window.SFEngine = { create, threadSupport, positionCommand, READY_TIMEOUT_MS, HANG_MS };
 })();
