@@ -563,8 +563,9 @@ function MoveList({ M, T, S, a, paused, onPick }) {
   // a flowing list grows up to maxRows lines, then scrolls; a placed one takes all the box's height under its title
   const listH = L.moves.flow ? null : Math.max(ROW, L.moves.h - 2 * tx(L.pad[0]) - tx(15) * 1.4 - tx(12) - 2);
   const k = c >= 0 ? MOTION.move(cl01((T - S.tp[c]) / 0.35)) : 1, listRef = React.useRef(null);
-  // a new move scrolls the list by whole lines so the move's line keeps two lines under it (sliding there as the move
-  // plays), and leaves it where the viewer put it (wheel, finger, a mouse drag) until the next
+  // a new move scrolls the list by whole lines so the move's line keeps two lines under it (as many as fit with the
+  // move's own line in view: a box of one or two lines keeps fewer), sliding there as the move plays, and leaves it
+  // where the viewer put it (wheel, finger, a mouse drag) until the next
   const applied = React.useRef(null);
   React.useLayoutEffect(() => {
     const el = listRef.current;
@@ -572,7 +573,8 @@ function MoveList({ M, T, S, a, paused, onPick }) {
     const at = (i) => {
       const m = i >= 0 && el.querySelector(`[data-ply="${i}"]`);
       // the lines in view: clientHeight is rounded to whole pixels, so a box of exactly n lines can read a pixel short
-      return m ? Math.max(0, Math.round(m.offsetTop / ROW) + 3 - Math.max(1, Math.floor((el.clientHeight + 1) / ROW))) * ROW : 0;
+      const lines = Math.max(1, Math.floor((el.clientHeight + 1) / ROW)), under = Math.min(2, lines - 1);
+      return m ? Math.max(0, Math.round(m.offsetTop / ROW) + 1 + under - lines) * ROW : 0;
     };
     const scroll = Math.round(lerp(at(c - 1), at(c), k));
     if (applied.current !== scroll) { el.scrollTop = scroll; applied.current = scroll; }
