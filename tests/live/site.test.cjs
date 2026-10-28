@@ -1623,7 +1623,9 @@ for (const name of BROWSERS) for (const site of SITES) {
       // before any move: the eval and Stockfish's best line, whose first move plays when picked
       const chip = p.locator('.mv[role="button"][title^="Show stockfish’s best line"]').first();
       await assert.doesNotReject(chip.waitFor({ timeout: 45000 }));
-      assert.match(await p.locator('body').innerText(), /white to move/i);
+      // the line is final once the search ends: a chip read while it still runs can be another move by the click
+      // (Firefox on GitHub, 2026-10-28: read e4, and the label never showed 1. e4)
+      await p.waitForFunction(() => /white to move/i.test(document.body.innerText) && !/white to move · thinking/i.test(document.body.innerText), null, { timeout: 30000 });
       await p.screenshot({ path: path.join(OUT, host + '-board-start.png') });
       const san = (await chip.innerText()).trim();
       await chip.click();
