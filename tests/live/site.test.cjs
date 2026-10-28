@@ -22,7 +22,7 @@ const { execFileSync, execSync } = require('child_process');
 const fs = require('fs'), path = require('path'), crypto = require('crypto');
 const pw = (() => { try { return require('playwright'); } catch (e) { return require(path.join(execSync('npm root -g').toString().trim(), 'playwright')); } })();
 const { serve } = require('./serve.cjs');
-const { loadedOn, boardBox, square } = require('./board.cjs');
+const { loadedOn, boardBox, square, namePending } = require('./board.cjs');
 
 const ROOT = path.join(__dirname, '..', '..');
 const OUT = path.join(ROOT, 'tests', 'out', 'live');
@@ -59,7 +59,7 @@ async function open(browser, viewport, opts) {
   });
   // whatever the page's Content-Security-Policy blocks is an error, whether or not the browser logs it
   await ctx.addInitScript(() => document.addEventListener('securitypolicyviolation', (e) => console.error(`CSP blocked ${e.blockedURI || 'inline'} (${e.effectiveDirective})`)));
-  const page = await ctx.newPage();
+  const page = namePending(await ctx.newPage());
   const errors = [];
   // where an error came from, so a failure in CI says which file. WebKit reports a reload that cuts off an engine worker
   // still loading as errors: the wasm fetch "due to access control checks", and unhandled rejections raised in

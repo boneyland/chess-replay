@@ -22,10 +22,11 @@ jobs:
   # Playwright's WebKit, the engine of iPhone Safari (its phone tests get the iPhone 13 profile). One job per browser and
   # part, side by side: the engine part is the tests that wait out engines starting (Stockfish's threads failing and
   # falling back, the full engine's 99 MB download), the rest is everything else. Failures are also reported as
-  # annotations (@reporters/github), which a token that can't read the job's log can still read
+  # annotations (@reporters/github), which a token that can't read the job's log can still read. WebKit's main part
+  # takes 12–19 minutes, so the limit leaves room for a page that keeps a test waiting out its 30 s load timeout
   browsers:
     runs-on: ubuntu-24.04
-    timeout-minutes: 20
+    timeout-minutes: 30
     strategy:
       fail-fast: false
       matrix:

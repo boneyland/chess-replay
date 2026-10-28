@@ -17,4 +17,25 @@ const square = (b, name, flipped) => (flipped
   ? { x: b.x0 + (7 - (name.charCodeAt(0) - 97) + 0.5) * b.sq, y: b.y0 + (+name[1] - 1 + 0.5) * b.sq }
   : { x: b.x0 + (name.charCodeAt(0) - 97 + 0.5) * b.sq, y: b.y0 + (8 - +name[1] + 0.5) * b.sq });
 
-module.exports = { loadedOn, boardBox, square };
+// A goto or reload that times out says which requests were still loading and for how long: in CI a page sometimes
+// never fires load in 30 s, in every browser, and the error alone doesn't say what held it back
+function namePending(page) {
+  const loading = new Map();
+  page.on('request', (r) => loading.set(r, Date.now()));
+  for (const ev of ['requestfinished', 'requestfailed']) page.on(ev, (r) => loading.delete(r));
+  for (const m of ['goto', 'reload']) {
+    const f = page[m].bind(page);
+    page[m] = async (...args) => {
+      try { return await f(...args); } catch (e) {
+        if (e.name === 'TimeoutError') {
+          const now = Date.now(), list = [...loading].map(([r, t]) => `${r.url().slice(0, 140)} (${r.resourceType()}, ${Math.round((now - t) / 1000)} s)`);
+          e.message += `\nstill loading: ${list.join(', ') || 'nothing'}`;
+        }
+        throw e;
+      }
+    };
+  }
+  return page;
+}
+
+module.exports = { loadedOn, boardBox, square, namePending };

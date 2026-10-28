@@ -11,7 +11,7 @@ const { execFileSync, execSync } = require('child_process');
 const fs = require('fs'), path = require('path');
 const pw = (() => { try { return require('playwright'); } catch (e) { return require(path.join(execSync('npm root -g').toString().trim(), 'playwright')); } })();
 const { serve } = require('./serve.cjs');
-const { loadedOn, boardBox, square } = require('./board.cjs');
+const { loadedOn, boardBox, square, namePending } = require('./board.cjs');
 
 const ROOT = path.join(__dirname, '..', '..');
 const OUT = path.join(ROOT, 'tests', 'out', 'live');
@@ -46,7 +46,7 @@ test('android · chrome · local build', async (t) => {
 
   const ctx = await device.launchBrowser({ hasTouch: true }); // Playwright's taps need it set, though the phone has touch anyway
   undo.push(() => ctx.close());
-  const page = ctx.pages()[0] || (await ctx.newPage());
+  const page = namePending(ctx.pages()[0] || (await ctx.newPage()));
   const errors = [];
   // Chrome downloads a manifest icon in the background (to check the page can be installed), and a reload that cuts
   // it off logs this as an error though the icon is fine; the first test downloads and decodes every icon instead
