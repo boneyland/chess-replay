@@ -148,7 +148,7 @@ function LichessExplorer({ x, tw, posKey, onPlay, onHover, white, fallback }) {
                 onMouseEnter={() => onHover(m.uci)} onMouseLeave={() => onHover(null)} onFocus={() => onHover(m.uci)} onBlur={() => onHover(null)}
                 onKeyDown={(ev) => { if (ev.key === 'Enter' || ev.key === ' ') play(ev, m.uci); }}
                 style={{ display: 'flex', alignItems: 'center', gap: tx(10), minWidth: 0, padding: `${tx(3)}px ${tx(6)}px`, borderRadius: 2, cursor: 'pointer' }}>
-                <span style={{ flex: 'none', minWidth: tx(58), boxSizing: 'border-box', textAlign: 'center', padding: `${tx(2)}px ${tx(8)}px`, borderRadius: 2, font: `600 ${tx(17)}px ${MONO}`, background: white ? '#f1ebe1' : '#2a2320', color: white ? '#15100d' : '#f1ebe1' }}>{m.san}</span>
+                <span style={{ flex: 'none', minWidth: tx(58), boxSizing: 'border-box', textAlign: 'center', padding: `${tx(2)}px ${tx(8)}px`, borderRadius: 2, font: `600 ${tx(17)}px ${MONO}`, background: white ? '#f1ebe1' : '#2a2320', color: white ? '#15100d' : '#efe8de', border: `1px solid ${white ? 'rgba(60,40,20,0.22)' : 'rgba(255,236,214,0.22)'}` }}>{m.san}</span>
                 <span style={{ flex: 'none', minWidth: tx(44), textAlign: 'right', font: `500 ${tx(15)}px ${MONO}`, color: C.dim }}>{nf(m.total)}</span>
                 <ResultBar w={m.white} d={m.draws} b={m.black} height={tx(20)} />
               </div>

@@ -61,9 +61,8 @@ function OpeningExplorer({ board, book, onPlay, onHover }) {
   else if (inBook) {
     body = (
       <React.Fragment>
-        {heading(named ? named.name : ucis.length === 0 && fromStart ? 'Starting position' : 'In the book')}
         {next.length ? (
-          <div className="book-moves" style={{ display: 'flex', flexDirection: 'column', gap: tx(2), marginTop: tx(12) }}>
+          <div className="book-moves" style={{ display: 'flex', flexDirection: 'column', gap: tx(2) }}>
             {next.map((m) => (
               // a name that doesn't fit beside its move goes under it
               <div key={m.uci} className="mv expl-row" role="button" tabIndex={0} title={`Play ${m.san}`} onClick={(e) => play(e, m.uci)}
