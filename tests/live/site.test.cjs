@@ -1453,6 +1453,53 @@ for (const name of BROWSERS) for (const site of SITES) {
       assert.deepEqual(ce.errors.filter((e) => !/status of 404 .*lichess\.org\/api\/cloud-eval/.test(e)), []);
       await ce.ctx.close();
     });
+    // Lichess's opening explorer (faked: it needs a token, so a route answers 401 without one and a fixed answer with
+    // the pasted one): off, the local book shows and nothing is sent; on and signed out, the panel asks to sign in; a
+    // pasted token brings the moves with their counts, and a click plays one
+    await t.test('desktop: the Lichess explorer asks for a token, then lists the moves with counts and plays one', async () => {
+      const ex = await open(browser, { width: 1440, height: 900 });
+      const p = ex.page;
+      const answer = { white: 1200, draws: 600, black: 700, moves: [{ uci: 'e7e5', san: 'e5', averageRating: 2210, white: 500, draws: 250, black: 300 }, { uci: 'c7c5', san: 'c5', averageRating: 2230, white: 450, draws: 200, black: 250 }], topGames: [], opening: { eco: 'B00', name: 'Lichess Test Opening' } };
+      // The page's own fetch is replaced for the explorer's host: a route can't do it in every browser (Playwright's
+      // WebKit doesn't route the CORS preflight that the Authorization header causes, and Firefox hides the header from
+      // routes). It answers 401 until the token is pasted, and records the header it was sent
+      await ex.ctx.addInitScript((ans) => {
+        const f = window.fetch;
+        window.__expl = []; window.__pasted = false;
+        window.fetch = function (u, o) {
+          if (!String(u).startsWith('https://explorer.lichess.ovh/')) return f.apply(this, arguments);
+          window.__expl.push((o && o.headers && o.headers.Authorization) || null);
+          return Promise.resolve(window.__pasted ? new Response(JSON.stringify(ans), { status: 200, headers: { 'Content-Type': 'application/json' } }) : new Response('no', { status: 401 }));
+        };
+      }, answer);
+      const E4 = 'rnbqkbnr/pppppppp/8/8/4P3/8/PPPP1PPP/RNBQKBNR b KQkq - 0 1';
+      await p.goto(base, { waitUntil: 'load' });
+      await loadedOn(p);
+      await setUpFen(p, E4);
+      await p.waitForTimeout(800);
+      assert.deepEqual(await p.evaluate(() => window.__expl), [], 'nothing sent with the setting off');
+      await p.getByRole('button', { name: 'Settings' }).click();
+      await p.getByRole('tab', { name: 'Online' }).click();
+      await p.getByRole('switch', { name: /Lichess opening explorer/ }).click();
+      await p.keyboard.press('Escape');
+      await p.waitForFunction(() => /Sign in to use the explorer/.test(document.body.innerText), null, { timeout: 10000 });
+      assert.deepEqual(await p.evaluate(() => window.__expl), [], 'no token, no request');
+      await p.getByRole('button', { name: 'Settings' }).click();
+      await p.getByRole('tab', { name: 'Online' }).click();
+      await p.getByLabel('Lichess personal token').fill('lip_testtoken123');
+      await p.evaluate(() => { window.__pasted = true; });
+      await p.getByRole('button', { name: 'Use this token' }).click();
+      await p.keyboard.press('Escape');
+      await p.waitForFunction(() => /Lichess Test Opening/i.test(document.body.innerText), null, { timeout: 10000 });
+      const sent = await p.evaluate(() => window.__expl);
+      assert.ok(sent.length >= 1 && sent.every((a) => a === 'Bearer lip_testtoken123'), 'the token goes with every request: ' + JSON.stringify(sent));
+      assert.match(await p.evaluate(() => document.body.innerText), /2\.5k games/);
+      await p.screenshot({ path: path.join(OUT, host + '-lichess-explorer.png') });
+      await p.locator('.expl-moves .mv', { hasText: 'e5' }).click();
+      await p.waitForFunction(() => /1…\s*e5/.test(document.body.innerText), null, { timeout: 10000 });
+      assert.deepEqual(ex.errors.filter((e) => !/status of 401/.test(e)), []);
+      await ex.ctx.close();
+    });
     // Go deeper on a loaded analysis's move asks the cloud (the setting on): stepping onto the move sends nothing, the
     // analysis's eval stands until the press, and the cloud's deeper answer then shows, labelled
     await t.test('desktop: Go deeper on an analysed move takes the cloud\'s answer', async () => {

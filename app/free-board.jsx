@@ -355,6 +355,8 @@ function FreeBoard({ board, onChange, tw, sf, nav, orient, book }) {
   // result replaces the eval in the bar
   const boardFen = () => window.ChessCore.fenAfter(board.fen, steps.slice(0, upto + 1).map((s) => s.san), pos);
   const tb = useTablebase(G ? null : boardFen(), tw.tablebase !== false), tbv = tbBar(tb);
+  // Lichess's opening explorer (Settings › Online), asked where the tablebase isn't, in place of the local book
+  const xf = explorerFilters(tw), xl = useExplorer(G || tb ? null : boardFen(), tw.explorer === true, xf);
   // the running clock: redrawn ten times a second, and the game ends when it reaches zero
   const running = live && G.clock && G.clock.since != null;
   const [, tick] = React.useState(0);
@@ -428,7 +430,7 @@ function FreeBoard({ board, onChange, tw, sf, nav, orient, book }) {
       <FreeBar pos={pos} side="w" a={1} clock={clockOf('w')} name={G ? playerName(G, 'w') : null} />
       {L.header && <Header M={HM} a={1} />}
       <MoveList M={MV} T={upto + 0.999} S={S} a={1} paused onPick={live ? () => {} : go} />
-      {G ? <GameInfo board={board} /> : tb ? <TablebaseExplorer t={tb} posKey={boardKey} onPlay={onBook} /> : <OpeningExplorer board={board} book={book} onPlay={onBook} />}
+      {G ? <GameInfo board={board} /> : tb ? <TablebaseExplorer t={tb} posKey={boardKey} onPlay={onBook} /> : xl ? <LichessExplorer x={xl} tw={tw} posKey={boardKey} onPlay={onBook} white={pos.turn === 'w'} fallback={<OpeningExplorer board={board} book={book} onPlay={onBook} />} /> : <OpeningExplorer board={board} book={book} onPlay={onBook} />}
       {G ? <Panel box={L.analysis} a={1} style={NO_SELECT} title="Game"><GameStatus board={board} onChange={onChange} down={opponent.down} /></Panel>
         : <AnalysisPanel box={L.analysis} a={1} paused depth={down ? null : searchDepth(ev.after)} deep={ev}>
         {upto < 0

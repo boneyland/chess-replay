@@ -107,10 +107,10 @@ function TweakSlider({ id, label, value, min = 0, max = 100, step = 1, stops, un
   );
 }
 
-function TweakToggle({ id, label, value, onChange }) {
+function TweakToggle({ id, label, value, info, onChange }) {
   return (
     <div className="twk-row twk-row-h">
-      <label className="twk-lbl" htmlFor={id}><span>{label}</span></label>
+      <div className="twk-lbl" style={{ justifyContent: 'flex-start' }}><label htmlFor={id}>{label}</label>{info && <InfoTip info={info} label={label} />}</div>
       <button id={id} type="button" className="twk-toggle" data-on={value ? '1' : '0'} role="switch" aria-checked={!!value} onClick={() => onChange(!value)}><i /></button>
     </div>
   );

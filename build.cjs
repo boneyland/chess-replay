@@ -31,7 +31,7 @@ const units = [
   ['sample-analysis.js', read(path.join(app, 'sample-analysis.js'))],
   ['engine.jsx', jsx(read(path.join(app, 'engine.jsx')), 'engine.jsx')],
   ['tweaks.jsx', jsx(read(path.join(app, 'tweaks.jsx')), 'tweaks.jsx')],
-  ['game-video.jsx', jsx(read(path.join(app, 'game-video-core.jsx')) + '\n' + read(path.join(app, 'queen.jsx')) + '\n' + read(path.join(app, 'stockfish.jsx')) + '\n' + read(path.join(app, 'tablebase.jsx')) + '\n' + read(path.join(app, 'free-board.jsx')) + '\n' + read(path.join(app, 'edit-board.jsx')) + '\n' + read(path.join(app, 'sfx.jsx')) + '\n' + read(path.join(app, 'export.jsx')) + '\n' + read(path.join(app, 'game-app.jsx')), 'game-video.jsx')],
+  ['game-video.jsx', jsx(read(path.join(app, 'game-video-core.jsx')) + '\n' + read(path.join(app, 'queen.jsx')) + '\n' + read(path.join(app, 'stockfish.jsx')) + '\n' + read(path.join(app, 'tablebase.jsx')) + '\n' + read(path.join(app, 'explorer.jsx')) + '\n' + read(path.join(app, 'free-board.jsx')) + '\n' + read(path.join(app, 'edit-board.jsx')) + '\n' + read(path.join(app, 'sfx.jsx')) + '\n' + read(path.join(app, 'export.jsx')) + '\n' + read(path.join(app, 'game-app.jsx')), 'game-video.jsx')],
 ];
 const scripts = units.map(([name, code]) => {
   if (/<\/script/i.test(code)) throw new Error(name + ' contains </script');
@@ -87,7 +87,7 @@ if ('serviceWorker' in navigator) window.addEventListener('load', () => { naviga
 `;
 // The page's Content-Security-Policy, as a <meta> so the build can list a hash of each of its inline scripts (no
 // 'unsafe-inline' for scripts, so an injected one doesn't run). It names every host the page talks to: React and
-// html2canvas-pro (CDNs), the fonts, Hugging Face (sign-in, the Queen Space), Lichess's tablebase, the full engine's
+// html2canvas-pro (CDNs), the fonts, Hugging Face (sign-in, the Queen Space), Lichess's tablebase and explorer, the full engine's
 // download (unpkg). The engines and the export's encoders are WebAssembly ('wasm-unsafe-eval'); the full engine and
 // Mediabunny start workers from Blob URLs, and the full engine's glue fetches its wasm from one
 const inlineHashes = [...site.matchAll(/<script>([\s\S]*?)<\/script>/g)].map((m) => `'sha256-${require('crypto').createHash('sha256').update(m[1]).digest('base64')}'`);
@@ -95,7 +95,7 @@ const CSP = [
   "default-src 'self'",
   `script-src 'self' 'wasm-unsafe-eval' https://cdnjs.cloudflare.com https://cdn.jsdelivr.net ${inlineHashes.join(' ')}`,
   "worker-src 'self' blob:",
-  "connect-src 'self' blob: data: https://huggingface.co https://boneyland-queen-pawn-8.hf.space https://tablebase.lichess.ovh https://lichess.org https://unpkg.com https://cdnjs.cloudflare.com https://cdn.jsdelivr.net https://fonts.googleapis.com https://fonts.gstatic.com",
+  "connect-src 'self' blob: data: https://huggingface.co https://boneyland-queen-pawn-8.hf.space https://tablebase.lichess.ovh https://explorer.lichess.ovh https://lichess.org https://unpkg.com https://cdnjs.cloudflare.com https://cdn.jsdelivr.net https://fonts.googleapis.com https://fonts.gstatic.com",
   "style-src 'self' 'unsafe-inline' https://fonts.googleapis.com",
   "font-src 'self' data: https://fonts.gstatic.com",
   "img-src 'self' data: blob:",

@@ -102,6 +102,7 @@ function useHfAuth() {
     const onStorage = (e) => { if (e.key === AUTH_STORE) setAuth(readAuth()); };
     window.addEventListener('storage', onStorage);
     const q = new URLSearchParams(location.search);
+    if ((q.get('state') || '').startsWith('lichess.')) return () => window.removeEventListener('storage', onStorage); // Lichess's sign-in (explorer.jsx)
     if (q.get('code') && q.get('state')) finish(q);
     else if (q.get('error')) { history.replaceState(null, '', location.pathname); setNote('Hugging Face sign-in was cancelled.'); }
     else if (location.hash === '#hf-signin') { history.replaceState(null, '', location.pathname); start(); }

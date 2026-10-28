@@ -226,3 +226,65 @@ test('a cloud answer is cached by position and lines; errors aren\'t; a 429 back
   assert.equal((await c.tablebase('4k3/8/8/8/8/8/3RK3/7r w - - 0 1')).category, 'draw');
   assert.ok(f.calls[0].startsWith('https://lichess.org/api/cloud-eval?fen='));
 });
+
+// the explorer: the shape follows Lichess's documentation (no token here to fetch a live answer, 2026-10-28)
+const EXPL = fixture('explorer-e4.json');
+const EXFEN = 'rnbqkbnr/pppppppp/8/8/4P3/8/PPPP1PPP/RNBQKBNR b KQkq - 0 1';
+
+test('parseExplorer totals the counts and keeps the moves, top games and opening', () => {
+  const e = LC.parseExplorer(EXPL);
+  assert.equal(e.total, 2500);
+  assert.deepEqual(e.moves[0], { uci: 'e7e5', san: 'e5', white: 500, draws: 250, black: 300, total: 1050, averageRating: 2210 });
+  assert.deepEqual(e.games[0], { id: 'abcd1234', white: 'Carlsen, M (2850)', black: 'Nakamura, H (2790)', winner: 'white', year: 2019 });
+  assert.deepEqual(e.opening, { eco: 'B00', name: 'King\'s Pawn Game' });
+  assert.equal(LC.parseExplorer({ moves: [] }).opening, null);
+  assert.throws(() => LC.parseExplorer({ error: 'x' }));
+});
+
+test('explorerUrl picks the database and sends the filters for Lichess games only', () => {
+  const u = LC.explorerUrl(EXFEN, { db: 'lichess', ratings: [2000, 2200], speeds: ['blitz', 'rapid'] });
+  assert.ok(u.startsWith('https://explorer.lichess.ovh/lichess?'));
+  const q = new URL(u).searchParams;
+  assert.equal(q.get('fen'), EXFEN);
+  assert.equal(q.get('ratings'), '2000,2200');
+  assert.equal(q.get('speeds'), 'blitz,rapid');
+  const m = new URL(LC.explorerUrl(EXFEN, { db: 'masters', ratings: [2000], speeds: ['blitz'] }));
+  assert.equal(m.pathname, '/masters');
+  assert.equal(m.searchParams.get('ratings'), null);
+  assert.notEqual(LC.explorerKey(EXFEN, { ratings: [2000] }), LC.explorerKey(EXFEN, {}));
+  assert.notEqual(LC.explorerKey(EXFEN, { db: 'masters' }), LC.explorerKey(EXFEN, {}));
+  assert.equal(LC.explorerKey(EXFEN, {}), LC.explorerKey(EXFEN.replace(' 0 1', ' 5 9'), {}));
+});
+
+test('explorer sends the token only when given, answers 401 as auth without caching it, and caches answers', async () => {
+  const seen = [];
+  const f = fakeFetch([{ status: 401, body: '' }, EXPL]);
+  const fn = async (url, opts) => { seen.push(opts.headers.Authorization || null); return f(url, opts); };
+  const c = LC.create({ fetchFn: fn });
+  assert.deepEqual(await c.explorer(EXFEN, {}), { auth: true });
+  assert.equal(c.explorerCached(EXFEN, {}), undefined);
+  const e = await c.explorer(EXFEN, {}, { token: 'tok' });
+  assert.equal(e.total, 2500);
+  assert.deepEqual(seen, [null, 'Bearer tok']);
+  assert.equal((await c.explorer(EXFEN, {}, { token: 'other' })).total, 2500);
+  assert.equal(f.calls.length, 2);
+  assert.equal(c.explorerCached(EXFEN, {}).total, 2500);
+});
+
+test('explorer backs off after a 429 and gives null for an error', async () => {
+  let t = 0;
+  const f = fakeFetch([{ status: 429, body: '' }, { status: 500, body: '' }]);
+  const c = LC.create({ fetchFn: f, now: () => t });
+  assert.equal(await c.explorer(EXFEN, {}, { token: 'x' }), null);
+  assert.equal(await c.explorer(EXFEN, { db: 'masters' }, { token: 'x' }), null); // inside the minute: no request
+  assert.equal(f.calls.length, 1);
+  t = LC.BACKOFF_MS + 1;
+  assert.equal(await c.explorer(EXFEN, { db: 'masters' }, { token: 'x' }), null);
+  assert.equal(f.calls.length, 2);
+});
+
+test('parseExplorer keeps counts above 2^31 (the start position has billions of games)', () => {
+  const e = LC.parseExplorer({ white: 1500000000, draws: 900000000, black: 1300000000, moves: [{ uci: 'e2e4', san: 'e4', white: 1500000000, draws: 900000000, black: 1300000000 }] });
+  assert.equal(e.total, 3700000000);
+  assert.equal(e.moves[0].total, 3700000000);
+});
