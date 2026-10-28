@@ -8,9 +8,10 @@ const LI_AUTH_STORE = 'chess-video.lichess-auth.v1', LI_PKCE_STORE = 'chess-vide
 const LI_CLIENT_ID = 'chess-replay';
 const LI_REDIRECT = location.origin + location.pathname.replace(/[^/]*$/, '');
 // the Lichess rating groups and speeds the Settings choices stand for (empty: all)
-const EXPL_RATINGS = { All: [], '1600+': [1600, 1800, 2000, 2200, 2500], '2000+': [2000, 2200, 2500], '2200+': [2200, 2500] };
-const EXPL_SPEEDS = { All: [], 'Rapid and slower': ['rapid', 'classical'], 'Blitz and slower': ['blitz', 'rapid', 'classical'] };
-const explorerFilters = (tw) => ({ db: tw && tw.explorerDb === 'Masters' ? 'masters' : 'lichess', ratings: EXPL_RATINGS[tw && tw.explorerRating] || [], speeds: EXPL_SPEEDS[tw && tw.explorerSpeed] || [] });
+// "Lichess default" is the website's own: every speed but ultrabullet, every rating group but the lowest (400)
+const EXPL_RATINGS = { 'Lichess default': [1000, 1200, 1400, 1600, 1800, 2000, 2200, 2500], All: [], '1600+': [1600, 1800, 2000, 2200, 2500], '2000+': [2000, 2200, 2500], '2200+': [2200, 2500] };
+const EXPL_SPEEDS = { 'Lichess default': ['bullet', 'blitz', 'rapid', 'classical', 'correspondence'], All: [], 'Rapid and slower': ['rapid', 'classical'], 'Blitz and slower': ['blitz', 'rapid', 'classical'] };
+const explorerFilters = (tw) => ({ db: tw && tw.explorerDb === 'Masters' ? 'masters' : 'lichess', ratings: EXPL_RATINGS[tw && tw.explorerRating] || EXPL_RATINGS['Lichess default'], speeds: EXPL_SPEEDS[tw && tw.explorerSpeed] || EXPL_SPEEDS['Lichess default'] });
 
 function readLiAuth() { try { const a = JSON.parse(localStorage.getItem(LI_AUTH_STORE) || 'null'); return a && a.token && (!a.expires || a.expires > Date.now()) ? a : null; } catch (e) { return null; } }
 // the signed-in state is shared by the panel and the settings
@@ -174,8 +175,8 @@ function ExplorerSettings({ t, setTweak }) {
       <TweakToggle id="tw-explorer" label="Lichess opening explorer" info="With this on, the free board’s Opening explorer box lists the moves played from the position with their game counts (explorer.lichess.ovh), in place of the local book. Lichess answers only signed-in requests: sign in, or paste a personal token (lichess.org/account/oauth/token, no scopes). The position goes to Lichess; the token stays in this browser and goes only to Lichess. Off by default." value={on} onChange={(v) => setTweak('explorer', v)} />
       {on && <React.Fragment>
         <TweakSelect id="tw-expl-db" label="Games" value={db} options={['Lichess', 'Masters']} onChange={(v) => setTweak('explorerDb', v)} />
-        {db === 'Lichess' && <TweakSelect id="tw-expl-rating" label="Rating" value={EXPL_RATINGS[t.explorerRating] ? t.explorerRating : 'All'} options={Object.keys(EXPL_RATINGS)} onChange={(v) => setTweak('explorerRating', v)} />}
-        {db === 'Lichess' && <TweakSelect id="tw-expl-speed" label="Speed" value={EXPL_SPEEDS[t.explorerSpeed] ? t.explorerSpeed : 'All'} options={Object.keys(EXPL_SPEEDS)} onChange={(v) => setTweak('explorerSpeed', v)} />}
+        {db === 'Lichess' && <TweakSelect id="tw-expl-rating" label="Rating" value={EXPL_RATINGS[t.explorerRating] ? t.explorerRating : 'Lichess default'} options={Object.keys(EXPL_RATINGS)} onChange={(v) => setTweak('explorerRating', v)} />}
+        {db === 'Lichess' && <TweakSelect id="tw-expl-speed" label="Speed" value={EXPL_SPEEDS[t.explorerSpeed] ? t.explorerSpeed : 'Lichess default'} options={Object.keys(EXPL_SPEEDS)} onChange={(v) => setTweak('explorerSpeed', v)} />}
         {LA.auth
           ? <TweakButton secondary label={`Sign out of Lichess${LA.auth.name ? ' (' + LA.auth.name + ')' : ''}`} onClick={LA.signOut} />
           : <React.Fragment>
