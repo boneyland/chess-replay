@@ -171,7 +171,7 @@ function ExplorerSettings({ t, setTweak }) {
   const on = t.explorer === true, db = t.explorerDb === 'Masters' ? 'Masters' : 'Lichess';
   return (
     <React.Fragment>
-      <TweakToggle id="tw-explorer" label="Lichess opening explorer" info="With this on, the free board’s Commentary box lists the moves played from the position with their game counts (explorer.lichess.ovh), in place of the local book. Lichess answers only signed-in requests: sign in, or paste a personal token (lichess.org/account/oauth/token, no scopes). The position goes to Lichess; the token stays in this browser and goes only to Lichess. Off by default." value={on} onChange={(v) => setTweak('explorer', v)} />
+      <TweakToggle id="tw-explorer" label="Lichess opening explorer" info="With this on, the free board’s Opening explorer box lists the moves played from the position with their game counts (explorer.lichess.ovh), in place of the local book. Lichess answers only signed-in requests: sign in, or paste a personal token (lichess.org/account/oauth/token, no scopes). The position goes to Lichess; the token stays in this browser and goes only to Lichess. Off by default." value={on} onChange={(v) => setTweak('explorer', v)} />
       {on && <React.Fragment>
         <TweakSelect id="tw-expl-db" label="Games" value={db} options={['Lichess', 'Masters']} onChange={(v) => setTweak('explorerDb', v)} />
         {db === 'Lichess' && <TweakSelect id="tw-expl-rating" label="Rating" value={EXPL_RATINGS[t.explorerRating] ? t.explorerRating : 'All'} options={Object.keys(EXPL_RATINGS)} onChange={(v) => setTweak('explorerRating', v)} />}
