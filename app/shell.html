@@ -9,7 +9,7 @@
 :root {
   --bg: #f2ece3; --panel: #fbf7f1; --raise: #ebe3d6; --line: rgba(60, 40, 20, 0.14); --line-strong: rgba(60, 40, 20, 0.3);
   --ink: #2a211b; --dim: #76695c; --accent: #8a5e15; --accent-ink: #fffaf2; --danger: #c0392b; --ok: #237a46;
-  --warn: #b05616; --queen: #c03f7c; --track: rgba(60, 40, 20, 0.16); --btn: var(--raise); --btn-line: var(--line);
+  --warn: #b05616; --queen: #c03f7c; --track: rgba(60, 40, 20, 0.16); --btn: var(--raise); --btn-line: var(--line); --btn-hover: #ddd2c0;
   --panel-glass: #fbf7f1; --scrim: rgba(242, 236, 227, 0.86); --shadow: rgba(60, 40, 20, 0.18);
   --mono: "JetBrains Mono", ui-monospace, SFMono-Regular, Menlo, monospace;
   --sans: "IBM Plex Sans", system-ui, -apple-system, "Segoe UI", sans-serif;
@@ -19,7 +19,7 @@
   :root:not([data-scheme="light"]) {
     --bg: #13100f; --panel: #1b1715; --raise: #241e1b; --line: rgba(255, 236, 214, 0.1); --line-strong: rgba(255, 236, 214, 0.25);
     --ink: #efe8de; --dim: #8e8276; --accent: #e3b55b; --accent-ink: #15100d; --danger: #e4553f; --ok: #62c483;
-    --warn: #ec9442; --queen: #e0609f; --track: rgba(255, 236, 214, 0.16); --btn: #3a312c; --btn-line: rgba(255, 236, 214, 0.28);
+    --warn: #ec9442; --queen: #e0609f; --track: rgba(255, 236, 214, 0.16); --btn: #3a312c; --btn-line: rgba(255, 236, 214, 0.28); --btn-hover: #5a4d44;
     --panel-glass: #1b1715; --scrim: rgba(19, 16, 15, 0.82); --shadow: rgba(0, 0, 0, 0.45);
     color-scheme: dark;
   }
@@ -27,7 +27,7 @@
 :root[data-scheme="dark"] {
   --bg: #13100f; --panel: #1b1715; --raise: #241e1b; --line: rgba(255, 236, 214, 0.1); --line-strong: rgba(255, 236, 214, 0.25);
   --ink: #efe8de; --dim: #8e8276; --accent: #e3b55b; --accent-ink: #15100d; --danger: #e4553f; --ok: #62c483;
-  --warn: #ec9442; --queen: #e0609f; --track: rgba(255, 236, 214, 0.16); --btn: #3a312c; --btn-line: rgba(255, 236, 214, 0.28);
+  --warn: #ec9442; --queen: #e0609f; --track: rgba(255, 236, 214, 0.16); --btn: #3a312c; --btn-line: rgba(255, 236, 214, 0.28); --btn-hover: #5a4d44;
   --panel-glass: #1b1715; --scrim: rgba(19, 16, 15, 0.82); --shadow: rgba(0, 0, 0, 0.45);
   color-scheme: dark;
 }
@@ -66,12 +66,11 @@ button:focus-visible, select:focus-visible, input:focus-visible, [role="slider"]
   flex: none; width: 34px; height: 34px; display: grid; place-items: center; padding: 0; cursor: pointer;
   border-radius: 3px; border: 1px solid var(--btn-line); background: var(--btn); color: var(--ink);
 }
-.pbtn:hover:not(:disabled) { border-color: var(--line-strong); }
+.pbtn:hover:not(:disabled), .dock-btn:hover:not(:disabled) { background: var(--btn-hover); border-color: var(--line-strong); }
 .pbtn:disabled { opacity: 0.35; cursor: default; }
 /* no double-tap zoom anywhere (pinch is the viewport's to allow); the board and the seek bar set their own */
 * { touch-action: manipulation; }
-.pnav { touch-action: manipulation; -webkit-touch-callout: none; border-color: color-mix(in srgb, var(--accent) 45%, transparent); color: var(--accent); }
-.pnav:hover:not(:disabled) { background: color-mix(in srgb, var(--accent) 14%, transparent); border-color: var(--accent); }
+.pnav { touch-action: manipulation; -webkit-touch-callout: none; }
 /* the move name is announced to screen readers only: the board and Moves panel already show it, and the track gets the room */
 .plabel { position: absolute; width: 1px; height: 1px; overflow: hidden; clip-path: inset(50%); white-space: nowrap; }
 .ptime { flex: none; width: 64px; text-align: right; font: 500 0.75rem var(--mono); font-variant-numeric: tabular-nums; color: var(--ink); }
@@ -103,6 +102,7 @@ body:has(.stage-one) .twk-panel { bottom: calc(51px + env(safe-area-inset-bottom
 /* the landscape bar below 1200 px drops the times, so the seek bar keeps some width */
 @media (max-width: 1199px) { .stage:not(.stage-one) .ptime { display: none; } }
 .dock-primary { border-color: transparent; background: var(--accent); color: var(--accent-ink); }
+.dock-primary:hover:not(:disabled) { background: var(--accent); border-color: transparent; filter: brightness(1.15); }
 .dock-items { display: contents; }
 .dock-group { display: contents; }
 .dock-menu-status { display: none; }
@@ -310,6 +310,7 @@ body:has(.stage.stage-short) .twk-panel { bottom: calc(44px + env(safe-area-inse
 .mv:hover { outline: 1px solid color-mix(in srgb, var(--accent) 60%, transparent); }
 .mv:focus-visible { outline: 2px solid var(--accent); outline-offset: 1px; }
 .dock-queen { border-color: color-mix(in srgb, var(--queen) 55%, transparent); color: var(--queen); }
+.dock-queen:hover:not(:disabled) { background: color-mix(in srgb, var(--queen) 18%, var(--btn)); border-color: var(--queen); }
 
 .q-panel { left: max(16px, env(safe-area-inset-left, 0px)); right: auto; width: min(400px, calc(100% - 32px)); }
 .q-panel .twk-hd b { color: var(--queen); }
