@@ -509,6 +509,9 @@ for (const name of BROWSERS) for (const site of SITES) {
       await fl.page.mouse.up();
       await assert.doesNotReject(fl.page.locator('.plabel').filter({ hasText: /You 1\. e4/ }).waitFor({ timeout: 5000 }));
       await fl.page.screenshot({ path: path.join(OUT, host + '-flipped.png') });
+      // the move started Stockfish: a reload that cuts off its loading files is logged by WebKit as errors (worker script
+      // and wasm "due to access control checks", and an [object Event]), so the reload waits for the move's verdict
+      await fl.page.waitForFunction(() => /your move · .*(stockfish’s choice|cp vs|as good as|can’t run here|stopped)/i.test(document.body.innerText), null, { timeout: 60000 });
       // the flip is remembered
       await fl.page.reload({ waitUntil: 'load' });
       await fl.page.locator('.dock-primary').waitFor();
