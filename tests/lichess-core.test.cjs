@@ -282,3 +282,9 @@ test('explorer backs off after a 429 and gives null for an error', async () => {
   assert.equal(await c.explorer(EXFEN, { db: 'masters' }, { token: 'x' }), null);
   assert.equal(f.calls.length, 2);
 });
+
+test('parseExplorer keeps counts above 2^31 (the start position has billions of games)', () => {
+  const e = LC.parseExplorer({ white: 1500000000, draws: 900000000, black: 1300000000, moves: [{ uci: 'e2e4', san: 'e4', white: 1500000000, draws: 900000000, black: 1300000000 }] });
+  assert.equal(e.total, 3700000000);
+  assert.equal(e.moves[0].total, 3700000000);
+});

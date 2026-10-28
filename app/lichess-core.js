@@ -134,7 +134,7 @@
   // winner, year }], opening: { eco, name } | null }; throws on an answer that isn't the explorer's
   function parseExplorer(j) {
     if (!j || !Array.isArray(j.moves)) throw new Error('not an explorer answer');
-    const n = (x) => (x | 0);
+    const n = (x) => Math.max(0, Math.floor(+x || 0)); // not `| 0`: the start position has over 2^31 games
     const total = (o) => n(o.white) + n(o.draws) + n(o.black);
     const name = (p) => (p && p.name ? p.name + (p.rating ? ' (' + p.rating + ')' : '') : '?');
     return {

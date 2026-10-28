@@ -90,7 +90,7 @@ function useExplorer(fen, on, filters) {
 }
 const EXPL_KEY = (fen, f) => window.LichessCore.explorerKey(fen, f);
 
-const nf = (n) => (n >= 1e6 ? (n / 1e6).toFixed(1) + 'M' : n >= 1e4 ? Math.round(n / 1e3) + 'k' : n >= 1e3 ? (n / 1e3).toFixed(1) + 'k' : String(n));
+const nf = (n) => (n >= 1e9 ? (n / 1e9).toFixed(2) + 'B' : n >= 1e6 ? (n / 1e6).toFixed(1) + 'M' : n >= 1e4 ? Math.round(n / 1e3) + 'k' : n >= 1e3 ? (n / 1e3).toFixed(1) + 'k' : String(n));
 // white / draws / black as a bar, with the percentages in the tooltip
 function ResultBar({ w, d, b, height }) {
   const t = Math.max(1, w + d + b), pc = (n) => Math.round((100 * n) / t);
