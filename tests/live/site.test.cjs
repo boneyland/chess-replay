@@ -1458,38 +1458,39 @@ for (const name of BROWSERS) for (const site of SITES) {
     // pasted token brings the moves with their counts, and a click plays one
     await t.test('desktop: the Lichess explorer asks for a token, then lists the moves with counts and plays one', async () => {
       const ex = await open(browser, { width: 1440, height: 900 });
-      const p = ex.page, seen = [];
-      const cors = { 'access-control-allow-origin': '*', 'access-control-allow-headers': 'Authorization,Accept' };
+      const p = ex.page;
       const answer = { white: 1200, draws: 600, black: 700, moves: [{ uci: 'e7e5', san: 'e5', averageRating: 2210, white: 500, draws: 250, black: 300 }, { uci: 'c7c5', san: 'c5', averageRating: 2230, white: 450, draws: 200, black: 250 }], topGames: [], opening: { eco: 'B00', name: 'Lichess Test Opening' } };
-      // Playwright's Firefox hides the Authorization header from routes, so the page's own fetch records what it sends
-      // and the route answers by whether the token has been pasted yet
-      let pasted = false;
-      await ex.ctx.addInitScript(() => { const f = window.fetch; window.__expl = []; window.fetch = function (u, o) { if (String(u).startsWith('https://explorer.lichess.ovh/')) window.__expl.push((o && o.headers && o.headers.Authorization) || null); return f.apply(this, arguments); }; });
-      await ex.ctx.route('https://explorer.lichess.ovh/**', (r) => {
-        if (r.request().method() === 'OPTIONS') return r.fulfill({ status: 204, headers: cors });
-        seen.push(pasted);
-        return pasted ? r.fulfill({ status: 200, contentType: 'application/json', headers: cors, body: JSON.stringify(answer) }) : r.fulfill({ status: 401, contentType: 'text/html', headers: cors, body: 'no' });
-      });
+      // The page's own fetch is replaced for the explorer's host: a route can't do it in every browser (Playwright's
+      // WebKit doesn't route the CORS preflight that the Authorization header causes, and Firefox hides the header from
+      // routes). It answers 401 until the token is pasted, and records the header it was sent
+      await ex.ctx.addInitScript((ans) => {
+        const f = window.fetch;
+        window.__expl = []; window.__pasted = false;
+        window.fetch = function (u, o) {
+          if (!String(u).startsWith('https://explorer.lichess.ovh/')) return f.apply(this, arguments);
+          window.__expl.push((o && o.headers && o.headers.Authorization) || null);
+          return Promise.resolve(window.__pasted ? new Response(JSON.stringify(ans), { status: 200, headers: { 'Content-Type': 'application/json' } }) : new Response('no', { status: 401 }));
+        };
+      }, answer);
       const E4 = 'rnbqkbnr/pppppppp/8/8/4P3/8/PPPP1PPP/RNBQKBNR b KQkq - 0 1';
       await p.goto(base, { waitUntil: 'load' });
       await loadedOn(p);
       await setUpFen(p, E4);
       await p.waitForTimeout(800);
-      assert.deepEqual(seen, [], 'nothing sent with the setting off');
+      assert.deepEqual(await p.evaluate(() => window.__expl), [], 'nothing sent with the setting off');
       await p.getByRole('button', { name: 'Settings' }).click();
       await p.getByRole('tab', { name: 'Online' }).click();
       await p.getByRole('switch', { name: /Lichess opening explorer/ }).click();
       await p.keyboard.press('Escape');
       await p.waitForFunction(() => /Sign in to use the explorer/.test(document.body.innerText), null, { timeout: 10000 });
-      assert.deepEqual(seen, [], 'no token, no request');
+      assert.deepEqual(await p.evaluate(() => window.__expl), [], 'no token, no request');
       await p.getByRole('button', { name: 'Settings' }).click();
       await p.getByRole('tab', { name: 'Online' }).click();
       await p.getByLabel('Lichess personal token').fill('lip_testtoken123');
-      pasted = true;
+      await p.evaluate(() => { window.__pasted = true; });
       await p.getByRole('button', { name: 'Use this token' }).click();
       await p.keyboard.press('Escape');
       await p.waitForFunction(() => /Lichess Test Opening/i.test(document.body.innerText), null, { timeout: 10000 });
-      assert.ok(seen.length >= 1);
       const sent = await p.evaluate(() => window.__expl);
       assert.ok(sent.length >= 1 && sent.every((a) => a === 'Bearer lip_testtoken123'), 'the token goes with every request: ' + JSON.stringify(sent));
       assert.match(await p.evaluate(() => document.body.innerText), /2\.5k games/);
