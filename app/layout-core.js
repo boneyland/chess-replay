@@ -52,7 +52,10 @@
   // one column)
   const MOVE_ROW = 38, MOVE_BORDER = 2, MOVE_LINES = 5, MOVE_LINES_ONE = 3, TX = 0.8;
   const moveRow = (text) => MOVE_ROW * TX * text;
-  const moveChrome = (text) => (2 * PAD[0] + 15 * 1.4 + 12) * TX * text + MOVE_BORDER;
+  // TIGHT: the panel's tighter padding (0.6 of it) and title gap (half) off the desktop in one column, and on a phone
+  // (game-video-core.jsx's tightAn), set by compute()
+  let TIGHT = false;
+  const moveChrome = (text) => (2 * PAD[0] * (TIGHT ? 0.6 : 1) + 15 * 1.4 + (TIGHT ? 6 : 12)) * TX * text + MOVE_BORDER;
   const movesMax = (text, lines = MOVE_LINES) => moveChrome(text) + lines * moveRow(text);
 
   const TEXT_SIZES = { Small: 0.9, Default: 1, Large: 1.15, Larger: 1.3 };
@@ -209,6 +212,15 @@
         const t = Math.max(0, (avail - floor) / (sumPref - floor));
         heights = prefs.map((p, i) => floors[i] + (p - floors[i]) * t);
       }
+      // Moves rounded down to whole lines, as in two columns, so no part-line of empty room shows under its lines;
+      // Analysis, under it, takes the rest. A box too short for one line keeps its height
+      const mi = sized.findIndex((p) => p[0] === 'moves'), ai = sized.findIndex((p) => p[0] === 'analysis');
+      const lines = mi >= 0 ? Math.floor((heights[mi] - moveChrome(text)) / moveRow(text) + 1e-6) : 0;
+      if (lines >= 1 && ai >= 0) {
+        const movesH = moveChrome(text) + lines * moveRow(text);
+        heights[ai] += heights[mi] - movesH;
+        heights[mi] = movesH;
+      }
     }
     const gx = (w - (size + ev)) / 2;
     const L = {
@@ -243,6 +255,7 @@
     const c = cols || columns({ w, h, text, prevCols, video, vw, vh });
     boardMax = Math.max(BOARD_MIN, Math.min(BOARD_MAX, 0.5 * Math.max(vw, vh)));
     const tier = useTier(vw, vh), t = text * tier.scale;
+    TIGHT = tierOf(vw, vh) !== 'desktop' && (c === 1 || tierOf(vw, vh) === 'phone');
     return Object.assign((c === 1 ? oneColumn : twoColumns)({ w, h, text: t, view, video, dock: c === 2 && dock, vw }), { text: t, tier: tierOf(vw, vh), pad: PAD });
   }
 
