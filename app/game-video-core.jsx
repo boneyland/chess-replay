@@ -765,7 +765,7 @@ function EvalPlot({ M, T, S, a, paused, onPick }) {
   const { c, k } = evalNow(M, T, S);
   const PLOT = L.plot, W = PLOT.w - 40, H = PLOT.h - 30, mid = H / 2, N = S.N;
   const [hover, setHover] = React.useState(null);
-  const down = React.useRef(false), fade = React.useRef(null);
+  const down = React.useRef(false), lastPick = React.useRef(null), fade = React.useRef(null);
   React.useEffect(() => () => clearTimeout(fade.current), []);
   // nearest move to the pointer: ply j sits at x = px(j + 1); -1 is the starting position
   const plyAt = (e) => { const r = e.currentTarget.getBoundingClientRect(); return Math.max(-1, Math.min(N - 1, Math.round(((e.clientX - r.left) / r.width) * N) - 1)); };
@@ -784,16 +784,20 @@ function EvalPlot({ M, T, S, a, paused, onPick }) {
   return (
     <div style={{ ...NO_SELECT, position: 'absolute', left: PLOT.x, top: PLOT.y, width: PLOT.w, height: PLOT.h, boxSizing: 'border-box', background: C.panel, border: `1px solid ${C.line}`, borderRadius: 4, padding: '10px 20px', opacity: a }}>
       <svg width={W} height={H + 14} style={{ display: 'block', overflow: 'visible', cursor: 'pointer', touchAction: 'none' }}
-        onPointerDown={(e) => { try { e.currentTarget.setPointerCapture(e.pointerId); } catch (err) {} down.current = true; clearTimeout(fade.current); setHover(plyAt(e)); }}
-        onPointerMove={(e) => { if (down.current || e.pointerType === 'mouse') setHover(plyAt(e)); }}
+        onPointerDown={(e) => { try { e.currentTarget.setPointerCapture(e.pointerId); } catch (err) {} down.current = true; clearTimeout(fade.current); const j = plyAt(e); setHover(j); lastPick.current = j; onPick(j); }}
+        onPointerMove={(e) => {
+          if (!down.current && e.pointerType !== 'mouse') return;
+          const j = plyAt(e); setHover(j);
+          if (down.current && j !== lastPick.current) { lastPick.current = j; onPick(j); } // a drag lands on whole moves, as it crosses them
+        }}
         onPointerUp={(e) => {
           if (!down.current) return;
-          down.current = false; onPick(plyAt(e));
+          down.current = false;
           if (e.pointerType !== 'mouse') fade.current = setTimeout(() => setHover(null), 1200); // let a finger see where it landed
         }}
         onPointerCancel={() => { down.current = false; setHover(null); }}
         onPointerLeave={(e) => { if (e.pointerType === 'mouse' && !down.current) setHover(null); }}>
-        <title>Click to jump to a move</title>
+        <title>Click or drag to go to a move</title>
         <rect x="0" y="0" width={W} height={H} fill="transparent" />
         <defs>
           <clipPath id="cp-up"><rect x="0" y="-10" width={W} height={mid + 10} /></clipPath>
