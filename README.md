@@ -9,6 +9,7 @@ A browser app for replaying and playing chess games, at https://chess-replay.onr
 - **Replay a game**: load a PGN (a `[FEN]` start position too; Chess960 not yet) and step through it on an animated board, with an evaluation graph, a rating for every move, the best line and the opening name
 - **Analysis in the browser**: Stockfish 19 analyses games that come without evals; drag a piece to try your own move from any position. The 1.8 MB lite engine runs by default; the engine drop-down in the Analysis panel offers the full engine (99 MB, downloaded once and kept in the browser)
 - **Opening explorer**: the book moves from each position (Lichess's opening tables)
+- **Lichess opening explorer** (off by default): the games played from each position, with counts and results, from Lichess or its masters database; needs a Lichess sign-in (see Lichess data)
 - **Endgame tablebase**: with 7 pieces or fewer, the result with best play and every move ranked by it, from Lichess's tablebase; a game's analysis takes those positions from it too, rating each move by whether it keeps the win or the draw (needs a connection; Settings › Online turns it off)
 - **Play/Explore**: a board from the starting position or a position set up by hand (or from a FEN) in Edit position, where Stockfish rates every move
 - **Play vs human**: a game for two at one screen, from the starting position or a pasted one. The board turns to the side to move, moves can be taken back, and the game ends on mate, a draw by the rules or by agreement, or resignation, with optional clocks. Stockfish stays off until it ends
@@ -25,6 +26,8 @@ https://github.com/user-attachments/assets/d15445d0-b356-4954-b791-e700a717ab14
 ## Lichess data
 
 With Settings › Online › Endgame tablebase on (the default), the position on the board, as a FEN and nothing else (no account, no game), goes to Lichess's tablebase at `https://tablebase.lichess.ovh/standard` whenever it has 7 pieces or fewer: while a replay is paused, and on the free board, never during a game. "Analyse with Stockfish" sends the game's positions of 7 pieces or fewer one by one as the run reaches them, to `/standard`, 4 s apart. With Settings › Online › Lichess cloud evaluation on (off by default), the positions Stockfish searches for your own moves (the free board, moves you try in the replay) go to `https://lichess.org/api/cloud-eval` as FENs (and a loaded analysis's position when you press Go deeper on it), one at a time, 300 ms after the board last changed; never a game's analysis or a game against Stockfish. Answers are kept in memory for the page's lifetime only.
+
+With Settings › Online › Lichess opening explorer on (off by default), the position on the board, as a FEN and nothing else, goes to `https://explorer.lichess.ovh/lichess` (or `/masters`) whenever the free board's position changes, with your Lichess token: Lichess answers only signed-in requests. Sign in with Lichess (OAuth, no scopes, so the token can read nothing of your account) or paste a personal token; the token stays in this browser and goes only to Lichess. Sign out removes it.
 
 ## Build
 

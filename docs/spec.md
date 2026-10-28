@@ -7,7 +7,7 @@ The one spec for the app: what it does now, what is planned, and the decisions b
 ## Contents
 
 - [Principles](#principles)
-- [Built](#built): replay and browser analysis, opening names, custom starts and flip, free board and explorer, edit position, play vs human, My games, play vs Stockfish, full Stockfish download, lines (MultiPV), endgame tablebase (in game analysis too), Lichess cloud evaluation, multi-threaded Stockfish, responsive layout
+- [Built](#built): replay and browser analysis, opening names, custom starts and flip, free board and explorer, edit position, play vs human, My games, play vs Stockfish, full Stockfish download, lines (MultiPV), endgame tablebase (in game analysis too), Lichess cloud evaluation, multi-threaded Stockfish, Lichess opening explorer, responsive layout
 - [Roadmap](#roadmap): square layouts and breakpoints, Lichess data and multi-threaded Stockfish, player names, Chess960, typed commentary, Maia3, dead positions, chasolver, background music, peer-to-peer online play, app walk-through
 - [Known gaps](#known-gaps)
 - [Decisions log](#decisions-log)
@@ -210,6 +210,16 @@ Built 2026-10-28 (PR 81, with follow-up fixes). Stockfish searches with several 
 - **Fallback**: a threaded engine gets up to three starts (Firefox can hang before `uci`, while starting threads, or on its first search); `ready()` also waits for a depth-1 probe search. If it never starts or dies, the page falls back silently to single-thread (Full without a kept single-thread copy runs Lite), Threads is disabled for the rest of the page and the menu says why. A threaded search still running 5 s past its movetime moves to a fresh worker (up to three in a row, then the engine fails).
 - **Not done / open**: **verify** on an iPhone whether 64 MB of hash starts or iOS needs Lichess's 32 MB cap; manual checks on the phone (Firefox Beta on Android) and iPhone Safari.
 
+### Lichess opening explorer
+
+Built 2026-10-28 (`claude/lichess-explorer`, plan `docs/plans/2026-10-28-lichess-explorer.md`). Free board only (the replay has no book panel).
+
+- Settings › **Online** › **Lichess opening explorer** (`TWEAK_DEFAULTS.explorer = false`), with **Games** (Lichess, Masters), **Rating** (all, 1600+, 2000+, 2200+) and **Speed** (all, rapid and slower, blitz and slower) for Lichess games. Off: the local book, nothing sent.
+- On, in the Commentary box where the tablebase doesn't answer and not in a game: the position's name and ECO, the games counted, each move with its count and a white/draw/black bar (click plays it as a drag does), and the top games (links to lichess.org). Offline or backed off: the local book takes its place.
+- **Sign-in is required**: the explorer answers 401 without a token (checked 2026-10-28). OAuth2 code + PKCE (`lichess.org/oauth`, `/api/token`, client id `chess-replay`, no scopes, redirect the page's folder) or a pasted personal token; stored in `chess-video.lichess-auth.v1`, sent only to Lichess hosts, kept by Clear saved data like the HF token, removed by Sign out. Signed out, the panel says so and asks nothing of Lichess.
+- `LichessCore.explorer` on the shared client (own gate, cache by position and filters, 401 answered as `{ auth: true }` and not cached, 429 back-off). `explorer.lichess.ovh` is in the CSP's `connect-src`, not in `KEEP_HOSTS`.
+- **Open**: the response shape follows Lichess's documentation, not a live answer (no token at hand): **verify** on a signed-in run; **verify** that Lichess's OAuth accepts the unregistered client id and the page's redirect URL on the live site.
+
 ### Responsive layout
 
 Built 2026-10-26 (designed the same day), replacing the fixed video frames (1920×1080, compact, square, sideways and 840-wide portrait, scaled as a whole to the window) with a normal responsive page. Text keeps one comfortable size whatever the window, extra room goes to the board and the panels together, and nothing is cut off at any size (the anti-goal; a live test sweeps nine sizes for overflow).
@@ -244,7 +254,7 @@ Unverified facts are marked **verify**.
 | 2 | `claude/tablebase`: endgame tablebase (built, see Endgame tablebase) | none | low |
 | 2b | `claude/tablebase-analysis`: the tablebase in game analysis and move ratings (built, see Endgame tablebase) | 2 | medium |
 | 3 | `claude/cloud-eval`: Lichess cloud evaluation (built, see Lichess cloud evaluation) | 1 | low |
-| 4 | `claude/lichess-explorer`: opening explorer and Lichess sign-in | none | medium |
+| 4 | `claude/lichess-explorer`: opening explorer and Lichess sign-in (built, see Lichess opening explorer) | none | medium |
 | 5 | `claude/threads`: cross-origin isolation, multi-thread engine, Threads setting (built, see Multi-threaded Stockfish) | 1 | high |
 
 Ship 1 to 3 first (2b right after 2); then 5, alone, since its headers affect every external load; 4 after it (reordered 2026-10-28).
@@ -291,7 +301,7 @@ Ship 1 to 3 first (2b right after 2); then 5, alone, since its headers affect ev
 - Never used for batch analysis, the Stockfish opponent or its critique.
 - Tests: parser, mate mapping, 404 → null without retry loops, debounce, toggle off sends nothing.
 
-**PR 4: Opening explorer.** `https://explorer.lichess.ovh/lichess?fen=<FEN>&moves=12&topGames=4&recentGames=0` (and `/masters`) **verify** whether a Bearer token is required.
+**PR 4: Opening explorer.** Built 2026-10-28, see Lichess opening explorer; the plan as it was: `https://explorer.lichess.ovh/lichess?fen=<FEN>&moves=12&topGames=4&recentGames=0` (and `/masters`) **verify** whether a Bearer token is required.
 
 - Sign-in: Lichess OAuth2 PKCE (no client registration, no scopes for public data **verify**), like the HF sign-in (`HF_OAUTH.redirect` in `queen.jsx`), with a pasted personal token as the fallback. The token is kept in its own localStorage key, sent only to Lichess hosts, cleared by Sign out, treated like the HF token by Clear saved data. Redirect URLs in README next to the HF note, plus a CLAUDE.md gotcha.
 - `LichessCore.explorer(fen, { db, ratings, speeds })` → totals, `moves: [{ uci, san, white, draws, black, averageRating }]`, `topGames`, `opening`.
@@ -469,3 +479,4 @@ Deferred by the per-plan reviews; each was true when recorded and may since have
 - 2026-10-27: Edit position opens on the position on the board instead of an empty one (Play's Set-up position too).
 - 2026-10-27: no resume for the Full Stockfish download. unpkg ignores Range requests (it sends all 99 MB to `Range: bytes=N-`) and jsDelivr refuses the file (403, too big); Render ignores Range too, and serving 99 MB a download from it (or ~10 MB pieces split at build time) would eat the workspace's 5 GB a month of bandwidth in about 50 downloads, charged beyond. A host that honours Range (a Hugging Face repo) was the only way, not worth it.
 - 2026-10-28: multi-threaded Stockfish (PR 5) before the opening explorer (PR 4). Threads default to half of what the browser reports, at most 4 (not near 100% CPU); one setting for every search; iOS Safari gets threads when it passes Lichess's feature test (it was wrongly assumed a fallback-only browser).
+- 2026-10-28: PR 4 (opening explorer) built: the explorer needs a token (401 without), so it is off by default and signs in by OAuth PKCE or a pasted token; free board only.
