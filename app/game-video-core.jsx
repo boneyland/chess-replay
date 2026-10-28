@@ -396,7 +396,7 @@ function LineBoard({ a, sq, v, hide, arrows }) {
       {sq}{over}{pieces}
       {arrows && (
         <svg width={BW} height={BW} style={{ position: 'absolute', left: 0, top: 0, zIndex: 6, pointerEvents: 'none' }}>
-          {arrows.slice().reverse().map((r) => <Arrow key={r.k} from={r.uci.slice(0, 2)} to={r.uci.slice(2, 4)} color={BOARD.best} a={r.k === 1 ? 1 : 0.5} grow={1} thin={r.k > 1} />)}
+          {arrows.slice().reverse().map((r) => <Arrow key={r.k} from={r.uci.slice(0, 2)} to={r.uci.slice(2, 4)} color={r.color || BOARD.best} a={r.a != null ? r.a : r.k === 1 ? 1 : 0.5} grow={1} thin={r.k > 1} />)}
         </svg>
       )}
     </div>
@@ -529,7 +529,7 @@ function PlayerBar({ M, T, S, side, a, pieces }) {
   const k = Math.max(0.6, fit(caps));
   return (
     <div style={{ ...barPlace(side), gap: tx(14), opacity: a }}>
-      <span style={{ width: tx(14), height: tx(14), borderRadius: 2, background: side === 'w' ? '#f1ebe1' : '#1c1613', border: `1.5px solid ${C.dim}`, flex: 'none' }} />
+      <span style={{ width: tx(14), height: tx(14), borderRadius: 2, background: side === 'w' ? '#fff' : '#1c1613', border: `1.5px solid ${C.dim}`, flex: 'none' }} />
       <span style={{ display: 'flex', alignItems: 'baseline', gap: tx(10) * k, minWidth: 0, whiteSpace: 'nowrap' }}>
         <span title={P.name} style={{ font: `600 ${tx(20) * k}px ${SANS}`, color: C.ink, overflow: 'hidden', textOverflow: 'ellipsis', minWidth: 0 }}>{P.name}</span>
         {rating && <span style={{ flex: 'none', font: `500 ${tx(16) * k}px ${MONO}`, color: C.dim }}>{rating}</span>}
@@ -549,7 +549,7 @@ function Header({ M, a }) {
   const lines = [[M.event, M.round && 'Round ' + M.round, teams].filter(Boolean).join(' · '), [M.site, M.date].filter(Boolean).join(' · '), [M.eco, M.opening].filter(Boolean).join(' ')].filter(Boolean);
   return (
     <Panel box={L.header} a={a} style={{ padding: `${tx(10)}px ${tx(L.pad[1])}px`, display: 'flex', flexDirection: 'column', justifyContent: 'center', gap: tx(4), font: `500 ${tx(15)}px/1.35 ${MONO}`, color: C.dim }}>
-      {lines.map((t, i) => <SideScroll key={i} style={{ display: 'block', color: i === 0 ? C.ink : undefined }}>{t}</SideScroll>)}
+      {lines.map((t, i) => <SideScroll key={i} style={{ display: 'block', color: C.ink }}>{t}</SideScroll>)}
     </Panel>
   );
 }
@@ -611,7 +611,7 @@ function MoveList({ M, T, S, a, paused, onPick }) {
     const edge = P.cls !== 'none' && P.cls !== 'best' ? `2px solid ${clsColor(P.cls)}` : `1px solid ${white ? 'rgba(60,40,20,0.22)' : 'rgba(255,236,214,0.22)'}`;
     moves.push(
       <span key={i} style={{ display: 'flex', alignItems: 'center', gap: tx(5), opacity: shown }}>
-        {(white || i === 0) && <span style={{ color: C.dim, marginLeft: i ? tx(6) : 0, font: `500 ${tx(15)}px ${MONO}` }}>{window.ChessCore.moveNo(M.ply0 + i)}</span>}
+        {(white || i === 0) && <span style={{ color: i <= c ? C.ink : C.dim, marginLeft: i ? tx(6) : 0, font: `500 ${tx(15)}px ${MONO}` }}>{window.ChessCore.moveNo(M.ply0 + i)}</span>}
         <span className="mv" role="button" data-ply={i} tabIndex={i === focusPly ? 0 : -1} title={`Go to ${label(M, i)}`} onClick={(e) => { e.stopPropagation(); onPick(i); }}
           onKeyDown={(e) => moveKey(e, i)}
           style={{ opacity: ahead ? 0.5 : 1, height: CHIP, boxSizing: 'border-box', display: 'flex', alignItems: 'center', padding: `0 ${tx(8)}px`, borderRadius: 2, cursor: 'pointer', font: `${cur ? 700 : 600} ${tx(16)}px ${MONO}`, background: white ? '#f1ebe1' : '#2a2320', color: white ? '#15100d' : '#efe8de', border: edge, boxShadow: cur ? `0 0 0 3px ${C.last}` : 'none' }}>{P.san}{P.mark || ''}</span>
