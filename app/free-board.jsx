@@ -39,9 +39,12 @@ function bookMoves(board, book) {
   try { return book.continuations(window.BoardCore.ucis(board), board.fen); } catch (e) { return []; }
 }
 
+// the engine arrows plus the hovered explorer move's, drawn over them in the free board's colour
+const hovArrows = (arrows, uci) => (uci ? [{ uci, k: 'hover', color: BOARD.last, a: 0.9 }, ...(arrows || [])] : arrows);
+
 // The Commentary box on the free board: the position's name and the book moves from it, each a button that plays the
 // move as a drag would (so Stockfish rates it). Out of the book it says so, with the last book position on the way.
-function OpeningExplorer({ board, book, onPlay }) {
+function OpeningExplorer({ board, book, onPlay, onHover }) {
   const B = window.BoardCore, ucis = B.ucis(board), white = B.pos(board).turn === 'w';
   const named = boardOpening(board, book), next = bookMoves(board, book);
   let inBook = false;
@@ -58,12 +61,12 @@ function OpeningExplorer({ board, book, onPlay }) {
   else if (inBook) {
     body = (
       <React.Fragment>
-        {heading(named ? named.name : ucis.length === 0 && fromStart ? 'Starting position' : 'In the book')}
         {next.length ? (
-          <div className="book-moves" style={{ display: 'flex', flexDirection: 'column', gap: tx(2), marginTop: tx(12) }}>
+          <div className="book-moves" style={{ display: 'flex', flexDirection: 'column', gap: tx(2) }}>
             {next.map((m) => (
               // a name that doesn't fit beside its move goes under it
-              <div key={m.uci} className="mv" role="button" tabIndex={0} title={`Play ${m.san}`} onClick={(e) => play(e, m.uci)}
+              <div key={m.uci} className="mv expl-row" role="button" tabIndex={0} title={`Play ${m.san}`} onClick={(e) => play(e, m.uci)}
+                onMouseEnter={() => onHover(m.uci)} onMouseLeave={() => onHover(null)} onFocus={() => onHover(m.uci)} onBlur={() => onHover(null)}
                 onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') play(e, m.uci); }}
                 style={{ display: 'flex', flexWrap: 'wrap', alignItems: 'center', columnGap: tx(14), rowGap: tx(2), minWidth: 0, padding: `${tx(3)}px ${tx(6)}px`, borderRadius: 2, cursor: 'pointer' }}>
                 <span style={{ flex: 'none', minWidth: tx(58), boxSizing: 'border-box', textAlign: 'center', padding: `${tx(2)}px ${tx(8)}px`, borderRadius: 2, font: `600 ${tx(17)}px ${MONO}`, background: white ? '#f1ebe1' : '#2a2320', color: white ? '#15100d' : '#efe8de', border: `1px solid ${white ? 'rgba(60,40,20,0.22)' : 'rgba(255,236,214,0.22)'}` }}>{m.san}</span>
@@ -339,8 +342,10 @@ function FreeBoard({ board, onChange, tw, sf, nav, orient, book }) {
   // a finished game takes no moves (Analyse on the free board does), nor the board while Stockfish is to move
   const still = G && (!live || (sfGame && gameTurn(board) !== G.you)), NO_INPUT = { onDown: () => {}, onMove: () => {}, onUp: () => {}, onCancel: () => {} };
   const boardKey = board.fen + '|' + B.ucis(board).join(' ');
+  // the explorer row under the pointer: its move is drawn as an arrow on the board
+  const [hov, setHov] = React.useState(null);
   // another position (a step, a takeback) drops a half-made move: a selected piece, the promotion picker
-  React.useEffect(() => { input.clear(); }, [boardKey]);
+  React.useEffect(() => { input.clear(); setHov(null); }, [boardKey]);
   // Stockfish rates the move on the board: the positions before and after it (before the first move, both the start); never in a game
   const ev = useMoveEval(sf.engine, G ? null : B.ucis(board, upto), G ? null : B.ucis(board), sf.own, board.fen, null, cloudSetting(tw));
   const posBefore = upto > 0 ? steps[upto - 1].pos : board.start.pos;
@@ -424,13 +429,13 @@ function FreeBoard({ board, onChange, tw, sf, nav, orient, book }) {
       {!G && (tbv ? <EvalBarView cp={tbv.cp} txt={tbv.txt} a={1} /> : <EvalBarView cp={cp == null ? 0 : cp} txt={cp == null ? (down ? '' : '…') : fmtSf(cp)} a={1} />)}
       <FreeBar pos={pos} side="b" a={1} clock={clockOf('b')} name={G ? playerName(G, 'b') : null} />
       <BoardSpace>
-        <LineBoard a={1} sq={boardSquares()} v={{ upto, moves: steps, base: board.start.pos, src: 'you' }} hide={input.drag && input.drag.moved ? input.drag.from : null} arrows={!G && tw.bestArrows !== false ? lineArrows(ev.after) : null} />
+        <LineBoard a={1} sq={boardSquares()} v={{ upto, moves: steps, base: board.start.pos, src: 'you' }} hide={input.drag && input.drag.moved ? input.drag.from : null} arrows={hovArrows(!G && tw.bestArrows !== false ? lineArrows(ev.after) : null, hov)} />
         <BoardTouch pos={pos} sel={input.sel} targets={input.targets} drag={input.drag} promo={input.promo} {...(still ? NO_INPUT : input.handlers)} />
       </BoardSpace>
       <FreeBar pos={pos} side="w" a={1} clock={clockOf('w')} name={G ? playerName(G, 'w') : null} />
       {L.header && <Header M={HM} a={1} />}
       <MoveList M={MV} T={upto + 0.999} S={S} a={1} paused onPick={live ? () => {} : go} />
-      {G ? <GameInfo board={board} /> : tb ? <TablebaseExplorer t={tb} posKey={boardKey} onPlay={onBook} /> : xl ? <LichessExplorer x={xl} tw={tw} posKey={boardKey} onPlay={onBook} white={pos.turn === 'w'} fallback={<OpeningExplorer board={board} book={book} onPlay={onBook} />} /> : <OpeningExplorer board={board} book={book} onPlay={onBook} />}
+      {G ? <GameInfo board={board} /> : tb ? <TablebaseExplorer t={tb} posKey={boardKey} onPlay={onBook} /> : xl ? <LichessExplorer x={xl} tw={tw} posKey={boardKey} onPlay={onBook} onHover={setHov} white={pos.turn === 'w'} fallback={<OpeningExplorer board={board} book={book} onPlay={onBook} onHover={setHov} />} /> : <OpeningExplorer board={board} book={book} onPlay={onBook} onHover={setHov} />}
       {G ? <Panel box={L.analysis} a={1} style={NO_SELECT} title="Game"><GameStatus board={board} onChange={onChange} down={opponent.down} /></Panel>
         : <AnalysisPanel box={L.analysis} a={1} paused depth={down ? null : searchDepth(ev.after)} deep={ev}>
         {upto < 0

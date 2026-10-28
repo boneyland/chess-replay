@@ -1567,7 +1567,16 @@ for (const name of BROWSERS) for (const site of SITES) {
       const panel = (title) => p.evaluate((tt) => { const d = [...document.querySelectorAll('div')].find((e) => e.firstElementChild && e.firstElementChild.firstElementChild && e.firstElementChild.firstElementChild.textContent === tt && getComputedStyle(e.firstElementChild).textTransform === 'uppercase'); return d ? d.innerText : ''; }, title);
       // a book move's row: its SAN first, then the opening it reaches
       const row = (pg, san) => pg.locator('.book-moves [role="button"]').filter({ hasText: new RegExp('^' + san + '(?![a-z0-9=+#])') });
-      const head = p.locator('.book-head');
+      // the opening's name is at the right of the panel's title row (no big heading under it)
+      const named = async (pg, re) => {
+        const t0 = Date.now();
+        for (;;) {
+          const txt = await pg.evaluate(() => { const d = [...document.querySelectorAll('div')].find((e) => e.firstElementChild && e.firstElementChild.firstElementChild && e.firstElementChild.firstElementChild.textContent === 'Opening explorer' && getComputedStyle(e.firstElementChild).textTransform === 'uppercase'); return d ? d.firstElementChild.textContent : ''; });
+          if (re.test(txt)) return;
+          assert.ok(Date.now() - t0 < 5000, `the title row names ${re}, got "${txt}"`);
+          await pg.waitForTimeout(100);
+        }
+      };
       const drag = async (b, from, to) => {
         const f = square(b, from), tt = square(b, to);
         await p.mouse.move(f.x, f.y);
@@ -1580,17 +1589,17 @@ for (const name of BROWSERS) for (const site of SITES) {
       await p.getByRole('button', { name: 'Play/Explore' }).click();
       await p.getByRole('button', { name: 'Starting position' }).click();
       await assert.doesNotReject(p.getByRole('button', { name: 'Play (space)' }).waitFor({ state: 'detached', timeout: 5000 }));
-      await assert.doesNotReject(head.filter({ hasText: /^Starting position$/ }).waitFor({ timeout: 5000 }));
+      await assert.doesNotReject(row(p, 'e4').waitFor({ timeout: 5000 }));
       const b = await boardBox(p);
       // a mouse drag on the list scrolls it: no move played, no text selected
-      const listTop = () => p.evaluate(() => document.querySelector('.book-head').parentElement.parentElement.scrollTop);
+      const listTop = () => p.evaluate(() => document.querySelector('.book-moves').parentElement.parentElement.scrollTop);
       // once the list has the room to scroll that far (in CI's Firefox its rows and fonts can still be settling)
-      const room = () => p.evaluate(() => { const e = document.querySelector('.book-head').parentElement.parentElement; return e.scrollHeight - e.clientHeight; });
-      await p.waitForFunction(() => { const e = document.querySelector('.book-head').parentElement.parentElement; return e.scrollHeight - e.clientHeight >= 120; }, null, { timeout: 10000 }).catch(() => {});
+      const room = () => p.evaluate(() => { const e = document.querySelector('.book-moves').parentElement.parentElement; return e.scrollHeight - e.clientHeight; });
+      await p.waitForFunction(() => { const e = document.querySelector('.book-moves').parentElement.parentElement; return e.scrollHeight - e.clientHeight >= 120; }, null, { timeout: 10000 }).catch(() => {});
       await p.evaluate(() => document.fonts.ready);
       // from the lowest row wholly in view (the panel's height follows the layout, so no named row is sure to be)
       const from = await p.evaluate(() => {
-        const r = document.querySelector('.book-head').parentElement.parentElement.getBoundingClientRect();
+        const r = document.querySelector('.book-moves').parentElement.parentElement.getBoundingClientRect();
         const rows = [...document.querySelectorAll('.book-moves [role="button"]')].map((e) => e.getBoundingClientRect()).filter((b) => b.top >= r.top && b.bottom <= r.bottom);
         const b = rows[rows.length - 1];
         return { x: b.x, y: b.y, height: b.height };
@@ -1601,7 +1610,7 @@ for (const name of BROWSERS) for (const site of SITES) {
       await p.mouse.up();
       // CI's Firefox can still be applying the drag's last moves (and the glide after it) when mouse.up resolves: it
       // read 66–99 px there straight away, so wait for the list to get there rather than reading it once
-      await p.waitForFunction(() => document.querySelector('.book-head').parentElement.parentElement.scrollTop >= 100, null, { timeout: 3000 }).catch(() => {});
+      await p.waitForFunction(() => document.querySelector('.book-moves').parentElement.parentElement.scrollTop >= 100, null, { timeout: 3000 }).catch(() => {});
       assert.ok(await listTop() >= 100, `the list scrolled (${await listTop()} px of ${await room()} px it can)`);
       assert.match(await label.innerText(), /^Start$/, 'the drag played no move');
       assert.equal(await p.evaluate(() => String(window.getSelection())), '', 'and selected no text');
@@ -1612,19 +1621,19 @@ for (const name of BROWSERS) for (const site of SITES) {
       await p.waitForFunction(() => /your move · .*(stockfish’s choice|cp vs|as good as|can’t run here|stopped)/i.test(document.body.innerText), null, { timeout: 45000 });
       await row(p, 'c5').click();
       await assert.doesNotReject(label.filter({ hasText: /1… c5/ }).waitFor({ timeout: 5000 }));
-      await assert.doesNotReject(head.filter({ hasText: /Sicilian Defense/ }).waitFor({ timeout: 5000 }));
+      await named(p, /Sicilian Defense/);
       assert.match(await panel('Opening explorer'), /B20/);
       await p.screenshot({ path: path.join(OUT, host + '-explorer.png') });
       // back to the start: a book move there replaces the moves after it. The list scrolled down for c5 starts at its top
-      await p.evaluate(() => { document.querySelector('.book-head').parentElement.parentElement.scrollTop = 400; });
+      await p.evaluate(() => { document.querySelector('.book-moves').parentElement.parentElement.scrollTop = 400; });
       await p.keyboard.press('ArrowLeft');
       await p.keyboard.press('ArrowLeft');
       await assert.doesNotReject(label.filter({ hasText: /^Start$/ }).waitFor({ timeout: 5000 }));
-      assert.equal(await p.evaluate(() => document.querySelector('.book-head').parentElement.parentElement.scrollTop), 0, 'the start\'s list is scrolled to its top');
+      assert.equal(await p.evaluate(() => document.querySelector('.book-moves').parentElement.parentElement.scrollTop), 0, 'the start\'s list is scrolled to its top');
       await row(p, 'd4').click();
       await assert.doesNotReject(label.filter({ hasText: /1\. d4/ }).waitFor({ timeout: 5000 }));
       assert.doesNotMatch(await panel('Moves'), /c5|e4/);
-      await assert.doesNotReject(head.filter({ hasText: /Queen.s Pawn/ }).waitFor({ timeout: 5000 }));
+      await named(p, /Queen.s Pawn/);
       // out of the book: it says so, naming the last book position
       // each move lands before the next drag starts: a drag begun before the board re-renders picks up the wrong side's piece
       // the rows clicked (each scrolled into view first) left the board where it was: the frame clips rather than scrolls
@@ -1639,7 +1648,7 @@ for (const name of BROWSERS) for (const site of SITES) {
       assert.match(await panel('Opening explorer'), /last book position: /);
       // a pasted FEN that is a book position is named itself; its rows take Enter
       await setUpFen(p, 'rnbqkbnr/pppppppp/8/8/4P3/8/PPPP1PPP/RNBQKBNR b KQkq e3 0 1');
-      await assert.doesNotReject(head.filter({ hasText: /King.s Pawn Game/ }).waitFor({ timeout: 5000 }));
+      await named(p, /King.s Pawn Game/);
       assert.match(await panel('Opening explorer'), /B00/);
       await row(p, 'e5').focus();
       await p.keyboard.press('Enter');
@@ -1656,7 +1665,7 @@ for (const name of BROWSERS) for (const site of SITES) {
       await row(ph.page, 'e4').click();
       await assert.doesNotReject(ph.page.locator('.plabel').filter({ hasText: /1\. e4/ }).waitFor({ timeout: 5000 }));
       await row(ph.page, 'c5').click();
-      await assert.doesNotReject(ph.page.locator('.book-head').filter({ hasText: /Sicilian Defense/ }).waitFor({ timeout: 5000 }));
+      await named(ph.page, /Sicilian Defense/);
       assert.deepEqual(await wider(ph.page), [], 'no sideways scroll');
       await ph.page.screenshot({ path: path.join(OUT, host + '-explorer-phone.png') });
       assert.deepEqual(ph.errors, []);
