@@ -2,11 +2,11 @@
 // Replaces the Claude Design host hooks: files load and save in the browser, and settings open from a page button.
 const STORE = 'chess-video.files.v1';
 const SAMPLE = { pgn: window.SAMPLE_PGN, analysis: window.SAMPLE_ANALYSIS, sampleNotes: window.SAMPLE_NOTES, sample: true };
-// a free board is stored as { board: BoardCore.save(…) } in the loaded game's place; one that no longer restores gives the sample
+// a free board is stored as { board: BoardCore.save(…), lastGame } (see commit) in the loaded game's place; one that no longer restores gives the sample
 function readStored() {
   try {
     const s = JSON.parse(localStorage.getItem(STORE) || 'null');
-    if (s && s.board) return window.BoardCore.restore(s.board) ? { board: s.board } : SAMPLE;
+    if (s && s.board) return window.BoardCore.restore(s.board) ? { board: s.board, lastGame: s.lastGame } : SAMPLE;
     if (s && (s.pgn || s.analysis)) return s;
   } catch (e) {}
   return SAMPLE;
@@ -138,6 +138,8 @@ function GameApp() {
   const inputRef = React.useRef(null);
   const probe = React.useRef(null);
   const nav = React.useRef(null);
+  const clockRef = React.useRef(null); // the stage's { time }, for the playhead a game is left at
+  const seekAfter = React.useRef(null); // the playhead a game just brought back opens at
   const fullscreen = useFullscreen();
   const net = useOnline();
   const [queenOpen, setQueenOpen] = React.useState(false);
@@ -246,10 +248,22 @@ function GameApp() {
 
   // false when it couldn't be remembered (the error says so)
   // keep: the editor stays open (an analysis finishing in the background isn't the viewer leaving it)
+  // The loaded game left for a board is kept in the board's place (lastGame: { files, at }, at its playhead) for Back to the
+  // loaded game; the board's own commits carry it, loading or replacing a game drops it
   const commit = (next, keep) => {
     if (!next.board) try { window.ChessCore.buildGame(next); } catch (e) { setErr(e.message); return false; }
-    setErr(''); setFiles(next); if (!keep) setEditing(null);
-    try { if (next.sample && !next.evalSource) localStorage.removeItem(STORE); else localStorage.setItem(STORE, JSON.stringify(next)); } catch (e) { setErr(next.board ? 'The board couldn’t be remembered after reload: the browser’s storage is full.' : 'Loaded, but the files are too large to remember after reload.'); return false; }
+    const cur = filesRef.current;
+    let withLast = next;
+    if (next.board && !next.lastGame && !keep) {
+      const { lastGame, fromBoard, fromLastGame, ...game } = cur;
+      const last = cur.board ? lastGame : 'fromLastGame' in cur ? fromLastGame : cur.sample ? null : { files: game, at: clockRef.current ? clockRef.current.time : 0 };
+      if (last) withLast = { ...next, lastGame: last };
+    }
+    setErr(''); setFiles(withLast); if (!keep) setEditing(null);
+    try {
+      if (next.sample && !next.evalSource) localStorage.removeItem(STORE);
+      else try { localStorage.setItem(STORE, JSON.stringify(withLast)); } catch (e) { if (withLast === next) throw e; setFiles(next); localStorage.setItem(STORE, JSON.stringify(next)); }
+    } catch (e) { setErr(next.board ? 'The board couldn’t be remembered after reload: the browser’s storage is full.' : 'Loaded, but the files are too large to remember after reload.'); return false; }
     return true;
   };
   // a game is kept in My games as it goes; a full storage doesn't stop the board. The new list, or null when it couldn't
@@ -342,7 +356,14 @@ function GameApp() {
   const pgnLoad = (text) => { setPgnOpen(false); setQueenOpen(false); commit({ pgn: text, pgnName: 'pasted.pgn', gameIndex: 0 }); };
   const closePgn = React.useCallback(() => setPgnOpen(false), []);
   // the board's moves as a loaded game (replay, Analyse with Stockfish, PGN and video export); the board is kept with it, to go back to
-  const boardAsGame = () => { commit({ pgn: window.BoardCore.pgn(board), pgnName: 'free-board.pgn', gameIndex: 0, fromBoard: files.board }); };
+  const boardAsGame = () => { commit({ pgn: window.BoardCore.pgn(board), pgnName: 'free-board.pgn', gameIndex: 0, fromBoard: files.board, fromLastGame: files.lastGame || null }); };
+  // the game left for the board comes back as it was, paused where the playhead was (the board is kept to go back to)
+  const backToGame = () => guard(() => { const l = files.lastGame; if (!l) return; seekAfter.current = l.at; setQueenOpen(false); if (!commit({ ...l.files, fromBoard: files.board })) seekAfter.current = null; });
+  React.useEffect(() => {
+    if (seekAfter.current == null || files.board) return;
+    const time = seekAfter.current; seekAfter.current = null;
+    window.dispatchEvent(new CustomEvent('chess-video:seek', { detail: { time } }));
+  }, [files]);
   // a dialog closed (Esc, Cancel, Set up, Start game): focus goes back to what opened it, Play/Explore or the phone's Menu
   const newBtn = React.useRef(null), menuBtn = React.useRef(null), fenWasOpen = React.useRef(false), dialogOpen = pgnOpen || !!playOpen || !!gamesOpen;
   React.useEffect(() => {
@@ -590,7 +611,7 @@ function GameApp() {
   return (
     <React.Fragment>
       <EngineMenuContext.Provider value={board && board.game ? null : engineMenu}>
-      <CompositionStage nav={nav} forceVideo={video.busy} text={LayoutCore.textScale(t.textSize)} top={!net.online && <span className="net-chip" role="status" title={OFFLINE_NOTE}>Offline</span>} menu={<React.Fragment>{!(phone && short) && <SoundButton on={t.sound !== false} onChange={(v) => setTweak('sound', v)} />}{phone ? menuEl : deskDock}</React.Fragment>} onLayout={onLayout} scenes={scenes} playback={PLAYBACK} bg={C.bg} still={!!board || !!editing}>
+      <CompositionStage clock={clockRef} nav={nav} forceVideo={video.busy} text={LayoutCore.textScale(t.textSize)} top={!net.online && <span className="net-chip" role="status" title={OFFLINE_NOTE}>Offline</span>} menu={<React.Fragment>{!(phone && short) && <SoundButton on={t.sound !== false} onChange={(v) => setTweak('sound', v)} />}{phone ? menuEl : deskDock}</React.Fragment>} onLayout={onLayout} scenes={scenes} playback={PLAYBACK} bg={C.bg} still={!!board || !!editing}>
         {editing
           ? <EditBoard setup={editing.setup} onChange={editTo} onDone={editDone} onCancel={editCancel} fenText={editing.text} onFenText={editText} fenMsg={editing.msg} doneLabel={editing.play ? 'Start game' : 'Done'} orient={t.flip ? 'b' : 'w'} nav={nav} overlay={panel || newMenu || menu || queenOpen} />
           : board
@@ -630,6 +651,7 @@ function GameApp() {
           {!board && <div className="twk-note">Uses the PGN’s own evals (Lichess [%eval] or cutechess +0.25/20). Without them, run “Analyse with Stockfish” from the Analysis panel’s ☰ menu. Saved analysis, notes and Queen files load here too.</div>}
           {board && !window.PlayCore.inProgress(board) && <TweakButton label="Replay these moves as a game" disabled={!board.steps.length} onClick={boardAsGame} />}
           {board && !window.PlayCore.inProgress(board) && <div className="twk-note">{board.steps.length ? 'Opens every move on the board as a game: watch it, analyse it with Stockfish, and export it as a video or WebP. The board comes back with “Back to the free board”.' : 'Play some moves first; then they can be replayed and exported as a video.'}</div>}
+          {board && files.lastGame && <TweakButton secondary label="Back to the loaded game" onClick={backToGame} />}
           {!board && files.fromBoard && <TweakButton secondary label="Back to the free board" onClick={() => { const b = window.BoardCore.restore(files.fromBoard); if (b) commitBoard(b); }} />}
           {!files.sample && <TweakButton secondary label="Back to sample game" onClick={() => guard(() => commit(SAMPLE))} />}
           {!board && M.canChooseSource && (

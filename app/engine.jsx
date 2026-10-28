@@ -22,7 +22,7 @@ const useFrame = () => React.useContext(FrameContext);
 
 // still: a board without a timeline (the free board): no playing, no seeking keys, and a transport bar of moves only
 // top: an optional line above the frame (the page's Offline tag); the page lays out at the size of the room left
-function Stage({ menu, top, onLayout, duration, background, playback, nav, still, forceVideo, text = 1, children }) {
+function Stage({ menu, top, onLayout, duration, background, playback, nav, still, forceVideo, text = 1, clock, children }) {
   const playTimes = playback && playback.mode === 'times' ? playback.count : null;
   const loop = !playback || playback.mode === 'loop';
   // The page opens paused on the composition's start frame (setStart); the first Play from that untouched frame
@@ -31,6 +31,7 @@ function Stage({ menu, top, onLayout, duration, background, playback, nav, still
   const [playing, setPlaying] = React.useState(false);
   const timeRef = React.useRef(0), playingRef = React.useRef(false), freshRef = React.useRef(null);
   timeRef.current = time; playingRef.current = playing;
+  if (clock) clock.current = { time };
   const setStart = React.useCallback((t) => { setTime(t); freshRef.current = t; }, []);
   const togglePlay = () => {
     if (!playingRef.current && freshRef.current != null && Math.abs(timeRef.current - freshRef.current) < 1e-6) setTime(0);
@@ -292,13 +293,13 @@ function CompositionClock({ derived, children }) {
   return <CompositionContext.Provider value={value}>{children}</CompositionContext.Provider>;
 }
 
-function CompositionStage({ menu, top, onLayout, scenes, playback, bg, nav, still, forceVideo, text, children }) {
+function CompositionStage({ menu, top, onLayout, scenes, playback, bg, nav, still, forceVideo, text, clock, children }) {
   const parsed = React.useMemo(() => parseScenes(scenes), [scenes]);
   const derived = React.useMemo(() => (parsed ? deriveCues(parsed) : null), [parsed]);
   const pb = React.useMemo(() => { try { return JSON.parse(playback); } catch (e) { return null; } }, [playback]);
   if (!derived) return <div className="stage-error">This game produced an invalid scene list.</div>;
   return (
-    <Stage menu={menu} top={top} onLayout={onLayout} duration={derived.total} background={bg} playback={pb} nav={nav} still={still} forceVideo={forceVideo} text={text}>
+    <Stage menu={menu} top={top} onLayout={onLayout} duration={derived.total} background={bg} playback={pb} nav={nav} still={still} forceVideo={forceVideo} text={text} clock={clock}>
       <CompositionClock derived={derived}>{children}</CompositionClock>
     </Stage>
   );
