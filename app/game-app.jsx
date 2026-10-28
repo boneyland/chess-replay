@@ -677,6 +677,7 @@ function GameApp() {
           <div className="twk-note">Positions with 7 pieces or fewer go to Lichess’s tablebase (tablebase.lichess.ovh) for the result with best play and every move ranked by it: in the Analysis panel and the eval bar (tagged TB), while the replay is paused and on the free board, never during a game. “Analyse with Stockfish” takes them from it too, and rates those moves by whether they keep the win or the draw. Nothing is sent with this off.</div>
           <TweakToggle id="tw-cloud" label="Lichess cloud evaluation" value={t.cloudEval === true} onChange={(v) => setTweak('cloudEval', v)} />
           {t.cloudEval === true && <TweakToggle id="tw-cloud-prefer" label="Prefer cloud" value={t.cloudPrefer === true} onChange={(v) => setTweak('cloudPrefer', v)} />}
+          <ExplorerSettings t={t} setTweak={setTweak} />
           <div className="twk-note">The positions Stockfish searches for your moves (the free board, moves you try in the replay) also go to Lichess’s cloud (lichess.org/api/cloud-eval), which has deep evaluations of many positions: whichever answer comes first shows, the deeper one replacing it, labelled “cloud depth”; Go deeper on a move of a loaded analysis asks it too. Prefer cloud skips the search in your browser where the cloud is at least as deep as its depth limit (30 with No limit). Never for “Analyse with Stockfish” or in a game. Nothing is sent with this off.</div>
         </> },
         !board && { id: 'commentary', label: 'Commentary', body: <>
@@ -723,7 +724,7 @@ class Recover extends React.Component {
   render() {
     if (!this.state.error) return this.props.children;
     const reset = () => {
-      try { Object.keys(localStorage).filter((k) => k.startsWith('chess-video.') && k !== AUTH_STORE && k !== GAMES).forEach((k) => localStorage.removeItem(k)); } catch (e) {}
+      try { Object.keys(localStorage).filter((k) => k.startsWith('chess-video.') && k !== AUTH_STORE && k !== LI_AUTH_STORE && k !== GAMES).forEach((k) => localStorage.removeItem(k)); } catch (e) {}
       location.reload();
     };
     return (
