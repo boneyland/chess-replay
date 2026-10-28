@@ -132,8 +132,9 @@ const editBox = async (page) => {
 // Records the engine workers' files, the commands the page sends them and the nodes per second they report
 // (window.__sf); cores: what navigator.hardwareConcurrency says, so the Threads choices are the same on every machine;
 // hang: how many threaded engines (the first ones) never get a search, as Firefox's first one in a page sometimes doesn't;
-// hangReady: how many never answer at all (they never get uci)
-function spyEngine({ cores = 8, noSharedMemory = false, hang = 0, hangReady = 0 } = {}) {
+// hangReady: how many never answer at all (they never get uci); hangSearch: how many answer their probe (go depth 1),
+// then never get another search, as WebKit's on GitHub once didn't answer one
+function spyEngine({ cores = 8, noSharedMemory = false, hang = 0, hangReady = 0, hangSearch = 0 } = {}) {
   // at: when each worker started, ended: [which, when] each was terminated (ms since the page began)
   const seen = window.__sf = { urls: [], posted: [], nps: [], at: [], ended: [] };
   Object.defineProperty(Navigator.prototype, 'hardwareConcurrency', { get: () => cores });
@@ -143,7 +144,7 @@ function spyEngine({ cores = 8, noSharedMemory = false, hang = 0, hangReady = 0 
     constructor(url, ...rest) {
       super(url, ...rest); this.n = seen.urls.push(String(url)) - 1; seen.at.push(Math.round(performance.now()));
       const threaded = /stockfish-19-lite\.js$/.test(String(url));
-      this.mute = threaded && hangReady-- > 0 ? /^uci$/ : threaded && hang-- > 0 ? /^go/ : null;
+      this.mute = threaded && hangReady-- > 0 ? /^uci$/ : threaded && hang-- > 0 ? /^go/ : threaded && hangSearch-- > 0 ? /^go (?!depth 1$)/ : null;
     }
     terminate() { seen.ended.push([this.n, Math.round(performance.now())]); return super.terminate(); }
     postMessage(m, ...rest) { if (typeof m === 'string') seen.posted.push(m); if (this.mute && typeof m === 'string' && this.mute.test(m)) return; return super.postMessage(m, ...rest); }
@@ -756,6 +757,26 @@ for (const name of BROWSERS) for (const site of SITES) {
         assert.deepEqual(nb.errors, []);
         await nb.ctx.close();
       }
+    });
+
+    // a search that hangs after the probe: the engine moves it to a fresh worker 5 s past its movetime (SFEngine's hangMs),
+    // and the move is still rated with threads
+    await t.test('desktop: a threaded engine that stops answering mid-search is replaced and the search still runs', { timeout: 120000 }, async () => {
+      const nb = await open(browser, { width: 1440, height: 900 });
+      const p = nb.page;
+      await p.addInitScript(spyEngine, { hangSearch: 1 });
+      await p.addInitScript(() => { try { localStorage.setItem('chess-video.tweaks.v1', JSON.stringify({ sfOwnTime: 1 })); } catch (e) {} });
+      await p.goto(base, { waitUntil: 'load' });
+      await loadedOn(p);
+      const seen = await ownMoveRated(p, 90000), log = `${seen.urls.join(' ')} at ${seen.at.join(' ')} ended ${JSON.stringify(seen.ended)}`;
+      // without the replacement the verdict never comes; the hung worker is terminated and a threaded one follows it
+      // (the browser's own hangs can add tries, and after three, one thread)
+      t.diagnostic(log);
+      assert.ok(seen.ended.some(([n]) => n === 0) && threadedOf(seen) >= 2 && /stockfish-19-lite\.js$/.test(seen.urls[1]), log);
+      await p.getByRole('button', { name: 'Engine options' }).click();
+      assert.equal(await p.locator('#tw-sf-threads').isDisabled(), singleOf(seen) > 0);
+      assert.deepEqual(nb.errors, []);
+      await nb.ctx.close();
     });
 
     // the browser's own hangs (Firefox's, and WebKit's on GitHub) can use up the other tries, each up to the 10 s load
