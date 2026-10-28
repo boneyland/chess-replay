@@ -6,6 +6,13 @@ const LC = window.LayoutCore;
 const VIEWS = ['replay', 'free', 'game', 'edit'];
 const PANELS = ['header', 'moves', 'comment', 'analysis', 'plot', 'tray', 'panel'];
 const boxes = (L) => PANELS.filter((k) => L[k]).map((k) => [k, L[k]]);
+// MoveList's chrome as it draws it (tx() sizes, 0.8 × the text): the panel's padding (2 × 16), title row (15 × 1.4)
+// and its margin (12), and the borders (2, not scaled); the tight panel (off the desktop in one column, and on a
+// phone) has 0.6 of the padding and half the margin
+const chromeOf = (L) => {
+  const tight = L.tier !== 'desktop' && (L.cols === 1 || L.tier === 'phone');
+  return 0.8 * L.text * (2 * L.pad[0] * (tight ? 0.6 : 1) + 15 * 1.4 + (tight ? 6 : 12)) + 2;
+};
 const overlap = (a, b) => a.x < b.x + b.w - 0.5 && b.x < a.x + a.w - 0.5 && a.y < b.y + b.h - 0.5 && b.y < a.y + a.h - 0.5;
 
 test('two columns on a desktop', () => {
@@ -131,8 +138,9 @@ test('hysteresis, by width and by aspect', () => {
 });
 
 test('video one column: board shrinks first, panels keep a floor', () => {
-  const v = LC.compute({ w: 390, h: 770, video: true });
-  assert.ok(v.comment.h >= 96 - 1 && v.analysis.h >= 120 - 1 && v.moves.h >= 96 - 1);
+  // the panels at their preferred heights at least (Moves rounded down to whole lines: up to a line less, which Analysis takes)
+  const v = LC.compute({ w: 390, h: 770, video: true }), line = 38 * 0.8 * v.text;
+  assert.ok(v.comment.h >= 96 - 1 && v.analysis.h >= 120 - 1 && v.moves.h > 96 - line && v.moves.rows >= 1);
   const s = LC.compute({ w: 320, h: 500, video: true });
   assert.ok(s.board.size >= 200);
   for (const k of ['comment', 'analysis', 'moves']) assert.ok(s[k].h >= 48 - 0.5, k);
@@ -198,7 +206,7 @@ test('the board stays within half the viewport', () => {
 // Moves stands over Commentary, as wide, in every layout and view, and is never taller than its title and five lines
 // (three in one column)
 test('Moves sits over Commentary, five lines at most, three in one column', () => {
-  const cap = (L) => 0.8 * L.text * (2 * L.pad[0] + 15 * 1.4 + 12) + 2 + (L.cols === 1 ? 3 : 5) * 38 * 0.8 * L.text + 0.5;
+  const cap = (L) => chromeOf(L) + (L.cols === 1 ? 3 : 5) * 38 * 0.8 * L.text + 0.5;
   for (const [w, h] of [[1440, 900], [2560, 1400], [1024, 690], [820, 600], [390, 844], [768, 1024], [844, 390], [320, 500]]) {
     for (const text of [1, 1.3]) for (const video of [false, true]) for (const view of ['replay', 'free']) {
       const L = LC.compute({ w, h, text, video, view }), at = `${w}x${h} text ${text}${video ? ' video' : ''} ${view}`;
@@ -227,7 +235,7 @@ test('eval graph height floor, square-ish and portrait layouts', () => {
     assert.ok(L.analysis.y >= L.board.y + L.board.size + L.bars.h && L.analysis.h >= 160 * L.text - 0.5, `${at}: analysis ${JSON.stringify(L.analysis)}`);
     assert.ok(L.comment.y + L.comment.h <= L.analysis.y, at);
     // Moves takes 40% of the sidebar's room under the header there (30% elsewhere), up to its five lines
-    const room = L.moves.h + L.comment.h, cap = 0.8 * L.text * (2 * L.pad[0] + 15 * 1.4 + 12) + 2 + 5 * 38 * 0.8 * L.text;
+    const room = L.moves.h + L.comment.h, cap = chromeOf(L) + 5 * 38 * 0.8 * L.text;
     const line = 38 * 0.8 * L.text, chrome = cap - 5 * line;
     assert.ok(L.moves.h <= Math.min(cap, 0.4 * room) + 0.5 && L.moves.h > Math.min(cap, 0.4 * room) - line, `${at}: moves ${L.moves.h} of ${room}`);
   }
@@ -236,12 +244,14 @@ test('eval graph height floor, square-ish and portrait layouts', () => {
   assert.ok(p.moves.order < p.analysis.order && p.analysis.order < p.comment.order);
 });
 
-// two columns: the Moves box holds whole lines, none cut off
-test('two-column Moves holds whole lines', () => {
-  for (const [w, h] of [[1440, 900], [1440, 818], [1024, 690], [1000, 960], [900, 860], [1280, 520], [844, 390], [2560, 1400]]) for (const text of [0.9, 1, 1.15, 1.3]) for (const video of [false, true]) {
+// a placed Moves box (two columns, or a video in one) holds whole lines, none cut off and no part-line of empty room
+// under them
+test('a placed Moves box holds whole lines', () => {
+  const sizes = [[1440, 900], [1440, 818], [1024, 690], [1000, 960], [900, 860], [1280, 520], [844, 390], [2560, 1400], [390, 844], [320, 456], [435, 940], [600, 900], [768, 1024], [1024, 1366]];
+  for (const [w, h] of sizes) for (const text of [0.9, 1, 1.15, 1.3]) for (const video of [false, true]) {
     const L = LC.compute({ w, h, text, video }), at = `${w}x${h} text ${text}${video ? ' video' : ''}`;
-    if (L.cols !== 2) continue;
-    const line = 38 * 0.8 * L.text, chrome = 0.8 * L.text * (2 * L.pad[0] + 15 * 1.4 + 12) + 2;
+    if (L.moves.flow) continue;
+    const line = 38 * 0.8 * L.text, chrome = chromeOf(L);
     const n = (L.moves.h - chrome) / line;
     if (n >= 1 - 1e-6) assert.ok(Math.abs(n - Math.round(n)) < 1e-6, `${at}: ${n} lines`);
   }

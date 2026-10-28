@@ -560,8 +560,9 @@ function MoveList({ M, T, S, a, paused, onPick }) {
   // the move number before White's (and before the first, when the game starts on Black's). A line is a chip (CHIP)
   // and the gap under it: ROW, the line LayoutCore counts
   const ROW = tx(38), CHIP = tx(28), GAP = tx(6);
-  // a flowing list grows up to maxRows lines, then scrolls; a placed one takes all the box's height under its title
-  const listH = L.moves.flow ? null : Math.max(ROW, L.moves.h - 2 * tx(L.pad[0]) - tx(15) * 1.4 - tx(12) - 2);
+  // a flowing list grows up to maxRows lines, then scrolls; a placed one takes all the box's height under its title (the
+  // tight panel's padding and title gap where it has them, as LayoutCore counts them)
+  const listH = L.moves.flow ? null : Math.max(ROW, L.moves.h - 2 * tx(L.pad[0] * (tightAn() ? 0.6 : 1)) - tx(15) * 1.4 - (tightAn() ? anGap(12) : tx(12)) - 2);
   const k = c >= 0 ? MOTION.move(cl01((T - S.tp[c]) / 0.35)) : 1, listRef = React.useRef(null);
   // a new move scrolls the list by whole lines so the move's line keeps one line under it (none in a box of one line,
   // where the move's own line must show), sliding there as the move plays, and leaves it
