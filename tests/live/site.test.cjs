@@ -1702,6 +1702,27 @@ for (const name of BROWSERS) for (const site of SITES) {
       assert.deepEqual(g.errors, []);
       await g.ctx.close();
     });
+    // a loaded game left for the free board comes back from Settings › Game, paused at the move it was left on
+    await t.test('desktop: Back to the loaded game returns to the game and its move', async () => {
+      const g = await open(browser, { width: 1440, height: 900 });
+      const p = g.page, label = p.locator('.plabel');
+      await p.goto(base, { waitUntil: 'load' });
+      await loadedOn(p);
+      await p.setInputFiles('#game-files', { name: 'promo.pgn', mimeType: 'text/plain', buffer: Buffer.from('1. e4 d5 2. exd5 c6 3. dxc6 Qd6 4. cxb7 Qd5 *') });
+      await assert.doesNotReject(p.getByRole('button', { name: 'Play (space)' }).waitFor({ timeout: 5000 }));
+      for (let i = 0; i < 3; i++) await p.keyboard.press('ArrowRight');
+      const before = await label.innerText();
+      await p.getByRole('button', { name: 'Play/Explore' }).click();
+      await p.getByRole('button', { name: 'Starting position' }).click();
+      await assert.doesNotReject(p.getByRole('button', { name: 'Play (space)' }).waitFor({ state: 'detached', timeout: 5000 }));
+      await p.reload({ waitUntil: 'load' });
+      await p.getByRole('button', { name: 'Settings' }).click();
+      await p.getByRole('button', { name: 'Back to the loaded game' }).click();
+      await assert.doesNotReject(p.getByRole('button', { name: 'Play (space)' }).waitFor({ timeout: 5000 }));
+      assert.equal(await label.innerText(), before);
+      assert.deepEqual(g.errors, []);
+      await g.ctx.close();
+    });
     // Play vs human: the board turns to the side to move, Take back takes a move back, the game ends in mate, nothing hints
     await t.test('desktop: Play vs human turns the board, takes back, ends in mate, and asks before leaving a game', async () => {
       const g = await open(browser, { width: 1440, height: 900 });

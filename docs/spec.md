@@ -107,6 +107,7 @@ A plain board with Stockfish, separate from the replay (`app/free-board.jsx`, st
 - **Copy FEN**: copies the six-field FEN of the position on the board, in the replay (a line being shown included) or on the free board; the half-move clock and move number count on from the start's. A note shows the FEN for 4 s; where the clipboard is refused it stays up, the FEN in a read-only field that selects it all with one click.
 - **Opening explorer** in the Commentary box: the opening's name and the book moves that continue from the position (`openings-core.js` continuations), each clickable; a short note once out of book. No win rates or game counts (that is the Lichess explorer on the roadmap). At 7 pieces or fewer, with the tablebase setting on, the endgame tablebase takes its place (see Endgame tablebase).
 - **Replay these moves as a game** (Settings) opens the board's moves as a loaded game for replay, analysis and MP4/WebP export, with "Back to the free board" to return.
+- **Back to the loaded game** (Settings › Game, shown on a free board) returns to the game left for it, paused at the move it was on: the loaded game's files are kept in the stored board as `lastGame` (survives a reload; one game only; loading another game, Back to sample game or Clear saved data drops it).
 - The board (start FEN, moves, position in the line) survives a reload: `{ board: { fen, moves, upto } }` in the stored files.
 
 ### Edit position
