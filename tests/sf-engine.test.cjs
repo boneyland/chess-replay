@@ -445,3 +445,63 @@ test('probeMs: from uciok on, a missing readyok fails as the probe does', async 
   const e = SF.create(() => fakeWorker({ noReady: true }), { threaded: true, threads: 4, probeMs: 30 });
   await assert.rejects(e.ready(), /threads didn’t start/);
 });
+
+// A search can hang after the probe too (WebKit on GitHub, 2026-10-28: a threaded engine passed its probe, then never
+// answered go movetime 1000): hangMs past its movetime, a fresh worker takes the search over, the same engine to the page
+test('a search that runs hangMs past its movetime moves to a fresh worker, which gets the probe and the options again', async () => {
+  const ws = [], ended = [];
+  const e = SF.create(() => { const w = fakeWorker(); w.terminate = () => ended.push(w); ws.push(w); return w; }, { threaded: true, threads: 4, probeMs: 1000, hangMs: 40 });
+  const r = e.ready(); await tick(); ws[0].finish('e2e4'); await r;
+  const s = e.search({ moves: ['e2e4'], depth: null, movetimeMs: 20, lines: 2 });
+  await tick();
+  assert.equal(ws.length, 1);
+  await new Promise((res) => setTimeout(res, 80));
+  assert.equal(ws.length, 2, 'a fresh worker');
+  assert.deepEqual(ended, [ws[0]], 'the hung one is terminated');
+  const w = ws[1];
+  assert.ok(w.posted.includes('go depth 1'), 'the fresh worker is probed: ' + w.posted.join(' | '));
+  w.finish('e2e4'); await tick();
+  assert.ok(w.posted.includes('setoption name Threads value 4') && w.posted.includes('setoption name MultiPV value 2'), w.posted.join(' | '));
+  assert.equal(w.posted.at(-1), 'go movetime 20');
+  w.finish('e7e5');
+  assert.equal((await s.promise).best, 'e7e5');
+  assert.equal(e.failed(), null);
+});
+
+test('a search that hangs on three workers in a row fails the engine; a bestmove in between starts the count again', async () => {
+  const ws = [];
+  let reported = null;
+  const e = SF.create(() => { const w = fakeWorker(); ws.push(w); return w; }, { hangMs: 100, onFail: (err) => { reported = err; } });
+  await e.ready();
+  const wait = (ms) => new Promise((res) => setTimeout(res, ms));
+  const a = e.search({ moves: [], depth: null, movetimeMs: 10 });
+  await wait(150);
+  assert.equal(ws.length, 2);
+  ws[1].finish('e2e4');
+  assert.equal((await a.promise).best, 'e2e4');
+  const b = e.search({ moves: ['e2e4'], depth: null, movetimeMs: 10 });
+  const c = e.search({ moves: ['d2d4'], depth: null, movetimeMs: 10 });
+  await wait(450);
+  assert.equal(ws.length, 4, 'three workers in a row for b, then none');
+  assert.equal(await b.promise, null);
+  assert.equal(await c.promise, null);
+  assert.match(reported && reported.message, /stopped answering/);
+});
+
+test('a cancelled search that hangs answers with its last score, and the next search runs on a fresh worker', async () => {
+  const ws = [];
+  const e = SF.create(() => { const w = fakeWorker(); ws.push(w); return w; }, { hangMs: 20 });
+  await e.ready();
+  const a = e.search({ moves: [], depth: null, movetimeMs: 10 });
+  const b = e.search({ moves: ['e2e4'], depth: null, movetimeMs: 10 });
+  await tick();
+  ws[0].onmessage({ data: 'info depth 7 score cp 31 pv e2e4' });
+  a.cancel();
+  const r = await a.promise;
+  assert.equal(r.cp, 31);
+  assert.equal(ws.length, 2);
+  await tick();
+  assert.equal(positions(ws[1]).at(-1), 'position startpos moves e2e4');
+  ws[1].finish('e7e5');
+  assert.equal((await b.promise).best, 'e7e5');
+});
