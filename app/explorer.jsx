@@ -106,7 +106,7 @@ function ResultBar({ w, d, b, height }) {
 // The Commentary box on the free board while the explorer is on: the opening's name, then the moves with their game
 // counts and results, each a button that plays the move as a drag would. x: useExplorer's answer; fallback: the local book's
 // panel, for an answer that can't come (offline, a back-off)
-function LichessExplorer({ x, tw, posKey, onPlay, white, fallback }) {
+function LichessExplorer({ x, tw, posKey, onPlay, onHover, white, fallback }) {
   const LA = useLichessAuth();
   const top = React.useRef(null), loading = x.state === 'loading';
   React.useLayoutEffect(() => { const box = top.current && top.current.parentElement; if (box) box.scrollTop = 0; }, [posKey]);
@@ -144,7 +144,8 @@ function LichessExplorer({ x, tw, posKey, onPlay, white, fallback }) {
           {e.moves.map((m) => {
             const tip = `Play ${m.san}: ${nf(m.total)} games${m.averageRating ? `, average rating ${m.averageRating}` : ''}`;
             return (
-              <div key={m.uci} className="mv" role="button" tabIndex={0} title={tip} aria-label={tip} onClick={(ev) => play(ev, m.uci)}
+              <div key={m.uci} className="mv expl-row" role="button" tabIndex={0} title={tip} aria-label={tip} onClick={(ev) => play(ev, m.uci)}
+                onMouseEnter={() => onHover(m.uci)} onMouseLeave={() => onHover(null)} onFocus={() => onHover(m.uci)} onBlur={() => onHover(null)}
                 onKeyDown={(ev) => { if (ev.key === 'Enter' || ev.key === ' ') play(ev, m.uci); }}
                 style={{ display: 'flex', alignItems: 'center', gap: tx(10), minWidth: 0, padding: `${tx(3)}px ${tx(6)}px`, borderRadius: 2, cursor: 'pointer' }}>
                 <span style={{ flex: 'none', minWidth: tx(58), boxSizing: 'border-box', textAlign: 'center', padding: `${tx(2)}px ${tx(8)}px`, borderRadius: 2, font: `600 ${tx(17)}px ${MONO}`, background: white ? '#f1ebe1' : '#2a2320', color: white ? '#15100d' : '#f1ebe1' }}>{m.san}</span>
