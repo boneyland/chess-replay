@@ -2070,7 +2070,9 @@ for (const name of BROWSERS) for (const site of SITES) {
       assert.deepEqual(await wider(pp), [], 'no sideways scroll');
       await pp.screenshot({ path: path.join(OUT, host + '-sf-dialog-phone.png') });
       await pp.getByRole('button', { name: 'Cancel' }).click();
-      await pp.evaluate((s) => localStorage.setItem('chess-video.files.v1', s), stored);
+      // stored by the reloaded page itself, before its scripts read it: WebKit on GitHub sometimes reloaded before a
+      // setItem from the old page had landed, and showed the sample
+      await pp.addInitScript((s) => { try { localStorage.setItem('chess-video.files.v1', s); } catch (e) {} }, stored);
       await pp.reload({ waitUntil: 'load' });
       await assert.doesNotReject(pp.locator('.plabel').filter({ hasText: /^1… dxc4$/ }).waitFor({ timeout: 5000 }));
       await assert.doesNotReject(pp.getByText(/drops the queen/).waitFor({ timeout: 5000 }));
