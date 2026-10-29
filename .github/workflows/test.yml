@@ -6,7 +6,9 @@ name: test
 on:
   push:
     branches: ['**']
+    paths-ignore: ['docs/**', 'media/**', '*.md', 'LICENSE']
   pull_request:
+    paths-ignore: ['docs/**', 'media/**', '*.md', 'LICENSE']
 # the job only reads the repo
 permissions:
   contents: read
