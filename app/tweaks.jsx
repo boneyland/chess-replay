@@ -149,4 +149,4 @@ function TweakButton({ label, onClick, secondary = false, danger = false, disabl
   return info ? <div className="twk-btn-row">{el}<InfoTip info={info} label={label} /></div> : el;
 }
 
-Object.assign(window, { useTweaks, TweaksPanel, TweakSection, TweakSlider, TweakToggle, TweakRadio, TweakSelect, TweakButton });
+Object.assign(window, { useTweaks, TweaksPanel, TweakSection, InfoTip, TweakSlider, TweakToggle, TweakRadio, TweakSelect, TweakButton });

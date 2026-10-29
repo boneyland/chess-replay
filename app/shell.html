@@ -254,6 +254,7 @@ body:has(.stage-one) .twk-panel { bottom: calc(51px + env(safe-area-inset-bottom
 .twk-flow { display: flex; flex-direction: column; gap: 10px; }
 /* a scrolling flex column squeezes its children before it scrolls: a wrapped two-line button lost its second line */
 .twk-body > *, .twk-flow > * { flex-shrink: 0; }
+.twk-keep { display: flex; flex-direction: column; gap: 10px; }
 .twk-group { display: flex; flex-direction: column; gap: 10px; }
 .twk-flow > * + .twk-group { padding-top: 10px; }
 .twk-sect { font: 600 0.625rem var(--mono); letter-spacing: 0.14em; text-transform: uppercase; color: var(--accent); }
