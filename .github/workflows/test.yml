@@ -2,7 +2,11 @@
 # desktop and phone layouts in Chrome, Firefox and WebKit (iPhone Safari's engine), and real Chrome on an Android emulator.
 # The Python cross-check (tests/check_browser_json.py) is left out: it imports chess-animator, which needs Manim.
 name: test
-on: [push, pull_request]
+# branches only: a tag push starts nothing
+on:
+  push:
+    branches: ['**']
+  pull_request:
 # the job only reads the repo
 permissions:
   contents: read
