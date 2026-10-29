@@ -2414,9 +2414,10 @@ for (const name of BROWSERS) for (const site of SITES) {
           const board = drawn(find((n) => n.querySelectorAll('img').length >= 20));
           const bar = drawn(find((n) => n.offsetWidth < 60 && /^[+−]?\d+\.\d\d$/.test(n.textContent.trim())));
           const plot = drawn(find((n) => n.querySelector('svg > title') && /Click or drag/.test(n.querySelector('svg > title').textContent)));
+          // the stage's frame first: it makes the page's first html2canvas capture, which WebKit gets wrong unless warmed up
+          const b = document.createElement('canvas'); b.width = W; b.height = H; await stage.draw(b.getContext('2d'));
           const shot = await html2canvas(el, { scale: 1, width: W, height: H, logging: false, ignoreElements: skip(el), onclone: (d, c) => { c.style.transform = 'none'; } });
           const a = document.createElement('canvas'); a.width = W; a.height = H; a.getContext('2d').drawImage(shot, 0, 0);
-          const b = document.createElement('canvas'); b.width = W; b.height = H; await stage.draw(b.getContext('2d'));
           out.push({ t, board, bar, plot, letterSpacing: 'letterSpacing' in b.getContext('2d'), psnr: psnr(pixels(a), pixels(b)), old: a.toDataURL('image/png'), neu: b.toDataURL('image/png') });
         }
         stage.done();

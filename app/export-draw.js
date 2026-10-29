@@ -286,7 +286,11 @@
       paint(cx, n, place, scale);
       return { bmp: cv, x: x0 * scale, y: y0 * scale };
     };
+    let warm = false;
     const draw = async (cx) => {
+      // html2canvas's first capture in a page lays text out wrongly in WebKit (stray gaps between words, the Moves
+      // highlights missing); one thrown-away capture of the stage first, at the export's scale, and the rest come out right
+      if (!warm) { await html2canvas(root, { scale, backgroundColor: null, logging: false, ignoreElements: skip(root), onclone }); warm = true; }
       const R = root.getBoundingClientRect(), Z = R.width / root.offsetWidth || 1;
       // a box's place on the stage in its own (untransformed) CSS px
       const place = (n) => { const r = n.getBoundingClientRect(); return { x: (r.left - R.left) / Z, y: (r.top - R.top) / Z, w: r.width / Z, h: r.height / Z }; };
