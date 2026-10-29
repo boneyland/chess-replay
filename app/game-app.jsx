@@ -729,7 +729,7 @@ function GameApp() {
             <TweakSelect id="tw-clip-to" label="To" aria="Export to" value={clipToOpts.find((o) => o.i === clipTo).s} options={clipToOpts.map((o) => o.s)} onChange={(v) => setClip((c) => ({ ...c, to: clipToOpts.find((o) => o.s === v).i }))} />
           </div>
           <TweakButton label={`${webp ? 'Export animated WebP (' : 'Export video (MP4, '}${exportFps} fps, ${fmtLen(clipT.end - clipT.start)})`} disabled={video.busy} onClick={exportVideo} />
-          <div className="twk-note">Renders every frame in this tab: about {fmtLen(Math.ceil((clipT.end - clipT.start) * exportFps * 0.17))} for {clipSuffix ? 'these moves' : 'this game'}, longer on a phone. Higher frame rates are smoother but slower. Each move’s clip runs from just before it until the board settles. {webp ? 'No sound, and it loops; a smaller width or quality makes a smaller file.' : 'Includes move sounds when on.'} No camera push.</div>
+          <div className="twk-note">Renders every frame in this tab: about {fmtLen(Math.ceil((clipT.end - clipT.start) * exportFps * 0.04))} for {clipSuffix ? 'these moves' : 'this game'}, longer on a phone. Higher frame rates are smoother but slower. Each move’s clip runs from just before it until the board settles. {webp ? 'No sound, and it loops; a smaller width or quality makes a smaller file.' : 'Includes move sounds when on.'} No camera push.</div>
         </> },
         { id: 'sound', label: 'Sound', body: <>
           <TweakToggle id="tw-sound" label="Move sounds" value={t.sound !== false} onChange={(v) => setTweak('sound', v)} />

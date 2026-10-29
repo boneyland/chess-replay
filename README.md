@@ -61,7 +61,7 @@ Built into the page or served with it:
 
 Loaded from CDNs when the page runs:
 - [React](https://react.dev/) 18.3.1 (MIT)
-- [html2canvas-pro](https://github.com/yorickshan/html2canvas-pro) 2.5.0 by yorickshan (MIT), which draws each frame of an export
+- [html2canvas-pro](https://github.com/yorickshan/html2canvas-pro) 2.5.0 by yorickshan (MIT), which draws the panels of each export frame (the board, eval bar and graph are drawn by the page itself)
 - IBM Plex Sans, Instrument Serif, JetBrains Mono and Noto Sans Symbols 2, from Google Fonts (SIL Open Font License)
 
 Used to build it: [@babel/standalone](https://babeljs.io/docs/babel-standalone) 7.29.0 (MIT), which compiles the JSX.
