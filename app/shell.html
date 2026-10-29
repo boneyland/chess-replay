@@ -156,15 +156,16 @@ body:has(.stage-one) .twk-panel { bottom: calc(51px + env(safe-area-inset-bottom
 /* a screen held sideways: the menu is 560 px wide at most, Explore and Play side by side, the last row under Play
    (the folded menu shows in the wide layout too, as at 800×480, so this goes by orientation, not by stage class) */
 @media (orientation: landscape) {
-  .pmenu-open .dock-items { display: grid; grid-template-columns: 1fr 1fr; grid-template-areas: "st st" "load load" "ex pl" "ex tail"; align-items: start; width: min(560px, calc(100vw - 32px)); }
+  .pmenu-open .dock-items { display: grid; grid-template-columns: 1fr 1fr; grid-template-areas: "st st" "load load" "ex pl" "ex mo" "ex tail"; align-items: start; width: min(560px, calc(100vw - 32px)); }
   .pmenu .dock-menu-status { grid-area: st; max-width: none; }
   .pmenu .dock-primary { grid-area: load; }
   .pmenu .dock-group { display: flex; flex-direction: column; gap: 6px; }
   .pmenu .dock-group-explore { grid-area: ex; }
   .pmenu .dock-group-play { grid-area: pl; }
+  .pmenu .dock-group-more { grid-area: mo; }
   .pmenu .dock-icons { grid-area: tail; align-self: end; }
 }
-/* Play/Explore: a small menu above its dock button, its items under Explore and Play labels; on a phone they sit in the folded menu */
+/* Menu: a small menu above its dock button, its items under Explore, Play and More labels; on a phone they sit in the folded menu */
 .dock-new { position: relative; flex: none; }
 .dock-pop {
   position: absolute; z-index: 60; bottom: calc(100% + 12px); left: 0; display: flex; flex-direction: column; align-items: stretch; gap: 6px;
@@ -195,6 +196,23 @@ body:has(.stage-one) .twk-panel { bottom: calc(51px + env(safe-area-inset-bottom
 .fen-note { font: 0.75rem/1.45 var(--sans); color: var(--dim); }
 .fen-btns { display: flex; justify-content: flex-end; gap: 8px; }
 .fen-btns .twk-btn { min-height: 34px; padding: 4px 16px; }
+/* Keyboard shortcuts: groups of keys and what they do, scrolling inside the dialog */
+.fen-box:has(.keys-body) { width: min(640px, 100%); max-height: calc(100dvh - 32px); }
+.keys-body { display: flex; flex-direction: column; gap: 14px; overflow-y: auto; min-height: 0; }
+.keys-title { margin: 0 0 6px; font: 600 0.625rem var(--mono); letter-spacing: 0.14em; text-transform: uppercase; color: var(--accent); }
+.keys-list { display: grid; grid-template-columns: minmax(max-content, 11rem) 1fr; gap: 6px 14px; margin: 0; align-items: baseline; }
+.keys-list dt { display: flex; flex-wrap: wrap; gap: 4px; margin: 0; }
+.keys-list dd { margin: 0; font: 0.8125rem/1.4 var(--sans); color: var(--ink); }
+.keys-list kbd { padding: 1px 6px; border-radius: 3px; border: 1px solid var(--btn-line); background: var(--btn); color: var(--ink); font: 600 0.6875rem/1.5 var(--mono); }
+@media (min-width: 900px) {
+  .fen-box:has(.keys-body) { width: min(900px, 100%); }
+  .keys-body { display: block; columns: 2; column-gap: 28px; }
+  .keys-group { break-inside: avoid; margin-bottom: 14px; }
+  .keys-list { grid-template-columns: minmax(max-content, 8.5rem) 1fr; }
+}
+@media (max-width: 520px) { .keys-list { grid-template-columns: 1fr; gap: 2px; } .keys-list dd { margin-bottom: 6px; } }
+/* the folded menu's shortcuts item: no use on a touch screen */
+@media (hover: none) and (pointer: coarse) { .pmenu .dock-group-more { display: none; } }
 /* Play vs human's choices: a label over a segmented row */
 .play-row { display: flex; flex-direction: column; gap: 6px; }
 .play-label { font: 500 0.75rem var(--sans); color: var(--dim); }
