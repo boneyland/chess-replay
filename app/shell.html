@@ -265,10 +265,10 @@ body:has(.stage-one) .twk-panel { bottom: calc(51px + env(safe-area-inset-bottom
 .twk-tabs button:hover { color: var(--ink); }
 .twk-tabs button[aria-selected="true"] { color: var(--ink); background: color-mix(in srgb, var(--accent) 22%, transparent); box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--accent) 50%, transparent); }
 .twk-tabs button:focus-visible { outline: 2px solid var(--accent); outline-offset: 1px; }
-/* a phone on its side (or a short window): Settings is wide and reaches down to the transport bar, with its title, tabs
+/* a phone on its side (or a short or wide window): Settings is wide and reaches down to the transport bar, with its title, tabs
    and close button in one row and each tab's rows in two columns. The columns are an inner box of natural height that
    the body scrolls: a multi-column box of capped height adds columns past its right edge in Firefox */
-@media (max-height: 560px) and (min-width: 600px), (max-height: 499px) and (orientation: landscape) {
+@media (max-height: 560px) and (min-width: 600px), (max-height: 499px) and (orientation: landscape), (min-width: 900px) {
   body:has(.stage) .twk-panel.twk-tabbed { width: min(760px, calc(100% - 32px)); bottom: calc(52px + env(safe-area-inset-bottom, 0px)); height: calc(100% - 68px - env(safe-area-inset-bottom, 0px)); max-height: none; display: grid; grid-template-columns: auto 1fr auto; grid-template-rows: auto minmax(0, 1fr); align-items: center; }
   body:has(.stage) .twk-panel.twk-tabbed .twk-hd { display: contents; }
   body:has(.stage) .twk-panel.twk-tabbed .twk-hd b { grid-row: 1; grid-column: 1; padding: 0 4px 0 14px; }
@@ -282,6 +282,10 @@ body:has(.stage-one) .twk-panel { bottom: calc(51px + env(safe-area-inset-bottom
   body:has(.stage) .twk-panel.twk-tabbed .twk-btn { display: block; width: 100%; }
   /* the bar in the sidebar: 4 px margin, 34 px high */
   body:has(.stage.stage-short) .twk-panel.twk-tabbed { bottom: calc(44px + env(safe-area-inset-bottom, 0px)); height: calc(100% - 52px - env(safe-area-inset-bottom, 0px)); }
+}
+/* a wide, tall window: two columns as above, above the transport bar, no taller than the usual panel */
+@media (min-width: 900px) and (min-height: 561px) {
+  body:has(.stage) .twk-panel.twk-tabbed { bottom: calc(76px + env(safe-area-inset-bottom, 0px)); height: min(720px, calc(100% - 92px - env(safe-area-inset-bottom, 0px))); }
 }
 /* panels (Settings, Queen) open above the bar in the sidebar */
 body:has(.stage.stage-short) .twk-panel { bottom: calc(44px + env(safe-area-inset-bottom, 0px)); max-height: calc(100% - 52px); }

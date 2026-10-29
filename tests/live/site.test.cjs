@@ -335,13 +335,10 @@ for (const name of BROWSERS) for (const site of SITES) {
     await t.test('desktop: Settings scrolls with a mouse drag, and a drag selects no text', async () => {
       await page.setViewportSize({ width: 1440, height: 640 });
       await page.getByRole('button', { name: 'Settings' }).click();
-      const body = page.locator('.twk-body'), tabs = page.getByRole('tablist', { name: 'Settings' }).getByRole('tab');
-      let tall = false;
-      for (const tab of await tabs.all()) {
-        await tab.click();
-        if (await body.evaluate((el) => el.scrollHeight > el.clientHeight + 40)) { tall = true; break; }
-      }
-      assert.ok(tall, 'a Settings tab overflows');
+      const body = page.locator('.twk-body');
+      // in two columns no tab overflows at 640 px tall, so give the body some text to scroll
+      await body.evaluate((el) => { const p = document.createElement('p'); p.textContent = 'Settings text. '.repeat(400); el.appendChild(p); });
+      assert.ok(await body.evaluate((el) => el.scrollHeight > el.clientHeight + 40), 'Settings overflows');
       // pressed on text, not a control (a drag from a field or a slider is its own)
       const at = await body.evaluate((el) => {
         const r = el.getBoundingClientRect();
