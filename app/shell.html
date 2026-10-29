@@ -283,9 +283,9 @@ body:has(.stage-one) .twk-panel { bottom: calc(51px + env(safe-area-inset-bottom
   /* the bar in the sidebar: 4 px margin, 34 px high */
   body:has(.stage.stage-short) .twk-panel.twk-tabbed { bottom: calc(44px + env(safe-area-inset-bottom, 0px)); height: calc(100% - 52px - env(safe-area-inset-bottom, 0px)); }
 }
-/* a wide, tall window keeps the panel's usual corner and height; only the two-column layout above carries over */
+/* a wide, tall window: two columns as above, above the transport bar, no taller than the usual panel */
 @media (min-width: 900px) and (min-height: 561px) {
-  body:has(.stage) .twk-panel.twk-tabbed { bottom: calc(16px + env(safe-area-inset-bottom, 0px)); height: min(720px, calc(100% - 72px)); }
+  body:has(.stage) .twk-panel.twk-tabbed { height: min(720px, calc(100% - 68px - env(safe-area-inset-bottom, 0px))); }
 }
 /* panels (Settings, Queen) open above the bar in the sidebar */
 body:has(.stage.stage-short) .twk-panel { bottom: calc(44px + env(safe-area-inset-bottom, 0px)); max-height: calc(100% - 52px); }
