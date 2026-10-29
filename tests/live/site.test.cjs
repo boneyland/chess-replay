@@ -250,6 +250,8 @@ for (const name of BROWSERS) for (const site of SITES) {
     });
 
     await t.test('desktop: hovering a move of the Analysis best line previews it on the board, and leaving restores the board', async () => {
+      const g = await open(browser, { width: 1440, height: 900 });
+      const page = g.page, errors = g.errors, loaded = () => loadedOn(page);
       await page.goto(base, { waitUntil: 'load' });
       await loaded();
       const chips = page.locator('.mv[role="button"][title^="Show best line"]');
@@ -263,6 +265,7 @@ for (const name of BROWSERS) for (const site of SITES) {
       await page.mouse.move(5, 5);
       await page.waitForFunction((b) => [...document.querySelectorAll('img')].map((i) => i.getBoundingClientRect()).filter((r) => r.width > 10).map((r) => Math.round(r.left) + ',' + Math.round(r.top)).sort().join(';') === b, before, { timeout: 5000 });
       assert.deepEqual(errors, []);
+      await g.ctx.close();
     });
 
     await t.test('desktop: an own move gets a Stockfish verdict', async () => {
