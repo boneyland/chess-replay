@@ -18,9 +18,13 @@ const EXPORT_FORMATS = ['MP4', 'WebP'];
 // converted from the MP4, though it is larger than the MP4 of the same clip
 const WEBP_WIDTHS = [1676, 1280, 960, 838, 640];
 const WEBP_QUALITY = { min: 50, max: 100, step: 5 };
-// MP4 quality: Mediabunny's bitrate presets, which scale with the frame's size and rate
-const MP4_QUALITIES = ['Very low', 'Low', 'Medium', 'High', 'Very high'];
-const mp4Bitrate = (MB, q) => MB[{ 'Very low': 'QUALITY_VERY_LOW', Low: 'QUALITY_LOW', Medium: 'QUALITY_MEDIUM', 'Very high': 'QUALITY_VERY_HIGH' }[q] || 'QUALITY_HIGH'];
+// MP4 quality: Mediabunny's quality levels as a target bitrate, which scales with the frame's size and rate. Left to
+// itself Mediabunny asks an encoder that offers it for a per-frame quantizer instead, and Firefox's H.264 encoder takes
+// that mode but ignores the quantizer: every quality gave the same file. preferBitrate keeps every browser on the bitrate.
+// No Very high: a stage is mostly still, and High already reaches what the encoders do with it (a 1440×900 clip came
+// out the same size at both, 58–63 dB apart); a saved Very high falls back to High
+const MP4_QUALITIES = ['Very low', 'Low', 'Medium', 'High'];
+const mp4Bitrate = (MB, q) => new MB.Quality({ quality: { 'Very low': 'very-low', Low: 'low', Medium: 'medium' }[q] || 'high', preferBitrate: true });
 // libwebp 1.1.0 built to WebAssembly (Squoosh's codec, as packaged in @jsquash/webp 1.5.0), served next to the page.
 // The browser's own encoder (canvas.toBlob) takes only a quality, and at most qualities it sometimes chose a strong deblocking
 // filter for a frame, smearing the board's square edges and the text for that one frame. Here the filter is off, so
