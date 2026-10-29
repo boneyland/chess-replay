@@ -154,10 +154,11 @@ function SideScroll({ style, children }) {
       style={{ ...style, whiteSpace: 'nowrap', overflowX: 'auto', overflowY: 'hidden', scrollbarWidth: 'none', touchAction: 'pan-x pan-y', WebkitMaskImage: fade, maskImage: fade }}>{children}</span>
   );
 }
+// info: a node beside the title (an InfoTip); not part of the title's own text, which the live tests look panels up by
 // extra: a node after right that never scrolls with it (Analysis: Go deeper beside the search's depth)
 // head: the title row's own contents, in place of title, right and extra (the Analysis panel's)
 // progress: 0–1, drawn along the top border (the Analysis panel's while Stockfish searches); null draws none
-function Panel({ box, title, right, extra, head, a, style, progress, tight, children }) {
+function Panel({ box, title, info, right, extra, head, a, style, progress, tight, children }) {
   const { x, y, w, h } = box;
   // the entrance slide only while it fades in (a video's): a settled panel has no transform. A flowing panel (a paused
   // one-column page) takes its place in the view's column, as tall as its contents
@@ -171,7 +172,7 @@ function Panel({ box, title, right, extra, head, a, style, progress, tight, chil
     <div style={{ ...place, background: C.panel, border: `1px solid ${C.line}`, padding: tight && tightAn() ? `${tx(L.pad[0] * 0.6)}px ${tx(L.pad[1])}px` : panelPad(), ...(box.scroll && { overflowY: 'auto', scrollbarWidth: 'thin' }), ...style }}>
       {(title || head) && (
         <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: tx(16), font: `600 ${tx(15)}px ${MONO}`, letterSpacing: '0.12em', textTransform: 'uppercase', color: C.dim, marginBottom: tight ? anGap(12) : tx(12) }}>
-          {head || <><span style={{ flex: '0 1 auto', minWidth: 0, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{title}</span><SideScroll style={{ minWidth: 0, flex: 1, textAlign: 'right', letterSpacing: '0.04em' }}>{right}</SideScroll>{extra}</>}
+          {head || <><span style={{ flex: '0 1 auto', minWidth: 0, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{title}</span>{info && <span style={{ flex: 'none', marginLeft: -tx(8) }}>{info}</span>}<SideScroll style={{ minWidth: 0, flex: 1, textAlign: 'right', letterSpacing: '0.04em' }}>{right}</SideScroll>{extra}</>}
         </div>
       )}
       {children}
@@ -621,7 +622,7 @@ function MoveList({ M, T, S, a, paused, onPick }) {
     );
   }
   return (
-    <Panel box={L.moves} a={a} tight title={<>Moves<InfoTip label="Moves" info="Drag or tap a piece to try your own moves; click a move in Moves to jump to it." /></>}>
+    <Panel box={L.moves} a={a} tight title="Moves" info={paused && <InfoTip label="Moves" info="Drag or tap a piece to try your own moves; click a move in Moves to jump to it." />}>
       <div ref={listRef} className="moves-list" style={{ position: 'relative', height: listH ?? 'auto', maxHeight: listH == null ? L.moves.maxRows * ROW : undefined, overflowY: 'auto', scrollbarWidth: 'thin' }}>
         <div style={{ display: 'flex', flexWrap: 'wrap', alignItems: 'center', columnGap: GAP, rowGap: ROW - CHIP, padding: 4 }}>{moves}</div>
       </div>
