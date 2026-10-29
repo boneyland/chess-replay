@@ -557,7 +557,7 @@ function GameApp() {
   const newGroups = [{ label: 'Explore', items: [{ label: 'Starting position', run: newBoard }, { label: 'Edit position', run: editPosition }, { label: 'Paste PGN', run: pastePgn }, { label: 'Copy FEN', run: copyFen }] },
     { label: 'Play', items: [{ label: 'Play vs human', run: playHuman }, { label: 'Play vs Stockfish', run: playSf }, { label: 'My games', run: myGames }] },
     // Ask Queen sits here on the wide layouts; the folded menu keeps it in its last row. The folded menu's shortcuts item is hidden on a touch screen
-    { label: 'More', items: [...(!phone && !board ? [{ label: 'Ask Queen', cls: 'dock-queen', run: () => { setNewMenu(false); askQueen(); } }] : []), { label: 'Keyboard shortcuts', run: openKeys }] }];
+    { label: 'More', items: [{ label: 'Keyboard shortcuts', run: openKeys }, ...(!phone && !board ? [{ label: 'Ask Queen', cls: 'dock-queen', run: () => { setNewMenu(false); askQueen(); } }] : [])] }];
   const newItems = newGroups.map((g) => <div key={g.label} className={`dock-group dock-group-${g.label.toLowerCase()}`}>
     <span className="dock-menu-label">{g.label}</span>
     {g.items.map((it) => <button key={it.label} type="button" className={it.cls ? 'dock-btn ' + it.cls : 'dock-btn'} onClick={it.run}>{it.label}</button>)}
