@@ -1762,9 +1762,12 @@ for (const name of BROWSERS) for (const site of SITES) {
       await p.goto(base, { waitUntil: 'load' });
       await loadedOn(p);
       await p.setInputFiles('#game-files', { name: 'promo.pgn', mimeType: 'text/plain', buffer: Buffer.from('1. e4 d5 2. exd5 c6 3. dxc6 Qd6 4. cxb7 Qd5 *') });
-      await assert.doesNotReject(p.getByRole('button', { name: 'Play (space)' }).waitFor({ timeout: 5000 }));
+      // the sample game already shows Play: wait for the file's moves, or the arrows step the sample
+      // (WebKit on GitHub read 2. g3, the sample's third move)
+      await p.waitForFunction(() => /Qd5/.test(document.body.innerText), null, { timeout: 10000 });
       for (let i = 0; i < 3; i++) await p.keyboard.press('ArrowRight');
-      const before = await label.innerText();
+      const before = '2. exd5';
+      await assert.doesNotReject(label.filter({ hasText: /^2\. exd5$/ }).waitFor({ timeout: 5000 }));
       await p.getByRole('button', { name: 'Menu', exact: true }).click();
       await p.getByRole('button', { name: 'Starting position' }).click();
       await assert.doesNotReject(p.getByRole('button', { name: 'Play (space)' }).waitFor({ state: 'detached', timeout: 5000 }));
@@ -1772,7 +1775,7 @@ for (const name of BROWSERS) for (const site of SITES) {
       await p.getByRole('button', { name: 'Settings' }).click();
       await p.getByRole('button', { name: 'Back to the loaded game' }).click();
       await assert.doesNotReject(p.getByRole('button', { name: 'Play (space)' }).waitFor({ timeout: 5000 }));
-      assert.equal(await label.innerText(), before);
+      await assert.doesNotReject(label.filter({ hasText: /^2\. exd5$/ }).waitFor({ timeout: 5000 }), 'back at ' + before);
       assert.deepEqual(g.errors, []);
       await g.ctx.close();
     });
