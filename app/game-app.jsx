@@ -456,7 +456,8 @@ function GameApp() {
   React.useLayoutEffect(() => { document.documentElement.style.setProperty('--text', String(LayoutCore.textScale(t.textSize))); }, [t.textSize]);
   React.useEffect(() => { if (t.webpSize !== undefined) { setTweak('webpWidth', t.webpSize === 'Full' ? 0 : 'Half'); setTweak('webpSize', undefined); } }, []);
   const webpQuality = Math.min(WEBP_QUALITY.max, Math.max(WEBP_QUALITY.min, +t.webpQuality || 75));
-  const video = useVideoExport({ fps: exportFps, format: exportFormat, webp: { width: webpWidth, quality: webpQuality }, stem: fileStem, save: (name, blob) => saveFile(name, blob, blob.type) });
+  const mp4Quality = MP4_QUALITIES.includes(t.mp4Quality) ? t.mp4Quality : 'High';
+  const video = useVideoExport({ fps: exportFps, format: exportFormat, webp: { width: webpWidth, quality: webpQuality }, mp4Quality, stem: fileStem, save: (name, blob) => saveFile(name, blob, blob.type) });
   busyRef.current = video.busy;
   // the stretch to export, in plies: from -1 starts on the title card, to N (the ply count) ends after the end card
   const [clip, setClip] = React.useState({ from: -1, to: Infinity });
@@ -721,15 +722,16 @@ function GameApp() {
           <TweakRadio id="tw-format" label="Export as" value={exportFormat} options={EXPORT_FORMATS} onChange={(v) => setTweak('exportFormat', v)} />
           {webp && <>
             <TweakSelect id="tw-webp-width" label="WebP width" value={webpPx(webpWidth)} options={webpWidths.map(webpPx)} onChange={(v) => setTweak('webpWidth', webpWidths.find((x) => webpPx(x) === v))} />
-            <TweakSlider id="tw-webp-q" label="WebP quality" value={webpQuality} min={WEBP_QUALITY.min} max={WEBP_QUALITY.max} step={WEBP_QUALITY.step} onChange={(v) => setTweak('webpQuality', v)} />
+            <TweakSlider id="tw-webp-q" label="WebP quality" value={webpQuality} min={WEBP_QUALITY.min} max={WEBP_QUALITY.max} step={WEBP_QUALITY.step} format={(v) => (v >= 100 ? 'Lossless' : v)} onChange={(v) => setTweak('webpQuality', v)} />
           </>}
+          {!webp && <TweakSelect id="tw-mp4-q" label="MP4 quality" value={mp4Quality} options={MP4_QUALITIES} onChange={(v) => setTweak('mp4Quality', v)} />}
           <TweakSelect id="tw-fps" label="Export frame rate" value={exportFps + ' fps'} options={EXPORT_FPS_OPTIONS.map((f) => f + ' fps')} onChange={(v) => setTweak('exportFps', parseInt(v, 10))} />
           <div className="twk-pair">
             <TweakSelect id="tw-clip-from" label="From" aria="Export from" value={clipFromOpts.find((o) => o.i === clipFrom).s} options={clipFromOpts.map((o) => o.s)} onChange={(v) => setClip((c) => ({ ...c, from: clipFromOpts.find((o) => o.s === v).i }))} />
             <TweakSelect id="tw-clip-to" label="To" aria="Export to" value={clipToOpts.find((o) => o.i === clipTo).s} options={clipToOpts.map((o) => o.s)} onChange={(v) => setClip((c) => ({ ...c, to: clipToOpts.find((o) => o.s === v).i }))} />
           </div>
           <TweakButton label={`${webp ? 'Export animated WebP (' : 'Export video (MP4, '}${exportFps} fps, ${fmtLen(clipT.end - clipT.start)})`} disabled={video.busy} onClick={exportVideo} />
-          <div className="twk-note">Renders every frame in this tab: about {fmtLen(Math.ceil((clipT.end - clipT.start) * exportFps * 0.04))} for {clipSuffix ? 'these moves' : 'this game'}, longer on a phone. Higher frame rates are smoother but slower. Each move’s clip runs from just before it until the board settles. {webp ? 'No sound, and it loops; a smaller width or quality makes a smaller file.' : 'Includes move sounds when on.'} No camera push.</div>
+          <div className="twk-note">Renders every frame in this tab: about {fmtLen(Math.ceil((clipT.end - clipT.start) * exportFps * 0.04))} for {clipSuffix ? 'these moves' : 'this game'}, longer on a phone. Higher frame rates are smoother but slower. Each move’s clip runs from just before it until the board settles. {webp ? 'No sound, and it loops; a smaller width or quality makes a smaller file, and Lossless a much larger one.' : 'Includes move sounds when on; a lower quality makes a smaller file.'} No camera push.</div>
         </> },
         { id: 'sound', label: 'Sound', body: <>
           <TweakToggle id="tw-sound" label="Move sounds" value={t.sound !== false} onChange={(v) => setTweak('sound', v)} />

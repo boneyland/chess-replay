@@ -131,3 +131,12 @@ test('the WebP config keeps a patch sharp where the default filter blurs it', as
   // where the filter doesn't blur, leaving it off costs well under 1 dB
   for (const q of [50, 70, 80, 95]) assert.ok(quality({ quality: q }) > quality({ quality: q, filter_strength: 60 }) - 0.6, 'quality ' + q);
 });
+
+test('the top WebP quality is lossless: a VP8L still that decodes to the same pixels', async () => {
+  const enc = await encoder(), dec = await decoder();
+  const WEBP_LOSSLESS = Function('return ' + fs.readFileSync(path.join(ROOT, 'app', 'export.jsx'), 'utf8').match(/const WEBP_LOSSLESS = (\{[\s\S]*?\});/)[1])();
+  const src = dec.decode(new Uint8Array(fs.readFileSync(path.join(__dirname, 'fixtures', 'webp-blur.webp'))));
+  const still = enc.encode(src.data, src.width, src.height, { ...WEBP_CONFIG, quality: 100, ...WEBP_LOSSLESS });
+  assert.equal(Buffer.from(still).toString('ascii', W.stillImage(still).offset, W.stillImage(still).offset + 4), 'VP8L');
+  assert.deepEqual(Buffer.from(dec.decode(still).data), Buffer.from(src.data));
+});
