@@ -2074,7 +2074,13 @@ for (const name of BROWSERS) for (const site of SITES) {
       // setItem from the old page had landed, and showed the sample
       await pp.addInitScript((s) => { try { localStorage.setItem('chess-video.files.v1', s); } catch (e) {} }, stored);
       await pp.reload({ waitUntil: 'load' });
-      await assert.doesNotReject(pp.locator('.plabel').filter({ hasText: /^1… dxc4$/ }).waitFor({ timeout: 5000 }));
+      // the app mounted (loadedOn's 32 pieces aren't on this board): WebKit on GitHub can take longer than 5 s after load
+      await pp.locator('.dock-primary').waitFor({ state: 'attached' });
+      await pp.locator('.plabel').filter({ hasText: /^1… dxc4$/ }).waitFor({ timeout: 10000 }).catch(async (e) => {
+        await pp.screenshot({ path: path.join(OUT, host + '-sf-reload-failed.png') });
+        const seen = await pp.evaluate(() => ({ labels: [...document.querySelectorAll('.plabel')].map((l) => l.innerText), stored: (localStorage.getItem('chess-video.files.v1') || '').slice(0, 120) }));
+        assert.fail(`no 1… dxc4 after the reload: ${JSON.stringify(seen)}\n${e.message}`);
+      });
       await assert.doesNotReject(pp.getByText(/drops the queen/).waitFor({ timeout: 5000 }));
       assert.deepEqual(await wider(pp), [], 'no sideways scroll');
       await pp.screenshot({ path: path.join(OUT, host + '-sf-blunder-phone.png') });
