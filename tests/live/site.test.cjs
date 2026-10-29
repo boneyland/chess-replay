@@ -249,6 +249,25 @@ for (const name of BROWSERS) for (const site of SITES) {
       assert.ok(await home.isDisabled(), 'Home is disabled back at the start');
     });
 
+    await t.test('desktop: hovering a move of the Analysis best line previews it on the board, and leaving restores the board', async () => {
+      const g = await open(browser, { width: 1440, height: 900 });
+      const page = g.page, errors = g.errors, loaded = () => loadedOn(page);
+      await page.goto(base, { waitUntil: 'load' });
+      await loaded();
+      const chips = page.locator('.mv[role="button"][title^="Show best line"]');
+      for (let i = 0; i < 20 && !(await chips.count()); i++) await page.keyboard.press('ArrowRight');
+      assert.ok(await chips.count() > 1, 'a move with a best line of two or more moves');
+      const sig = () => page.evaluate(() => [...document.querySelectorAll('img')].map((i) => i.getBoundingClientRect()).filter((r) => r.width > 10).map((r) => Math.round(r.left) + ',' + Math.round(r.top)).sort().join(';'));
+      const before = await sig();
+      await chips.nth(1).hover();
+      await page.waitForFunction((b) => [...document.querySelectorAll('img')].map((i) => i.getBoundingClientRect()).filter((r) => r.width > 10).map((r) => Math.round(r.left) + ',' + Math.round(r.top)).sort().join(';') !== b, before, { timeout: 5000 });
+      await page.screenshot({ path: path.join(OUT, host + '-line-hover.png') });
+      await page.mouse.move(5, 5);
+      await page.waitForFunction((b) => [...document.querySelectorAll('img')].map((i) => i.getBoundingClientRect()).filter((r) => r.width > 10).map((r) => Math.round(r.left) + ',' + Math.round(r.top)).sort().join(';') === b, before, { timeout: 5000 });
+      assert.deepEqual(errors, []);
+      await g.ctx.close();
+    });
+
     await t.test('desktop: an own move gets a Stockfish verdict', async () => {
       const b = await boardBox(page);
       const from = square(b, 'e2'), to = square(b, 'e4');
@@ -1670,6 +1689,25 @@ for (const name of BROWSERS) for (const site of SITES) {
       await ph.page.screenshot({ path: path.join(OUT, host + '-explorer-phone.png') });
       assert.deepEqual(ph.errors, []);
       await ph.ctx.close();
+    });
+    await t.test('desktop: hovering a move of the free board\'s best line previews it, and leaving restores the board', async () => {
+      const g = await open(browser, { width: 1440, height: 900 });
+      const p = g.page;
+      await p.goto(base, { waitUntil: 'load' });
+      await loadedOn(p);
+      await p.getByRole('button', { name: 'Play/Explore' }).click();
+      await p.getByRole('button', { name: 'Starting position' }).click();
+      const chips = p.locator('.mv[role="button"][title^="Show stockfish’s best line"]');
+      await assert.doesNotReject(chips.nth(1).waitFor({ timeout: 45000 }));
+      const sig = () => p.evaluate(() => [...document.querySelectorAll('img')].map((i) => i.getBoundingClientRect()).filter((r) => r.width > 10).map((r) => Math.round(r.left) + ',' + Math.round(r.top)).sort().join(';'));
+      const before = await sig();
+      await chips.nth(1).hover();
+      await p.waitForFunction((b) => [...document.querySelectorAll('img')].map((i) => i.getBoundingClientRect()).filter((r) => r.width > 10).map((r) => Math.round(r.left) + ',' + Math.round(r.top)).sort().join(';') !== b, before, { timeout: 5000 });
+      await p.screenshot({ path: path.join(OUT, host + '-free-line-hover.png') });
+      await p.mouse.move(5, 5);
+      await p.waitForFunction((b) => [...document.querySelectorAll('img')].map((i) => i.getBoundingClientRect()).filter((r) => r.width > 10).map((r) => Math.round(r.left) + ',' + Math.round(r.top)).sort().join(';') === b, before, { timeout: 5000 });
+      assert.deepEqual(g.errors, []);
+      await g.ctx.close();
     });
     await t.test('desktop: the start shows Stockfish\'s eval and best line, and the board\'s moves replay as a game', async () => {
       const g = await open(browser, { width: 1440, height: 900 });
