@@ -26,6 +26,7 @@ const units = [
   ['sfx-core.js', read(path.join(app, 'sfx-core.js'))],
   ['drag-scroll.js', read(path.join(app, 'drag-scroll.js'))],
   ['webp-core.js', read(path.join(app, 'webp-core.js'))],
+  ['export-draw.js', read(path.join(app, 'export-draw.js'))],
   ['sample-game.js', read(path.join(src, 'sample-game.js'))],
   ['game-data.js', read(path.join(src, 'game-data.js'))],
   ['sample-analysis.js', read(path.join(app, 'sample-analysis.js'))],

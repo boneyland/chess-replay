@@ -1,5 +1,6 @@
 // ---------- video export ----------
-// Steps the player through every frame, draws the stage into a canvas with html2canvas-pro and encodes it in
+// Steps the player through every frame, draws the stage into a canvas (export-draw.js: the board, the eval bar and the
+// graph drawn there, the other layers with html2canvas-pro, each only when it changes) and encodes it in
 // the browser: an MP4 (WebCodecs, muxed by Mediabunny), or an animated WebP (each frame a still WebP from libwebp,
 // joined by webp-core.js). The libraries load on the first export only: html2canvas-pro from the CDN, Mediabunny and
 // libwebp from the site.
@@ -139,7 +140,7 @@ function useVideoExport({ fps, format, webp, mp4Quality, save, stem }) {
     if (state && state.phase !== 'error') return;
     stopRef.current = false;
     setState({ phase: 'load', done: 0, N: 0 });
-    let enc = null;
+    let enc = null, stage = null;
     try {
       const html2canvas = await loadHtml2canvas();
       // the stage is in its screen-sized video layout once the busy state has rendered: wait a frame, then draw it from
@@ -158,28 +159,28 @@ function useVideoExport({ fps, format, webp, mp4Quality, save, stem }) {
       // html2canvas copies the whole document every frame: leave out the scripts (the page inlines its sounds
       // and opening tables) and the page around the stage, but keep the head and every stylesheet (fonts and base styles)
       const keep = (n) => n.tagName === 'STYLE' || n.tagName === 'LINK' || n.tagName === 'HEAD' || n.closest('head');
-      const skip = (n) => n.tagName === 'SCRIPT' || (!keep(n) && n !== el && !n.contains(el) && !el.contains(n));
+      const skip = (target) => (n) => n.tagName === 'SCRIPT' || (!keep(n) && n !== target && !n.contains(target) && !target.contains(n));
+      // the stage drawn layer by layer, each redrawn only when its markup changes (export-draw.js)
+      stage = window.ExportDraw.compositor(el, { W, H, scale: W / cssW, html2canvas, skip });
       const N = Math.floor((end - start) * fps) + 1, t0 = performance.now();
       let prev = null;
       for (let i = 0; i < N; i++) {
-        if (stopRef.current) { await enc.cancel(); setState(null); return; }
+        if (stopRef.current) { await enc.cancel(); stage.done(); setState(null); return; }
         seekStage(start + i / fps);
         // a frame whose markup matches the last one (holds, the title and end cards) reuses the canvas as it is
         const html = el.innerHTML, isNew = html !== prev;
-        if (isNew) {
-          const shot = await html2canvas(el, { scale, width: cssW, height: cssH, logging: false, ignoreElements: skip, onclone: (doc, c) => { c.style.transform = 'none'; } });
-          cx.clearRect(0, 0, W, H); cx.drawImage(shot, 0, 0, W, H);
-          prev = html;
-        }
+        if (isNew) { await stage.draw(cx); prev = html; }
         await enc.frame(isNew);
         const per = (performance.now() - t0) / (i + 1);
         setState({ phase: 'render', done: i + 1, N, eta: per * (N - i - 1) / 1000 });
       }
+      stage.done();
       setState({ phase: 'save', done: N, N });
       const { blob, ext } = await enc.finish();
       await save(stem + suffix + ext, blob);
       setState(null);
     } catch (e) {
+      if (stage) stage.done();
       try { if (enc) await enc.cancel(); } catch (_) {}
       setState({ phase: 'error', msg: 'Export failed: ' + ((e && e.message) || e) });
     }
