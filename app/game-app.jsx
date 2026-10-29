@@ -684,13 +684,11 @@ function GameApp() {
               <div className="twk-note">Drag or tap a piece to play a move, for either side; Stockfish rates each one.</div>
               <TweakToggle id="tw-flip" label="Flip board" value={!!t.flip} onChange={(v) => setTweak('flip', v)} />
             </> : <>
-              <div className="twk-note">Drag or tap a piece to try your own moves; click a move in Moves to jump to it.</div>
               <TweakToggle id="tw-flip" label="Flip board" value={!!t.flip} onChange={(v) => setTweak('flip', v)} />
               <TweakToggle id="tw-arrows" label="Best-move arrows" value={t.bestArrows} onChange={(v) => setTweak('bestArrows', v)} />
               <TweakToggle id="tw-push" label="Camera push on blunders" value={t.cameraPush} onChange={(v) => setTweak('cameraPush', v)} />
               <TweakToggle id="tw-glow" label="Red glow on blunders and mates" value={t.blunderGlow !== false} onChange={(v) => setTweak('blunderGlow', v)} />
-              <TweakToggle id="tw-queen" label="Queen in the video" value={queenInVideo} onChange={(v) => setTweak('queenInVideo', v)} />
-              <div className="twk-note">Shows Queen’s comments and lines on the moves it has analysed; those moves stay on screen longer.</div>
+              <TweakToggle id="tw-queen" label="Queen in the video" info="Shows Queen’s comments and lines on the moves it has analysed; those moves stay on screen longer." value={queenInVideo} onChange={(v) => setTweak('queenInVideo', v)} />
             </>}
           </TweakSection>
           {!board && <TweakSection label="Pace">
@@ -702,8 +700,10 @@ function GameApp() {
         </> },
         { id: 'online', label: 'Online', body: <>
           <TweakToggle id="tw-tablebase" label="Endgame tablebase (7 pieces or fewer)" info="Positions with 7 pieces or fewer go to Lichess’s tablebase (tablebase.lichess.ovh) for the result with best play and every move ranked by it: in the Analysis panel and the eval bar (tagged TB), while the replay is paused and on the free board, never during a game. “Analyse with Stockfish” takes them from it too, and rates those moves by whether they keep the win or the draw. Nothing is sent with this off." value={t.tablebase !== false} onChange={(v) => setTweak('tablebase', v)} />
-          <TweakToggle id="tw-cloud" label="Lichess cloud evaluation" info="The positions Stockfish searches for your moves (the free board, moves you try in the replay) also go to Lichess’s cloud (lichess.org/api/cloud-eval), which has deep evaluations of many positions: whichever answer comes first shows, the deeper one replacing it, labelled “cloud depth”; Go deeper on a move of a loaded analysis asks it too. Never for “Analyse with Stockfish” or in a game. Nothing is sent with this off." value={t.cloudEval === true} onChange={(v) => setTweak('cloudEval', v)} />
-          {t.cloudEval === true && <TweakToggle id="tw-cloud-prefer" label="Prefer cloud" info="Skips the search in your browser where the cloud is at least as deep as its depth limit (30 with No limit)." value={t.cloudPrefer === true} onChange={(v) => setTweak('cloudPrefer', v)} />}
+          <div className="twk-keep">
+            <TweakToggle id="tw-cloud" label="Lichess cloud evaluation" info="The positions Stockfish searches for your moves (the free board, moves you try in the replay) also go to Lichess’s cloud (lichess.org/api/cloud-eval), which has deep evaluations of many positions: whichever answer comes first shows, the deeper one replacing it, labelled “cloud depth”; Go deeper on a move of a loaded analysis asks it too. Never for “Analyse with Stockfish” or in a game. Nothing is sent with this off." value={t.cloudEval === true} onChange={(v) => setTweak('cloudEval', v)} />
+            {t.cloudEval === true && <TweakToggle id="tw-cloud-prefer" label="Prefer cloud" info="Skips the search in your browser where the cloud is at least as deep as its depth limit (30 with No limit)." value={t.cloudPrefer === true} onChange={(v) => setTweak('cloudPrefer', v)} />}
+          </div>
           <ExplorerSettings t={t} setTweak={setTweak} />
         </> },
         !board && { id: 'commentary', label: 'Commentary', body: <>

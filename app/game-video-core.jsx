@@ -621,7 +621,7 @@ function MoveList({ M, T, S, a, paused, onPick }) {
     );
   }
   return (
-    <Panel box={L.moves} a={a} tight title="Moves">
+    <Panel box={L.moves} a={a} tight title={<>Moves<InfoTip label="Moves" info="Drag or tap a piece to try your own moves; click a move in Moves to jump to it." /></>}>
       <div ref={listRef} className="moves-list" style={{ position: 'relative', height: listH ?? 'auto', maxHeight: listH == null ? L.moves.maxRows * ROW : undefined, overflowY: 'auto', scrollbarWidth: 'thin' }}>
         <div style={{ display: 'flex', flexWrap: 'wrap', alignItems: 'center', columnGap: GAP, rowGap: ROW - CHIP, padding: 4 }}>{moves}</div>
       </div>
