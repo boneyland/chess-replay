@@ -285,7 +285,7 @@ body:has(.stage-one) .twk-panel { bottom: calc(51px + env(safe-area-inset-bottom
 }
 /* a wide, tall window: two columns as above, above the transport bar, no taller than the usual panel */
 @media (min-width: 900px) and (min-height: 561px) {
-  body:has(.stage) .twk-panel.twk-tabbed { height: min(720px, calc(100% - 68px - env(safe-area-inset-bottom, 0px))); }
+  body:has(.stage) .twk-panel.twk-tabbed { bottom: calc(76px + env(safe-area-inset-bottom, 0px)); height: min(720px, calc(100% - 92px - env(safe-area-inset-bottom, 0px))); }
 }
 /* panels (Settings, Queen) open above the bar in the sidebar */
 body:has(.stage.stage-short) .twk-panel { bottom: calc(44px + env(safe-area-inset-bottom, 0px)); max-height: calc(100% - 52px); }
