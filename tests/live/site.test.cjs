@@ -2417,18 +2417,21 @@ for (const name of BROWSERS) for (const site of SITES) {
           const shot = await html2canvas(el, { scale: 1, width: W, height: H, logging: false, ignoreElements: skip(el), onclone: (d, c) => { c.style.transform = 'none'; } });
           const a = document.createElement('canvas'); a.width = W; a.height = H; a.getContext('2d').drawImage(shot, 0, 0);
           const b = document.createElement('canvas'); b.width = W; b.height = H; await stage.draw(b.getContext('2d'));
-          out.push({ t, board, bar, plot, letterSpacing: 'letterSpacing' in b.getContext('2d'), psnr: psnr(pixels(a), pixels(b)) });
+          out.push({ t, board, bar, plot, letterSpacing: 'letterSpacing' in b.getContext('2d'), psnr: psnr(pixels(a), pixels(b)), old: a.toDataURL('image/png'), neu: b.toDataURL('image/png') });
         }
         stage.done();
         return out;
       });
+      // both pictures of each frame, to see what differs where it fails
+      for (const f of got) for (const [k, v] of [['html2canvas', f.old], ['drawn', f.neu]]) fs.writeFileSync(path.join(OUT, `${host}-export-frame-${f.t}-${k}.png`), Buffer.from(v.split(',')[1], 'base64'));
+      const all = got.map((f) => `${f.t} s ${f.psnr.toFixed(2)} dB`).join(', ');
       for (const f of got) {
         assert.equal(f.board, 'drawn', `the board at ${f.t} s`);
         assert.equal(f.bar, 'drawn', `the eval bar at ${f.t} s`);
         // the graph's WHITE and BLACK are letter-spaced, which canvas can't do everywhere (WebKit): html2canvas's there
         if (f.letterSpacing) assert.equal(f.plot, 'drawn', `the graph at ${f.t} s`);
         // the text lands within a pixel and the board gets its shadow, which html2canvas leaves out: 31–34 dB measured
-        assert.ok(f.psnr > 28, `the frame at ${f.t} s matches html2canvas's: ${f.psnr.toFixed(2)} dB`);
+        assert.ok(f.psnr > 28, `the frame at ${f.t} s matches html2canvas's (${all})`);
       }
       assert.deepEqual(dk.errors, []);
       await dk.ctx.close();
