@@ -2394,6 +2394,51 @@ for (const name of BROWSERS) for (const site of SITES) {
       await ph.ctx.close();
     });
 
+    // MP4 export: the default is constant frame rate (every sample the same length); Variable frame rate drops the frames
+    // that didn't change (the title card, the settled board) and holds the one before, so the same clip is as long but
+    // has fewer, uneven samples
+    await t.test('desktop: a variable frame rate MP4 holds unchanged frames', { timeout: 240000 }, async () => {
+      const dk = await open(browser, { width: 1440, height: 900 });
+      await dk.page.goto(base, { waitUntil: 'load' });
+      await loadedOn(dk.page);
+      const p = dk.page, settings = p.getByRole('button', { name: 'Settings' });
+      if (!(await settings.isVisible())) await p.getByRole('button', { name: 'Menu' }).click();
+      await settings.click();
+      await p.getByRole('tab', { name: 'Export' }).click();
+      await p.locator('#tw-fps').selectOption('8 fps');
+      // the samples of an MP4's video track: its stts box, as [count, delta] pairs, and the media timescale (mdhd)
+      const samples = (buf) => {
+        const at = buf.indexOf('stts', 0, 'ascii'), n = buf.readUInt32BE(at + 8), out = [];
+        for (let k = 0; k < n; k++) out.push([buf.readUInt32BE(at + 12 + 8 * k), buf.readUInt32BE(at + 16 + 8 * k)]);
+        return { out, count: out.reduce((a, [c]) => a + c, 0), ticks: out.reduce((a, [c, d]) => a + c * d, 0) };
+      };
+      const exportMp4 = async (tag) => {
+        const [dl] = await Promise.all([p.waitForEvent('download', { timeout: 200000 }), p.getByRole('button', { name: /^Export video \(MP4/ }).click()]);
+        const file = path.join(OUT, `${host}-${tag}.mp4`);
+        await dl.saveAs(file);
+        await p.getByRole('dialog', { name: 'Exporting' }).waitFor({ state: 'detached', timeout: 5000 });
+        return fs.readFileSync(file);
+      };
+      await p.locator('#tw-clip-from').selectOption({ index: 0 });
+      await p.locator('#tw-clip-to').selectOption({ index: 1 });
+      assert.equal(await p.getByRole('switch', { name: 'Variable frame rate' }).getAttribute('aria-checked'), 'false', 'off by default');
+      const cfr = samples(await exportMp4('cfr'));
+      assert.equal(cfr.out.length, 1, 'constant frame rate: every sample is the same length');
+      if (!(await p.getByRole('tab', { name: 'Export' }).isVisible())) { // the export closed Settings
+        if (!(await settings.isVisible())) await p.getByRole('button', { name: 'Menu' }).click();
+        await settings.click();
+      }
+      await p.getByRole('tab', { name: 'Export' }).click();
+      await p.getByRole('switch', { name: 'Variable frame rate' }).click();
+      assert.ok(await p.getByRole('button', { name: /^Export video \(MP4, up to 8 fps, variable/ }).isVisible());
+      const vfr = samples(await exportMp4('vfr'));
+      assert.ok(vfr.count < cfr.count, `fewer samples (${vfr.count} < ${cfr.count})`);
+      assert.ok(vfr.out.length > 1, 'uneven sample lengths');
+      assert.ok(Math.abs(vfr.ticks / vfr.count - cfr.ticks / cfr.count) > 0, 'a longer average sample');
+      assert.deepEqual(dk.errors, []);
+      await dk.ctx.close();
+    });
+
     // The export draws the board, the eval bar and the graph itself (export-draw.js), and html2canvas the rest: each of
     // the three is drawn there, not handed to html2canvas, and in a frame put together that way they match html2canvas's
     // picture of the whole stage. Mid-move, with a badge and a best-move arrow on the board, and later in the game

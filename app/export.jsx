@@ -61,13 +61,17 @@ const loadWebp = once(async () => {
 
 // The two encoders behind one interface: frame(isNew) after each frame is drawn into the canvas (isNew false when
 // run() left the canvas as it was, its markup unchanged), then finish() gives the file as { blob, ext }, or cancel()
-async function mp4Encoder(cv, W, H, fps, audio, quality = 'High') {
+// vfr: a frame whose picture didn't change (isNew false) isn't encoded: the frame before is held for its time, so a
+// pause is one long frame and fps is the most frames a second a move's animation gets. The picture is kept in a copy
+// of the canvas, as the canvas itself is drawn over with the next new frame before the held one's length is known
+async function mp4Encoder(cv, W, H, fps, audio, quality = 'High', vfr = false) {
   const MB = await loadMediabunny();
   const avc = await MB.canEncodeVideo('avc', { width: W, height: H });
   const codec = avc ? 'avc' : (await MB.canEncodeVideo('vp9', { width: W, height: H })) ? 'vp9' : null;
   if (!codec) throw new Error('this browser cannot encode video. Try a recent Chrome, Edge or Firefox.');
   const output = new MB.Output({ format: avc ? new MB.Mp4OutputFormat() : new MB.WebMOutputFormat(), target: new MB.BufferTarget() });
-  const src = new MB.CanvasSource(cv, { codec, bitrate: mp4Bitrate(MB, quality) });
+  const hold = vfr ? Object.assign(document.createElement('canvas'), { width: W, height: H }) : null, hx = vfr ? hold.getContext('2d') : null;
+  const src = new MB.CanvasSource(vfr ? hold : cv, { codec, bitrate: mp4Bitrate(MB, quality) });
   output.addVideoTrack(src, { frameRate: fps });
   // the move sounds, when the browser can encode them: AAC in an MP4, else Opus (which MP4 and WebM both hold)
   const sound = audio ? await audio() : null;
@@ -78,10 +82,19 @@ async function mp4Encoder(cv, W, H, fps, audio, quality = 'High') {
   }
   await output.start();
   if (asrc) { await asrc.add(sound); asrc.close(); }
-  let i = 0;
+  let i = 0, from = null; // from: when the picture in hold began, in frames
   return {
-    frame: async () => { await src.add(i / fps, 1 / fps); i++; },
+    frame: async (isNew) => {
+      if (!vfr) { await src.add(i / fps, 1 / fps); i++; return; }
+      if (isNew || from == null) {
+        if (from != null) await src.add(from / fps, (i - from) / fps);
+        hx.drawImage(cv, 0, 0);
+        from = i;
+      }
+      i++;
+    },
     finish: async () => {
+      if (vfr && from != null) await src.add(from / fps, (i - from) / fps);
       await output.finalize();
       return { blob: new Blob([output.target.buffer], { type: avc ? 'video/mp4' : 'video/webm' }), ext: avc ? '.mp4' : '.webm' };
     },
@@ -133,7 +146,7 @@ const seekStage = (t) => window.dispatchEvent(new CustomEvent('chess-video:seek'
 // run() takes the stretch of the timeline to export in seconds ({ start, end }), a file name suffix, and audio: an
 // async function giving the stretch's soundtrack as an AudioBuffer (or null for none; a WebP has no sound).
 // format: one of EXPORT_FORMATS; webp: { width (0 the frame's own, 'Half', or pixels), quality } for webpEncoder; mp4Quality: one of MP4_QUALITIES
-function useVideoExport({ fps, format, webp, mp4Quality, save, stem }) {
+function useVideoExport({ fps, format, webp, mp4Quality, mp4Vfr = false, save, stem }) {
   const [state, setState] = React.useState(null); // { phase: 'load' | 'render' | 'save', done, N, eta } or { phase: 'error', msg }
   const stopRef = React.useRef(false);
   const run = async ({ start, end, suffix = '', audio }) => {
@@ -155,7 +168,7 @@ function useVideoExport({ fps, format, webp, mp4Quality, save, stem }) {
       const cx = cv.getContext('2d', { willReadFrequently: format === 'WebP' }); // the WebP encoder reads every frame back
       // Full (0) and Half are taken against the canvas drawn now, whatever Settings' widths were worked out from
       const wpx = webp.width === 'Half' ? Math.round(W / 2) : webp.width;
-      enc = format === 'WebP' ? await webpEncoder(cv, W, H, fps, { ...webp, width: wpx }) : await mp4Encoder(cv, W, H, fps, audio, mp4Quality);
+      enc = format === 'WebP' ? await webpEncoder(cv, W, H, fps, { ...webp, width: wpx }) : await mp4Encoder(cv, W, H, fps, audio, mp4Quality, mp4Vfr);
       // html2canvas copies the whole document every frame: leave out the scripts (the page inlines its sounds
       // and opening tables) and the page around the stage, but keep the head and every stylesheet (fonts and base styles)
       const keep = (n) => n.tagName === 'STYLE' || n.tagName === 'LINK' || n.tagName === 'HEAD' || n.closest('head');
