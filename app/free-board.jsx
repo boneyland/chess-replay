@@ -89,7 +89,7 @@ function OpeningExplorer({ board, book, onPlay, onHover }) {
 
 // The Analysis panel before the first move: the start position's eval and Stockfish's best line, whose moves play
 // on the board when picked (as its replies do after a move)
-function StartAnalysis({ board, ev, status, onLine }) {
+function StartAnalysis({ board, ev, status, onLine, onHover }) {
   const after = ev.after, down = status === 'unavailable' || status === 'stopped';
   const line = engineSteps(board.start.pos, after && after.pv);
   const turn = board.start.pos.turn === 'w' ? 'White' : 'Black';
@@ -105,9 +105,9 @@ function StartAnalysis({ board, ev, status, onLine }) {
         {turn} to move{down ? ` · ${status === 'unavailable' ? 'Stockfish can’t run here' : 'Stockfish stopped · play a move to restart it'}` : !after || after.partial ? ' · Thinking…' : ''}
       </div>
       <div style={{ marginTop: anGap(16), paddingTop: anGap(14), borderTop: `1px solid ${C.line}`, font: `500 ${tx(18)}px ${MONO}`, color: C.dim, display: 'flex', flexDirection: 'column', gap: anGap(8) }}>
-        {after && after.lines && after.lines.length > 1 ? <EngineLines lines={after.lines} pos={board.start.pos} ply0={board.start.ply0} c={0} onPick={onLine} cloud={after.source === 'cloud'} />
+        {after && after.lines && after.lines.length > 1 ? <EngineLines lines={after.lines} pos={board.start.pos} ply0={board.start.ply0} c={0} onPick={onLine} onHover={onHover} cloud={after.source === 'cloud'} />
           : line.length > 0
-          ? <LineChips name={null} tip="stockfish’s best line" accent={C.best} moves={line.map((m) => m.san)} ply0={board.start.ply0} c={0} legal={line.length} sel={null} onPick={(j) => onLine(line.slice(0, j + 1))} />
+          ? <LineChips name={null} tip="stockfish’s best line" accent={C.best} moves={line.map((m) => m.san)} ply0={board.start.ply0} c={0} legal={line.length} sel={null} onPick={(j) => onLine(line.slice(0, j + 1))} onHover={(j) => onHover(j == null ? null : line.slice(0, j + 1))} />
           : <span> </span>}
         <span style={{ ...NO_SELECT, font: `500 ${tx(15)}px ${MONO}` }}>Drag a piece to play a move, for either side; Stockfish rates every move.</span>
       </div>
@@ -344,8 +344,10 @@ function FreeBoard({ board, onChange, tw, sf, nav, orient, book }) {
   const boardKey = board.fen + '|' + B.ucis(board).join(' ');
   // the explorer row under the pointer: its move is drawn as an arrow on the board
   const [hov, setHov] = React.useState(null);
+  // the Analysis line under the mouse, as the steps it would play: shown on the board until the mouse leaves
+  const [pv, setPv] = React.useState(null);
   // another position (a step, a takeback) drops a half-made move: a selected piece, the promotion picker
-  React.useEffect(() => { input.clear(); setHov(null); }, [boardKey]);
+  React.useEffect(() => { input.clear(); setHov(null); setPv(null); }, [boardKey]);
   // Stockfish rates the move on the board: the positions before and after it (before the first move, both the start); never in a game
   const ev = useMoveEval(sf.engine, G ? null : B.ucis(board, upto), G ? null : B.ucis(board), sf.own, board.fen, null, cloudSetting(tw));
   const posBefore = upto > 0 ? steps[upto - 1].pos : board.start.pos;
@@ -429,7 +431,7 @@ function FreeBoard({ board, onChange, tw, sf, nav, orient, book }) {
       {!G && (tbv ? <EvalBarView cp={tbv.cp} txt={tbv.txt} a={1} /> : <EvalBarView cp={cp == null ? 0 : cp} txt={cp == null ? (down ? '' : '…') : fmtSf(cp)} a={1} />)}
       <FreeBar pos={pos} side="b" a={1} clock={clockOf('b')} name={G ? playerName(G, 'b') : null} />
       <BoardSpace>
-        <LineBoard a={1} sq={boardSquares()} v={{ upto, moves: steps, base: board.start.pos, src: 'you' }} hide={input.drag && input.drag.moved ? input.drag.from : null} arrows={hovArrows(!G && tw.bestArrows !== false ? lineArrows(ev.after) : null, hov)} />
+        <LineBoard a={1} sq={boardSquares()} v={pv && pv.length ? { upto: upto + pv.length, moves: [...steps.slice(0, upto + 1), ...pv], base: board.start.pos, src: 'you' } : { upto, moves: steps, base: board.start.pos, src: 'you' }} hide={input.drag && input.drag.moved ? input.drag.from : null} arrows={hovArrows(!G && tw.bestArrows !== false ? lineArrows(ev.after) : null, hov)} />
         <BoardTouch pos={pos} sel={input.sel} targets={input.targets} drag={input.drag} promo={input.promo} {...(still ? NO_INPUT : input.handlers)} />
       </BoardSpace>
       <FreeBar pos={pos} side="w" a={1} clock={clockOf('w')} name={G ? playerName(G, 'w') : null} />
@@ -440,10 +442,10 @@ function FreeBoard({ board, onChange, tw, sf, nav, orient, book }) {
         : <AnalysisPanel box={L.analysis} a={1} paused depth={down ? null : searchDepth(ev.after)} deep={ev}>
         {upto < 0
           ? <React.Fragment>
-            <StartAnalysis board={board} ev={ev} status={sf.status} onLine={onReply} />
+            <StartAnalysis board={board} ev={ev} status={sf.status} onLine={onReply} onHover={setPv} />
           </React.Fragment>
           : <React.Fragment>
-            <OwnMoveAnalysis M={MV} vline={{ at: 0, moves: steps, upto, src: 'you' }} own={own} status={sf.status} onReply={onReply} />
+            <OwnMoveAnalysis M={MV} vline={{ at: 0, moves: steps, upto, src: 'you' }} own={own} status={sf.status} onReply={onReply} onHover={setPv} />
             <FitOrHide style={{ ...NO_SELECT, display: 'block', marginTop: tx(8), font: `500 ${tx(15)}px ${MONO}`, color: C.dim }}>← → step · <KeyCap>Home</KeyCap> the start · <KeyCap>End</KeyCap> the last move</FitOrHide>
           </React.Fragment>}
       </AnalysisPanel>}
