@@ -2017,7 +2017,9 @@ for (const name of BROWSERS) for (const site of SITES) {
       await g.ctx.close();
     });
     // a queen left hanging is called a blunder in the Commentary box, without the better move until the game ends
-    await t.test('desktop: Play vs Stockfish flags a blunder', async () => {
+    // Quarantined in WebKit: failed on bc0f3ae at the phone's reload (getByText(/drops the queen/) timed out after 5 s), passed on
+    // the re-run of the same commit; cause not found yet (flaky-test report, 2026-10-29)
+    await t.test('desktop: Play vs Stockfish flags a blunder', { skip: name === 'webkit' && 'flaky in WebKit' }, async () => {
       const g = await open(browser, { width: 1440, height: 900 });
       const p = g.page, label = p.locator('.plabel');
       const panel = (title) => p.evaluate((tt) => { const d = [...document.querySelectorAll('div')].find((e) => e.firstElementChild && e.firstElementChild.firstElementChild && e.firstElementChild.firstElementChild.textContent === tt && getComputedStyle(e.firstElementChild).textTransform === 'uppercase'); return d ? d.innerText : ''; }, title);
