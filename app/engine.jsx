@@ -114,7 +114,7 @@ function Stage({ menu, top, onLayout, duration, background, playback, nav, still
     return () => { cancelAnimationFrame(raf); lastTsRef.current = null; };
   }, [playing, duration, loop, playTimes]);
 
-  // Keyboard: space = play/pause, arrows = seek (shift for 1 s), 0/Home = start
+  // Keyboard: space = play/pause, shift+arrows = seek 1 s (plain arrows are claimed by the views, which step moves), 0/Home = start
   React.useEffect(() => {
     if (still) return;
     const onKey = (e) => {
@@ -123,8 +123,8 @@ function Stage({ menu, top, onLayout, duration, background, playback, nav, still
       // Space on a focused button, switch or link presses it rather than playing
       if (e.code === 'Space' && e.target.closest && e.target.closest('button, a[href], summary, [role="button"], [role="switch"], [role="radio"], [role="checkbox"]')) return;
       if (e.code === 'Space') { e.preventDefault(); togglePlay(); }
-      else if (e.code === 'ArrowLeft') setTime((t) => clamp(t - (e.shiftKey ? 1 : 0.1), 0, duration));
-      else if (e.code === 'ArrowRight') setTime((t) => clamp(t + (e.shiftKey ? 1 : 0.1), 0, duration));
+      else if (e.code === 'ArrowLeft' && e.shiftKey) setTime((t) => clamp(t - 1, 0, duration));
+      else if (e.code === 'ArrowRight' && e.shiftKey) setTime((t) => clamp(t + 1, 0, duration));
       else if (e.key === '0' || e.code === 'Home') setTime(0);
     };
     window.addEventListener('keydown', onKey);
