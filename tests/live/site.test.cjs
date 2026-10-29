@@ -2406,11 +2406,20 @@ for (const name of BROWSERS) for (const site of SITES) {
       await settings.click();
       await p.getByRole('tab', { name: 'Export' }).click();
       await p.locator('#tw-fps').selectOption('8 fps');
-      // the samples of an MP4's video track: its stts box, as [count, delta] pairs, and the media timescale (mdhd)
+      // the samples of an MP4's video track: its stts box (found by walking the boxes, as the video data can hold the
+      // same four letters), as [count, delta] pairs
       const samples = (buf) => {
-        const at = buf.indexOf('stts', 0, 'ascii'), n = buf.readUInt32BE(at + 8), out = [];
-        for (let k = 0; k < n; k++) out.push([buf.readUInt32BE(at + 12 + 8 * k), buf.readUInt32BE(at + 16 + 8 * k)]);
-        return { out, count: out.reduce((a, [c]) => a + c, 0), ticks: out.reduce((a, [c, d]) => a + c * d, 0) };
+        const find = (from, to, path) => {
+          for (let at = from; at + 8 <= to;) {
+            const size = buf.readUInt32BE(at) || to - at, type = buf.toString('latin1', at + 4, at + 8);
+            if (type === path[0]) return path.length === 1 ? { at, size } : find(at + 8, at + size, path.slice(1));
+            at += size;
+          }
+          return null;
+        };
+        const box = find(0, buf.length, ['moov', 'trak', 'mdia', 'minf', 'stbl', 'stts']), n = buf.readUInt32BE(box.at + 12), out = [];
+        for (let k = 0; k < n; k++) out.push([buf.readUInt32BE(box.at + 16 + 8 * k), buf.readUInt32BE(box.at + 20 + 8 * k)]);
+        return { out, count: out.reduce((x, [c]) => x + c, 0), ticks: out.reduce((x, [c, d]) => x + c * d, 0) };
       };
       const exportMp4 = async (tag) => {
         const [dl] = await Promise.all([p.waitForEvent('download', { timeout: 200000 }), p.getByRole('button', { name: /^Export video \(MP4/ }).click()]);
