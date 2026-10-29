@@ -607,3 +607,67 @@ function MyGamesDialog({ games, current, onReplay, onResume, onDelete, onClose }
     </DialogBox>
   );
 }
+
+// Menu › Keyboard shortcuts: what the keys do, in the groups the code handles them in (Stage in engine.jsx, GameVideo and
+// FreeBoard, the move list, EditBoard, the dialogs). A key listed here is a key a handler reads: change one, change the other
+const SHORTCUTS = [
+  { title: 'Replay', rows: [
+    ['Space', 'Play or pause'],
+    ['← →', 'Pause and step to the previous or next move (in a previewed line, step the line)'],
+    ['End', 'Pause and jump to the last move'],
+    ['Home  0', 'Back to the start'],
+    ['Shift + ← →', 'Seek 1 s'],
+    ['Esc', 'Leave a previewed line, or cancel a promotion'],
+    ['F', 'Flip the board'],
+  ] },
+  { title: 'Free board and games', rows: [
+    ['← →', 'Previous or next move'],
+    ['Home  End', 'First position, last position'],
+    ['Esc', 'Cancel a promotion'],
+    ['F', 'Flip the board (not in a game)'],
+  ] },
+  { title: 'Seek bar and move list', rows: [
+    ['← →  ↓ ↑', 'Seek bar: 1 s back or forward (Shift 5 s)'],
+    ['PageUp  PageDown', 'Seek bar: 10 s'],
+    ['Home  End', 'Seek bar: start, end'],
+    ['← →  ↑ ↓', 'Move list: previous or next move, previous or next line'],
+    ['Enter  Space', 'Move list: go to the move'],
+  ] },
+  { title: 'Edit position', rows: [
+    ['Arrows', 'Move the square on the board'],
+    ['Enter  Space', 'Place the tray piece, or pick up a piece and put it down'],
+    ['P N B R Q K', 'Place a piece (capitals White, lower case Black)'],
+    ['Delete  Backspace', 'Take the piece away'],
+    ['Esc', 'Put down a held piece, then leave the editor'],
+  ] },
+  { title: 'Menus and dialogs', rows: [
+    ['Esc', 'Close the menu, Settings, Ask Queen or a dialog'],
+    ['Tab', 'Go round a dialog\u2019s controls'],
+    ['Ctrl/Cmd + Enter', 'Paste PGN: load the text'],
+    ['← → Home End', 'Settings: switch tab'],
+  ] },
+];
+function ShortcutsDialog({ onClose }) {
+  return (
+    <DialogBox label="Keyboard shortcuts" onClose={onClose}>
+      <div className="keys-body">
+        {SHORTCUTS.map((g) => (
+          <section key={g.title} className="keys-group" aria-label={g.title}>
+            <h3 className="keys-title">{g.title}</h3>
+            <dl className="keys-list">
+              {g.rows.map(([k, d]) => (
+                <React.Fragment key={k + d}>
+                  <dt>{k.split('  ').map((c) => <kbd key={c}>{c}</kbd>)}</dt>
+                  <dd>{d}</dd>
+                </React.Fragment>
+              ))}
+            </dl>
+          </section>
+        ))}
+      </div>
+      <div className="fen-btns">
+        <button type="button" className="twk-btn secondary" data-autofocus onClick={onClose}>Close</button>
+      </div>
+    </DialogBox>
+  );
+}

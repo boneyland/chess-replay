@@ -151,7 +151,7 @@ function GameApp() {
   const onLayout = React.useCallback((isPhone, w, isShort) => { setPhone(isPhone); setFrameW(w); setShort(!!isShort); }, []);
   const [menu, setMenu] = React.useState(false);
   React.useEffect(() => { if (!phone) setMenu(false); }, [phone]);
-  // the dock's Play/Explore menu (landscape); on a phone its items sit in the folded menu instead
+  // the dock's Menu (landscape); on a phone its items sit in the folded menu instead
   const [newMenu, setNewMenu] = React.useState(false);
   const [pgnOpen, setPgnOpen] = React.useState(false);
   // Edit position: { setup, text, msg, resume } while the editor shows in place of the board or the loaded game; text is
@@ -163,6 +163,8 @@ function GameApp() {
   const [playOpen, setPlayOpen] = React.useState(null);
   // My games' list while its dialog is open
   const [gamesOpen, setGamesOpen] = React.useState(null);
+  // the Keyboard shortcuts dialog
+  const [keysOpen, setKeysOpen] = React.useState(false);
   // leaving a game in progress asks first: { run } is what waits on the answer
   const [leave, setLeave] = React.useState(null);
   const newRef = React.useRef(null);
@@ -346,6 +348,8 @@ function GameApp() {
   const closePlay = React.useCallback(() => setPlayOpen(null), []);
   const myGames = () => { setNewMenu(false); setMenu(false); setPanel(false); setGamesOpen(readGames()); };
   const closeGames = React.useCallback(() => setGamesOpen(null), []);
+  const openKeys = () => { setNewMenu(false); setMenu(false); setPanel(false); setQueenOpen(false); setKeysOpen(true); };
+  const closeKeys = React.useCallback(() => setKeysOpen(false), []);
   // a finished game replays as a loaded game; one in progress goes back on the board, the side to move's clock running
   // from now (the time away isn't charged)
   const replayGame = (e) => { setGamesOpen(null); guard(() => { const b = window.BoardCore.restore(e.board); if (!b) return; setQueenOpen(false); commit({ pgn: window.PlayCore.pgn(b), pgnName: `my-game-${b.game.date}.pgn`, gameIndex: 0 }); }); };
@@ -364,8 +368,8 @@ function GameApp() {
     const time = seekAfter.current; seekAfter.current = null;
     window.dispatchEvent(new CustomEvent('chess-video:seek', { detail: { time } }));
   }, [files]);
-  // a dialog closed (Esc, Cancel, Set up, Start game): focus goes back to what opened it, Play/Explore or the phone's Menu
-  const newBtn = React.useRef(null), menuBtn = React.useRef(null), fenWasOpen = React.useRef(false), dialogOpen = pgnOpen || !!playOpen || !!gamesOpen;
+  // a dialog closed (Esc, Cancel, Set up, Start game): focus goes back to what opened it, Menu
+  const newBtn = React.useRef(null), menuBtn = React.useRef(null), fenWasOpen = React.useRef(false), dialogOpen = pgnOpen || !!playOpen || !!gamesOpen || keysOpen;
   React.useEffect(() => {
     if (fenWasOpen.current && !dialogOpen) { const b = phone ? menuBtn.current : newBtn.current; if (b) b.focus(); }
     fenWasOpen.current = dialogOpen;
@@ -476,12 +480,11 @@ function GameApp() {
   const askQueen = () => { setQueenOpen((q) => !q); setPanel(false); };
   // the Queen panel opens centred over its button in the transport bar, or over the menu button when the dock is folded
   // into a menu (a phone frame, or a window under 900 px), kept on screen
-  const queenBtn = React.useRef(null);
   const [queenLeft, setQueenLeft] = React.useState(null);
   React.useLayoutEffect(() => {
     if (!queenOpen) { setQueenLeft(null); return; }
     const place = () => {
-      const btn = phone ? menuBtn.current : queenBtn.current, b = btn && btn.getBoundingClientRect();
+      const btn = phone ? menuBtn.current : newBtn.current, b = btn && btn.getBoundingClientRect();
       if (!b) return;
       const w = Math.min(400, window.innerWidth - 32);
       setQueenLeft(Math.round(Math.max(16, Math.min(b.left + b.width / 2 - w / 2, window.innerWidth - 16 - w))));
@@ -552,20 +555,22 @@ function GameApp() {
   const shownErr = err || built.error;
 
   const newGroups = [{ label: 'Explore', items: [{ label: 'Starting position', run: newBoard }, { label: 'Edit position', run: editPosition }, { label: 'Paste PGN', run: pastePgn }, { label: 'Copy FEN', run: copyFen }] },
-    { label: 'Play', items: [{ label: 'Play vs human', run: playHuman }, { label: 'Play vs Stockfish', run: playSf }, { label: 'My games', run: myGames }] }];
+    { label: 'Play', items: [{ label: 'Play vs human', run: playHuman }, { label: 'Play vs Stockfish', run: playSf }, { label: 'My games', run: myGames }] },
+    // Ask Queen sits here on the wide layouts; the folded menu keeps it in its last row. The folded menu's shortcuts item is hidden on a touch screen
+    { label: 'More', items: [{ label: 'Keyboard shortcuts', run: openKeys }, ...(!phone && !board ? [{ label: 'Ask Queen', cls: 'dock-queen', run: () => { setNewMenu(false); askQueen(); } }] : [])] }];
   const newItems = newGroups.map((g) => <div key={g.label} className={`dock-group dock-group-${g.label.toLowerCase()}`}>
     <span className="dock-menu-label">{g.label}</span>
-    {g.items.map((it) => <button key={it.label} type="button" className="dock-btn" onClick={it.run}>{it.label}</button>)}
+    {g.items.map((it) => <button key={it.label} type="button" className={it.cls ? 'dock-btn ' + it.cls : 'dock-btn'} onClick={it.run}>{it.label}</button>)}
   </div>);
   const fsLabel = fullscreen.on ? 'Exit full screen' : 'Full screen';
   const dockItems = (
     <div id="dock-items" className="dock-items">
       {phone && <span className="dock-menu-status">{shownErr || status}</span>}
       <button type="button" className="dock-btn dock-primary" onClick={() => { setMenu(false); loadGame(); }}>Load game</button>
-      {/* a list of starting points in two groups, each under its heading; on the phone they sit in the folded menu */}
+      {/* a list of starting points and tools in groups, each under its heading; on the phone they sit in the folded menu */}
       {phone ? newItems : (
         <div ref={newRef} className="dock-new">
-          <button ref={newBtn} type="button" className="dock-btn" aria-expanded={newMenu} aria-controls="dock-new-items" onClick={() => { setNewMenu((m) => !m); setPanel(false); setQueenOpen(false); }}>Play/Explore</button>
+          <button ref={newBtn} type="button" className="dock-btn" aria-expanded={newMenu} aria-controls="dock-new-items" onClick={() => { setNewMenu((m) => !m); setPanel(false); setQueenOpen(false); }}>Menu</button>
           {newMenu && (
             <div id="dock-new-items" className="dock-pop">
               {newItems}
@@ -575,7 +580,7 @@ function GameApp() {
       )}
       {/* Settings and Full screen are icons in every layout; on the phone they share the menu's last row with Ask Queen */}
       <div className="dock-icons">
-      {!board && <button ref={queenBtn} type="button" className="dock-btn dock-queen" aria-expanded={queenOpen} onClick={() => { setMenu(false); askQueen(); }}>Ask Queen</button>}
+      {phone && !board && <button type="button" className="dock-btn dock-queen" aria-expanded={queenOpen} onClick={() => { setMenu(false); askQueen(); }}>Ask Queen</button>}
       <button type="button" className="dock-btn dock-iconic" aria-label="Settings" title="Settings" aria-expanded={panel} onClick={() => { setMenu(false); setPanel((p) => !p); setQueenOpen(false); }}>
         <svg className="dock-icon" width="16" height="16" viewBox="0 0 16 16" aria-hidden="true"><path fill="currentColor" fillRule="evenodd" d={GEAR} /></svg>
       </button>
@@ -640,6 +645,7 @@ function GameApp() {
       <ExportOverlay x={video} />
       {pgnOpen && <PgnDialog onLoad={pgnLoad} onClose={closePgn} />}
       {playOpen && <PlayDialog key={playOpen} mode={playOpen} setUpFen={board && board.fen !== window.ChessCore.START_FEN ? board.fen : null} clock={t.playClock} side={t.playSide} initial={playInit} onStart={playStart} onSetUp={playSetUp} onClose={closePlay} />}
+      {keysOpen && <ShortcutsDialog onClose={closeKeys} />}
       {gamesOpen && <MyGamesDialog games={gamesOpen} current={board && window.PlayCore.inProgress(board) ? board.game.id : null} onReplay={replayGame} onResume={resumeGame} onDelete={deleteGame} onClose={closeGames} />}
       {leave && <LeaveDialog onStay={() => setLeave(null)} onLeave={() => { const run = leave.run; setLeave(null); keepLeft(board); run(); }} />}
       {queenOpen && !board && <QueenPanel M={M} Q={Q} hf={hf} probe={probe} onClose={closeQueen} onOverlay={setQueenArrow} onSave={saveQueen} left={queenLeft} />}
@@ -672,13 +678,13 @@ function GameApp() {
           <TweakSection label="Board">
             {board && board.game ? (
               <div className="twk-note">{board.game.mode === 'stockfish'
-                ? 'Drag or tap a piece to play a move; the board stays on your side, and Stockfish replies after a short pause. Take back and Resign are in the Game box; after the game, ← → step through it.'
-                : 'Drag or tap a piece to play a move; the board turns after each one, so the side to move plays from the bottom. Take back, Offer a draw and Resign are in the Game box; after the game, ← → step through it.'}</div>
+                ? 'Drag or tap a piece to play a move; the board stays on your side, and Stockfish replies after a short pause. Take back and Resign are in the Game box.'
+                : 'Drag or tap a piece to play a move; the board turns after each one, so the side to move plays from the bottom. Take back, Offer a draw and Resign are in the Game box.'}</div>
             ) : board ? <>
-              <div className="twk-note">Drag or tap a piece to play a move, for either side; Stockfish rates each one. Keys: ← → moves, Home the start, End the last move, F flips the board.</div>
+              <div className="twk-note">Drag or tap a piece to play a move, for either side; Stockfish rates each one.</div>
               <TweakToggle id="tw-flip" label="Flip board" value={!!t.flip} onChange={(v) => setTweak('flip', v)} />
             </> : <>
-              <div className="twk-note">Drag or tap a piece to try your own moves; click a move in Moves to jump to it. Keys: ← → moves, Shift+← → 1 s, Space play/pause, Home or 0 start, End last move.</div>
+              <div className="twk-note">Drag or tap a piece to try your own moves; click a move in Moves to jump to it.</div>
               <TweakToggle id="tw-flip" label="Flip board" value={!!t.flip} onChange={(v) => setTweak('flip', v)} />
               <TweakToggle id="tw-arrows" label="Best-move arrows" value={t.bestArrows} onChange={(v) => setTweak('bestArrows', v)} />
               <TweakToggle id="tw-push" label="Camera push on blunders" value={t.cameraPush} onChange={(v) => setTweak('cameraPush', v)} />

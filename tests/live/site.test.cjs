@@ -161,7 +161,7 @@ async function typeFen(field, fen) {
 }
 // Play/Explore › Edit position, a FEN typed in, Done: the free board at that position
 async function setUpFen(page, fen) {
-  await page.getByRole('button', { name: 'Play/Explore' }).click();
+  await page.getByRole('button', { name: 'Menu', exact: true }).click();
   await page.getByRole('button', { name: 'Edit position' }).click();
   const field = page.getByRole('textbox', { name: 'FEN' });
   await typeFen(field, fen);
@@ -366,7 +366,21 @@ for (const name of BROWSERS) for (const site of SITES) {
       await page.setViewportSize({ width: 1440, height: 900 });
     });
 
+    await t.test('desktop: Menu › Keyboard shortcuts opens a dialog that Esc closes, focus back on Menu', async () => {
+      const menu = page.getByRole('button', { name: 'Menu', exact: true });
+      await menu.click();
+      await page.getByRole('button', { name: 'Keyboard shortcuts' }).click();
+      const dlg = page.getByRole('dialog', { name: 'Keyboard shortcuts' });
+      await dlg.waitFor({ timeout: 3000 });
+      assert.ok(await dlg.getByText('Play or pause').isVisible());
+      await page.screenshot({ path: path.join(OUT, 'keyboard-shortcuts.png') });
+      await page.keyboard.press('Escape');
+      await assert.doesNotReject(dlg.waitFor({ state: 'detached', timeout: 3000 }));
+      assert.equal(await page.evaluate(() => document.activeElement.textContent), 'Menu');
+    });
+
     await t.test('desktop: Esc closes the Queen panel', async () => {
+      await page.getByRole('button', { name: 'Menu', exact: true }).click();
       await page.getByRole('button', { name: 'Ask Queen' }).click();
       const queen = page.locator('.q-panel');
       await queen.waitFor({ timeout: 3000 });
@@ -606,10 +620,9 @@ for (const name of BROWSERS) for (const site of SITES) {
         if (text !== 'Default') await p.addInitScript((v) => { try { localStorage.setItem('chess-video.tweaks.v1', JSON.stringify({ textSize: v })); } catch (e) {} }, text);
         await p.goto(base, { waitUntil: 'load' });
         await loadedOn(p);
-        // the folded menu on a phone layout, Play/Explore otherwise
+        // the folded menu on a phone layout, the dock's Menu otherwise
         const pick = async (item) => {
-          const menu = p.getByRole('button', { name: 'Menu' });
-          await ((await menu.isVisible()) ? menu : p.getByRole('button', { name: 'Play/Explore' })).click();
+          await p.getByRole('button', { name: 'Menu', exact: true }).click();
           await p.getByRole('button', { name: item }).click();
         };
         const check = async (view) => {
@@ -649,7 +662,7 @@ for (const name of BROWSERS) for (const site of SITES) {
       const p = rs.page;
       await p.goto(base, { waitUntil: 'load' });
       await loadedOn(p);
-      await p.getByRole('button', { name: 'Play/Explore' }).click();
+      await p.getByRole('button', { name: 'Menu', exact: true }).click();
       await p.getByRole('button', { name: 'Starting position' }).click();
       await p.getByRole('button', { name: 'Play (space)' }).waitFor({ state: 'detached', timeout: 5000 });
       const e2 = square(await boardBox(p), 'e2');
@@ -675,7 +688,7 @@ for (const name of BROWSERS) for (const site of SITES) {
       await p.addInitScript(() => { try { localStorage.setItem('chess-video.tweaks.v1', JSON.stringify({ sfLines: 3, sfOwnTime: 1.5 })); } catch (e) {} });
       await p.goto(base, { waitUntil: 'load' });
       await loadedOn(p);
-      await p.getByRole('button', { name: 'Play/Explore' }).click();
+      await p.getByRole('button', { name: 'Menu', exact: true }).click();
       await p.getByRole('button', { name: 'Starting position' }).click();
       await assert.doesNotReject(p.getByRole('button', { name: 'Play (space)' }).waitFor({ state: 'detached', timeout: 5000 }));
       const b = await boardBox(p);
@@ -701,7 +714,7 @@ for (const name of BROWSERS) for (const site of SITES) {
         await p.addInitScript((n) => { try { localStorage.setItem('chess-video.tweaks.v1', JSON.stringify({ sfLines: 3, sfOwnTime: 3, sfThreads: n })); } catch (e) {} }, threads);
         await p.goto(base, { waitUntil: 'load' });
         await loadedOn(p);
-        await p.getByRole('button', { name: 'Play/Explore' }).click();
+        await p.getByRole('button', { name: 'Menu', exact: true }).click();
         await p.getByRole('button', { name: 'Starting position' }).click();
         await assert.doesNotReject(p.getByRole('button', { name: 'Play (space)' }).waitFor({ state: 'detached', timeout: 5000 }));
         const b = await boardBox(p);
@@ -905,14 +918,17 @@ for (const name of BROWSERS) for (const site of SITES) {
       };
       await p.goto(base, { waitUntil: 'load' });
       await loadedOn(p);
-      await p.getByRole('button', { name: 'Play/Explore' }).click();
+      await p.getByRole('button', { name: 'Menu', exact: true }).click();
       await p.getByRole('button', { name: 'Starting position' }).click();
       // the sample's start reads "Start" too: the board is in once Play has gone
       await assert.doesNotReject(p.getByRole('button', { name: 'Play (space)' }).waitFor({ state: 'detached', timeout: 5000 }));
       await assert.doesNotReject(label.filter({ hasText: /^Start$/ }).waitFor({ timeout: 5000 }));
       const b = await boardBox(p);
       assert.equal(b.n, 32, 'pieces on the board');
+      await p.getByRole('button', { name: 'Menu', exact: true }).click();
+      assert.equal(await p.getByRole('button', { name: 'Keyboard shortcuts' }).count(), 1, 'the menu is open');
       assert.equal(await p.getByRole('button', { name: 'Ask Queen' }).count(), 0, 'no Ask Queen on the free board');
+      await p.keyboard.press('Escape');
       assert.equal(await p.getByRole('button', { name: 'Starting position' }).count(), 0, 'the menu closes on a pick');
       await drag(b, 'e2', 'e4');
       await assert.doesNotReject(label.filter({ hasText: /1\. e4/ }).waitFor({ timeout: 5000 }));
@@ -942,7 +958,9 @@ for (const name of BROWSERS) for (const site of SITES) {
       await p.getByRole('button', { name: 'Settings' }).click();
       await p.getByRole('button', { name: 'Back to sample game' }).click();
       await assert.doesNotReject(label.filter({ hasText: /^Start$/ }).waitFor({ timeout: 5000 }));
+      await p.getByRole('button', { name: 'Menu', exact: true }).click();
       await assert.doesNotReject(p.getByRole('button', { name: 'Ask Queen' }).waitFor({ timeout: 5000 }));
+      await p.keyboard.press('Escape');
       assert.equal((await boardBox(p)).n, 32);
       assert.deepEqual(nb.errors, []);
       await nb.ctx.close();
@@ -980,7 +998,7 @@ for (const name of BROWSERS) for (const site of SITES) {
       await p.goto(base, { waitUntil: 'load' });
       await loadedOn(p);
       // it opens on the position on the board; Empty clears it
-      await p.getByRole('button', { name: 'Play/Explore' }).click();
+      await p.getByRole('button', { name: 'Menu', exact: true }).click();
       await p.getByRole('button', { name: 'Edit position' }).click();
       const field = p.getByRole('textbox', { name: 'FEN' });
       await assert.doesNotReject(field.waitFor({ timeout: 5000 }));
@@ -988,9 +1006,9 @@ for (const name of BROWSERS) for (const site of SITES) {
       assert.ok(await onBoard() > 2, 'the replay\'s pieces');
       await p.keyboard.press('Escape');
       await field.waitFor({ state: 'detached', timeout: 5000 });
-      await p.getByRole('button', { name: 'Play/Explore' }).click();
+      await p.getByRole('button', { name: 'Menu', exact: true }).click();
       await p.getByRole('button', { name: 'Starting position' }).click();
-      await p.getByRole('button', { name: 'Play/Explore' }).click();
+      await p.getByRole('button', { name: 'Menu', exact: true }).click();
       await p.getByRole('button', { name: 'Edit position' }).click();
       await assert.doesNotReject(field.waitFor({ timeout: 5000 }));
       assert.equal(await field.inputValue(), 'rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1', 'the free board\'s position');
@@ -1017,7 +1035,7 @@ for (const name of BROWSERS) for (const site of SITES) {
       await typeFen(field, '4k3/4R3/8/8/8/8/8/4K3 b - - 0 1');
       await done.click();
       await assert.doesNotReject(field.waitFor({ state: 'detached', timeout: 5000 }));
-      await p.getByRole('button', { name: 'Play/Explore' }).click();
+      await p.getByRole('button', { name: 'Menu', exact: true }).click();
       await p.getByRole('button', { name: 'Copy FEN' }).click();
       await assert.doesNotReject(p.waitForFunction(() => { const f = document.querySelector('.fen-note-fen'); return f && f.value === '4k3/4R3/8/8/8/8/8/4K3 b - - 0 1'; }, null, { timeout: 5000 }));
       assert.deepEqual(ep.errors, []);
@@ -1028,7 +1046,7 @@ for (const name of BROWSERS) for (const site of SITES) {
       const p = ep.page;
       await p.goto(base, { waitUntil: 'load' });
       await loadedOn(p);
-      await p.getByRole('button', { name: 'Play/Explore' }).click();
+      await p.getByRole('button', { name: 'Menu', exact: true }).click();
       await p.getByRole('button', { name: 'Edit position' }).click();
       const field = p.getByRole('textbox', { name: 'FEN' }), box = (n) => p.getByRole('checkbox', { name: n, exact: true });
       await p.getByRole('button', { name: 'Start', exact: true }).click();
@@ -1051,7 +1069,7 @@ for (const name of BROWSERS) for (const site of SITES) {
       const p = ep.page;
       await p.goto(base, { waitUntil: 'load' });
       await loadedOn(p);
-      await p.getByRole('button', { name: 'Play/Explore' }).click();
+      await p.getByRole('button', { name: 'Menu', exact: true }).click();
       await p.getByRole('button', { name: 'Play vs human' }).click();
       const dialog = p.getByRole('dialog', { name: 'Play vs human' });
       await dialog.getByRole('radiogroup', { name: 'Time control' }).getByRole('radio', { name: '5+3' }).click();
@@ -1060,7 +1078,7 @@ for (const name of BROWSERS) for (const site of SITES) {
       const b = await boardBox(p), f = square(b, 'e2'), tt = square(b, 'e4');
       await p.mouse.move(f.x, f.y); await p.mouse.down(); await p.mouse.move(tt.x, tt.y, { steps: 8 }); await p.mouse.up();
       await p.waitForTimeout(1500);
-      await p.getByRole('button', { name: 'Play/Explore' }).click();
+      await p.getByRole('button', { name: 'Menu', exact: true }).click();
       await p.getByRole('button', { name: 'Edit position' }).click();
       await p.getByRole('button', { name: 'Leave' }).click();
       const clocks = async () => (await p.locator('.game-clock').allInnerTexts()).join(' ');
@@ -1115,7 +1133,7 @@ for (const name of BROWSERS) for (const site of SITES) {
         if (flip) await p.addInitScript(() => { try { localStorage.setItem('chess-video.tweaks.v1', JSON.stringify({ flip: true })); } catch (e) {} });
         await p.goto(base, { waitUntil: 'load' });
         await loadedOn(p);
-        await p.getByRole('button', { name: 'Play/Explore' }).click();
+        await p.getByRole('button', { name: 'Menu', exact: true }).click();
         await p.getByRole('button', { name: 'Edit position' }).click();
         const field = p.getByRole('textbox', { name: 'FEN' }), tray = (n) => p.getByRole('button', { name: n, exact: true });
         await assert.doesNotReject(field.waitFor({ timeout: 5000 }));
@@ -1159,7 +1177,7 @@ for (const name of BROWSERS) for (const site of SITES) {
         if (flip) await p.addInitScript(() => { try { localStorage.setItem('chess-video.tweaks.v1', JSON.stringify({ flip: true })); } catch (e) {} });
         await p.goto(base, { waitUntil: 'load' });
         await loadedOn(p);
-        await p.getByRole('button', { name: 'Play/Explore' }).click();
+        await p.getByRole('button', { name: 'Menu', exact: true }).click();
         await p.getByRole('button', { name: 'Edit position' }).click();
         const field = p.getByRole('textbox', { name: 'FEN' }), tray = (n) => p.getByRole('button', { name: n, exact: true });
         await assert.doesNotReject(field.waitFor({ timeout: 5000 }));
@@ -1217,21 +1235,21 @@ for (const name of BROWSERS) for (const site of SITES) {
       await p.goto(base, { waitUntil: 'load' });
       await loadedOn(p);
       // a two-move game, analysed in a few seconds
-      await p.getByRole('button', { name: 'Play/Explore' }).click();
+      await p.getByRole('button', { name: 'Menu', exact: true }).click();
       await p.getByRole('button', { name: 'Paste PGN' }).click();
       // typed, not filled: Firefox over WebDriver BiDi can miss fill()'s text (see typeFen)
       await p.getByRole('textbox', { name: 'PGN' }).click();
       await p.keyboard.type('1. e4 e5 *');
       await p.getByRole('button', { name: 'Load', exact: true }).click();
       await p.getByRole('button', { name: /^Analyse with Stockfish/ }).first().click();
-      await p.getByRole('button', { name: 'Play/Explore' }).click();
+      await p.getByRole('button', { name: 'Menu', exact: true }).click();
       await p.getByRole('button', { name: 'Edit position' }).click();
       const field = p.getByRole('textbox', { name: 'FEN' });
       await assert.doesNotReject(field.waitFor({ timeout: 5000 }));
       await typeFen(field, '4k3/8/8/8/8/8/8/4K3 w - - 0 1');
       await p.getByRole('button', { name: 'Settings' }).click();
       await p.keyboard.press('Escape');
-      await p.getByRole('button', { name: 'Play/Explore' }).click();
+      await p.getByRole('button', { name: 'Menu', exact: true }).click();
       await p.keyboard.press('Escape');
       assert.equal(await field.isVisible(), true, 'Esc closed the menus, not the editor');
       await p.waitForTimeout(8000);
@@ -1244,7 +1262,7 @@ for (const name of BROWSERS) for (const site of SITES) {
       const p = ep.page, label = p.locator('.plabel');
       await p.goto(base, { waitUntil: 'load' });
       await loadedOn(p);
-      await p.getByRole('button', { name: 'Play/Explore' }).click();
+      await p.getByRole('button', { name: 'Menu', exact: true }).click();
       await p.getByRole('button', { name: 'Play vs Stockfish' }).click();
       const dialog = p.getByRole('dialog', { name: 'Play vs Stockfish' });
       await dialog.getByRole('radio', { name: 'White' }).click();
@@ -1253,7 +1271,7 @@ for (const name of BROWSERS) for (const site of SITES) {
       await assert.doesNotReject(p.getByRole('button', { name: 'Play (space)' }).waitFor({ state: 'detached', timeout: 5000 }));
       const b = await boardBox(p), f = square(b, 'e2'), tt = square(b, 'e4');
       await p.mouse.move(f.x, f.y); await p.mouse.down(); await p.mouse.move(tt.x, tt.y, { steps: 8 }); await p.mouse.up();
-      await p.getByRole('button', { name: 'Play/Explore' }).click();
+      await p.getByRole('button', { name: 'Menu', exact: true }).click();
       await p.getByRole('button', { name: 'Edit position' }).click();
       // Stockfish replies under the Leave dialog
       await p.getByRole('dialog', { name: 'Leave this game?' }).waitFor({ timeout: 3000 });
@@ -1278,7 +1296,7 @@ for (const name of BROWSERS) for (const site of SITES) {
       const p = ep.page, dialog = p.getByRole('dialog', { name: 'Play vs human' });
       await p.goto(base, { waitUntil: 'load' });
       await loadedOn(p);
-      await p.getByRole('button', { name: 'Play/Explore' }).click();
+      await p.getByRole('button', { name: 'Menu', exact: true }).click();
       await p.getByRole('button', { name: 'Play vs human' }).click();
       await assert.doesNotReject(dialog.waitFor({ timeout: 3000 }));
       const from = dialog.getByRole('radiogroup', { name: 'Start from' });
@@ -1311,14 +1329,14 @@ for (const name of BROWSERS) for (const site of SITES) {
       const pp = await open(browser, { width: 1440, height: 900 });
       const p = pp.page, dialog = p.getByRole('dialog', { name: 'Paste PGN' }), field = dialog.getByRole('textbox', { name: 'PGN' });
       const openIt = async () => {
-        await p.getByRole('button', { name: 'Play/Explore' }).click();
+        await p.getByRole('button', { name: 'Menu', exact: true }).click();
         await p.getByRole('button', { name: 'Paste PGN' }).click();
         await dialog.waitFor({ timeout: 5000 });
       };
       await p.goto(base, { waitUntil: 'load' });
       await loadedOn(p);
       // from the free board, so the loaded game is seen to replace it
-      await p.getByRole('button', { name: 'Play/Explore' }).click();
+      await p.getByRole('button', { name: 'Menu', exact: true }).click();
       await p.getByRole('button', { name: 'Starting position' }).click();
       await assert.doesNotReject(p.getByRole('button', { name: 'Play (space)' }).waitFor({ state: 'detached', timeout: 5000 }));
       await openIt();
@@ -1340,7 +1358,7 @@ for (const name of BROWSERS) for (const site of SITES) {
       }
       await p.keyboard.press('Escape');
       await assert.doesNotReject(dialog.waitFor({ state: 'detached', timeout: 5000 }));
-      assert.equal(await p.evaluate(() => document.activeElement.textContent), 'Play/Explore', 'focus back on Play/Explore');
+      assert.equal(await p.evaluate(() => document.activeElement.textContent), 'Menu', 'focus back on Menu');
       await openIt();
       await field.click();
       await field.pressSequentially('[White "Alpha Tester"]\n[Black "Beta Tester"]\n\n1. e4 e5 2. Nf3 Nc6 3. Bb5 a6 *');
@@ -1605,7 +1623,7 @@ for (const name of BROWSERS) for (const site of SITES) {
       };
       await p.goto(base, { waitUntil: 'load' });
       await loadedOn(p);
-      await p.getByRole('button', { name: 'Play/Explore' }).click();
+      await p.getByRole('button', { name: 'Menu', exact: true }).click();
       await p.getByRole('button', { name: 'Starting position' }).click();
       await assert.doesNotReject(p.getByRole('button', { name: 'Play (space)' }).waitFor({ state: 'detached', timeout: 5000 }));
       await assert.doesNotReject(row(p, 'e4').waitFor({ timeout: 5000 }));
@@ -1695,7 +1713,7 @@ for (const name of BROWSERS) for (const site of SITES) {
       const p = g.page;
       await p.goto(base, { waitUntil: 'load' });
       await loadedOn(p);
-      await p.getByRole('button', { name: 'Play/Explore' }).click();
+      await p.getByRole('button', { name: 'Menu', exact: true }).click();
       await p.getByRole('button', { name: 'Starting position' }).click();
       const chips = p.locator('.mv[role="button"][title^="Show stockfish’s best line"]');
       await assert.doesNotReject(chips.nth(1).waitFor({ timeout: 45000 }));
@@ -1714,7 +1732,7 @@ for (const name of BROWSERS) for (const site of SITES) {
       const p = g.page, label = p.locator('.plabel');
       await p.goto(base, { waitUntil: 'load' });
       await loadedOn(p);
-      await p.getByRole('button', { name: 'Play/Explore' }).click();
+      await p.getByRole('button', { name: 'Menu', exact: true }).click();
       await p.getByRole('button', { name: 'Starting position' }).click();
       await assert.doesNotReject(p.getByRole('button', { name: 'Play (space)' }).waitFor({ state: 'detached', timeout: 5000 }));
       // before any move: the eval and Stockfish's best line, whose first move plays when picked
@@ -1750,7 +1768,7 @@ for (const name of BROWSERS) for (const site of SITES) {
       await assert.doesNotReject(p.getByRole('button', { name: 'Play (space)' }).waitFor({ timeout: 5000 }));
       for (let i = 0; i < 3; i++) await p.keyboard.press('ArrowRight');
       const before = await label.innerText();
-      await p.getByRole('button', { name: 'Play/Explore' }).click();
+      await p.getByRole('button', { name: 'Menu', exact: true }).click();
       await p.getByRole('button', { name: 'Starting position' }).click();
       await assert.doesNotReject(p.getByRole('button', { name: 'Play (space)' }).waitFor({ state: 'detached', timeout: 5000 }));
       await p.reload({ waitUntil: 'load' });
@@ -1780,7 +1798,7 @@ for (const name of BROWSERS) for (const site of SITES) {
       };
       await p.goto(base, { waitUntil: 'load' });
       await loadedOn(p);
-      await p.getByRole('button', { name: 'Play/Explore' }).click();
+      await p.getByRole('button', { name: 'Menu', exact: true }).click();
       await p.getByRole('button', { name: 'Play vs human' }).click();
       const dialog = p.getByRole('dialog', { name: 'Play vs human' });
       await assert.doesNotReject(dialog.waitFor({ timeout: 3000 }));
@@ -1828,18 +1846,18 @@ for (const name of BROWSERS) for (const site of SITES) {
       await assert.doesNotReject(label.filter({ hasText: /2… Qh4#/ }).waitFor({ timeout: 5000 }));
       assert.match(await panel('Game'), /0–1[\s\S]*checkmate/i);
       // leaving a finished game doesn't ask
-      await p.getByRole('button', { name: 'Play/Explore' }).click();
+      await p.getByRole('button', { name: 'Menu', exact: true }).click();
       await p.getByRole('button', { name: 'Starting position' }).click();
       await assert.doesNotReject(label.filter({ hasText: /^Start$/ }).waitFor({ timeout: 5000 }));
       assert.notEqual(await panel('Opening explorer'), '', 'the free board again');
       assert.equal(await p.getByRole('dialog').count(), 0);
       // a game in progress asks first: Keep playing keeps it, Leave the game leaves
-      await p.getByRole('button', { name: 'Play/Explore' }).click();
+      await p.getByRole('button', { name: 'Menu', exact: true }).click();
       await p.getByRole('button', { name: 'Play vs human' }).click();
       await p.getByRole('button', { name: 'Start game' }).click();
       await drag(b, 'e2', 'e4', false);
       await assert.doesNotReject(label.filter({ hasText: /1\. e4/ }).waitFor({ timeout: 5000 }));
-      await p.getByRole('button', { name: 'Play/Explore' }).click();
+      await p.getByRole('button', { name: 'Menu', exact: true }).click();
       await p.getByRole('button', { name: 'Starting position' }).click();
       const leave = p.getByRole('dialog', { name: 'Leave this game?' });
       await assert.doesNotReject(leave.waitFor({ timeout: 3000 }));
@@ -1876,12 +1894,12 @@ for (const name of BROWSERS) for (const site of SITES) {
       await assert.doesNotReject(p.getByText('Black resigned').waitFor({ timeout: 3000 }));
       await p.screenshot({ path: path.join(OUT, host + '-play-resigned.png') });
       // a finished game is left without asking; then a new one with a move asks
-      await p.getByRole('button', { name: 'Play/Explore' }).click();
+      await p.getByRole('button', { name: 'Menu', exact: true }).click();
       await p.getByRole('button', { name: 'Play vs human' }).click();
       await p.getByRole('button', { name: 'Start game' }).click();
       await drag(b, 'e2', 'e4', false);
       await assert.doesNotReject(label.filter({ hasText: /1\. e4/ }).waitFor({ timeout: 5000 }));
-      await p.getByRole('button', { name: 'Play/Explore' }).click();
+      await p.getByRole('button', { name: 'Menu', exact: true }).click();
       await p.getByRole('button', { name: 'Starting position' }).click();
       await leave.getByRole('button', { name: 'Leave the game' }).click();
       await assert.doesNotReject(label.filter({ hasText: /^Start$/ }).waitFor({ timeout: 5000 }));
@@ -1940,7 +1958,7 @@ for (const name of BROWSERS) for (const site of SITES) {
       // the bars' names from the top of the board down
       const bars = async () => (await barNames(p, /^(You|Stockfish 19)$/)).map((x) => x.text);
       const start = async (you) => {
-        await p.getByRole('button', { name: 'Play/Explore' }).click();
+        await p.getByRole('button', { name: 'Menu', exact: true }).click();
         await p.getByRole('button', { name: 'Play vs Stockfish' }).click();
         const dialog = p.getByRole('dialog', { name: 'Play vs Stockfish' });
         await assert.doesNotReject(dialog.waitFor({ timeout: 3000 }));
@@ -1994,7 +2012,7 @@ for (const name of BROWSERS) for (const site of SITES) {
       await assert.doesNotReject(label.filter({ hasText: /^1\. / }).waitFor({ timeout: 5000 }));
       assert.match(await panel('Game'), /Your move/);
       // My games names the mode and the side
-      await p.getByRole('button', { name: 'Play/Explore' }).click();
+      await p.getByRole('button', { name: 'Menu', exact: true }).click();
       await p.getByRole('button', { name: 'My games' }).click();
       assert.match(await p.locator('.games-row').first().innerText(), /vs Stockfish · you played Black/);
       await p.keyboard.press('Escape');
@@ -2009,7 +2027,7 @@ for (const name of BROWSERS) for (const site of SITES) {
       await p.goto(base, { waitUntil: 'load' });
       await loadedOn(p);
       await setUpFen(p, '6k1/5ppp/8/3p4/8/8/4QPPP/6K1 w - - 0 1');
-      await p.getByRole('button', { name: 'Play/Explore' }).click();
+      await p.getByRole('button', { name: 'Menu', exact: true }).click();
       await p.getByRole('button', { name: 'Play vs Stockfish' }).click();
       const dialog = p.getByRole('dialog', { name: 'Play vs Stockfish' });
       await dialog.getByRole('radio', { name: 'Set-up position' }).click();
@@ -2073,7 +2091,7 @@ for (const name of BROWSERS) for (const site of SITES) {
         await p.mouse.move(tt.x, tt.y, { steps: 8 });
         await p.mouse.up();
       };
-      const menuItem = async (name) => { await p.getByRole('button', { name: 'Play/Explore' }).click(); await p.getByRole('button', { name }).click(); };
+      const menuItem = async (name) => { await p.getByRole('button', { name: 'Menu', exact: true }).click(); await p.getByRole('button', { name }).click(); };
       const dialog = p.getByRole('dialog', { name: 'My games' }), rows = dialog.locator('.games-row');
       await p.goto(base, { waitUntil: 'load' });
       await loadedOn(p);
