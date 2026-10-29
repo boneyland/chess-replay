@@ -14,10 +14,13 @@ const EXPORT_LIBS = {
 };
 const EXPORT_FORMATS = ['MP4', 'WebP'];
 // WebP widths offered besides the frame's own (the screen-sized page's width at the screen's density): 1676 fills GitHub's 838 px README
-// column on 2× screens. Quality is 50–95 (lossy). Encoded straight from the drawn frames, a WebP looks better than one
+// column on 2× screens. Quality is 50–95 (lossy), or 100: lossless. Encoded straight from the drawn frames, a WebP looks better than one
 // converted from the MP4, though it is larger than the MP4 of the same clip
 const WEBP_WIDTHS = [1676, 1280, 960, 838, 640];
-const WEBP_QUALITY = { min: 50, max: 95, step: 5 };
+const WEBP_QUALITY = { min: 50, max: 100, step: 5 };
+// MP4 quality: Mediabunny's bitrate presets, which scale with the frame's size and rate
+const MP4_QUALITIES = ['Very low', 'Low', 'Medium', 'High', 'Very high'];
+const mp4Bitrate = (MB, q) => MB[{ 'Very low': 'QUALITY_VERY_LOW', Low: 'QUALITY_LOW', Medium: 'QUALITY_MEDIUM', 'Very high': 'QUALITY_VERY_HIGH' }[q] || 'QUALITY_HIGH'];
 // libwebp 1.1.0 built to WebAssembly (Squoosh's codec, as packaged in @jsquash/webp 1.5.0), served next to the page.
 // The browser's own encoder (canvas.toBlob) takes only a quality, and at most qualities it sometimes chose a strong deblocking
 // filter for a frame, smearing the board's square edges and the text for that one frame. Here the filter is off, so
@@ -29,6 +32,8 @@ const WEBP_CONFIG = {
   partition_limit: 0, alpha_compression: 1, alpha_filtering: 1, alpha_quality: 100, lossless: 0, exact: 0, image_hint: 0,
   emulate_jpeg_size: 0, thread_level: 0, low_memory: 0, near_lossless: 100, use_delta_palette: 0, use_sharp_yuv: 0,
 };
+// quality 100 is lossless: libwebp then reads `quality` as effort, so it is left at the top
+const WEBP_LOSSLESS = { lossless: 1 };
 // each library loads once; a failed load is tried again on the next export
 const once = (load) => { let p = null; return () => (p = p || load().catch((e) => { p = null; throw e; })); };
 const loadHtml2canvas = once(() => new Promise((ok, fail) => {
@@ -51,13 +56,13 @@ const loadWebp = once(async () => {
 
 // The two encoders behind one interface: frame(isNew) after each frame is drawn into the canvas (isNew false when
 // run() left the canvas as it was, its markup unchanged), then finish() gives the file as { blob, ext }, or cancel()
-async function mp4Encoder(cv, W, H, fps, audio) {
+async function mp4Encoder(cv, W, H, fps, audio, quality = 'High') {
   const MB = await loadMediabunny();
   const avc = await MB.canEncodeVideo('avc', { width: W, height: H });
   const codec = avc ? 'avc' : (await MB.canEncodeVideo('vp9', { width: W, height: H })) ? 'vp9' : null;
   if (!codec) throw new Error('this browser cannot encode video. Try a recent Chrome, Edge or Firefox.');
   const output = new MB.Output({ format: avc ? new MB.Mp4OutputFormat() : new MB.WebMOutputFormat(), target: new MB.BufferTarget() });
-  const src = new MB.CanvasSource(cv, { codec, bitrate: MB.QUALITY_HIGH });
+  const src = new MB.CanvasSource(cv, { codec, bitrate: mp4Bitrate(MB, quality) });
   output.addVideoTrack(src, { frameRate: fps });
   // the move sounds, when the browser can encode them: AAC in an MP4, else Opus (which MP4 and WebM both hold)
   const sound = audio ? await audio() : null;
@@ -92,7 +97,7 @@ async function webpEncoder(cv, W, H, fps, { width = 0, quality = 75 } = {}) {
   const out = scale === 1 ? cv : Object.assign(document.createElement('canvas'), { width: w, height: h });
   const ox = out.getContext('2d', { willReadFrequently: true });
   ox.imageSmoothingQuality = 'high';
-  const config = { ...WEBP_CONFIG, quality };
+  const config = { ...WEBP_CONFIG, quality, ...(quality >= WEBP_QUALITY.max && WEBP_LOSSLESS) };
   const frames = [];
   let i = 0, prev = null;
   // frame i ends at round((i + 1) * 1000 / fps) ms, so the whole file keeps time (see WebPAnim.durations)
@@ -122,8 +127,8 @@ const seekStage = (t) => window.dispatchEvent(new CustomEvent('chess-video:seek'
 
 // run() takes the stretch of the timeline to export in seconds ({ start, end }), a file name suffix, and audio: an
 // async function giving the stretch's soundtrack as an AudioBuffer (or null for none; a WebP has no sound).
-// format: one of EXPORT_FORMATS; webp: { width (0 the frame's own, 'Half', or pixels), quality } for webpEncoder
-function useVideoExport({ fps, format, webp, save, stem }) {
+// format: one of EXPORT_FORMATS; webp: { width (0 the frame's own, 'Half', or pixels), quality } for webpEncoder; mp4Quality: one of MP4_QUALITIES
+function useVideoExport({ fps, format, webp, mp4Quality, save, stem }) {
   const [state, setState] = React.useState(null); // { phase: 'load' | 'render' | 'save', done, N, eta } or { phase: 'error', msg }
   const stopRef = React.useRef(false);
   const run = async ({ start, end, suffix = '', audio }) => {
@@ -145,7 +150,7 @@ function useVideoExport({ fps, format, webp, save, stem }) {
       const cx = cv.getContext('2d', { willReadFrequently: format === 'WebP' }); // the WebP encoder reads every frame back
       // Full (0) and Half are taken against the canvas drawn now, whatever Settings' widths were worked out from
       const wpx = webp.width === 'Half' ? Math.round(W / 2) : webp.width;
-      enc = format === 'WebP' ? await webpEncoder(cv, W, H, fps, { ...webp, width: wpx }) : await mp4Encoder(cv, W, H, fps, audio);
+      enc = format === 'WebP' ? await webpEncoder(cv, W, H, fps, { ...webp, width: wpx }) : await mp4Encoder(cv, W, H, fps, audio, mp4Quality);
       // html2canvas copies the whole document every frame: leave out the scripts (the page inlines its sounds
       // and opening tables) and the page around the stage, but keep the head and every stylesheet (fonts and base styles)
       const keep = (n) => n.tagName === 'STYLE' || n.tagName === 'LINK' || n.tagName === 'HEAD' || n.closest('head');
