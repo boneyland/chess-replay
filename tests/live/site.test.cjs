@@ -2409,6 +2409,7 @@ for (const name of BROWSERS) for (const site of SITES) {
       // the samples of an MP4's video track: its stts box (found by walking the boxes, as the video data can hold the
       // same four letters), as [count, delta] pairs
       const samples = (buf) => {
+        if (buf.toString('latin1', 4, 8) !== 'ftyp') return null; // a browser with no H.264 encoder writes WebM, which has no stts
         const find = (from, to, path) => {
           for (let at = from; at + 8 <= to;) {
             const size = buf.readUInt32BE(at) || to - at, type = buf.toString('latin1', at + 4, at + 8);
@@ -2432,7 +2433,7 @@ for (const name of BROWSERS) for (const site of SITES) {
       await p.locator('#tw-clip-to').selectOption({ index: 1 });
       assert.equal(await p.getByRole('switch', { name: 'Variable frame rate' }).getAttribute('aria-checked'), 'false', 'off by default');
       const cfr = samples(await exportMp4('cfr'));
-      assert.equal(cfr.out.length, 1, 'constant frame rate: every sample is the same length');
+      if (cfr) assert.equal(cfr.out.length, 1, 'constant frame rate: every sample is the same length');
       if (!(await p.getByRole('tab', { name: 'Export' }).isVisible())) { // the export closed Settings
         if (!(await settings.isVisible())) await p.getByRole('button', { name: 'Menu' }).click();
         await settings.click();
@@ -2441,9 +2442,12 @@ for (const name of BROWSERS) for (const site of SITES) {
       await p.getByRole('switch', { name: 'Variable frame rate' }).click();
       assert.ok(await p.getByRole('button', { name: /^Export video \(MP4, up to 8 fps, variable/ }).isVisible());
       const vfr = samples(await exportMp4('vfr'));
-      assert.ok(vfr.count < cfr.count, `fewer samples (${vfr.count} < ${cfr.count})`);
-      assert.ok(vfr.out.length > 1, 'uneven sample lengths');
-      assert.ok(Math.abs(vfr.ticks / vfr.count - cfr.ticks / cfr.count) > 0, 'a longer average sample');
+      assert.equal(!!vfr, !!cfr, 'both files are the same container');
+      if (vfr) {
+        assert.ok(vfr.count < cfr.count, `fewer samples (${vfr.count} < ${cfr.count})`);
+        assert.ok(vfr.out.length > 1, 'uneven sample lengths');
+        assert.ok(Math.abs(vfr.ticks / vfr.count - cfr.ticks / cfr.count) > 0, 'a longer average sample');
+      }
       assert.deepEqual(dk.errors, []);
       await dk.ctx.close();
     });
