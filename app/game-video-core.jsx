@@ -437,7 +437,8 @@ function BoardTouch({ pos, sel, targets, drag, promo, onDown, onMove, onUp, onCa
 
 // Move chips for a line; legal moves can be clicked to show the line on the board up to that move
 // name: null for none (the caller labels the line); tip: what the moves' tooltips call the line (else the name)
-function LineChips({ name, nameColor, accent, moves, ply0, c, legal, sel, onPick, tip }) {
+// onHover(j), then onHover(null) as the mouse leaves: the board previews the line up to that move
+function LineChips({ name, nameColor, accent, moves, ply0, c, legal, sel, onPick, tip, onHover }) {
   const what = tip || String(name).toLowerCase();
   return (
     <div style={{ display: 'flex', flexWrap: 'wrap', alignItems: 'center', columnGap: tx(6), rowGap: tx(6) }}>
@@ -448,7 +449,8 @@ function LineChips({ name, nameColor, accent, moves, ply0, c, legal, sel, onPick
           <span key={j} style={{ display: 'flex', alignItems: 'center', gap: tx(5) }}>
             {(white || j === 0) && <span style={{ color: C.dim, marginLeft: j ? tx(6) : 0, font: `500 ${tx(15)}px ${MONO}` }}>{window.ChessCore.moveNo(ply)}</span>}
             <span className={ok ? 'mv' : undefined} role={ok ? 'button' : undefined} title={ok ? `Show ${what} on the board up to ${m}` : 'Not a legal move in this line'}
-              onClick={ok ? (e) => { e.stopPropagation(); onPick(j); } : undefined} tabIndex={ok ? 0 : undefined}
+              onClick={ok ? (e) => { e.stopPropagation(); onPick(j); } : undefined}
+              onPointerEnter={ok && onHover ? (e) => { if (e.pointerType === 'mouse') onHover(j); } : undefined} onPointerLeave={ok && onHover ? (e) => { if (e.pointerType === 'mouse') onHover(null); } : undefined} tabIndex={ok ? 0 : undefined}
               onKeyDown={ok ? (e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); e.stopPropagation(); onPick(j); } } : undefined}
               style={{ cursor: ok ? 'pointer' : 'default', opacity: ok ? 1 : 0.4, padding: `${tx(2)}px ${tx(8)}px`, borderRadius: 2, font: `${j === 0 || on ? 700 : 600} ${tx(16)}px ${MONO}`, background: white ? '#f1ebe1' : '#2a2320', color: white ? '#15100d' : '#efe8de', boxShadow: on ? `0 0 0 3px ${C.last}` : 'none', border: j === 0 ? `2px solid ${accent}` : `1px solid ${white ? 'rgba(60,40,20,0.22)' : 'rgba(255,236,214,0.22)'}` }}>{m}</span>
           </span>
@@ -672,7 +674,7 @@ function Commentary({ M, T, S, a, book, line }) {
 }
 
 // tb: the endgame tablebase's answer for the position on the board (useTablebase); onTb plays one of its moves
-function Analysis({ M, T, S, a, vline, onLine, paused, sf, own, onReply, deep, tb, onTb }) {
+function Analysis({ M, T, S, a, vline, onLine, onPreview, onReplyHover, paused, sf, own, onReply, deep, tb, onTb }) {
   const c = lastPly(T, S);
   // the Tablebase block goes under the lines; the panel scrolls to it where it doesn't fit
   const box = tb && !L.analysis.flow ? { ...L.analysis, scroll: true } : L.analysis;
@@ -684,7 +686,7 @@ function Analysis({ M, T, S, a, vline, onLine, paused, sf, own, onReply, deep, t
   if (own && vline && vline.src === 'you' && vline.upto >= 0) {
     return (
       <AnalysisPanel box={box} a={a} paused={paused} depth={sf && (sf.status === 'unavailable' || sf.status === 'stopped') ? null : searchDepth(own.after)} deep={own}>
-        <OwnMoveAnalysis M={M} vline={vline} own={own} status={sf ? sf.status : 'idle'} onReply={onReply} />
+        <OwnMoveAnalysis M={M} vline={vline} own={own} status={sf ? sf.status : 'idle'} onReply={onReply} onHover={onReplyHover} />
         {tbEl}
         <span style={{ display: 'block', marginTop: tx(8), font: `500 ${tx(15)}px ${MONO}`, color: C.dim }}>
           <span style={{ color: lineAccent('you') }}>Your moves: {vline.moves.slice(0, vline.upto + 1).map((m, j) => (j === 0 || (M.ply0 + vline.at + j) % 2 === 0 ? lineLabel(M, vline.at, j, m.san) : m.san)).join(' ')}</span> · ← → step · Esc returns to the game
@@ -734,14 +736,14 @@ function Analysis({ M, T, S, a, vline, onLine, paused, sf, own, onReply, deep, t
       <div style={{ marginTop: anGap(16), paddingTop: anGap(14), borderTop: `1px solid ${C.line}`, font: `500 ${tx(18)}px ${MONO}`, color: C.dim, display: 'flex', flexDirection: 'column', gap: anGap(8), opacity: k }}>
         {P.best && P.best.line.length ? (
           <LineChips name="Best line" nameColor={C.ink} accent={C.best} moves={P.best.line.slice(0, 8)} ply0={M.ply0} c={c} legal={sfLegal.length}
-            sel={vline && vline.src === 'sf' ? vline.upto : null} onPick={(j) => onLine('sf', sfLegal, j)} />
+            sel={vline && vline.src === 'sf' ? vline.upto : null} onPick={(j) => onLine('sf', sfLegal, j)} onHover={(j) => onPreview('sf', sfLegal, j)} />
         ) : cls === 'best' && agreeLegal.length ? (
           <LineChips name="Best line" nameColor={C.ink} accent={C.best} moves={P.line.slice(0, 8)} ply0={M.ply0} c={c} legal={agreeLegal.length}
-            sel={vline && vline.src === 'sf' ? vline.upto : null} onPick={(j) => onLine('sf', agreeLegal, j)} />
+            sel={vline && vline.src === 'sf' ? vline.upto : null} onPick={(j) => onLine('sf', agreeLegal, j)} onHover={(j) => onPreview('sf', agreeLegal, j)} />
         ) : cls === 'best' ? <span>{agreeText}</span> : <span />}
         {qLine.length > 0 && (
           <LineChips name="Queen line" nameColor={C.queen} accent={C.queen} moves={qLine} ply0={M.ply0} c={c} legal={qLegal.length}
-            sel={vline && vline.src === 'queen' ? vline.upto : null} onPick={(j) => onLine('queen', qLegal, j)} />
+            sel={vline && vline.src === 'queen' ? vline.upto : null} onPick={(j) => onLine('queen', qLegal, j)} onHover={(j) => onPreview('queen', qLegal, j)} />
         )}
         {P.advice && <span style={{ color: C.inaccuracy }}>{P.advice}</span>}
         {tb && <div style={{ paddingTop: tx(8), borderTop: `1px solid ${C.line}` }}><TablebaseBlock t={tb} onPlay={onTb} /></div>}
@@ -991,7 +993,12 @@ function GameVideo({ M, tw, d, probe, queen, nav, scheme, sf, orient }) {
   const cNow = lastPly(T, S);
   React.useEffect(() => { if (vline && (playing || cNow !== vline.c)) setVline(null); }, [playing, cNow]);
   useMoveSounds(M, T, S, tw, playing, vline);
-  const onLine = (src, moves, j) => { if (j < moves.length) { tl.setPlaying(false); input.clear(); setVline({ c: cNow, at: cNow, src, moves, upto: j }); } };
+  // the line under the mouse in the Analysis panel, shown on the board until it leaves (or the line is picked)
+  const [pv, setPv] = React.useState(null);
+  React.useEffect(() => { setPv(null); }, [playing, cNow]);
+  const onPreview = (src, moves, j) => setPv(j != null && j < moves.length ? { c: cNow, at: cNow, src, moves, upto: j } : null);
+  const onReplyHover = (steps) => setPv(steps && steps.length && vline ? { ...vline, moves: [...vline.moves.slice(0, vline.upto + 1), ...steps], upto: vline.upto + steps.length } : null);
+  const onLine = (src, moves, j) => { setPv(null); if (j < moves.length) { tl.setPlaying(false); input.clear(); setVline({ c: cNow, at: cNow, src, moves, upto: j }); } };
   // a line steps back to its first move (the viewer's own line back to its starting position), then closes
   const stepLine = (d) => setVline((v) => {
     if (!v) return v;
@@ -1036,7 +1043,7 @@ function GameVideo({ M, tw, d, probe, queen, nav, scheme, sf, orient }) {
     const bm = ownEval.before && ownEval.before.best ? window.ChessCore.applyUci(posBefore, ownEval.before.best) : null;
     own = { ...ownEval, bestSan: bm ? bm.san : null };
   }
-  const onReply = (steps) => setVline((v) => v && { ...v, moves: [...v.moves.slice(0, v.upto + 1), ...steps], upto: v.upto + steps.length });
+  const onReply = (steps) => { setPv(null); setVline((v) => v && { ...v, moves: [...v.moves.slice(0, v.upto + 1), ...steps], upto: v.upto + steps.length }); };
   // the book name of the position on the board while a line is shown (it can reach openings the game never played)
   const lineKey = vline && vline.upto >= 0 ? M.plies.slice(0, vline.at).map((p) => p.uci).concat(vline.moves.slice(0, vline.upto + 1).map((m) => m.uci)).join(' ') : null;
   const lineBook = React.useMemo(() => {
@@ -1103,14 +1110,14 @@ function GameVideo({ M, tw, d, probe, queen, nav, scheme, sf, orient }) {
           <EvalBar M={M} T={T} S={S} a={enter(1)} tb={tbBar(tb)} />
           <PlayerBar M={M} T={T} S={S} side="b" a={enter(1)} pieces={pieces} />
           <BoardSpace>
-            <Board M={M} T={T} S={S} a={enter(0)} arrows={tw.bestArrows} pieces={pieces} queen={queen} vline={vline} hide={input.drag && input.drag.moved ? input.drag.from : null} lines={tw.bestArrows && own ? lineArrows(own.after) : null} />
+            <Board M={M} T={T} S={S} a={enter(0)} arrows={tw.bestArrows} pieces={pieces} queen={queen} vline={pv || vline} hide={input.drag && input.drag.moved ? input.drag.from : null} lines={tw.bestArrows && own ? lineArrows(own.after) : null} />
             <BoardTouch pos={touchPos} sel={input.sel} targets={input.targets} drag={input.drag} promo={input.promo} {...input.handlers} />
           </BoardSpace>
           <PlayerBar M={M} T={T} S={S} side="w" a={enter(1)} pieces={pieces} />
           {L.header && <Header M={M} a={enter(2)} />}
           <MoveList M={M} T={T} S={S} a={enter(3)} paused={!playing} onPick={goTo} />
           <Commentary M={M} T={T} S={S} a={enter(4)} book={sf ? sf.book : null} line={lineKey ? { book: lineBook } : null} />
-          <Analysis M={M} T={T} S={S} a={enter(5)} vline={vline} onLine={onLine} paused={!playing} sf={sf} own={own} onReply={onReply} deep={gameEval} tb={tb} onTb={onTb} />
+          <Analysis M={M} T={T} S={S} a={enter(5)} vline={vline} onLine={onLine} onPreview={onPreview} onReplyHover={onReplyHover} paused={!playing} sf={sf} own={own} onReply={onReply} deep={gameEval} tb={tb} onTb={onTb} />
           {L.plot && <EvalPlot M={M} T={T} S={S} a={enter(6)} paused={!playing} onPick={goTo} />}
         </div>
         <div style={{ position: 'absolute', inset: 0, pointerEvents: 'none', boxShadow: `inset 0 0 220px rgba(228,85,63,${0.55 * flash})` }} />

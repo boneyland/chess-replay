@@ -454,7 +454,7 @@ function engineSteps(pos, pv, max = 8) {
 // Analysis › ☰ › Lines above one: each line's eval and first moves, the moves wrapping under each other beside
 // the eval (a narrow panel scrolls to the later lines); a move plays the line on the board up to it. c: the ply the lines start at
 // cloud: the lines are Lichess's cloud evaluation's
-function EngineLines({ lines, pos, ply0, c, onPick, cloud }) {
+function EngineLines({ lines, pos, ply0, c, onPick, onHover, cloud }) {
   const top = lines[0].depth;
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: tx(6) }}>
@@ -465,7 +465,7 @@ function EngineLines({ lines, pos, ply0, c, onPick, cloud }) {
             <span style={{ flex: '0 0 auto', width: tx(100), whiteSpace: 'nowrap', lineHeight: `${tx(30)}px`, color: l.k === 1 ? C.ink : C.dim }}>{ev}{l.depth < top && <span style={{ font: `500 ${tx(13)}px ${MONO}`, color: C.dim }}> d{l.depth}</span>}</span>
             <div style={{ flex: '1 1 0', minWidth: 0 }}>
               <LineChips name={null} tip={`${cloud ? 'Lichess cloud' : 'Stockfish'}'s line ${l.k} (${ev})`} accent={l.k === 1 ? C.best : C.line}
-                moves={st.map((m) => m.san)} ply0={ply0} c={c} legal={st.length} sel={null} onPick={(j) => onPick(st.slice(0, j + 1))} />
+                moves={st.map((m) => m.san)} ply0={ply0} c={c} legal={st.length} sel={null} onPick={(j) => onPick(st.slice(0, j + 1))} onHover={onHover && ((j) => onHover(j == null ? null : st.slice(0, j + 1)))} />
             </div>
           </div>
         );
@@ -484,7 +484,7 @@ const fmtSf = (cp) => {
 };
 
 // The Analysis panel while the viewer plays their own line: their move, its eval, what it costs, Stockfish's reply
-function OwnMoveAnalysis({ M, vline, own, status, onReply }) {
+function OwnMoveAnalysis({ M, vline, own, status, onReply, onHover }) {
   const step = vline.moves[vline.upto], ply = vline.at + vline.upto, isWhite = (M.ply0 + ply) % 2 === 0;
   const { before, after } = own;
   const done = before && after && !before.partial && !after.partial;
@@ -506,9 +506,9 @@ function OwnMoveAnalysis({ M, vline, own, status, onReply }) {
       {/* the verdict spans the panel, under the move and the eval, so it fits on one line in the phone layout */}
       <div style={{ marginTop: anGap(6), font: `600 ${tx(16)}px ${MONO}`, letterSpacing: '0.08em', textTransform: 'uppercase', color: col }}>{who} · {bad ? CLASS_LABEL[rated.classification] + ' · ' : ''}{verdict}</div>
       <div style={{ marginTop: anGap(16), paddingTop: anGap(14), borderTop: `1px solid ${C.line}`, font: `500 ${tx(18)}px ${MONO}`, color: C.dim, display: 'flex', flexDirection: 'column', gap: anGap(8) }}>
-        {many ? <EngineLines lines={after.lines} pos={step.pos} ply0={M.ply0} c={ply + 1} onPick={onReply} cloud={after.source === 'cloud'} />
+        {many ? <EngineLines lines={after.lines} pos={step.pos} ply0={M.ply0} c={ply + 1} onPick={onReply} onHover={onHover} cloud={after.source === 'cloud'} />
           : replies.length > 0
-          ? <LineChips name={null} tip={after.source === 'cloud' ? 'Lichess cloud’s reply' : 'Stockfish’s reply'} accent={C.best} moves={replies.map((r) => r.san)} ply0={M.ply0} c={ply + 1} legal={replies.length} sel={null} onPick={(j) => onReply(replies.slice(0, j + 1))} />
+          ? <LineChips name={null} tip={after.source === 'cloud' ? 'Lichess cloud’s reply' : 'Stockfish’s reply'} accent={C.best} moves={replies.map((r) => r.san)} ply0={M.ply0} c={ply + 1} legal={replies.length} sel={null} onPick={(j) => onReply(replies.slice(0, j + 1))} onHover={onHover && ((j) => onHover(j == null ? null : replies.slice(0, j + 1)))} />
           : <span>{step.san.endsWith('#') ? 'Checkmate.' : ' '}</span>}
       </div>
     </React.Fragment>
