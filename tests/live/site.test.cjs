@@ -2390,7 +2390,7 @@ for (const name of BROWSERS) for (const site of SITES) {
     });
 
     // The export draws the board, the eval bar and the graph itself (export-draw.js), and html2canvas the rest: each of
-    // the three is drawn there, not handed to html2canvas, and a frame put together that way matches html2canvas's
+    // the three is drawn there, not handed to html2canvas, and in a frame put together that way they match html2canvas's
     // picture of the whole stage. Mid-move, with a badge and a best-move arrow on the board, and later in the game
     await t.test('desktop: the export\'s own drawing matches html2canvas', { timeout: 120000 }, async () => {
       const dk = await open(browser, { width: 1440, height: 900 });
@@ -2403,7 +2403,17 @@ for (const name of BROWSERS) for (const site of SITES) {
         const seek = (t) => window.dispatchEvent(new CustomEvent('chess-video:seek', { detail: { time: t, sync: true } }));
         const skip = (target) => (n) => n.tagName === 'SCRIPT' || (!(n.tagName === 'STYLE' || n.tagName === 'LINK' || n.closest('head')) && n !== target && !n.contains(target) && !target.contains(n));
         const pixels = (cv) => cv.getContext('2d').getImageData(0, 0, W, H).data;
-        const psnr = (A, B) => { let s = 0; for (let i = 0; i < A.length; i += 4) for (let c = 0; c < 3; c++) s += (A[i + c] - B[i + c]) ** 2; return 10 * Math.log10((255 * 255 * A.length * 0.75) / s); };
+        // over the boxes of the layers drawn here only: html2canvas draws the rest of both pictures, and WebKit's
+        // html2canvas doesn't always draw a panel the same twice (the Moves chips' shades, a stray gap between words)
+        const psnr = (A, B, boxes) => {
+          let s = 0, n = 0;
+          for (const r of boxes) for (let y = Math.max(0, Math.floor(r.top)); y < Math.min(H, Math.ceil(r.bottom)); y++) for (let x = Math.max(0, Math.floor(r.left)); x < Math.min(W, Math.ceil(r.right)); x++) {
+            const i = (y * W + x) * 4;
+            for (let c = 0; c < 3; c++) s += (A[i + c] - B[i + c]) ** 2;
+            n += 3;
+          }
+          return s ? 10 * Math.log10((255 * 255 * n) / s) : Infinity;
+        };
         const stage = window.ExportDraw.compositor(el, { W, H, scale: 1, html2canvas, skip });
         const out = [];
         for (const t of [7.0, 9.2, 20.4]) {
@@ -2411,14 +2421,15 @@ for (const name of BROWSERS) for (const site of SITES) {
           const layers = window.ExportDraw.layersOf(el);
           const find = (f) => layers.find(f);
           const drawn = (n) => (n ? (typeof window.ExportDraw.paintLayer(el, n, 1) === 'string' ? window.ExportDraw.paintLayer(el, n, 1) : 'drawn') : 'missing');
-          const board = drawn(find((n) => n.querySelectorAll('img').length >= 20));
-          const bar = drawn(find((n) => n.offsetWidth < 60 && /^[+−]?\d+\.\d\d$/.test(n.textContent.trim())));
-          const plot = drawn(find((n) => n.querySelector('svg > title') && /Click or drag/.test(n.querySelector('svg > title').textContent)));
+          const ns = [find((n) => n.querySelectorAll('img').length >= 20), find((n) => n.offsetWidth < 60 && /^[+−]?\d+\.\d\d$/.test(n.textContent.trim())), find((n) => n.querySelector('svg > title') && /Click or drag/.test(n.querySelector('svg > title').textContent))];
+          const [board, bar, plot] = ns.map(drawn);
+          const R = el.getBoundingClientRect();
+          const boxes = ns.filter((n) => n && drawn(n) === 'drawn').map((n) => { const r = n.getBoundingClientRect(); return { left: r.left - R.left, top: r.top - R.top, right: r.right - R.left, bottom: r.bottom - R.top }; });
           // the stage's frame first: it makes the page's first html2canvas capture, which WebKit gets wrong unless warmed up
           const b = document.createElement('canvas'); b.width = W; b.height = H; await stage.draw(b.getContext('2d'));
           const shot = await html2canvas(el, { scale: 1, width: W, height: H, logging: false, ignoreElements: skip(el), onclone: (d, c) => { c.style.transform = 'none'; } });
           const a = document.createElement('canvas'); a.width = W; a.height = H; a.getContext('2d').drawImage(shot, 0, 0);
-          out.push({ t, board, bar, plot, letterSpacing: 'letterSpacing' in b.getContext('2d'), psnr: psnr(pixels(a), pixels(b)), old: a.toDataURL('image/png'), neu: b.toDataURL('image/png') });
+          out.push({ t, board, bar, plot, letterSpacing: 'letterSpacing' in b.getContext('2d'), psnr: psnr(pixels(a), pixels(b), boxes), old: a.toDataURL('image/png'), neu: b.toDataURL('image/png') });
         }
         stage.done();
         return out;
@@ -2431,7 +2442,7 @@ for (const name of BROWSERS) for (const site of SITES) {
         assert.equal(f.bar, 'drawn', `the eval bar at ${f.t} s`);
         // the graph's WHITE and BLACK are letter-spaced, which canvas can't do everywhere (WebKit): html2canvas's there
         if (f.letterSpacing) assert.equal(f.plot, 'drawn', `the graph at ${f.t} s`);
-        // the text lands within a pixel and the board gets its shadow, which html2canvas leaves out: 31–34 dB measured
+        // in those layers' boxes: their text lands within a pixel of html2canvas's, and the pieces keep their shadows
         assert.ok(f.psnr > 28, `the frame at ${f.t} s matches html2canvas's (${all})`);
       }
       assert.deepEqual(dk.errors, []);
