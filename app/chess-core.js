@@ -99,10 +99,17 @@
     let s = san.replace(/[+#!?]+$/, '');
     if (/^0-0/.test(s)) s = s.replace(/0/g, 'O');
     const color = pos.turn;
-    if (/^O-O(-O)?$/.test(s)) { const y = color === 'w' ? 7 : 0; return { from: at(4, y), to: at(s.length > 3 ? 2 : 6, y), promo: null }; }
+    // castling is checked in full (rights, rook, empty squares, no check on the king's path): a PGN's O-O isn't trusted
+    if (/^O-O(-O)?$/.test(s)) {
+      const y = color === 'w' ? 7 : 0, from = at(4, y), to = at(s.length > 3 ? 2 : 6, y);
+      if (!legalMove(pos, from, to)) throw new Error(`"${san}" is not a legal move here`);
+      return { from, to, promo: null };
+    }
     const m = s.match(/^([NBRQK])?([a-h])?([1-8])?x?([a-h][1-8])(?:=?([NBRQnbrq]))?$/);
     if (!m) throw new Error(`Can't read the move "${san}"`);
     const type = (m[1] || 'P').toLowerCase(), to = sqIdx(m[4]), promo = m[5] ? m[5].toLowerCase() : null;
+    // a promotion piece only on a pawn reaching the last rank, and there always one
+    if (promo ? type !== 'p' || (fy(to) !== 0 && fy(to) !== 7) : type === 'p' && (fy(to) === 0 || fy(to) === 7)) throw new Error(`"${san}" is not a legal move here`);
     const cands = [];
     for (let i = 0; i < 64; i++) {
       const p = pos.b[i];
@@ -131,7 +138,9 @@
   const NAG = { 1: '!', 2: '?', 3: '!!', 4: '??', 5: '!?', 6: '?!' };
   function parsePGN(text) {
     const headers = {};
-    const body = text.replace(/\[(\w+)\s+"((?:[^"\\]|\\.)*)"\]/g, (_, k, v) => { headers[k] = v; return ' '; });
+    const body = text.replace(/\[(\w+)\s+"((?:[^"\\]|\\.)*)"\]/g, (_, k, v) => { headers[k] = v.replace(/\\(["\\])/g, '$1'); return ' '; });
+    // a [FEN] start with Black to move: the first ply is Black's (cutechess evals below are the mover's)
+    const black0 = (headers.FEN || '').trim().split(/\s+/)[1] === 'b';
     const plies = []; let intro = '', depth = 0, varPly = -1, varSans = null, varAt = 0, i = 0;
     const addComment = (raw) => {
       if (depth > 0) return;
@@ -144,7 +153,7 @@
       if (!t) { if (txt) intro = (intro + ' ' + txt).trim(); return; }
       if (ev) { if (ev[1][0] === '#') t.mate = parseInt(ev[1].slice(1), 10); else t.cp = Math.round(parseFloat(ev[1]) * 100); }
       if (ae) {
-        const sign = (ae[1] === '-' ? -1 : 1) * ((plies.length - 1) % 2 ? -1 : 1);
+        const sign = (ae[1] === '-' ? -1 : 1) * ((plies.length - 1 + (black0 ? 1 : 0)) % 2 ? -1 : 1);
         if (ae[3]) t.mate = sign * Math.ceil(parseInt(ae[3], 10) / 2); else t.cp = sign * Math.round(parseFloat(ae[2]) * 100);
       }
       if (ck) t.clk = ck[1].split(':').map(Number).reduce((a, x) => a * 60 + x, 0);

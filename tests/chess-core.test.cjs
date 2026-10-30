@@ -97,6 +97,29 @@ test('cutechess engine comments give evals, turned to White’s point of view', 
   assert.equal(M.hasEval, true);
 });
 
+test('cutechess engine comments in a game starting with Black to move are turned to White’s point of view too', () => {
+  const M = CC.buildGame({ pgn: '[SetUp "1"]\n[FEN "4k3/8/8/8/8/8/4P3/4K3 b - - 0 1"]\n\n1... Kd7 {+1.00/20 0.1s} 2. e4 {+2.00/20 0.1s} *' });
+  assert.deepEqual(M.plies.map((p) => p.cp), [-100, 200]);
+});
+
+// a PGN's move is checked as fully as a move on the board: an illegal one would otherwise corrupt every position after it
+test('illegal castling and promotions in a PGN are refused', () => {
+  const bad = (pgn) => assert.throws(() => CC.buildGame({ pgn }), /not a legal move/);
+  bad('1. O-O *'); // pieces in the way (it once took White's own bishop and knight)
+  bad('[SetUp "1"]\n[FEN "4k3/8/8/8/8/8/8/4K2R w - - 0 1"]\n\n1. O-O *'); // no castling right
+  bad('[SetUp "1"]\n[FEN "4kr2/8/8/8/8/8/8/4K2R w K - 0 1"]\n\n1. O-O *'); // through check
+  bad('[SetUp "1"]\n[FEN "4r1k1/8/8/8/8/8/8/4K2R w K - 0 1"]\n\n1. O-O *'); // out of check
+  bad('1. e4=Q *'); // a promotion short of the last rank
+  bad('[SetUp "1"]\n[FEN "8/P7/8/8/8/8/8/k6K w - - 0 1"]\n\n1. a8 *'); // a pawn left on the last rank
+  assert.equal(CC.buildGame({ pgn: '1. e4 e5 2. Nf3 Nc6 3. Bc4 Bc5 4. O-O *' }).plies[6].uci, 'e1g1');
+});
+
+test('escaped quotes and backslashes in a PGN tag are read as the characters', () => {
+  const M = CC.buildGame({ pgn: '[White "Smith, \\"J\\""]\n[Black "a\\\\b"]\n\n1. e4 *' });
+  assert.equal(M.headers.White, 'Smith, "J"');
+  assert.equal(M.headers.Black, 'a\\b');
+});
+
 test('an engine comment is not shown as commentary, the text after it is', () => {
   const P = CC.buildGame({ pgn: '[Result "*"]\n\n1. e4 {+0.31/20 1.2s Book exit} e5 {Played 1/2 the time} *' });
   assert.equal(P.plies[0].comment, 'Book exit');
