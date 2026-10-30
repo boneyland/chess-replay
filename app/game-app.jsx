@@ -140,6 +140,7 @@ function GameApp() {
   // the dock's Menu (landscape); on a phone its items sit in the folded menu instead
   const [newMenu, setNewMenu] = React.useState(false);
   const [pgnOpen, setPgnOpen] = React.useState(false);
+  const [resetOpen, setResetOpen] = React.useState(false);
   // Edit position: { setup, text, msg, resume } while the editor shows in place of the board or the loaded game; text is
   // the FEN field's, msg why it doesn't parse, resume the paused game in progress left to open it (Cancel goes back to it)
   const [editing, setEditing] = React.useState(null);
@@ -639,6 +640,15 @@ function GameApp() {
       )}
       <ExportOverlay x={video} />
       {pgnOpen && <PgnDialog onLoad={pgnLoad} onClose={closePgn} />}
+      {resetOpen && (
+        <DialogBox label="Reset all settings" onClose={() => setResetOpen(false)}>
+          <div className="fen-note">Every setting goes back to its default. Your saved games and the downloaded engine are kept.</div>
+          <div className="fen-btns">
+            <button type="button" className="twk-btn secondary" data-autofocus onClick={() => setResetOpen(false)}>Cancel</button>
+            <button type="button" className="twk-btn danger" onClick={() => { setResetOpen(false); Object.keys(window.TWEAK_DEFAULTS).filter((k) => k !== 'sfEngine').forEach((k) => setTweak(k, window.TWEAK_DEFAULTS[k])); }}>Reset</button>
+          </div>
+        </DialogBox>
+      )}
       {playOpen && <PlayDialog key={playOpen} mode={playOpen} setUpFen={board && board.fen !== window.ChessCore.START_FEN ? board.fen : null} clock={t.playClock} side={t.playSide} initial={playInit} onStart={playStart} onSetUp={playSetUp} onClose={closePlay} />}
       {keysOpen && <ShortcutsDialog onClose={closeKeys} />}
       {gamesOpen && <MyGamesDialog games={gamesOpen} current={board && window.PlayCore.inProgress(board) ? board.game.id : null} onReplay={replayGame} onResume={resumeGame} onDelete={deleteGame} onClose={closeGames} />}
@@ -665,7 +675,7 @@ function GameApp() {
             <div className="twk-note">This player is free software under the GPL-3.0-or-later; <a href="https://github.com/boneyland/chess-replay" target="_blank" rel="noopener">source on GitHub</a>.</div>
           </TweakSection>
           {/* every setting back to its default; the kept games, the loaded game, Queen's answers, sign-ins and the engine download stay, and so does the engine choice */}
-          <TweakButton danger label="Reset all settings" onClick={() => { if (window.confirm('Reset every setting to its default? Your saved games and the downloaded engine are kept.')) Object.keys(window.TWEAK_DEFAULTS).filter((k) => k !== 'sfEngine').forEach((k) => setTweak(k, window.TWEAK_DEFAULTS[k])); }} />
+          <TweakButton danger label="Reset all settings" onClick={() => setResetOpen(true)} />
         </> },
         { id: 'view', label: 'View', body: <>
           <TweakSection label="Appearance">
