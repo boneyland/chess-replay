@@ -61,6 +61,38 @@ const loadWebp = once(async () => {
 
 // The two encoders behind one interface: frame(isNew) after each frame is drawn into the canvas (isNew false when
 // run() left the canvas as it was, its markup unchanged), then finish() gives the file as { blob, ext }, or cancel()
+// The soundtrack encoded to packets, with times of our own. WebKitGTK's audio encoder stamps every packet of a slice it is
+// given with the slice's start (and some with the slice's length), so the track's clock jumped and players stuttered and
+// drifted from the picture. A packet's length is known from its data instead: an Opus packet says it in its first bytes,
+// an AAC one is always 1024 samples; the times are those lengths added up
+const opusPacketSeconds = (d) => {
+  const toc = d[0], c = toc >> 3, frame = c < 12 ? [0.01, 0.02, 0.04, 0.06][c & 3] : c < 16 ? [0.01, 0.02][c & 1] : [0.0025, 0.005, 0.01, 0.02][c & 3];
+  const n = (toc & 3) === 0 ? 1 : (toc & 3) === 3 ? (d[1] & 63) : 2;
+  return frame * n;
+};
+async function encodeSound(MB, sound, acodec) {
+  const sr = sound.sampleRate, ch = sound.numberOfChannels, out = [];
+  let err = null, config = null;
+  const enc = new AudioEncoder({ output: (chunk, meta) => { out.push(MB.EncodedPacket.fromEncodedChunk(chunk)); config = config || meta?.decoderConfig || null; }, error: (e) => { err = e; } });
+  enc.configure({ codec: acodec === 'aac' ? 'mp4a.40.2' : 'opus', sampleRate: sr, numberOfChannels: ch, bitrate: 96000 });
+  const step = Math.round(sr / 2);
+  for (let at = 0; at < sound.length && !err; at += step) {
+    const n = Math.min(step, sound.length - at), data = new Float32Array(n * ch);
+    for (let c = 0; c < ch; c++) data.set(sound.getChannelData(c).subarray(at, at + n), c * n);
+    const ad = new AudioData({ format: 'f32-planar', sampleRate: sr, numberOfFrames: n, numberOfChannels: ch, timestamp: Math.round((at / sr) * 1e6), data });
+    enc.encode(ad); ad.close();
+  }
+  if (!err) await enc.flush();
+  enc.close();
+  if (err) throw err;
+  let t = 0;
+  return out.map((p, k) => {
+    const dur = acodec === 'aac' ? 1024 / sr : opusPacketSeconds(p.data), packet = new MB.EncodedPacket(p.data, p.type, t, dur);
+    t += dur;
+    return [packet, k === 0 ? { decoderConfig: config } : undefined];
+  });
+}
+
 // vfr: a frame whose picture didn't change (isNew false) isn't encoded: the frame before is held for its time, so a
 // pause is one long frame and fps is the most frames a second a move's animation gets. The picture is kept in a copy
 // of the canvas, as the canvas itself is drawn over with the next new frame before the held one's length is known
@@ -75,13 +107,16 @@ async function mp4Encoder(cv, W, H, fps, audio, quality = 'High', vfr = false) {
   output.addVideoTrack(src, { frameRate: fps });
   // the move sounds, when the browser can encode them: AAC in an MP4, else Opus (which MP4 and WebM both hold)
   const sound = audio ? await audio() : null;
-  let asrc = null;
+  let asrc = null, packets = null;
   if (sound) {
     const acodec = await MB.getFirstEncodableAudioCodec(avc ? ['aac', 'opus'] : ['opus'], { numberOfChannels: sound.numberOfChannels, sampleRate: sound.sampleRate });
-    if (acodec) { asrc = new MB.AudioBufferSource({ codec: acodec, bitrate: MB.QUALITY_MEDIUM }); output.addAudioTrack(asrc); }
+    if (acodec) { asrc = new MB.EncodedAudioPacketSource(acodec); output.addAudioTrack(asrc); packets = await encodeSound(MB, sound, acodec); }
   }
   await output.start();
-  if (asrc) { await asrc.add(sound); asrc.close(); }
+  if (asrc) {
+    for (const [packet, meta] of packets) await asrc.add(packet, meta);
+    asrc.close();
+  }
   let i = 0, from = null; // from: when the picture in hold began, in frames
   return {
     frame: async (isNew) => {
