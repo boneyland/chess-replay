@@ -661,11 +661,11 @@ function GameApp() {
           {!board && M.gameCount > 1 && (
             <TweakSelect id="tw-game" label="Game in PGN" value={String((files.gameIndex || 0) + 1)} options={Array.from({ length: M.gameCount }, (_, i) => String(i + 1))} onChange={(v) => commit({ ...files, gameIndex: +v - 1, analysis: null, analysisName: null })} />
           )}
-          {/* every setting back to its default; the kept games, the loaded game, Queen's answers, sign-ins and the engine download stay, and so does the engine choice */}
-          <TweakButton secondary label="Reset all settings" onClick={() => { if (window.confirm('Reset every setting to its default? Your saved games and the downloaded engine are kept.')) Object.keys(window.TWEAK_DEFAULTS).filter((k) => k !== 'sfEngine').forEach((k) => setTweak(k, window.TWEAK_DEFAULTS[k])); }} />
           <TweakSection label="About">
             <div className="twk-note">This player is free software under the GPL-3.0-or-later; <a href="https://github.com/boneyland/chess-replay" target="_blank" rel="noopener">source on GitHub</a>.</div>
           </TweakSection>
+          {/* every setting back to its default; the kept games, the loaded game, Queen's answers, sign-ins and the engine download stay, and so does the engine choice */}
+          <TweakButton danger label="Reset all settings" onClick={() => { if (window.confirm('Reset every setting to its default? Your saved games and the downloaded engine are kept.')) Object.keys(window.TWEAK_DEFAULTS).filter((k) => k !== 'sfEngine').forEach((k) => setTweak(k, window.TWEAK_DEFAULTS[k])); }} />
         </> },
         { id: 'view', label: 'View', body: <>
           <TweakSection label="Appearance">
