@@ -2,12 +2,26 @@
 // Replaces the Claude Design host hooks: files load and save in the browser, and settings open from a page button.
 const STORE = 'chess-video.files.v1';
 const SAMPLE = { pgn: window.SAMPLE_PGN, analysis: window.SAMPLE_ANALYSIS, sampleNotes: window.SAMPLE_NOTES, sample: true };
-// a free board is stored as { board: BoardCore.save(…), lastGame } (see commit) in the loaded game's place; one that no longer restores gives the sample
+// a free board is stored as { board: BoardCore.save(…), lastGame } (see commit) in the loaded game's place; one that no longer restores gives the sample.
+// A stored game that no longer reads (one kept before the reader got stricter) is dropped, and storedNote says so once,
+// rather than the error showing on every visit; a free board's lastGame that no longer reads is let go the same way
+let storedNote = '';
+const readsAsGame = (files) => { try { window.ChessCore.buildGame(files); return ''; } catch (e) { return e.message || String(e); } };
 function readStored() {
   try {
     const s = JSON.parse(localStorage.getItem(STORE) || 'null');
-    if (s && s.board) return window.BoardCore.restore(s.board) ? { board: s.board, lastGame: s.lastGame } : SAMPLE;
-    if (s && (s.pgn || s.analysis)) return s;
+    if (s && s.board) {
+      if (!window.BoardCore.restore(s.board)) return SAMPLE;
+      const last = s.lastGame && s.lastGame.files && !readsAsGame(s.lastGame.files) ? s.lastGame : undefined;
+      if (s.lastGame && !last) try { localStorage.setItem(STORE, JSON.stringify({ ...s, lastGame: last })); } catch (e) {}
+      return { board: s.board, lastGame: last };
+    }
+    if (s && (s.pgn || s.analysis)) {
+      const why = readsAsGame(s);
+      if (!why) return s;
+      try { localStorage.removeItem(STORE); } catch (e) {}
+      storedNote = `The game kept from your last visit can’t be read any more (${why}), so the sample game is shown.`;
+    }
   } catch (e) {}
   return SAMPLE;
 }
@@ -103,7 +117,7 @@ function GameApp() {
   const [files, setFiles] = React.useState(readStored);
   const filesRef = React.useRef(files);
   filesRef.current = files;
-  const [err, setErr] = React.useState('');
+  const [err, setErr] = React.useState(() => storedNote);
   const [drag, setDrag] = React.useState(false);
   const [panel, setPanel] = React.useState(false);
   const [panelTab, setPanelTab] = React.useState('game'); // Settings' open tab, kept while the page is open
