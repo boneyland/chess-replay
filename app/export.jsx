@@ -103,7 +103,9 @@ async function mp4Encoder(cv, W, H, fps, audio, quality = 'High', vfr = false) {
   if (!codec) throw new Error('this browser cannot encode video. Try a recent Chrome, Edge or Firefox.');
   const output = new MB.Output({ format: avc ? new MB.Mp4OutputFormat() : new MB.WebMOutputFormat(), target: new MB.BufferTarget() });
   const hold = vfr ? Object.assign(document.createElement('canvas'), { width: W, height: H }) : null, hx = vfr ? hold.getContext('2d') : null;
-  const src = new MB.CanvasSource(vfr ? hold : cv, { codec, bitrate: mp4Bitrate(MB, quality) });
+  // latencyMode 'quality' is WebCodecs' default, asked for outright in case WebKitGTK's encoder, which wrote Constrained Baseline with no
+  // B-frames at about twice Firefox's bitrate, defaults to a live-streaming setting
+  const src = new MB.CanvasSource(vfr ? hold : cv, { codec, bitrate: mp4Bitrate(MB, quality), latencyMode: 'quality' });
   output.addVideoTrack(src, { frameRate: fps });
   // the move sounds, when the browser can encode them: AAC in an MP4, else Opus (which MP4 and WebM both hold)
   const sound = audio ? await audio() : null;
