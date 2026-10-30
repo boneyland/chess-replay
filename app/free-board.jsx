@@ -503,11 +503,13 @@ function DialogBox({ label, onClose, children }) {
 }
 // a row of choices drawn as Settings' segmented control
 function DialogChoice({ label, value, options, onChange }) {
+  const idx = Math.max(0, options.findIndex((o) => o.value === value));
   return (
     <div className="play-row">
       <span className="play-label">{label}</span>
-      <div className="twk-seg" role="radiogroup" aria-label={label}>
-        {options.map((o) => <button key={o.label} type="button" role="radio" aria-checked={o.value === value} onClick={() => onChange(o.value)}>{o.label}</button>)}
+      <div className="twk-seg" role="radiogroup" aria-label={label} style={{ '--n': options.length, '--i': idx }}>
+        <div className="twk-seg-thumb" />
+        {options.map((o, k) => <button key={o.label} type="button" style={{ gridColumn: k + 1 }} role="radio" aria-checked={o.value === value} onClick={() => onChange(o.value)}>{o.label}</button>)}
       </div>
     </div>
   );
