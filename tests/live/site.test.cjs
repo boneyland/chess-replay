@@ -1758,6 +1758,25 @@ for (const name of BROWSERS) for (const site of SITES) {
       assert.deepEqual(g.errors, []);
       await g.ctx.close();
     });
+    // a game kept before the reader got stricter (an illegal O-O the old one let through) is dropped on the next visit and
+    // said so once, rather than the error showing on every visit
+    await t.test('desktop: a kept game that no longer reads is dropped and said so once', async () => {
+      const g = await open(browser, { width: 1440, height: 900 });
+      const p = g.page;
+      // stored before the page's scripts read it, on the first load only (the script also runs on the blank page before
+      // the first load, where Firefox refuses storage with a SecurityError)
+      await p.addInitScript(() => { try { if (!sessionStorage.getItem('seeded')) { localStorage.setItem('chess-video.files.v1', JSON.stringify({ pgn: '1. O-O *', pgnName: 'old.pgn', gameIndex: 0 })); sessionStorage.setItem('seeded', '1'); } } catch (e) {} });
+      await p.goto(base, { waitUntil: 'load' });
+      await loadedOn(p);
+      const alert = p.locator('.dock-status[role=alert]');
+      await assert.doesNotReject(alert.filter({ hasText: /can’t be read any more \("O-O" is not a legal move here \(move 1\.\)\)/ }).waitFor({ timeout: 5000 }));
+      assert.equal(await p.evaluate(() => localStorage.getItem('chess-video.files.v1')), null, 'dropped from storage');
+      await p.reload({ waitUntil: 'load' });
+      await loadedOn(p);
+      assert.equal(await alert.count(), 0, 'not shown again');
+      assert.deepEqual(g.errors, []);
+      await g.ctx.close();
+    });
     // a loaded game left for the free board comes back from Settings › Game, paused at the move it was left on
     await t.test('desktop: Back to the loaded game returns to the game and its move', async () => {
       const g = await open(browser, { width: 1440, height: 900 });

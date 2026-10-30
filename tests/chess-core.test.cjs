@@ -112,6 +112,7 @@ test('illegal castling and promotions in a PGN are refused', () => {
   bad('1. e4=Q *'); // a promotion short of the last rank
   bad('[SetUp "1"]\n[FEN "8/P7/8/8/8/8/8/k6K w - - 0 1"]\n\n1. a8 *'); // a pawn left on the last rank
   assert.equal(CC.buildGame({ pgn: '1. e4 e5 2. Nf3 Nc6 3. Bc4 Bc5 4. O-O *' }).plies[6].uci, 'e1g1');
+  assert.throws(() => CC.buildGame({ pgn: '1. e4 e5 2. O-O *' }), /^Error: "O-O" is not a legal move here \(move 2\.\)$/); // says where
 });
 
 test('escaped quotes and backslashes in a PGN tag are read as the characters', () => {

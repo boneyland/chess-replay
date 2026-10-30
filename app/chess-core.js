@@ -318,7 +318,9 @@
     const plies = [];
     sans.forEach((san, i) => {
       const am = useA && A.moves[i];
-      const before = pos, mv = sanToMove(pos, san), std = canon(pos, mv);
+      let mv;
+      try { mv = sanToMove(pos, san); } catch (e) { throw new Error(`${e.message} (move ${moveNo(ply0 + i)})`); }
+      const before = pos, std = canon(pos, mv);
       if (A && P && am && bare(am.move_san) !== bare(san) && bare(am.move_san) !== bare(std)) throw new Error(`The analysis file doesn't match this PGN at ply ${i + 1}`);
       pos = applyMove(pos, mv.from, mv.to, mv.promo);
       const pp = P ? P.plies[i] : {};
