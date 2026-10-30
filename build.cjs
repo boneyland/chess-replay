@@ -90,11 +90,16 @@ if ('serviceWorker' in navigator) window.addEventListener('load', () => { naviga
 // 'unsafe-inline' for scripts, so an injected one doesn't run). It names every host the page talks to: React and
 // html2canvas-pro (CDNs), the fonts, Hugging Face (sign-in, the Queen Space), Lichess's tablebase and explorer, the full engine's
 // download (unpkg). The engines and the export's encoders are WebAssembly ('wasm-unsafe-eval'); the full engine and
-// Mediabunny start workers from Blob URLs, and the full engine's glue fetches its wasm from one
+// Mediabunny start workers from Blob URLs, and the full engine's glue fetches its wasm from one. Scripts from a CDN are
+// allowed by their exact URLs (those in shell.html and export.jsx), not the whole host, so no other file there can run.
+// Framing (frame-ancestors) can't be set in a <meta>: render.yaml sends it as a header
+const SW_REMOTE = [...new Set([read(path.join(app, 'shell.html')), read(path.join(app, 'export.jsx'))].join('\n')
+  .match(/https:\/\/(?:cdnjs\.cloudflare\.com|cdn\.jsdelivr\.net|fonts\.googleapis\.com\/css2)[^'"\s]*/g))].filter((u) => !/\/$/.test(u));
+const CDN_SCRIPTS = SW_REMOTE.filter((u) => /\.js$/.test(u));
 const inlineHashes = [...site.matchAll(/<script>([\s\S]*?)<\/script>/g)].map((m) => `'sha256-${require('crypto').createHash('sha256').update(m[1]).digest('base64')}'`);
 const CSP = [
   "default-src 'self'",
-  `script-src 'self' 'wasm-unsafe-eval' https://cdnjs.cloudflare.com https://cdn.jsdelivr.net ${inlineHashes.join(' ')}`,
+  `script-src 'self' 'wasm-unsafe-eval' ${CDN_SCRIPTS.join(' ')} ${inlineHashes.join(' ')}`,
   "worker-src 'self' blob:",
   "connect-src 'self' blob: data: https://huggingface.co https://boneyland-queen-pawn-8.hf.space https://tablebase.lichess.ovh https://explorer.lichess.ovh https://lichess.org https://unpkg.com https://cdnjs.cloudflare.com https://cdn.jsdelivr.net https://fonts.googleapis.com https://fonts.gstatic.com",
   "style-src 'self' 'unsafe-inline' https://fonts.googleapis.com",
@@ -129,8 +134,6 @@ fs.writeFileSync(path.join(dir, 'out', 'site', 'manifest.webmanifest'), JSON.str
 // and the fonts' stylesheet in shell.html, the export's libraries in export.jsx). Its VERSION changes with any of
 // them, so a deploy that changes one replaces the kept copies; the page itself is fetched afresh on every visit.
 const SW_LOCAL = ['chess-game-video.html', 'manifest.webmanifest', ...fs.readdirSync(ICONS), ...VENDOR];
-const SW_REMOTE = [...new Set([read(path.join(app, 'shell.html')), read(path.join(app, 'export.jsx'))].join('\n')
-  .match(/https:\/\/(?:cdnjs\.cloudflare\.com|cdn\.jsdelivr\.net|fonts\.googleapis\.com\/css2)[^'"\s]*/g))].filter((u) => !/\/$/.test(u));
 const swSrc = read(path.join(app, 'sw.js'));
 const swHash = require('crypto').createHash('sha256').update(swSrc).update(JSON.stringify(SW_REMOTE));
 for (const f of SW_LOCAL.slice(1)) swHash.update(fs.readFileSync(path.join(dir, 'out', 'site', f)));
