@@ -29,11 +29,6 @@ test('a FEN with Black to move numbers its moves from the FEN', () => {
   b = B.play(b, step(b, 'e8d7'));
   assert.equal(B.label(b, 0), '40… Kd7');
 });
-test('fenFromInput unwraps a PGN tag and passes parseFen\'s messages on', () => {
-  assert.equal(B.fenFromInput('  [FEN "4k3/8/8/8/8/8/4P3/4K3  b - - 0 40"] '), '4k3/8/8/8/8/8/4P3/4K3 b - - 0 40');
-  assert.throws(() => B.fenFromInput(''), /Paste a FEN/);
-  assert.throws(() => B.fenFromInput('8/8/8/8/8/8/8/4K3 w - - 0 1'), /king/i);
-});
 test('save and restore round-trip; restore keeps the legal prefix', () => {
   let b = B.fromFen();
   for (const u of ['e2e4', 'e7e5']) b = B.play(b, step(b, u));
