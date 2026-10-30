@@ -353,7 +353,7 @@ function AnalysisPanel({ box, a, depth, deep, paused, style, children }) {
       {/* smaller on the phone, where the row is tight */}
       {pick
         ? <select aria-label="Engine" value={pick.value} onChange={(e) => { const go = pick.onChange(e.target.value); if (go) setOpen(true); }} onClick={stopHere} onPointerDown={stopHere}
-            style={{ ...headCtl(), flex: '0 1 auto', minWidth: '3em', padding: '0 0.4em', font: 'inherit', fontSize: L.cols === 2 ? '1.15em' : '1em', height: '1.6em', textTransform: 'none', background: C.panel }}>
+            style={{ ...headCtl(), flex: '0 1 auto', minWidth: '3em', padding: '0 0.4em', font: 'inherit', fontSize: L.cols === 2 ? '1.15em' : '1em', height: 'auto', minHeight: '1.6em', textTransform: 'none', background: C.panel }}>
             {pick.options.map((o) => <option key={o.value} value={o.value}>{o.label}</option>)}
           </select>
         : <span style={{ flex: '0 1 auto', minWidth: 0, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', textTransform: 'none', letterSpacing: '0.04em', color: C.ink }}>{name}</span>}
