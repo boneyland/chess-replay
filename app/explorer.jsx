@@ -22,7 +22,6 @@ const liB64 = (buf) => btoa(String.fromCharCode(...new Uint8Array(buf))).replace
 
 function liStore(a) { try { if (a) localStorage.setItem(LI_AUTH_STORE, JSON.stringify(a)); else localStorage.removeItem(LI_AUTH_STORE); } catch (e) {} }
 async function liSignIn() {
-  if (window.top !== window) { window.open(LI_REDIRECT + '#lichess-signin', '_blank'); return; }
   const verifier = liB64(crypto.getRandomValues(new Uint8Array(32)));
   const challenge = liB64(await crypto.subtle.digest('SHA-256', new TextEncoder().encode(verifier)));
   const state = 'lichess.' + liB64(crypto.getRandomValues(new Uint8Array(16)));
@@ -53,12 +52,11 @@ function liPaste(token) {
   return true;
 }
 function liSignOut() { liStore(null); liSet(null, ''); }
-// the page was opened by Lichess's redirect, or by the embedded copy's "sign in in a new tab": finish or start it once
+// the page was opened by Lichess's redirect: finish the sign-in once
 function liResume() {
   const q = new URLSearchParams(location.search), st = q.get('state') || '';
   if (st.startsWith('lichess.') && q.get('code')) liFinish(q);
   else if (st.startsWith('lichess.') && q.get('error')) { history.replaceState(null, '', location.pathname); liSet(liAuth, 'Lichess sign-in was cancelled.'); }
-  else if (location.hash === '#lichess-signin') { history.replaceState(null, '', location.pathname); liSignIn(); }
 }
 if (EXPL) liResume();
 window.addEventListener('storage', (e) => { if (e.key === LI_AUTH_STORE) liSet(readLiAuth()); });

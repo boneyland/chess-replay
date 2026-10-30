@@ -42,6 +42,13 @@ services:
       - path: /*
         name: Referrer-Policy
         value: strict-origin-when-cross-origin
+      # no other site may show the page in a frame (clickjacking): CSP's frame-ancestors, and X-Frame-Options for old browsers
+      - path: /*
+        name: Content-Security-Policy
+        value: frame-ancestors 'self'
+      - path: /*
+        name: X-Frame-Options
+        value: SAMEORIGIN
       # cross-origin isolation, so the page gets SharedArrayBuffer and Stockfish can search with several threads; every
       # cross-origin file the page loads must then be CORS or send Cross-Origin-Resource-Policy. Rollback: delete these two
       - path: /*
