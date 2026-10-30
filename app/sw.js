@@ -55,7 +55,8 @@ self.addEventListener('fetch', (e) => {
   // anything else (Hugging Face, Lichess's tablebase: live data, never kept) goes to the network as usual
 });
 
-// the page from the network, kept for next time; offline (or too slow), the kept one
+// the page from the network, kept for next time; offline, too slow or a server error (a deploy, an outage), the kept one.
+// A 404 is the network's answer: a path that isn't the page
 async function page(req) {
   const cache = await caches.open(CACHE);
   const net = fetch(req).then((r) => {
@@ -66,7 +67,7 @@ async function page(req) {
   const slow = new Promise((ok) => setTimeout(ok, PAGE_TIMEOUT_MS));
   try {
     const r = await Promise.race([net, slow.then(() => null)]);
-    if (r) return r;
+    if (r && r.status < 500) return r;
   } catch (err) {}
   return (await cache.match(PAGE)) || net;
 }
