@@ -2628,6 +2628,15 @@ for (const name of BROWSERS) for (const site of SITES) {
       await ph.page.goto(base, { waitUntil: 'load' });
       await ph.page.getByRole('button', { name: 'Menu' }).waitFor();
       assert.deepEqual(await wider(ph.page), [], 'no sideways scroll');
+      // WebKit once sized the board for the area left beside the slim bar while the area still read the whole 390 px:
+      // wait for the board's and the area's heights to hold still across two animation frames before reading them
+      await ph.page.waitForFunction(() => {
+        const imgs = [...document.querySelectorAll('img')].map((i) => i.getBoundingClientRect()).filter((r) => r.width > 10);
+        const now = [document.querySelector('.stage-area')?.clientHeight, ...imgs.map((r) => Math.round(r.top) + ',' + Math.round(r.height))].join(';');
+        const seen = window.__sidewaysSeen || [];
+        window.__sidewaysSeen = [...seen, now].slice(-3);
+        return seen.length >= 2 && seen.every((s) => s === now);
+      }, null, { polling: 'raf', timeout: 5000 });
       const b = await boardBox(ph.page);
       assert.equal(b.n, 32);
       // the slim transport bar, and the board as tall as the area leaves it: its margins (12 px) and the two player bars
