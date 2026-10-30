@@ -13,6 +13,15 @@ async function boardBox(page) {
     return { n: pcs.length, x0, y0, sq: (x1 - x0) / 8, h: y1 - y0 };
   });
 }
+// The board and the stage area have held still for two animation frames: WebKit on GitHub has read a box mid-layout
+// (the board sized for the slim bar's area while the area still read the whole window; a drag that found no piece)
+const settled = (page, timeout = 5000) => page.waitForFunction(() => {
+  const imgs = [...document.querySelectorAll('img')].map((i) => i.getBoundingClientRect()).filter((r) => r.width > 10);
+  const now = [document.querySelector('.stage-area')?.clientHeight, ...imgs.map((r) => [r.left, r.top, r.width, r.height].map(Math.round).join(','))].join(';');
+  const seen = window.__settledSeen || [];
+  window.__settledSeen = [...seen, now].slice(-3);
+  return seen.length >= 2 && seen.every((s) => s === now);
+}, null, { polling: 'raf', timeout }).finally(() => page.evaluate(() => { delete window.__settledSeen; }));
 const square = (b, name, flipped) => (flipped
   ? { x: b.x0 + (7 - (name.charCodeAt(0) - 97) + 0.5) * b.sq, y: b.y0 + (+name[1] - 1 + 0.5) * b.sq }
   : { x: b.x0 + (name.charCodeAt(0) - 97 + 0.5) * b.sq, y: b.y0 + (8 - +name[1] + 0.5) * b.sq });
@@ -38,4 +47,4 @@ function namePending(page) {
   return page;
 }
 
-module.exports = { loadedOn, boardBox, square, namePending };
+module.exports = { loadedOn, boardBox, settled, square, namePending };

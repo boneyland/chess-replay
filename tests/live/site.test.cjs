@@ -22,7 +22,7 @@ const { execFileSync, execSync } = require('child_process');
 const fs = require('fs'), path = require('path'), crypto = require('crypto');
 const pw = (() => { try { return require('playwright'); } catch (e) { return require(path.join(execSync('npm root -g').toString().trim(), 'playwright')); } })();
 const { serve } = require('./serve.cjs');
-const { loadedOn, boardBox, square, namePending } = require('./board.cjs');
+const { loadedOn, boardBox, settled, square, namePending } = require('./board.cjs');
 
 const ROOT = path.join(__dirname, '..', '..');
 const OUT = path.join(ROOT, 'tests', 'out', 'live');
@@ -766,9 +766,15 @@ for (const name of BROWSERS) for (const site of SITES) {
       throw new Error(`${e.message}\n${JSON.stringify(at)}`);
     });
     const ownMoveRated = async (p, timeout = 60000) => {
+      await settled(p);
       const b = await boardBox(p);
       const f = square(b, 'd2'), tt = square(b, 'd4');
       await p.mouse.move(f.x, f.y); await p.mouse.down(); await p.mouse.move(tt.x, tt.y, { steps: 8 }); await p.mouse.up();
+      // WebKit on GitHub once made no move here (no engine ever started, the label still "Your move"): say so at once,
+      // with where the board was, rather than after the verdict's long wait
+      await p.waitForFunction((pt) => [...document.querySelectorAll('img')].some((i) => { const r = i.getBoundingClientRect(); return r.width > 10 && r.left < pt.x && pt.x < r.right && r.top < pt.y && pt.y < r.bottom; }), tt, { timeout: 5000 }).catch(async (e) => {
+        throw new Error(`${e.message}\nno piece on d4 after the drag: board then ${JSON.stringify(b)}, now ${JSON.stringify(await boardBox(p))}`);
+      });
       await verdictOn(p, timeout);
       assert.doesNotMatch(await p.getByText(/your move ·/i).innerText(), /can’t run here|stopped/i);
       return p.evaluate(() => window.__sf);
@@ -2628,15 +2634,7 @@ for (const name of BROWSERS) for (const site of SITES) {
       await ph.page.goto(base, { waitUntil: 'load' });
       await ph.page.getByRole('button', { name: 'Menu' }).waitFor();
       assert.deepEqual(await wider(ph.page), [], 'no sideways scroll');
-      // WebKit once sized the board for the area left beside the slim bar while the area still read the whole 390 px:
-      // wait for the board's and the area's heights to hold still across two animation frames before reading them
-      await ph.page.waitForFunction(() => {
-        const imgs = [...document.querySelectorAll('img')].map((i) => i.getBoundingClientRect()).filter((r) => r.width > 10);
-        const now = [document.querySelector('.stage-area')?.clientHeight, ...imgs.map((r) => Math.round(r.top) + ',' + Math.round(r.height))].join(';');
-        const seen = window.__sidewaysSeen || [];
-        window.__sidewaysSeen = [...seen, now].slice(-3);
-        return seen.length >= 2 && seen.every((s) => s === now);
-      }, null, { polling: 'raf', timeout: 5000 });
+      await settled(ph.page);
       const b = await boardBox(ph.page);
       assert.equal(b.n, 32);
       // the slim transport bar, and the board as tall as the area leaves it: its margins (12 px) and the two player bars
