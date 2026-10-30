@@ -421,9 +421,10 @@ function BoardTouch({ pos, sel, targets, drag, promo, onDown, onMove, onUp, onCa
             : <div style={{ width: 28, height: 28, borderRadius: '50%', background: 'rgba(21,16,13,0.32)' }} />}
         </div>
       ))}
+      {/* its own compositing layer: drawn in the scaled board, its shadow left trails Epiphany (WebKitGTK) never repainted */}
       {dragged && (
         <img src={img(dragged === dragged.toUpperCase() ? 'w' : 'b', dragged.toLowerCase())} alt=""
-          style={{ position: 'absolute', left: drag.x - SQ * 0.55, top: drag.y - SQ * 0.55, width: SQ * 1.1, height: SQ * 1.1, pointerEvents: 'none', filter: 'drop-shadow(0 10px 12px rgba(0,0,0,0.45))', zIndex: 3 }} />
+          style={{ position: 'absolute', left: drag.x - SQ * 0.55, top: drag.y - SQ * 0.55, width: SQ * 1.1, height: SQ * 1.1, pointerEvents: 'none', filter: 'drop-shadow(0 10px 12px rgba(0,0,0,0.45))', willChange: 'transform', transform: 'translateZ(0)', zIndex: 3 }} />
       )}
       {promo && <div style={{ position: 'absolute', inset: 0, background: 'rgba(21,16,13,0.45)', pointerEvents: 'none', zIndex: 4 }} />}
       {promo && promoPieces(promo).map(({ t, sq }) => (
