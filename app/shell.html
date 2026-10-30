@@ -91,9 +91,9 @@ button:focus-visible, select:focus-visible, input:focus-visible, [role="slider"]
   font: 500 0.75rem var(--mono); color: var(--danger); white-space: normal; overflow: hidden; pointer-events: none;
 }
 /* landscape: panels open above the transport bar, so they leave its buttons uncovered */
-body:has(.stage:not(.stage-one)) .twk-panel { bottom: calc(70px + env(safe-area-inset-bottom, 0px)); max-height: calc(100% - 86px); }
+body:has(.stage:not(.stage-one)) .twk-panel { bottom: calc(70px + var(--safe-b)); max-height: calc(100% - 86px); }
 /* portrait: the same above its slimmer bar */
-body:has(.stage-one) .twk-panel { bottom: calc(51px + env(safe-area-inset-bottom, 0px)); max-height: calc(100% - 67px); }
+body:has(.stage-one) .twk-panel { bottom: calc(51px + var(--safe-b)); max-height: calc(100% - 67px); }
 .dock-btn { flex: none; font: 600 0.75rem var(--mono); padding: 0 10px; height: 34px; border-radius: 3px; cursor: pointer; white-space: nowrap; border: 1px solid var(--btn-line); background: var(--btn); color: var(--ink); }
 /* Settings and Full screen: square icon buttons in every layout */
 .dock-icons { display: contents; }
@@ -118,7 +118,7 @@ body:has(.stage-one) .twk-panel { bottom: calc(51px + env(safe-area-inset-bottom
 /* a short two-column window (a phone held sideways): the slim bar sits at the foot of the sidebar, as wide as its panels
    (Stage places it at LayoutCore's L.dock, whose DOCK_H is its height), and the area takes the whole height. A narrow
    sidebar drops the first and last move buttons, rather than the seek bar */
-.stage-short { padding-block: 0 env(safe-area-inset-bottom, 0px); gap: 0; padding-left: max(4px, var(--safe-l)); padding-right: max(4px, var(--safe-r)); }
+.stage-short { padding-block: 0 var(--safe-b); gap: 0; padding-left: max(4px, var(--safe-l)); padding-right: max(4px, var(--safe-r)); }
 .stage-short .pbar-dock { position: absolute; max-width: none; padding: 2px 6px; gap: 6px; }
 .stage-short .pbtn { width: 34px; height: 28px; }
 .stage-short .pbar-narrow .pbtn-end { display: none; }
@@ -241,7 +241,7 @@ body:has(.stage-one) .twk-panel { bottom: calc(51px + env(safe-area-inset-bottom
 .drop-box span { color: var(--dim); font-size: 0.9375rem; }
 
 .twk-panel {
-  position: fixed; z-index: 70; right: max(16px, env(safe-area-inset-right, 0px)); bottom: calc(16px + env(safe-area-inset-bottom, 0px));
+  position: fixed; z-index: 70; right: max(16px, env(safe-area-inset-right, 0px)); bottom: calc(16px + var(--safe-b));
   width: min(18.75rem, calc(100% - 32px)); max-height: calc(100% - 72px); display: flex; flex-direction: column; overflow: hidden;
   background: var(--panel-glass); color: var(--ink); border: 1px solid var(--line); border-radius: 6px;
   box-shadow: 0 16px 48px var(--shadow); font: 0.75rem/1.4 var(--sans);
@@ -270,7 +270,7 @@ body:has(.stage-one) .twk-panel { bottom: calc(51px + env(safe-area-inset-bottom
    and close button in one row and each tab's rows in two columns. The columns are an inner box of natural height that
    the body scrolls: a multi-column box of capped height adds columns past its right edge in Firefox */
 @media (max-height: 560px) and (min-width: 600px), (max-height: 499px) and (orientation: landscape), (min-width: 900px) {
-  body:has(.stage) .twk-panel.twk-tabbed { width: min(760px, calc(100% - 32px)); bottom: calc(52px + env(safe-area-inset-bottom, 0px)); height: calc(100% - 68px - env(safe-area-inset-bottom, 0px)); max-height: none; display: grid; grid-template-columns: auto 1fr auto; grid-template-rows: auto minmax(0, 1fr); align-items: center; }
+  body:has(.stage) .twk-panel.twk-tabbed { width: min(760px, calc(100% - 32px)); bottom: calc(52px + var(--safe-b)); height: calc(100% - 68px - var(--safe-b)); max-height: none; display: grid; grid-template-columns: auto 1fr auto; grid-template-rows: auto minmax(0, 1fr); align-items: center; }
   body:has(.stage) .twk-panel.twk-tabbed .twk-hd { display: contents; }
   body:has(.stage) .twk-panel.twk-tabbed .twk-hd b { grid-row: 1; grid-column: 1; padding: 0 4px 0 14px; }
   body:has(.stage) .twk-panel.twk-tabbed .twk-tabs { grid-row: 1; grid-column: 2; margin: 8px 6px; grid-template-columns: none; grid-auto-flow: column; grid-auto-columns: 1fr; }
@@ -282,25 +282,25 @@ body:has(.stage-one) .twk-panel { bottom: calc(51px + env(safe-area-inset-bottom
   body:has(.stage) .twk-panel.twk-tabbed .twk-sect { break-after: avoid; }
   body:has(.stage) .twk-panel.twk-tabbed .twk-btn { display: block; width: 100%; }
   /* the bar in the sidebar: 4 px margin, 34 px high */
-  body:has(.stage.stage-short) .twk-panel.twk-tabbed { bottom: calc(44px + env(safe-area-inset-bottom, 0px)); height: calc(100% - 52px - env(safe-area-inset-bottom, 0px)); }
+  body:has(.stage.stage-short) .twk-panel.twk-tabbed { bottom: calc(44px + var(--safe-b)); height: calc(100% - 52px - var(--safe-b)); }
 }
 /* a wide, tall window: two columns as above, above the transport bar, no taller than the usual panel */
 @media (min-width: 900px) and (min-height: 561px) {
-  body:has(.stage) .twk-panel.twk-tabbed { bottom: calc(76px + env(safe-area-inset-bottom, 0px)); height: min(720px, calc(100% - 92px - env(safe-area-inset-bottom, 0px))); }
+  body:has(.stage) .twk-panel.twk-tabbed { bottom: calc(76px + var(--safe-b)); height: min(720px, calc(100% - 92px - var(--safe-b))); }
 }
 /* panels (Settings, Queen) open above the bar in the sidebar */
-body:has(.stage.stage-short) .twk-panel { bottom: calc(44px + env(safe-area-inset-bottom, 0px)); max-height: calc(100% - 52px); }
+body:has(.stage.stage-short) .twk-panel { bottom: calc(44px + var(--safe-b)); max-height: calc(100% - 52px); }
 /* a very small screen (the phone tier, upright or sideways): Settings takes all the room above the transport bar, 4 px
    from the edges and 4 px over the bar (its top 41 px from the foot in one column, 38 px when it is in the sidebar) */
 @media (max-width: 599px), (max-height: 499px) {
   body:has(.stage) .twk-panel.twk-tabbed { top: 4px; left: max(4px, var(--safe-l)); right: max(4px, var(--safe-r)); width: auto; height: auto; max-height: none; }
-  body:has(.stage.stage-one) .twk-panel.twk-tabbed.twk-tabbed { bottom: calc(45px + env(safe-area-inset-bottom, 0px)); height: auto; }
-  body:has(.stage.stage-short) .twk-panel.twk-tabbed.twk-tabbed { bottom: calc(42px + env(safe-area-inset-bottom, 0px)); height: auto; }
+  body:has(.stage.stage-one) .twk-panel.twk-tabbed.twk-tabbed { bottom: calc(45px + var(--safe-b)); height: auto; }
+  body:has(.stage.stage-short) .twk-panel.twk-tabbed.twk-tabbed { bottom: calc(42px + var(--safe-b)); height: auto; }
 }
 /* a phone held sideways: Settings covers the transport bar too (full height, up to 760 px wide at the right), and drops its title (the panel keeps it as its label) so
    the tabs get the row; they wrap only where one row can't hold them */
 @media (max-height: 499px) and (orientation: landscape) {
-  body:has(.stage) .twk-panel.twk-tabbed.twk-tabbed.twk-tabbed { bottom: calc(4px + env(safe-area-inset-bottom, 0px)); height: auto; left: auto; width: min(760px, calc(100% - max(4px, var(--safe-l)) - max(4px, var(--safe-r)))); }
+  body:has(.stage) .twk-panel.twk-tabbed.twk-tabbed.twk-tabbed { bottom: calc(4px + var(--safe-b)); height: auto; left: auto; width: min(760px, calc(100% - max(4px, var(--safe-l)) - max(4px, var(--safe-r)))); }
   body:has(.stage) .twk-panel.twk-tabbed .twk-hd b { display: none; }
   body:has(.stage) .twk-panel.twk-tabbed .twk-tabs { display: flex; flex-wrap: wrap; margin-left: 8px; }
   body:has(.stage) .twk-panel.twk-tabbed .twk-tabs button { flex: 1 1 auto; }

@@ -75,7 +75,7 @@ const site = `<!doctype html>
 <meta name="mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-title" content="Chess Replay">
 <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
-<style>:root{padding-top:env(safe-area-inset-top,0px);padding-bottom:env(safe-area-inset-bottom,0px)}body{margin:0}img{max-width:100%}[hidden]{display:none!important}@media (display-mode:browser){@supports (-moz-appearance:none){:root:not(:fullscreen){padding-bottom:0}}}</style>
+<style>:root{--safe-b:env(safe-area-inset-bottom,0px);padding-top:env(safe-area-inset-top,0px);padding-bottom:var(--safe-b)}body{margin:0}img{max-width:100%}[hidden]{display:none!important}@media (display-mode:browser){@supports (-moz-appearance:none){:root:not(:fullscreen){--safe-b:0px}}}</style>
 </head>
 <body>
 ${out}
