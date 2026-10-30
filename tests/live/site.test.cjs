@@ -2400,6 +2400,64 @@ for (const name of BROWSERS) for (const site of SITES) {
       await ph.ctx.close();
     });
 
+    // MP4 export: the default is constant frame rate (every sample the same length); Variable frame rate drops the frames
+    // that didn't change (the title card, the settled board) and holds the one before, so the same clip is as long but
+    // has fewer, uneven samples
+    await t.test('desktop: a variable frame rate MP4 holds unchanged frames', { timeout: 240000 }, async () => {
+      const dk = await open(browser, { width: 1440, height: 900 });
+      await dk.page.goto(base, { waitUntil: 'load' });
+      await loadedOn(dk.page);
+      const p = dk.page, settings = p.getByRole('button', { name: 'Settings' });
+      if (!(await settings.isVisible())) await p.getByRole('button', { name: 'Menu' }).click();
+      await settings.click();
+      await p.getByRole('tab', { name: 'Export' }).click();
+      await p.locator('#tw-fps').selectOption('8 fps');
+      // the samples of an MP4's video track: its stts box (found by walking the boxes, as the video data can hold the
+      // same four letters), as [count, delta] pairs
+      const samples = (buf) => {
+        if (buf.toString('latin1', 4, 8) !== 'ftyp') return null; // a browser with no H.264 encoder writes WebM, which has no stts
+        const find = (from, to, path) => {
+          for (let at = from; at + 8 <= to;) {
+            const size = buf.readUInt32BE(at) || to - at, type = buf.toString('latin1', at + 4, at + 8);
+            if (type === path[0]) return path.length === 1 ? { at, size } : find(at + 8, at + size, path.slice(1));
+            at += size;
+          }
+          return null;
+        };
+        const box = find(0, buf.length, ['moov', 'trak', 'mdia', 'minf', 'stbl', 'stts']), n = buf.readUInt32BE(box.at + 12), out = [];
+        for (let k = 0; k < n; k++) out.push([buf.readUInt32BE(box.at + 16 + 8 * k), buf.readUInt32BE(box.at + 20 + 8 * k)]);
+        return { out, count: out.reduce((x, [c]) => x + c, 0), ticks: out.reduce((x, [c, d]) => x + c * d, 0) };
+      };
+      const exportMp4 = async (tag) => {
+        const [dl] = await Promise.all([p.waitForEvent('download', { timeout: 200000 }), p.getByRole('button', { name: /^Export video \(MP4/ }).click()]);
+        const file = path.join(OUT, `${host}-${tag}.mp4`);
+        await dl.saveAs(file);
+        await p.getByRole('dialog', { name: 'Exporting' }).waitFor({ state: 'detached', timeout: 5000 });
+        return fs.readFileSync(file);
+      };
+      await p.locator('#tw-clip-from').selectOption({ index: 0 });
+      await p.locator('#tw-clip-to').selectOption({ index: 1 });
+      assert.equal(await p.getByRole('switch', { name: 'Variable frame rate' }).getAttribute('aria-checked'), 'false', 'off by default');
+      const cfr = samples(await exportMp4('cfr'));
+      if (cfr) assert.equal(cfr.out.length, 1, 'constant frame rate: every sample is the same length');
+      if (!(await p.getByRole('tab', { name: 'Export' }).isVisible())) { // the export closed Settings
+        if (!(await settings.isVisible())) await p.getByRole('button', { name: 'Menu' }).click();
+        await settings.click();
+      }
+      await p.getByRole('tab', { name: 'Export' }).click();
+      await p.getByRole('switch', { name: 'Variable frame rate' }).click();
+      assert.ok(await p.getByRole('button', { name: /^Export video \(MP4, up to 8 fps, variable/ }).isVisible());
+      const vfr = samples(await exportMp4('vfr'));
+      assert.equal(!!vfr, !!cfr, 'both files are the same container');
+      if (vfr) {
+        assert.ok(vfr.count < cfr.count, `fewer samples (${vfr.count} < ${cfr.count})`);
+        assert.ok(vfr.out.length > 1, 'uneven sample lengths');
+        assert.ok(Math.abs(vfr.ticks / vfr.count - cfr.ticks / cfr.count) > 0, 'a longer average sample');
+      }
+      assert.deepEqual(dk.errors, []);
+      await dk.ctx.close();
+    });
+
     // The export draws the board, the eval bar and the graph itself (export-draw.js), and html2canvas the rest: each of
     // the three is drawn there, not handed to html2canvas, and in a frame put together that way they match html2canvas's
     // picture of the whole stage. Mid-move, with a badge and a best-move arrow on the board, and later in the game
