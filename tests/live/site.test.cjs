@@ -2438,7 +2438,29 @@ for (const name of BROWSERS) for (const site of SITES) {
       await p.locator('#tw-clip-from').selectOption({ index: 0 });
       await p.locator('#tw-clip-to').selectOption({ index: 1 });
       assert.equal(await p.getByRole('switch', { name: 'Variable frame rate' }).getAttribute('aria-checked'), 'false', 'off by default');
-      const cfr = samples(await exportMp4('cfr'));
+      const cfrFile = await exportMp4('cfr'), cfr = samples(cfrFile);
+      // the soundtrack's packet lengths (stts, in the audio track's timescale): WebKitGTK's encoder once stamped packets of
+      // 0.5–2.5 s and jumped the track's clock back, so players stuttered; every packet must be short and the track as long
+      // as the picture
+      if (cfr) {
+        const boxes = (from, to) => { const out = []; for (let at = from; at + 8 <= to;) { const size = cfrFile.readUInt32BE(at) || to - at; out.push({ type: cfrFile.toString('latin1', at + 4, at + 8), at, size }); at += size; } return out; };
+        const kid = (b, type) => boxes(b.at + 8, b.at + b.size).find((k) => k.type === type);
+        const traks = boxes(0, cfrFile.length).filter((b) => b.type === 'moov').flatMap((m) => boxes(m.at + 8, m.at + m.size)).filter((b) => b.type === 'trak');
+        const track = (kind) => {
+          const mdia = traks.map((tk) => kid(tk, 'mdia')).find((m) => cfrFile.toString('latin1', kid(m, 'hdlr').at + 16, kid(m, 'hdlr').at + 20) === kind);
+          if (!mdia) return null;
+          const stts = kid(kid(kid(mdia, 'minf'), 'stbl'), 'stts'), scale = cfrFile.readUInt32BE(kid(mdia, 'mdhd').at + 20), n = cfrFile.readUInt32BE(stts.at + 12);
+          let total = 0, longest = 0, count = 0;
+          for (let k = 0; k < n; k++) { const c = cfrFile.readUInt32BE(stts.at + 16 + 8 * k), d = cfrFile.readUInt32BE(stts.at + 20 + 8 * k); total += (c * d) / scale; longest = Math.max(longest, d / scale); count += c; }
+          return { total, longest, count };
+        };
+        const sound = track('soun'), picture = track('vide');
+        if (sound) {
+          assert.ok(sound.longest <= 0.12, `no audio packet longer than 0.12 s (longest ${sound.longest} s)`);
+          assert.ok(sound.count >= sound.total / 0.12, `${sound.count} audio packets for ${sound.total} s`);
+          assert.ok(Math.abs(sound.total - picture.total) < 0.5, `audio ${sound.total} s against picture ${picture.total} s`);
+        }
+      }
       if (cfr) assert.equal(cfr.out.length, 1, 'constant frame rate: every sample is the same length');
       if (!(await p.getByRole('tab', { name: 'Export' }).isVisible())) { // the export closed Settings
         if (!(await settings.isVisible())) await p.getByRole('button', { name: 'Menu' }).click();
