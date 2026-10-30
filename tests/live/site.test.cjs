@@ -1763,8 +1763,9 @@ for (const name of BROWSERS) for (const site of SITES) {
     await t.test('desktop: a kept game that no longer reads is dropped and said so once', async () => {
       const g = await open(browser, { width: 1440, height: 900 });
       const p = g.page;
-      // stored before the page's scripts read it, on the first load only
-      await p.addInitScript(() => { if (!sessionStorage.getItem('seeded')) { sessionStorage.setItem('seeded', '1'); localStorage.setItem('chess-video.files.v1', JSON.stringify({ pgn: '1. O-O *', pgnName: 'old.pgn', gameIndex: 0 })); } });
+      // stored before the page's scripts read it, on the first load only (the script also runs on the blank page before
+      // the first load, where Firefox refuses storage with a SecurityError)
+      await p.addInitScript(() => { try { if (!sessionStorage.getItem('seeded')) { localStorage.setItem('chess-video.files.v1', JSON.stringify({ pgn: '1. O-O *', pgnName: 'old.pgn', gameIndex: 0 })); sessionStorage.setItem('seeded', '1'); } } catch (e) {} });
       await p.goto(base, { waitUntil: 'load' });
       await loadedOn(p);
       const alert = p.locator('.dock-status[role=alert]');
