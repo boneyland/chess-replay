@@ -2,22 +2,22 @@
 
 ![The sample chess game playing: move rating, best line, commentary and eval graph](media/preview.webp)
 
-A browser app for replaying and playing chess games, at https://chess-replay.onrender.com/. Everything runs in the browser, Stockfish included, and keeps working offline; only Ask Queen and the endgame tablebase go online.
+A browser app for replaying and playing chess games, at https://chess-replay.onrender.com/. Everything runs in the browser, Stockfish included, and keeps working offline once loaded (React, html2canvas and the fonts come from CDNs on the first visit and are then kept). Going online is limited to Ask Queen, Lichess (the endgame tablebase, on by default; the cloud evaluation and the opening explorer, off by default; see [Lichess data](#lichess-data)), and the full Stockfish when you ask for it.
 
 ## Features
 
 - **Replay a game**: load a PGN (a `[FEN]` start position too; Chess960 not yet) and step through it on an animated board, with an evaluation graph, a rating for every move, the best line and the opening name
-- **Analysis in the browser**: Stockfish 19 analyses games that come without evals; drag a piece to try your own move from any position. The 1.8 MB lite engine runs by default; the engine drop-down in the Analysis panel offers the full engine (99 MB, downloaded once and kept in the browser)
+- **Analysis in the browser**: Stockfish 19 analyses games that come without evals; drag a piece to try your own move from any position. The 1.8 MB lite engine runs by default; the engine drop-down in the Analysis panel offers the full engine (99 MB, downloaded once and kept in the browser). Where the page is cross-origin isolated (the Render site) Stockfish searches with several threads, and the Analysis panel's ☰ sets the threads, hash, lines and time or depth
 - **Opening explorer**: the book moves from each position (Lichess's opening tables)
-- **Lichess opening explorer** (off by default): the games played from each position, with counts and results, from Lichess or its masters database; needs a Lichess sign-in (see Lichess data)
+- **Lichess opening explorer** (off by default): the games played from each position, with counts and results, from Lichess or its masters database; needs a Lichess sign-in (see [Lichess data](#lichess-data))
 - **Endgame tablebase**: with 7 pieces or fewer, the result with best play and every move ranked by it, from Lichess's tablebase; a game's analysis takes those positions from it too, rating each move by whether it keeps the win or the draw (needs a connection; Settings › Online turns it off)
 - **Play/Explore**: a board from the starting position or a position set up by hand (or from a FEN) in Edit position, where Stockfish rates every move
 - **Play vs human**: a game for two at one screen, from the starting position or a pasted one. The board turns to the side to move, moves can be taken back, and the game ends on mate, a draw by the rules or by agreement, or resignation, with optional clocks. Stockfish stays off until it ends
 - **Play vs Stockfish**: a game against Stockfish at full strength, as White, Black or a random side, with Take back and optional clocks. Nothing hints at a move; Stockfish quietly flags inaccuracies, mistakes and blunders, and the better move shows once the game is over
 - **My games**: every game is kept in the browser from its first move; the 50 most recent are listed, to resume one in progress or replay a finished one like a loaded game (analysis, PGN and video export included)
 - **Ask Queen**: a commentary on the position from queen-pawn-8, a chess language model on a Hugging Face Space (needs a connection)
-- **Export**: any game, or a stretch of it, as an MP4 video or an animated WebP
-- **Layouts for every screen**: one responsive page, a board with a sidebar on a wide window and one column on a narrow one, with a Text size setting; full screen where the browser allows it, and Add to Home Screen opens it as an app
+- **Export**: any game, or a stretch of it, as an MP4 video (with the move sounds, in a chosen quality, optionally at a variable frame rate) or an animated WebP (a chosen width and quality, up to lossless), at 8 to 30 frames a second; it records the page as you see it, so the text size and layout carry over
+- **Layouts for every screen**: one responsive page, a board with a sidebar on a wide window and one column on a narrow one, with a Text size setting; light or dark to match the system; full screen where the browser allows it, and Add to Home Screen opens it as an app
 - **Move sounds**: a synthesized Wood set and four of Lichess's sets
 - **Offline**: a service worker keeps the page, the engine and everything they load
 
@@ -44,6 +44,7 @@ Hosting `out/site/` anywhere static works the same. Ask Queen's Hugging Face sig
 - `node --test --test-concurrency=1 tests/*.test.cjs`: the JS tests (GitHub Actions runs them on every push, and the Render build before building)
 - `../chess-animator/.venv/bin/python -m unittest tests/check_browser_json.py` (from the repo root, after the JS tests): checks the browser's analysis against the Python pipeline. It imports chess-animator, which must be checked out next to this repo; `make_rating_expected.py` and `make_openings_expected.py` regenerate the fixtures from the Python code. Building doesn't need chess-animator
 - `node --test tests/live/site.test.cjs`: smoke tests of the live site (or `LIVE_URLS=local`, a local build) in Chromium and Firefox with Playwright; GitHub Actions runs them on each push against that commit's build, in WebKit too (iPhone Safari's engine); `node --test tests/live/android.test.cjs`: a few phone checks in Chrome on an Android device over adb, which GitHub Actions runs on an emulator
+- `node media/record-demo.cjs`: re-records `media/demo.mp4`, the video above (needs Playwright and ffmpeg)
 
 ## Layout
 

@@ -58,7 +58,9 @@ What each part of the repo is, with the pinned SHA-256 of every vendored file. B
   - `sfx/Draw.mp3` sha256 `cd8f8a02a63a94ab221cb01ebe1679771c83329cb4ce0549b78fc119aa1c2883`
 - `openings-data.cjs`: embeds `openings/*.tsv` (Lichess chess-openings, CC0; a copy of chess-animator's) into the page
 - `render.yaml`: the Render static site's settings (a Blueprint: Render syncs them from this file)
-- `docs/`: design and plan for browser Stockfish (2026-10-16, written when this was `artifact/` in chess-animator; their paths are now repo-root paths)
-- `media/preview.webp`: the README preview from the sample game (scaled to 1676 wide to fill GitHub's 838 px README column on 2× screens; 8 fps, WebP quality 80)
+- `docs/`: `spec.md`, the one spec (principles, what's built, roadmap, known gaps, decisions log), and `plans/`, the implementation plans of built features, kept as written (the oldest, browser Stockfish of 2026-10-16, was written when this was `artifact/` in chess-animator; its paths are now repo-root paths)
+- `media/`: the README's pictures and video
+  - `preview.webp`: the preview from the sample game (scaled to 1676 wide to fill GitHub's 838 px README column on 2× screens; 8 fps, WebP quality 80)
+  - `demo.mp4`: the ~65 s showcase video (Byrne–Fischer 1956, `demo-game.pgn`), re-recorded by `record-demo.cjs`
 - `games/`: local PGNs (not committed)
 - `tests/`: JS tests (`*.test.cjs`), the Python cross-check `check_browser_json.py` with its fixture generators (`make_rating_expected.py`, `make_openings_expected.py`), and `live/`, Playwright smoke tests of the site; see [Tests](README.md#tests)
