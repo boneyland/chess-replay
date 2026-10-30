@@ -130,11 +130,9 @@ function TweakSelect({ id, label, aria, value, options, info, onChange, disabled
 function TweakRadio({ id, label, value, options, onChange }) {
   const maxLen = options.reduce((m, o) => Math.max(m, String(o).length), 0);
   if (maxLen > ({ 2: 16, 3: 10 }[options.length] || 0)) return <TweakSelect id={id} label={label} value={value} options={options} onChange={onChange} />;
-  const idx = Math.max(0, options.indexOf(value)), n = options.length;
   return (
     <TweakRow label={label}>
       <div className="twk-seg" role="radiogroup" aria-label={label}>
-        <div className="twk-seg-thumb" style={{ left: `calc(2px + ${idx} * (100% - 4px) / ${n})`, width: `calc((100% - 4px) / ${n})` }} />
         {options.map((o) => (
           <button key={o} type="button" role="radio" aria-checked={o === value} onClick={() => onChange(o)}>{o}</button>
         ))}

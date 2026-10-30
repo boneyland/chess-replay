@@ -503,12 +503,10 @@ function DialogBox({ label, onClose, children }) {
 }
 // a row of choices drawn as Settings' segmented control
 function DialogChoice({ label, value, options, onChange }) {
-  const idx = Math.max(0, options.findIndex((o) => o.value === value)), n = options.length;
   return (
     <div className="play-row">
       <span className="play-label">{label}</span>
       <div className="twk-seg" role="radiogroup" aria-label={label}>
-        <div className="twk-seg-thumb" style={{ left: `calc(2px + ${idx} * (100% - 4px) / ${n})`, width: `calc((100% - 4px) / ${n})` }} />
         {options.map((o) => <button key={o.label} type="button" role="radio" aria-checked={o.value === value} onClick={() => onChange(o.value)}>{o.label}</button>)}
       </div>
     </div>
