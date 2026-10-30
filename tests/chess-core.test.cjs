@@ -97,6 +97,49 @@ test('cutechess engine comments give evals, turned to White’s point of view', 
   assert.equal(M.hasEval, true);
 });
 
+test('cutechess engine comments in a game starting with Black to move are turned to White’s point of view too', () => {
+  const M = CC.buildGame({ pgn: '[SetUp "1"]\n[FEN "4k3/8/8/8/8/8/4P3/4K3 b - - 0 1"]\n\n1... Kd7 {+1.00/20 0.1s} 2. e4 {+2.00/20 0.1s} *' });
+  assert.deepEqual(M.plies.map((p) => p.cp), [-100, 200]);
+});
+
+// a PGN's move is checked as fully as a move on the board: an illegal one would otherwise corrupt every position after it
+test('illegal castling and promotions in a PGN are refused', () => {
+  const bad = (pgn) => assert.throws(() => CC.buildGame({ pgn }), /not a legal move/);
+  bad('1. O-O *'); // pieces in the way (it once took White's own bishop and knight)
+  bad('[SetUp "1"]\n[FEN "4k3/8/8/8/8/8/8/4K2R w - - 0 1"]\n\n1. O-O *'); // no castling right
+  bad('[SetUp "1"]\n[FEN "4kr2/8/8/8/8/8/8/4K2R w K - 0 1"]\n\n1. O-O *'); // through check
+  bad('[SetUp "1"]\n[FEN "4r1k1/8/8/8/8/8/8/4K2R w K - 0 1"]\n\n1. O-O *'); // out of check
+  bad('1. e4=Q *'); // a promotion short of the last rank
+  bad('[SetUp "1"]\n[FEN "8/P7/8/8/8/8/8/k6K w - - 0 1"]\n\n1. a8 *'); // a pawn left on the last rank
+  assert.equal(CC.buildGame({ pgn: '1. e4 e5 2. Nf3 Nc6 3. Bc4 Bc5 4. O-O *' }).plies[6].uci, 'e1g1');
+});
+
+test('escaped quotes and backslashes in a PGN tag are read as the characters', () => {
+  const M = CC.buildGame({ pgn: '[White "Smith, \\"J\\""]\n[Black "a\\\\b"]\n\n1. e4 *' });
+  assert.equal(M.headers.White, 'Smith, "J"');
+  assert.equal(M.headers.Black, 'a\\b');
+});
+
+test('a tag written inside a comment stays the comment’s text', () => {
+  const M = CC.buildGame({ pgn: '[Event "Real"]\n\n1. e4 {see [Event "x"] here} e5 ; [White "y"]\n2. Nf3 *' });
+  assert.equal(M.headers.Event, 'Real');
+  assert.equal(M.headers.White, undefined);
+  assert.equal(M.plies[0].comment, 'see [Event "x"] here');
+});
+
+// what other programs write besides plain SAN, shown in the move list as standard SAN
+test('figurines, long algebraic, e.p. and castling with zeros are read, and shown as standard SAN', () => {
+  const M = CC.buildGame({ pgn: '1. e2-e4 ♞f6 2. e5 d7-d5 3. exd6 e.p. e6 4. ♘g1-f3 ♗e7 5. Bf1-c4 0-0 6. 0-0 *' });
+  assert.deepEqual(M.plies.map((p) => p.san), ['e4', 'Nf6', 'e5', 'd5', 'exd6', 'e6', 'Nf3', 'Be7', 'Bc4', 'O-O', 'O-O']);
+  assert.equal(CC.buildGame({ pgn: '1. e4 e5 2. Ng1f3 *' }).plies[2].san, 'Nf3'); // more of the square than it needs
+});
+
+test('a null move gets a message saying so', () => {
+  assert.throws(() => CC.buildGame({ pgn: '1. e4 -- 2. d4 *' }), /null move \("--"\)/);
+  // in a variation it only ends that line
+  assert.equal(CC.buildGame({ pgn: '1. e4 (1. d4 -- 2. c4) e5 *' }).plies.length, 2);
+});
+
 test('an engine comment is not shown as commentary, the text after it is', () => {
   const P = CC.buildGame({ pgn: '[Result "*"]\n\n1. e4 {+0.31/20 1.2s Book exit} e5 {Played 1/2 the time} *' });
   assert.equal(P.plies[0].comment, 'Book exit');

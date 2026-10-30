@@ -95,14 +95,25 @@
   }
   const tOf = (p) => p.toLowerCase();
 
+  const FIGURINE = { '♔': 'K', '♕': 'Q', '♖': 'R', '♗': 'B', '♘': 'N', '♙': '', '♚': 'K', '♛': 'Q', '♜': 'R', '♝': 'B', '♞': 'N', '♟': '' };
   function sanToMove(pos, san) {
-    let s = san.replace(/[+#!?]+$/, '');
+    if (/^(--|Z0|0000|@@@@)$/.test(san)) throw new Error(`The game has a null move ("${san}"), which this player can't show`);
+    // besides plain SAN: figurines (♘f3), an e.p. suffix, long algebraic (e2-e4, Ng1-f3) and castling with zeros
+    let s = san.replace(/[♔-♟]/g, (c) => FIGURINE[c]).replace(/[+#!?]+$/, '').replace(/e\.p\.$/, '').replace(/[+#]+$/, '');
+    s = s.replace(/^([NBRQK]?[a-h][1-8])-([a-h][1-8])/, '$1$2');
     if (/^0-0/.test(s)) s = s.replace(/0/g, 'O');
     const color = pos.turn;
-    if (/^O-O(-O)?$/.test(s)) { const y = color === 'w' ? 7 : 0; return { from: at(4, y), to: at(s.length > 3 ? 2 : 6, y), promo: null }; }
+    // castling is checked in full (rights, rook, empty squares, no check on the king's path): a PGN's O-O isn't trusted
+    if (/^O-O(-O)?$/.test(s)) {
+      const y = color === 'w' ? 7 : 0, from = at(4, y), to = at(s.length > 3 ? 2 : 6, y);
+      if (!legalMove(pos, from, to)) throw new Error(`"${san}" is not a legal move here`);
+      return { from, to, promo: null };
+    }
     const m = s.match(/^([NBRQK])?([a-h])?([1-8])?x?([a-h][1-8])(?:=?([NBRQnbrq]))?$/);
     if (!m) throw new Error(`Can't read the move "${san}"`);
     const type = (m[1] || 'P').toLowerCase(), to = sqIdx(m[4]), promo = m[5] ? m[5].toLowerCase() : null;
+    // a promotion piece only on a pawn reaching the last rank, and there always one
+    if (promo ? type !== 'p' || (fy(to) !== 0 && fy(to) !== 7) : type === 'p' && (fy(to) === 0 || fy(to) === 7)) throw new Error(`"${san}" is not a legal move here`);
     const cands = [];
     for (let i = 0; i < 64; i++) {
       const p = pos.b[i];
@@ -131,7 +142,10 @@
   const NAG = { 1: '!', 2: '?', 3: '!!', 4: '??', 5: '!?', 6: '?!' };
   function parsePGN(text) {
     const headers = {};
-    const body = text.replace(/\[(\w+)\s+"((?:[^"\\]|\\.)*)"\]/g, (_, k, v) => { headers[k] = v; return ' '; });
+    // a comment ({…} or ; to the end of the line) is passed over whole, so a tag written inside one stays its text
+    const body = text.replace(/\{[^}]*\}?|;[^\n]*|\[(\w+)\s+"((?:[^"\\]|\\.)*)"\]/g, (m, k, v) => { if (!k) return m; headers[k] = v.replace(/\\(["\\])/g, '$1'); return ' '; });
+    // a [FEN] start with Black to move: the first ply is Black's (cutechess evals below are the mover's)
+    const black0 = (headers.FEN || '').trim().split(/\s+/)[1] === 'b';
     const plies = []; let intro = '', depth = 0, varPly = -1, varSans = null, varAt = 0, i = 0;
     const addComment = (raw) => {
       if (depth > 0) return;
@@ -144,7 +158,7 @@
       if (!t) { if (txt) intro = (intro + ' ' + txt).trim(); return; }
       if (ev) { if (ev[1][0] === '#') t.mate = parseInt(ev[1].slice(1), 10); else t.cp = Math.round(parseFloat(ev[1]) * 100); }
       if (ae) {
-        const sign = (ae[1] === '-' ? -1 : 1) * ((plies.length - 1) % 2 ? -1 : 1);
+        const sign = (ae[1] === '-' ? -1 : 1) * ((plies.length - 1 + (black0 ? 1 : 0)) % 2 ? -1 : 1);
         if (ae[3]) t.mate = sign * Math.ceil(parseInt(ae[3], 10) / 2); else t.cp = sign * Math.round(parseFloat(ae[2]) * 100);
       }
       if (ck) t.clk = ck[1].split(':').map(Number).reduce((a, x) => a * 60 + x, 0);
@@ -176,7 +190,7 @@
         continue;
       }
       tok = tok.replace(/^\d+\.+/, '');
-      if (!tok || /^(1-0|0-1|1\/2-1\/2|\*)$/.test(tok)) continue;
+      if (!tok || /^(1-0|0-1|1\/2-1\/2|\*|e\.p\.[+#]?)$/.test(tok)) continue;
       const mm = tok.match(/^(.*?)([!?]{1,2})?$/);
       if (depth === 0) plies.push({ san: mm[1], mark: mm[2] || null });
       else if (depth === 1) varSans.push(mm[1]);
@@ -291,7 +305,11 @@
     const ply0 = start.ply0, stdStart = start.fen === START_FEN;
     const sans = P ? P.plies.map((p) => p.san) : A ? A.moves.map((m) => m.move_san) : [];
     if (!sans.length) throw new Error('No moves found');
-    if (A && P && A.moves.length && A.moves[0].move_san.replace(/[+#]/g, '') !== sans[0].replace(/[+#]/g, '')) throw new Error("The analysis file doesn't match this PGN");
+    // moves are compared as written and as standard SAN (a PGN's 0-0 or e2-e4 is the analysis file's O-O or e4)
+    const bare = (x) => x.replace(/[+#]/g, '');
+    const canon = (p, mv) => sanOf(p, { ...mv, after: applyMove(p, mv.from, mv.to, mv.promo) });
+    const firstStd = () => { try { return canon(start.pos, sanToMove(start.pos, sans[0])); } catch (e) { return sans[0]; } };
+    if (A && P && A.moves.length && bare(A.moves[0].move_san) !== bare(sans[0]) && bare(A.moves[0].move_san) !== bare(firstStd())) throw new Error("The analysis file doesn't match this PGN");
     // chess-animator's analysis JSON never has start_fen (its moves come from the PGN's [FEN] board): then the per-ply SAN match and the side to move decide
     if (A && P && A.start_fen && parseFen(A.start_fen).fen !== start.fen) throw new Error("The analysis file doesn't match this PGN");
     if (A && P && A.moves.length && typeof A.moves[0].is_white_move === 'boolean' && A.moves[0].is_white_move !== (start.pos.turn === 'w')) throw new Error("The analysis file doesn't match this PGN");
@@ -300,12 +318,12 @@
     const plies = [];
     sans.forEach((san, i) => {
       const am = useA && A.moves[i];
-      if (A && P && am && am.move_san.replace(/[+#]/g, '') !== san.replace(/[+#]/g, '')) throw new Error(`The analysis file doesn't match this PGN at ply ${i + 1}`);
-      const before = pos, mv = sanToMove(pos, san);
+      const before = pos, mv = sanToMove(pos, san), std = canon(pos, mv);
+      if (A && P && am && bare(am.move_san) !== bare(san) && bare(am.move_san) !== bare(std)) throw new Error(`The analysis file doesn't match this PGN at ply ${i + 1}`);
       pos = applyMove(pos, mv.from, mv.to, mv.promo);
       const pp = P ? P.plies[i] : {};
       const check = inCheck(pos.b, pos.turn);
-      const ply = { san: san.replace(/[#+]/g, '') + (check ? (hasLegal(pos) ? '+' : '#') : ''), uci: idxSq(mv.from) + idxSq(mv.to) + (mv.promo || ''), side: (ply0 + i) % 2 ? 'b' : 'w' };
+      const ply = { san: std, uci: idxSq(mv.from) + idxSq(mv.to) + (mv.promo || ''), side: (ply0 + i) % 2 ? 'b' : 'w' };
       ply.checkmate = ply.san.endsWith('#');
       if (check) ply.checkSq = idxSq(kingIdx(pos.b, pos.turn));
       ply.fen = toFen(pos);

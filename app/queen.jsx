@@ -65,16 +65,13 @@ async function directCall(moves, token, signal, fen = '') {
 const b64url = (buf) => btoa(String.fromCharCode(...new Uint8Array(buf))).replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, '');
 function readAuth() { try { const a = JSON.parse(localStorage.getItem(AUTH_STORE) || 'null'); return a && a.token && a.expires > Date.now() ? a : null; } catch (e) { return null; } }
 
-// "Sign in with Hugging Face" (OAuth code flow with PKCE, no secret). Inside an iframe (the notes site embeds the
-// page) it opens the page in a new tab, which signs in there: the embedding site is another site, so the browser
-// keeps the iframe's storage separate and the token can't reach it.
+// "Sign in with Hugging Face" (OAuth code flow with PKCE, no secret)
 function useHfAuth() {
   const [auth, setAuth] = React.useState(readAuth);
   const [note, setNote] = React.useState('');
   const enabled = !!HF_OAUTH.clientId && !HF_PREVIEW;
   const start = async () => {
     if (!enabled) return;
-    if (window.top !== window) { window.open(HF_OAUTH.redirect + '#hf-signin', '_blank'); return; }
     const verifier = b64url(crypto.getRandomValues(new Uint8Array(32)));
     const challenge = b64url(await crypto.subtle.digest('SHA-256', new TextEncoder().encode(verifier)));
     const state = b64url(crypto.getRandomValues(new Uint8Array(16)));
@@ -94,7 +91,7 @@ function useHfAuth() {
       const a = { token: t.access_token, expires: Date.now() + (t.expires_in || 28800) * 1000 - 60000, name: u.preferred_username || u.name || '' };
       try { localStorage.setItem(AUTH_STORE, JSON.stringify(a)); } catch (e) {}
       setAuth(a);
-      setNote(`Signed in to Hugging Face${a.name ? ' as ' + a.name : ''}.` + (window.opener ? ' Ask Queen from this tab: the embedded copy can’t use this sign-in.' : ''));
+      setNote(`Signed in to Hugging Face${a.name ? ' as ' + a.name : ''}.`);
     } catch (e) { setNote('Sign-in failed: ' + ((e && e.message) || e)); }
   };
   const signOut = () => { try { localStorage.removeItem(AUTH_STORE); } catch (e) {} setAuth(null); };
@@ -105,7 +102,6 @@ function useHfAuth() {
     if ((q.get('state') || '').startsWith('lichess.')) return () => window.removeEventListener('storage', onStorage); // Lichess's sign-in (explorer.jsx)
     if (q.get('code') && q.get('state')) finish(q);
     else if (q.get('error')) { history.replaceState(null, '', location.pathname); setNote('Hugging Face sign-in was cancelled.'); }
-    else if (location.hash === '#hf-signin') { history.replaceState(null, '', location.pathname); start(); }
     return () => window.removeEventListener('storage', onStorage);
   }, []);
   return { auth, enabled, preview: HF_PREVIEW, start, signOut, note, clearNote: () => setNote('') };

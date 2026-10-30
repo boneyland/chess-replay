@@ -52,6 +52,23 @@ test('the page has a Content-Security-Policy listing a hash for each inline scri
   assert.doesNotMatch(page, /<script\b(?![^>]*\ssrc=)[^>]+>/, 'every inline script is a plain <script>, so its hash is listed');
 });
 
+// a script on a CDN runs only if it is one the page names: a whole host would let any package there run
+test('the policy allows CDN scripts by their exact URLs, not their hosts', () => {
+  const page = fs.readFileSync(path.join(ROOT, 'out', 'site', 'chess-game-video.html'), 'utf8');
+  const scriptSrc = page.match(/<meta http-equiv="Content-Security-Policy" content="([^"]+)">/)[1].split('; ').find((d) => d.startsWith('script-src '));
+  const hosts = scriptSrc.split(' ').filter((s) => /^https:/.test(s));
+  for (const h of hosts) assert.match(h, /^https:\/\/[^/]+\/.+\.js$/, h);
+  for (const u of [...page.matchAll(/<script src="([^"]+)"/g)].map((m) => m[1])) assert.ok(hosts.includes(u), u);
+  assert.ok(hosts.some((h) => h.includes('html2canvas-pro')), 'the export\'s library too');
+});
+
+test('render.yaml lets no other site frame the page', () => {
+  const yaml = fs.readFileSync(path.join(ROOT, 'render.yaml'), 'utf8');
+  const h = Object.fromEntries([...yaml.matchAll(/- path: \/\*\n\s+name: (.+)\n\s+value: (.+)/g)].map((m) => [m[1].trim(), m[2].trim()]));
+  assert.equal(h['Content-Security-Policy'], "frame-ancestors 'self'");
+  assert.equal(h['X-Frame-Options'], 'SAMEORIGIN');
+});
+
 // The Lichess sound sets travel inside the page
 test('the built page carries the four Lichess sound sets as MP3s, and the Wood set needs no data', () => {
   const page = fs.readFileSync(path.join(ROOT, 'out', 'site', 'chess-game-video.html'), 'utf8');

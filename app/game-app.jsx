@@ -19,7 +19,7 @@ const GAMES = 'chess-video.games.v1';
 const readGames = () => { try { return window.GamesCore.read(localStorage.getItem(GAMES)); } catch (e) { return []; } };
 
 // Full screen hides the browser's bars, and the phone layouts grow into the space. iPhone Safari has no element
-// full screen (only <video>) and a frame may not allow it, so the item shows only where the browser says it works;
+// full screen (only <video>), so the item shows only where the browser says it works;
 // an installed copy opened full screen (the manifest) has no bars to hide
 const fsElement = () => document.fullscreenElement || document.webkitFullscreenElement || null;
 const FS_OK = !!(document.fullscreenEnabled || document.webkitFullscreenEnabled) && !(() => { try { return window.matchMedia('(display-mode: fullscreen)').matches; } catch (e) { return false; } })();
@@ -70,36 +70,11 @@ function useOnline() {
   return { online, note, clearNote: () => setNote(null) };
 }
 
-// An embedding page on another origin (the notes site) can't be read, so it posts its scheme instead:
-// this page sends { type: 'chess-replay:scheme?' } (again after 0.5 s and 2 s while unanswered, in case the parent's
-// listener wasn't attached yet), and the parent answers, then posts again on each toggle,
-//   { type: 'chess-replay:scheme', scheme: 'dark' | 'light' }
-const SCHEME_MSG = 'chess-replay:scheme';
-let postedScheme = null;
-const schemeListeners = new Set();
-if (window.parent !== window) {
-  window.addEventListener('message', (e) => {
-    const d = e.data;
-    if (e.source !== window.parent || !d || d.type !== SCHEME_MSG || (d.scheme !== 'dark' && d.scheme !== 'light')) return;
-    postedScheme = d.scheme;
-    schemeListeners.forEach((f) => f());
-  });
-  const ask = () => { if (!postedScheme) try { window.parent.postMessage({ type: SCHEME_MSG + '?' }, '*'); } catch (e) {} };
-  ask(); setTimeout(ask, 500); setTimeout(ask, 2000);
-}
-
-// Auto follows the embedding page or the system setting; Light/Dark override both
+// Auto follows the system setting; Light/Dark override it
 function useScheme(pref) {
-  // a same-origin embed with a Material palette toggle (data-md-color-scheme) is read directly
-  const parentScheme = () => {
-    try { const b = window.parent !== window && window.parent.document.body; const s = b && b.getAttribute('data-md-color-scheme'); if (s) return s === 'slate' ? 'dark' : 'light'; } catch (e) {}
-    return postedScheme;
-  };
   const read = () => {
     if (pref === 'Light') return 'light';
     if (pref === 'Dark') return 'dark';
-    const ps = parentScheme();
-    if (ps) return ps;
     try { return window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light'; } catch (e) { return 'dark'; }
   };
   const [mode, setMode] = React.useState(read);
@@ -108,15 +83,12 @@ function useScheme(pref) {
     const update = () => {
       const m = read();
       setMode(m);
-      if (pref === 'Light' || pref === 'Dark' || parentScheme()) el.setAttribute('data-scheme', m); else el.removeAttribute('data-scheme');
+      if (pref === 'Light' || pref === 'Dark') el.setAttribute('data-scheme', m); else el.removeAttribute('data-scheme');
     };
     update();
     let mq = null;
     try { mq = window.matchMedia('(prefers-color-scheme: dark)'); mq.addEventListener('change', update); } catch (e) {}
-    const mo = new MutationObserver(update);
-    try { if (window.parent !== window && window.parent.document.body) mo.observe(window.parent.document.body, { attributes: true, attributeFilter: ['data-md-color-scheme'] }); } catch (e) {}
-    schemeListeners.add(update);
-    return () => { try { if (mq) mq.removeEventListener('change', update); } catch (e) {} mo.disconnect(); schemeListeners.delete(update); };
+    return () => { try { if (mq) mq.removeEventListener('change', update); } catch (e) {} };
   }, [pref]);
   return mode;
 }
@@ -398,7 +370,7 @@ function GameApp() {
     commit(next);
   };
   // Drag-and-drop: dragover repeats every few ms while a file is over the page, so the overlay hides itself
-  // shortly after those stop (dropped elsewhere, cancelled, or swallowed by an embedding page's frame)
+  // shortly after those stop (dropped elsewhere or cancelled)
   const dragTimer = React.useRef(null);
   const loadRef = React.useRef(loadFiles);
   loadRef.current = loadFiles; // the listeners below are registered once and always load with the current files

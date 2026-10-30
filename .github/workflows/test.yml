@@ -1,11 +1,12 @@
-# Build the page and run the JS tests on every push and pull request, and the browser smoke tests against the build:
+# Build the page and run the JS tests on every push to main and every pull request, and the browser smoke tests against the build:
 # desktop and phone layouts in Chrome, Firefox and WebKit (iPhone Safari's engine), and real Chrome on an Android emulator.
 # The Python cross-check (tests/check_browser_json.py) is left out: it imports chess-animator, which needs Manim.
 name: test
-# branches only: a tag push starts nothing
+# pushes to main and pull requests: a push to a PR's branch runs once, as the PR (both triggers ran it twice); a tag
+# push starts nothing
 on:
   push:
-    branches: ['**']
+    branches: [main]
     paths-ignore: ['docs/**', 'media/**', '*.md', 'LICENSE']
   pull_request:
     paths-ignore: ['docs/**', 'media/**', '*.md', 'LICENSE']
