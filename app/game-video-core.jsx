@@ -393,7 +393,7 @@ function LineBoard({ a, sq, v, hide, arrows }) {
   ) : null));
   return (
     // drawing only: taps and drags go to BoardTouch (without this its pieces sit above it and swallow them)
-    <div style={{ ...NO_SELECT, position: 'absolute', left: 0, top: 0, width: BW, height: BW, borderRadius: 2, overflow: 'hidden', boxShadow: `0 0 0 4px ${accent}, ${C.haloBoard}0 4px 12px rgba(0,0,0,0.28)`, opacity: a, pointerEvents: 'none' }}>
+    <div style={{ ...NO_SELECT, position: 'absolute', left: 0, top: 0, width: BW, height: BW, borderRadius: 2, overflow: 'hidden', boxShadow: `0 0 0 2px ${accent}, ${C.haloBoard}0 4px 12px rgba(0,0,0,0.28)`, opacity: a, pointerEvents: 'none' }}>
       {sq}{over}{pieces}
       {arrows && (
         <svg width={BW} height={BW} style={{ position: 'absolute', left: 0, top: 0, zIndex: 6, pointerEvents: 'none' }}>
@@ -540,7 +540,7 @@ function PlayerBar({ M, T, S, side, a, pieces }) {
       </span>
       {caps && <span style={{ display: 'flex', alignItems: 'center', marginLeft: tx(6) }}>{shown}</span>}
       {caps && pts > 0 && <span style={{ font: `600 ${tx(16)}px ${MONO}`, color: C.dim, marginLeft: tx(8) }}>+{pts}</span>}
-      {clk && <span style={{ marginLeft: 'auto', minWidth: tx(72), textAlign: 'center', padding: `${tx(1)}px ${tx(7)}px`, borderRadius: 3, font: `600 ${tx(17)}px ${MONO}`, background: clk.active ? (low ? C.blunder : '#f1ebe1') : C.off, color: clk.active ? '#15100d' : C.dim, boxShadow: clk.active ? `0 0 0 1px ${C.line}` : 'none' }}>{fmtClock(clk.s)}</span>}
+      {clk && <span style={{ marginLeft: 'auto', minWidth: tx(72), textAlign: 'center', padding: `${tx(1)}px ${tx(7)}px`, borderRadius: 3, font: `600 ${tx(17)}px ${MONO}`, background: clk.active ? (low ? C.blunder : 'rgb(251, 247, 241)') : C.off, color: clk.active ? '#15100d' : C.dim, boxShadow: clk.active ? `0 0 0 1px ${C.line}` : 'none' }}>{fmtClock(clk.s)}</span>}
     </div>
   );
 }

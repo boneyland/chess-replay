@@ -20,7 +20,7 @@ function FreeBar({ pos, side, a, clock, name }) {
       <span style={{ font: `600 ${tx(20)}px ${SANS}`, color: C.ink, whiteSpace: 'nowrap' }}>{name || (side === 'w' ? 'White' : 'Black')}</span>
       <span style={{ display: 'flex', alignItems: 'center', marginLeft: tx(6) }}>{shown}</span>
       {pts > 0 && <span style={{ font: `600 ${tx(16)}px ${MONO}`, color: C.dim, marginLeft: tx(8) }}>+{pts}</span>}
-      {clock && <span className="game-clock" style={{ marginLeft: 'auto', minWidth: tx(72), textAlign: 'center', padding: `${tx(1)}px ${tx(7)}px`, borderRadius: 3, font: `600 ${tx(17)}px ${MONO}`, background: clock.active ? (clock.s < 60 ? C.blunder : '#f1ebe1') : C.off, color: clock.active ? '#15100d' : C.dim, boxShadow: clock.active ? `0 0 0 1px ${C.line}` : 'none' }}>{fmtClock(clock.s)}</span>}
+      {clock && <span className="game-clock" style={{ marginLeft: 'auto', minWidth: tx(72), textAlign: 'center', padding: `${tx(1)}px ${tx(7)}px`, borderRadius: 3, font: `600 ${tx(17)}px ${MONO}`, background: clock.active ? (clock.s < 60 ? C.blunder : 'rgb(251, 247, 241)') : C.off, color: clock.active ? '#15100d' : C.dim, boxShadow: clock.active ? `0 0 0 1px ${C.line}` : 'none' }}>{fmtClock(clock.s)}</span>}
     </div>
   );
 }
