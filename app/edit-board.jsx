@@ -171,9 +171,10 @@ function EditBoard({ setup, onChange, onDone, onCancel, fenText, onFenText, fenM
         <span id="edit-board-keys" style={SR_ONLY}>{EDIT_KEYS}</span>
         <span aria-live="polite" style={SR_ONLY}>{kbFocus ? squareSay(setup.b, input.cursor) + (input.carrying != null ? `, carrying ${trayLabel(setup.b[input.carrying]).toLowerCase()}` : '') : ''}</span>
       </div>
+      {/* its own compositing layer: drawn in the scaled board, its shadow left trails Epiphany (WebKitGTK) never repainted */}
       {drag && drag.moved && (
         <img src={img(drag.piece === drag.piece.toUpperCase() ? 'w' : 'b', drag.piece.toLowerCase())} alt=""
-          style={{ position: 'absolute', left: drag.x - SQ * 0.55, top: drag.y - SQ * 0.55, width: SQ * 1.1, height: SQ * 1.1, pointerEvents: 'none', filter: 'drop-shadow(0 10px 12px rgba(0,0,0,0.45))', zIndex: 10 }} />
+          style={{ position: 'absolute', left: drag.x - SQ * 0.55, top: drag.y - SQ * 0.55, width: SQ * 1.1, height: SQ * 1.1, pointerEvents: 'none', filter: 'drop-shadow(0 10px 12px rgba(0,0,0,0.45))', willChange: 'transform', transform: 'translateZ(0)', zIndex: 10 }} />
       )}
       </BoardSpace>
       {L.tray && <Tray size={Math.min(112, Math.floor((L.tray.w - 20) / 6), Math.floor((L.tray.h - 4) / 2))} held={held} trayHandlers={trayHandlers} style={L.tray.flow ? { order: L.tray.order, flex: 'none', height: L.tray.h } : { position: 'absolute', left: L.tray.x, top: L.tray.y, width: L.tray.w }} />}
