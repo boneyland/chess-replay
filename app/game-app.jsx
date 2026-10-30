@@ -140,6 +140,7 @@ function GameApp() {
   // the dock's Menu (landscape); on a phone its items sit in the folded menu instead
   const [newMenu, setNewMenu] = React.useState(false);
   const [pgnOpen, setPgnOpen] = React.useState(false);
+  const [resetOpen, setResetOpen] = React.useState(false);
   // Edit position: { setup, text, msg, resume } while the editor shows in place of the board or the loaded game; text is
   // the FEN field's, msg why it doesn't parse, resume the paused game in progress left to open it (Cancel goes back to it)
   const [editing, setEditing] = React.useState(null);
@@ -315,6 +316,13 @@ function GameApp() {
     if (!fen) return;
     const shown = (ok) => setFenNote({ fen, ok });
     try { navigator.clipboard.writeText(fen).then(() => shown(true), () => shown(false)); } catch (e) { shown(false); }
+  };
+  // the game's PGN (a free board's moves, or the loaded game with its annotations), copied like the FEN
+  const copyPgn = () => {
+    setNewMenu(false); setMenu(false);
+    const pgn = board ? window.BoardCore.pgn(board) : window.ChessCore.annotatedPgn(withQueen(M, Q.resultAt));
+    const shown = (ok) => setFenNote({ fen: pgn, ok, what: 'PGN' });
+    try { navigator.clipboard.writeText(pgn).then(() => shown(true), () => shown(false)); } catch (e) { shown(false); }
   };
   React.useEffect(() => { if (fenNote && fenNote.ok) { const id = setTimeout(() => setFenNote(null), 4000); return () => clearTimeout(id); } }, [fenNote]);
   // the Play dialog's choices to open with (after the editor's Cancel), else its defaults
@@ -542,7 +550,7 @@ function GameApp() {
   const status = boardStatus || `${M.white.short} – ${M.black.short} · ${M.plies.length} plies` + (M.evalSource === 'analysis' ? ' · analysis evals' : M.evalSource === 'pgn' ? ' · PGN evals' : '') + (M.hasNotes ? ' · notes' : '') + (files.sample ? ' (sample)' : '') + ' · ' + fmtLen(TM.total);
   const shownErr = err || built.error;
 
-  const newGroups = [{ label: 'Explore', items: [{ label: 'Starting position', run: newBoard }, { label: 'Edit position', run: editPosition }, { label: 'Paste PGN', run: pastePgn }, { label: 'Copy FEN', run: copyFen }] },
+  const newGroups = [{ label: 'Explore', items: [{ label: 'Starting position', run: newBoard }, { label: 'Edit position', run: editPosition }, { label: 'Paste PGN', run: pastePgn }, { label: 'Copy FEN', run: copyFen }, { label: 'Copy PGN', run: copyPgn }] },
     { label: 'Play', items: [{ label: 'Play vs human', run: playHuman }, { label: 'Play vs Stockfish', run: playSf }, { label: 'My games', run: myGames }] },
     // Ask Queen sits here on the wide layouts; the folded menu keeps it in its last row. The folded menu's shortcuts item is hidden on a touch screen
     { label: 'More', items: [{ label: 'Keyboard shortcuts', run: openKeys }, ...(!phone && !board ? [{ label: 'Ask Queen', cls: 'dock-queen', run: () => { setNewMenu(false); askQueen(); } }] : [])] }];
@@ -618,7 +626,7 @@ function GameApp() {
       )}
       {fenNote && !hf.note && (
         <div className="signin-note net-note fen-note" role="status">
-          <span>{fenNote.ok ? 'FEN copied' : 'Copy this FEN'}: <textarea className="fen-note-fen" readOnly rows={2} value={fenNote.fen} aria-label="FEN" onFocus={(e) => e.target.select()} /></span>
+          <span>{fenNote.ok ? `${fenNote.what || 'FEN'} copied` : `Copy this ${fenNote.what || 'FEN'}`}{(!fenNote.ok || !fenNote.what) && <>: <textarea className="fen-note-fen" readOnly rows={2} value={fenNote.fen} aria-label={fenNote.what || 'FEN'} onFocus={(e) => e.target.select()} /></>}</span>
           <button type="button" className="twk-x" aria-label="Dismiss" onClick={() => setFenNote(null)}>✕</button>
         </div>
       )}
@@ -632,6 +640,15 @@ function GameApp() {
       )}
       <ExportOverlay x={video} />
       {pgnOpen && <PgnDialog onLoad={pgnLoad} onClose={closePgn} />}
+      {resetOpen && (
+        <DialogBox label="Reset all settings" onClose={() => setResetOpen(false)}>
+          <div className="fen-note">Every setting goes back to its default. Your saved games and the downloaded engine are kept.</div>
+          <div className="fen-btns">
+            <button type="button" className="twk-btn secondary" data-autofocus onClick={() => setResetOpen(false)}>Cancel</button>
+            <button type="button" className="twk-btn danger" onClick={() => { setResetOpen(false); Object.keys(window.TWEAK_DEFAULTS).filter((k) => k !== 'sfEngine').forEach((k) => setTweak(k, window.TWEAK_DEFAULTS[k])); }}>Reset</button>
+          </div>
+        </DialogBox>
+      )}
       {playOpen && <PlayDialog key={playOpen} mode={playOpen} setUpFen={board && board.fen !== window.ChessCore.START_FEN ? board.fen : null} clock={t.playClock} side={t.playSide} initial={playInit} onStart={playStart} onSetUp={playSetUp} onClose={closePlay} />}
       {keysOpen && <ShortcutsDialog onClose={closeKeys} />}
       {gamesOpen && <MyGamesDialog games={gamesOpen} current={board && window.PlayCore.inProgress(board) ? board.game.id : null} onReplay={replayGame} onResume={resumeGame} onDelete={deleteGame} onClose={closeGames} />}
@@ -657,6 +674,8 @@ function GameApp() {
           <TweakSection label="About">
             <div className="twk-note">This player is free software under the GPL-3.0-or-later; <a href="https://github.com/boneyland/chess-replay" target="_blank" rel="noopener">source on GitHub</a>.</div>
           </TweakSection>
+          {/* every setting back to its default; the kept games, the loaded game, Queen's answers, sign-ins and the engine download stay, and so does the engine choice */}
+          <TweakButton danger label="Reset all settings" onClick={() => setResetOpen(true)} />
         </> },
         { id: 'view', label: 'View', body: <>
           <TweakSection label="Appearance">

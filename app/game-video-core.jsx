@@ -826,6 +826,9 @@ function EvalPlot({ M, T, S, a, paused, onPick }) {
         ) : (
           <text x={W / 2} y={mid + 5} textAnchor="middle" fill={C.dim} style={{ font: `500 ${tx(16)}px ${MONO}` }}>No evaluation data</text>
         )}
+        {/* under the hover label, which would otherwise sit behind WHITE */}
+        <text x="4" y="12" fill={C.dim} style={{ font: `600 ${tx(14)}px ${MONO}`, letterSpacing: '0.1em' }}>WHITE</text>
+        <text x="4" y={H - 4} fill={C.dim} style={{ font: `600 ${tx(14)}px ${MONO}`, letterSpacing: '0.1em' }}>BLACK</text>
         {hover != null && (() => {
           const x = px(hover + 1), name = hover < 0 ? 'Start' : label(M, hover), w = name.length * tx(16) * 0.62 + 16;
           const bx = Math.min(Math.max(x - w / 2, 0), W - w);
@@ -837,8 +840,6 @@ function EvalPlot({ M, T, S, a, paused, onPick }) {
             </g>
           );
         })()}
-        <text x="4" y="12" fill={C.dim} style={{ font: `600 ${tx(14)}px ${MONO}`, letterSpacing: '0.1em' }}>WHITE</text>
-        <text x="4" y={H - 4} fill={C.dim} style={{ font: `600 ${tx(14)}px ${MONO}`, letterSpacing: '0.1em' }}>BLACK</text>
       </svg>
     </div>
   );
