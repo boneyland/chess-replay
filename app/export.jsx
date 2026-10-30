@@ -81,7 +81,17 @@ async function mp4Encoder(cv, W, H, fps, audio, quality = 'High', vfr = false) {
     if (acodec) { asrc = new MB.AudioBufferSource({ codec: acodec, bitrate: MB.QUALITY_MEDIUM }); output.addAudioTrack(asrc); }
   }
   await output.start();
-  if (asrc) { await asrc.add(sound); asrc.close(); }
+  // fed in half-second slices, not as one buffer: WebKitGTK's audio encoder, given the whole soundtrack at once, wrote Opus
+  // packets of 2.5 s whose timestamps then jumped back, so players stuttered and drifted from the picture
+  if (asrc) {
+    const step = Math.round(sound.sampleRate / 2);
+    for (let at = 0; at < sound.length; at += step) {
+      const n = Math.min(step, sound.length - at), slice = new AudioBuffer({ length: n, sampleRate: sound.sampleRate, numberOfChannels: sound.numberOfChannels });
+      for (let c = 0; c < sound.numberOfChannels; c++) slice.copyToChannel(sound.getChannelData(c).subarray(at, at + n), c);
+      await asrc.add(slice);
+    }
+    asrc.close();
+  }
   let i = 0, from = null; // from: when the picture in hold began, in frames
   return {
     frame: async (isNew) => {
