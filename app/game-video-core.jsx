@@ -169,7 +169,7 @@ function Panel({ box, title, info, right, extra, head, a, style, progress, tight
   // a box whose contents can outgrow it scrolls, and hands the wheel or finger on to the page at its ends
   return (
     <>
-    <div style={{ ...place, background: C.panel, border: `1px solid ${C.line}`, padding: tight && tightAn() ? `${tx(L.pad[0] * 0.6)}px ${tx(L.pad[1])}px` : panelPad(), ...(box.scroll && { overflowY: 'auto', scrollbarWidth: 'thin' }), ...style }}>
+    <div style={{ ...place, background: C.panel, border: `1px solid ${C.line}`, boxShadow: `${C.halo}0 0 0 transparent`, padding: tight && tightAn() ? `${tx(L.pad[0] * 0.6)}px ${tx(L.pad[1])}px` : panelPad(), ...(box.scroll && { overflowY: 'auto', scrollbarWidth: 'thin' }), ...style }}>
       {(title || head) && (
         <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: tx(16), font: `600 ${tx(15)}px ${MONO}`, letterSpacing: '0.12em', textTransform: 'uppercase', color: C.dim, marginBottom: tight ? anGap(12) : tx(12) }}>
           {head || <><span style={{ flex: '0 1 auto', minWidth: 0, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{title}</span>{info && <span style={{ flex: 'none', marginLeft: -tx(8) }}>{info}</span>}<SideScroll style={{ minWidth: 0, flex: 1, textAlign: 'right', letterSpacing: '0.04em' }}>{right}</SideScroll>{extra}</>}
@@ -786,7 +786,7 @@ function EvalPlot({ M, T, S, a, paused, onPick }) {
   const area = `${line} L${last[0].toFixed(1)},${mid} L0,${mid} Z`;
   const ticks = window.ChessCore.evalTicks(M.ply0, N);
   return (
-    <div style={{ ...NO_SELECT, position: 'absolute', left: PLOT.x, top: PLOT.y, width: PLOT.w, height: PLOT.h, boxSizing: 'border-box', background: C.panel, border: `1px solid ${C.line}`, borderRadius: 4, padding: '10px 20px', opacity: a }}>
+    <div style={{ ...NO_SELECT, position: 'absolute', left: PLOT.x, top: PLOT.y, width: PLOT.w, height: PLOT.h, boxSizing: 'border-box', background: C.panel, border: `1px solid ${C.line}`, boxShadow: `${C.halo}0 0 0 transparent`, borderRadius: 4, padding: '10px 20px', opacity: a }}>
       <svg width={W} height={H + 14} style={{ display: 'block', overflow: 'visible', cursor: 'pointer', touchAction: 'none' }}
         onPointerDown={(e) => { try { e.currentTarget.setPointerCapture(e.pointerId); } catch (err) {} down.current = true; clearTimeout(fade.current); const j = plyAt(e); setHover(j); lastPick.current = j; onPick(j); }}
         onPointerMove={(e) => {
