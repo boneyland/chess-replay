@@ -10,14 +10,14 @@ const PALETTES = {
     light: '#f0d9b5', dark: '#b58863', last: '#e3b55b',
     best: '#62c483', inaccuracy: '#e6c14d', mistake: '#ec9442', blunder: '#e4553f', none: '#efe8de',
     good: '#5aa9e6', brilliant: '#3cc7bd', interesting: '#c98be0', queen: '#e0609f',
-    off: '#2a2320', scrim: '19,16,15', halo: '0 0 3px rgba(255,236,214,0.3), 0 0 14px rgba(255,236,214,0.14), 0 0 36px rgba(255,236,214,0.1), ', rim: 'drop-shadow(0 0 1px rgba(239,232,222,0.95)) drop-shadow(0 0 1px rgba(239,232,222,0.6))',
+    off: '#2a2320', scrim: '19,16,15', haloBoard: '0 0 3px rgba(255,236,214,0.5), 0 0 16px rgba(255,236,214,0.26), 0 0 44px rgba(255,236,214,0.18), ', halo: '0 0 3px rgba(255,236,214,0.3), 0 0 14px rgba(255,236,214,0.14), 0 0 36px rgba(255,236,214,0.1), ', rim: 'drop-shadow(0 0 1px rgba(239,232,222,0.95)) drop-shadow(0 0 1px rgba(239,232,222,0.6))',
   },
   light: {
     bg: '#f2ece3', panel: '#fbf7f1', line: 'rgba(60,40,20,0.13)', ctlLine: 'rgba(60,40,20,0.5)', ink: '#2a211b', dim: '#76695c',
     light: '#f0d9b5', dark: '#b58863', last: '#8a5e15',
     best: '#237a46', inaccuracy: '#8a6a0a', mistake: '#b05616', blunder: '#c63b29', none: '#2a211b',
     good: '#2a6fae', brilliant: '#1a7a73', interesting: '#8f4fab', queen: '#c03f7c',
-    off: '#e4dbcd', scrim: '242,236,227', halo: '', rim: 'none',
+    off: '#e4dbcd', scrim: '242,236,227', halo: '', haloBoard: '', rim: 'none',
   },
 };
 const C = { ...PALETTES.dark };
@@ -291,7 +291,7 @@ function Board({ M, T, S, a, arrows, pieces, queen, vline, hide, lines }) {
     }
   }
   return (
-    <div onDragStart={(e) => e.preventDefault()} style={{ ...NO_SELECT, position: 'absolute', left: 0, top: 0, width: BW, height: BW, borderRadius: 2, overflow: 'hidden', boxShadow: `${C.halo}0 4px 12px rgba(0,0,0,0.28)`, opacity: a, transform: `scale(${lerp(0.96, 1, a)})` }}>
+    <div onDragStart={(e) => e.preventDefault()} style={{ ...NO_SELECT, position: 'absolute', left: 0, top: 0, width: BW, height: BW, borderRadius: 2, overflow: 'hidden', boxShadow: `${C.haloBoard}0 4px 12px rgba(0,0,0,0.28)`, opacity: a, transform: `scale(${lerp(0.96, 1, a)})` }}>
       {sq}{over}
       {pieces.map((p) => <Piece key={p.id} p={p} T={T} S={S} />)}
       <svg width={BW} height={BW} style={{ position: 'absolute', left: 0, top: 0, zIndex: 6, pointerEvents: 'none' }}>
@@ -393,7 +393,7 @@ function LineBoard({ a, sq, v, hide, arrows }) {
   ) : null));
   return (
     // drawing only: taps and drags go to BoardTouch (without this its pieces sit above it and swallow them)
-    <div style={{ ...NO_SELECT, position: 'absolute', left: 0, top: 0, width: BW, height: BW, borderRadius: 2, overflow: 'hidden', boxShadow: `0 0 0 4px ${accent}, ${C.halo}0 4px 12px rgba(0,0,0,0.28)`, opacity: a, pointerEvents: 'none' }}>
+    <div style={{ ...NO_SELECT, position: 'absolute', left: 0, top: 0, width: BW, height: BW, borderRadius: 2, overflow: 'hidden', boxShadow: `0 0 0 4px ${accent}, ${C.haloBoard}0 4px 12px rgba(0,0,0,0.28)`, opacity: a, pointerEvents: 'none' }}>
       {sq}{over}{pieces}
       {arrows && (
         <svg width={BW} height={BW} style={{ position: 'absolute', left: 0, top: 0, zIndex: 6, pointerEvents: 'none' }}>
