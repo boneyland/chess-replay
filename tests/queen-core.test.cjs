@@ -5,8 +5,8 @@ loadUnit('queen-core.js');
 const Q = window.QueenCore;
 
 test('pyParse reads a Python dict repr: quotes, escapes, None/True/False, numbers, nesting', () => {
-  const v = Q.pyParse(`{'best_move_uci': 'e2e4', "analysis": 'It\\'s "fine"\\nreally', 'x': None, 'ok': True, 'no': False, 'n': -1.5e2, 'l': [1, 'a', {'k': 2},], 'u': '\\u00e9\\x41'}`);
-  assert.deepEqual(v, { best_move_uci: 'e2e4', analysis: 'It\'s "fine"\nreally', x: null, ok: true, no: false, n: -150, l: [1, 'a', { k: 2 }], u: 'éA' });
+  const v = Q.pyParse(`{'best_move_uci': 'e2e4', "analysis": 'It\\'s "fine"\\nreally', 'x': None, 'ok': True, 'no': False, 'n': -1.5e2, 'l': [1, 'a', {'k': 2},], 'u': '\\u00e9\\x41\\U0001f600'}`);
+  assert.deepEqual(v, { best_move_uci: 'e2e4', analysis: 'It\'s "fine"\nreally', x: null, ok: true, no: false, n: -150, l: [1, 'a', { k: 2 }], u: 'éA\u{1f600}' });
 });
 
 test('pyParse reads Python tuples as arrays, a one-element tuple included', () => {

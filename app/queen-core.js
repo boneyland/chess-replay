@@ -26,6 +26,7 @@
             const e = src[++i];
             if (e === 'n') s += '\n'; else if (e === 't') s += '\t'; else if (e === 'r') s += '\r';
             else if (e === 'u') { s += String.fromCharCode(parseInt(src.slice(i + 1, i + 5), 16)); i += 4; }
+            else if (e === 'U') { s += String.fromCodePoint(parseInt(src.slice(i + 1, i + 9), 16)); i += 8; }
             else if (e === 'x') { s += String.fromCharCode(parseInt(src.slice(i + 1, i + 3), 16)); i += 2; }
             else s += e;
             i++;
