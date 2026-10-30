@@ -10,14 +10,14 @@ const PALETTES = {
     light: '#f0d9b5', dark: '#b58863', last: '#e3b55b',
     best: '#62c483', inaccuracy: '#e6c14d', mistake: '#ec9442', blunder: '#e4553f', none: '#efe8de',
     good: '#5aa9e6', brilliant: '#3cc7bd', interesting: '#c98be0', queen: '#e0609f',
-    off: '#2a2320', scrim: '19,16,15', rim: 'drop-shadow(0 0 1px rgba(239,232,222,0.95)) drop-shadow(0 0 1px rgba(239,232,222,0.6))',
+    off: '#2a2320', scrim: '19,16,15', haloBoard: '0 0 3px rgba(255,236,214,0.5), 0 0 16px rgba(255,236,214,0.26), 0 0 44px rgba(255,236,214,0.18), ', halo: '0 0 3px rgba(255,236,214,0.3), 0 0 14px rgba(255,236,214,0.14), 0 0 36px rgba(255,236,214,0.1), ', rim: 'drop-shadow(0 0 1px rgba(239,232,222,0.95)) drop-shadow(0 0 1px rgba(239,232,222,0.6))',
   },
   light: {
     bg: '#f2ece3', panel: '#fbf7f1', line: 'rgba(60,40,20,0.13)', ctlLine: 'rgba(60,40,20,0.5)', ink: '#2a211b', dim: '#76695c',
     light: '#f0d9b5', dark: '#b58863', last: '#8a5e15',
     best: '#237a46', inaccuracy: '#8a6a0a', mistake: '#b05616', blunder: '#c63b29', none: '#2a211b',
     good: '#2a6fae', brilliant: '#1a7a73', interesting: '#8f4fab', queen: '#c03f7c',
-    off: '#e4dbcd', scrim: '242,236,227', rim: 'none',
+    off: '#e4dbcd', scrim: '242,236,227', halo: '', haloBoard: '', rim: 'none',
   },
 };
 const C = { ...PALETTES.dark };
@@ -169,7 +169,7 @@ function Panel({ box, title, info, right, extra, head, a, style, progress, tight
   // a box whose contents can outgrow it scrolls, and hands the wheel or finger on to the page at its ends
   return (
     <>
-    <div style={{ ...place, background: C.panel, border: `1px solid ${C.line}`, padding: tight && tightAn() ? `${tx(L.pad[0] * 0.6)}px ${tx(L.pad[1])}px` : panelPad(), ...(box.scroll && { overflowY: 'auto', scrollbarWidth: 'thin' }), ...style }}>
+    <div style={{ ...place, background: C.panel, border: `1px solid ${C.line}`, boxShadow: `${C.halo}0 0 0 transparent`, padding: tight && tightAn() ? `${tx(L.pad[0] * 0.6)}px ${tx(L.pad[1])}px` : panelPad(), ...(box.scroll && { overflowY: 'auto', scrollbarWidth: 'thin' }), ...style }}>
       {(title || head) && (
         <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: tx(16), font: `600 ${tx(15)}px ${MONO}`, letterSpacing: '0.12em', textTransform: 'uppercase', color: C.dim, marginBottom: tight ? anGap(12) : tx(12) }}>
           {head || <><span style={{ flex: '0 1 auto', minWidth: 0, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{title}</span>{info && <span style={{ flex: 'none', marginLeft: -tx(8) }}>{info}</span>}<SideScroll style={{ minWidth: 0, flex: 1, textAlign: 'right', letterSpacing: '0.04em' }}>{right}</SideScroll>{extra}</>}
@@ -291,7 +291,7 @@ function Board({ M, T, S, a, arrows, pieces, queen, vline, hide, lines }) {
     }
   }
   return (
-    <div onDragStart={(e) => e.preventDefault()} style={{ ...NO_SELECT, position: 'absolute', left: 0, top: 0, width: BW, height: BW, borderRadius: 2, overflow: 'hidden', boxShadow: '0 4px 12px rgba(0,0,0,0.28)', opacity: a, transform: `scale(${lerp(0.96, 1, a)})` }}>
+    <div onDragStart={(e) => e.preventDefault()} style={{ ...NO_SELECT, position: 'absolute', left: 0, top: 0, width: BW, height: BW, borderRadius: 2, overflow: 'hidden', boxShadow: `${C.haloBoard}0 4px 12px rgba(0,0,0,0.28)`, opacity: a, transform: `scale(${lerp(0.96, 1, a)})` }}>
       {sq}{over}
       {pieces.map((p) => <Piece key={p.id} p={p} T={T} S={S} />)}
       <svg width={BW} height={BW} style={{ position: 'absolute', left: 0, top: 0, zIndex: 6, pointerEvents: 'none' }}>
@@ -393,7 +393,7 @@ function LineBoard({ a, sq, v, hide, arrows }) {
   ) : null));
   return (
     // drawing only: taps and drags go to BoardTouch (without this its pieces sit above it and swallow them)
-    <div style={{ ...NO_SELECT, position: 'absolute', left: 0, top: 0, width: BW, height: BW, borderRadius: 2, overflow: 'hidden', boxShadow: `0 0 0 4px ${accent}, 0 4px 12px rgba(0,0,0,0.28)`, opacity: a, pointerEvents: 'none' }}>
+    <div style={{ ...NO_SELECT, position: 'absolute', left: 0, top: 0, width: BW, height: BW, borderRadius: 2, overflow: 'hidden', boxShadow: `0 0 0 4px ${accent}, ${C.haloBoard}0 4px 12px rgba(0,0,0,0.28)`, opacity: a, pointerEvents: 'none' }}>
       {sq}{over}{pieces}
       {arrows && (
         <svg width={BW} height={BW} style={{ position: 'absolute', left: 0, top: 0, zIndex: 6, pointerEvents: 'none' }}>
@@ -477,7 +477,7 @@ function EvalBarView({ cp, txt, a }) {
   if (!L.eval) return null;
   const H = L.board.size, ef = Math.round(L.eval.w * 0.62 * 10) / 10; // the number, sized to the bar's width
   return (
-    <div style={{ ...NO_SELECT, position: 'absolute', left: L.eval.x, top: L.board.y, width: L.eval.w, height: H, borderRadius: 2, overflow: 'hidden', background: '#2a2320', boxShadow: `0 0 0 1px ${C.line}`, opacity: a }}>
+    <div style={{ ...NO_SELECT, position: 'absolute', left: L.eval.x, top: L.board.y, width: L.eval.w, height: H, borderRadius: 2, overflow: 'hidden', background: '#2a2320', boxShadow: `0 0 0 1px ${C.line}, ${C.halo}0 0 0 transparent`, opacity: a }}>
       <div style={{ position: 'absolute', left: 0, right: 0, [flip ? 'top' : 'bottom']: 0, height: f * H, background: '#ffffff' }} />
       <div style={{ position: 'absolute', left: 0, right: 0, top: H / 2 - 1, height: 2, background: C.last, opacity: 0.5 }} />
       <div style={{ position: 'absolute', left: 0, right: 0, [top ? 'top' : 'bottom']: ef / 2, height: ef * 5, display: 'flex', alignItems: 'center', justifyContent: 'center', font: `700 ${ef}px ${MONO}`, color: inWhite ? '#2a2320' : '#f1ebe1' }}>
@@ -786,7 +786,7 @@ function EvalPlot({ M, T, S, a, paused, onPick }) {
   const area = `${line} L${last[0].toFixed(1)},${mid} L0,${mid} Z`;
   const ticks = window.ChessCore.evalTicks(M.ply0, N);
   return (
-    <div style={{ ...NO_SELECT, position: 'absolute', left: PLOT.x, top: PLOT.y, width: PLOT.w, height: PLOT.h, boxSizing: 'border-box', background: C.panel, border: `1px solid ${C.line}`, borderRadius: 4, padding: '10px 20px', opacity: a }}>
+    <div style={{ ...NO_SELECT, position: 'absolute', left: PLOT.x, top: PLOT.y, width: PLOT.w, height: PLOT.h, boxSizing: 'border-box', background: C.panel, border: `1px solid ${C.line}`, boxShadow: `${C.halo}0 0 0 transparent`, borderRadius: 4, padding: '10px 20px', opacity: a }}>
       <svg width={W} height={H + 14} style={{ display: 'block', overflow: 'visible', cursor: 'pointer', touchAction: 'none' }}
         onPointerDown={(e) => { try { e.currentTarget.setPointerCapture(e.pointerId); } catch (err) {} down.current = true; clearTimeout(fade.current); const j = plyAt(e); setHover(j); lastPick.current = j; onPick(j); }}
         onPointerMove={(e) => {

@@ -29,6 +29,8 @@
     if (!m) no(what + ' ' + v);
     return { color: m[1], x: +m[2], y: +m[3], blur: +(m[4] || 0), spread: +(m[5] || 0) };
   };
+  // a box-shadow list, first (topmost) shadow first; the commas inside rgba() don't split it
+  const shadowsOf = (v) => v === 'none' ? [] : v.split(/,(?![^(]*\))/).map((x) => shadowOf(x.trim(), 'box-shadow'));
   const dropShadowOf = (f) => {
     if (!f || f === 'none') return null;
     const m = f.match(/^drop-shadow\((.*)\)$/);
@@ -90,20 +92,20 @@
     const bw = [s.borderTopWidth, s.borderRightWidth, s.borderBottomWidth, s.borderLeftWidth].map(px);
     const border = bw[0] > 0 && !clear(s.borderTopColor);
     if (new Set(bw).size > 1 || (border && (s.borderTopStyle !== 'solid' || new Set([s.borderTopColor, s.borderRightColor, s.borderBottomColor, s.borderLeftColor]).size > 1))) no('border');
-    const bs = s.boxShadow === 'none' ? null : shadowOf(s.boxShadow, 'box-shadow');
-    if ((bg || img || border || bs) && (rot || shadow)) no('box under a rotation or filter');
+    const bs = shadowsOf(s.boxShadow);
+    if ((bg || img || border || bs.length) && (rot || shadow)) no('box under a rotation or filter');
     if (s.outlineStyle !== 'none' && px(s.outlineWidth) > 0) no('outline');
     cx.save(); cx.globalAlpha = a;
-    if (bs) {
-      const sp = bs.spread * k;
-      if (bs.blur > 0) {
+    for (const sh of bs.slice().reverse()) {
+      const sp = sh.spread * k;
+      if (sh.blur > 0) {
         // the shadow alone: the shape is drawn far off the canvas and its shadow moved back
         const far = 1e4;
-        Object.assign(cx, { shadowColor: bs.color, shadowOffsetX: (bs.x * k + far) * dev, shadowOffsetY: bs.y * k * dev, shadowBlur: bs.blur * k * dev, fillStyle: '#000' });
+        Object.assign(cx, { shadowColor: sh.color, shadowOffsetX: (sh.x * k + far) * dev, shadowOffsetY: sh.y * k * dev, shadowBlur: sh.blur * k * dev, fillStyle: '#000' });
         roundRect(cx, b.x - sp - far, b.y - sp, b.w + 2 * sp, b.h + 2 * sp, r + sp); cx.fill();
         Object.assign(cx, { shadowColor: 'transparent', shadowBlur: 0, shadowOffsetX: 0, shadowOffsetY: 0 });
       } else {
-        cx.fillStyle = bs.color; roundRect(cx, b.x + bs.x * k - sp, b.y + bs.y * k - sp, b.w + 2 * sp, b.h + 2 * sp, r + sp); cx.fill();
+        cx.fillStyle = sh.color; roundRect(cx, b.x + sh.x * k - sp, b.y + sh.y * k - sp, b.w + 2 * sp, b.h + 2 * sp, r + sp); cx.fill();
       }
     }
     if (bg) { cx.fillStyle = s.backgroundColor; roundRect(cx, b.x, b.y, b.w, b.h, r); cx.fill(); }
