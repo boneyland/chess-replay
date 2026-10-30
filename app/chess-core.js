@@ -95,8 +95,12 @@
   }
   const tOf = (p) => p.toLowerCase();
 
+  const FIGURINE = { '♔': 'K', '♕': 'Q', '♖': 'R', '♗': 'B', '♘': 'N', '♙': '', '♚': 'K', '♛': 'Q', '♜': 'R', '♝': 'B', '♞': 'N', '♟': '' };
   function sanToMove(pos, san) {
-    let s = san.replace(/[+#!?]+$/, '');
+    if (/^(--|Z0|0000|@@@@)$/.test(san)) throw new Error(`The game has a null move ("${san}"), which this player can't show`);
+    // besides plain SAN: figurines (♘f3), an e.p. suffix, long algebraic (e2-e4, Ng1-f3) and castling with zeros
+    let s = san.replace(/[♔-♟]/g, (c) => FIGURINE[c]).replace(/[+#!?]+$/, '').replace(/e\.p\.$/, '').replace(/[+#]+$/, '');
+    s = s.replace(/^([NBRQK]?[a-h][1-8])-([a-h][1-8])/, '$1$2');
     if (/^0-0/.test(s)) s = s.replace(/0/g, 'O');
     const color = pos.turn;
     // castling is checked in full (rights, rook, empty squares, no check on the king's path): a PGN's O-O isn't trusted
@@ -138,7 +142,8 @@
   const NAG = { 1: '!', 2: '?', 3: '!!', 4: '??', 5: '!?', 6: '?!' };
   function parsePGN(text) {
     const headers = {};
-    const body = text.replace(/\[(\w+)\s+"((?:[^"\\]|\\.)*)"\]/g, (_, k, v) => { headers[k] = v.replace(/\\(["\\])/g, '$1'); return ' '; });
+    // a comment ({…} or ; to the end of the line) is passed over whole, so a tag written inside one stays its text
+    const body = text.replace(/\{[^}]*\}?|;[^\n]*|\[(\w+)\s+"((?:[^"\\]|\\.)*)"\]/g, (m, k, v) => { if (!k) return m; headers[k] = v.replace(/\\(["\\])/g, '$1'); return ' '; });
     // a [FEN] start with Black to move: the first ply is Black's (cutechess evals below are the mover's)
     const black0 = (headers.FEN || '').trim().split(/\s+/)[1] === 'b';
     const plies = []; let intro = '', depth = 0, varPly = -1, varSans = null, varAt = 0, i = 0;
@@ -185,7 +190,7 @@
         continue;
       }
       tok = tok.replace(/^\d+\.+/, '');
-      if (!tok || /^(1-0|0-1|1\/2-1\/2|\*)$/.test(tok)) continue;
+      if (!tok || /^(1-0|0-1|1\/2-1\/2|\*|e\.p\.[+#]?)$/.test(tok)) continue;
       const mm = tok.match(/^(.*?)([!?]{1,2})?$/);
       if (depth === 0) plies.push({ san: mm[1], mark: mm[2] || null });
       else if (depth === 1) varSans.push(mm[1]);
@@ -300,7 +305,11 @@
     const ply0 = start.ply0, stdStart = start.fen === START_FEN;
     const sans = P ? P.plies.map((p) => p.san) : A ? A.moves.map((m) => m.move_san) : [];
     if (!sans.length) throw new Error('No moves found');
-    if (A && P && A.moves.length && A.moves[0].move_san.replace(/[+#]/g, '') !== sans[0].replace(/[+#]/g, '')) throw new Error("The analysis file doesn't match this PGN");
+    // moves are compared as written and as standard SAN (a PGN's 0-0 or e2-e4 is the analysis file's O-O or e4)
+    const bare = (x) => x.replace(/[+#]/g, '');
+    const canon = (p, mv) => sanOf(p, { ...mv, after: applyMove(p, mv.from, mv.to, mv.promo) });
+    const firstStd = () => { try { return canon(start.pos, sanToMove(start.pos, sans[0])); } catch (e) { return sans[0]; } };
+    if (A && P && A.moves.length && bare(A.moves[0].move_san) !== bare(sans[0]) && bare(A.moves[0].move_san) !== bare(firstStd())) throw new Error("The analysis file doesn't match this PGN");
     // chess-animator's analysis JSON never has start_fen (its moves come from the PGN's [FEN] board): then the per-ply SAN match and the side to move decide
     if (A && P && A.start_fen && parseFen(A.start_fen).fen !== start.fen) throw new Error("The analysis file doesn't match this PGN");
     if (A && P && A.moves.length && typeof A.moves[0].is_white_move === 'boolean' && A.moves[0].is_white_move !== (start.pos.turn === 'w')) throw new Error("The analysis file doesn't match this PGN");
@@ -309,12 +318,12 @@
     const plies = [];
     sans.forEach((san, i) => {
       const am = useA && A.moves[i];
-      if (A && P && am && am.move_san.replace(/[+#]/g, '') !== san.replace(/[+#]/g, '')) throw new Error(`The analysis file doesn't match this PGN at ply ${i + 1}`);
-      const before = pos, mv = sanToMove(pos, san);
+      const before = pos, mv = sanToMove(pos, san), std = canon(pos, mv);
+      if (A && P && am && bare(am.move_san) !== bare(san) && bare(am.move_san) !== bare(std)) throw new Error(`The analysis file doesn't match this PGN at ply ${i + 1}`);
       pos = applyMove(pos, mv.from, mv.to, mv.promo);
       const pp = P ? P.plies[i] : {};
       const check = inCheck(pos.b, pos.turn);
-      const ply = { san: san.replace(/[#+]/g, '') + (check ? (hasLegal(pos) ? '+' : '#') : ''), uci: idxSq(mv.from) + idxSq(mv.to) + (mv.promo || ''), side: (ply0 + i) % 2 ? 'b' : 'w' };
+      const ply = { san: std, uci: idxSq(mv.from) + idxSq(mv.to) + (mv.promo || ''), side: (ply0 + i) % 2 ? 'b' : 'w' };
       ply.checkmate = ply.san.endsWith('#');
       if (check) ply.checkSq = idxSq(kingIdx(pos.b, pos.turn));
       ply.fen = toFen(pos);

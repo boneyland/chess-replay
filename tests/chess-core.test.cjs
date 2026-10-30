@@ -120,6 +120,26 @@ test('escaped quotes and backslashes in a PGN tag are read as the characters', (
   assert.equal(M.headers.Black, 'a\\b');
 });
 
+test('a tag written inside a comment stays the comment’s text', () => {
+  const M = CC.buildGame({ pgn: '[Event "Real"]\n\n1. e4 {see [Event "x"] here} e5 ; [White "y"]\n2. Nf3 *' });
+  assert.equal(M.headers.Event, 'Real');
+  assert.equal(M.headers.White, undefined);
+  assert.equal(M.plies[0].comment, 'see [Event "x"] here');
+});
+
+// what other programs write besides plain SAN, shown in the move list as standard SAN
+test('figurines, long algebraic, e.p. and castling with zeros are read, and shown as standard SAN', () => {
+  const M = CC.buildGame({ pgn: '1. e2-e4 ♞f6 2. e5 d7-d5 3. exd6 e.p. e6 4. ♘g1-f3 ♗e7 5. Bf1-c4 0-0 6. 0-0 *' });
+  assert.deepEqual(M.plies.map((p) => p.san), ['e4', 'Nf6', 'e5', 'd5', 'exd6', 'e6', 'Nf3', 'Be7', 'Bc4', 'O-O', 'O-O']);
+  assert.equal(CC.buildGame({ pgn: '1. e4 e5 2. Ng1f3 *' }).plies[2].san, 'Nf3'); // more of the square than it needs
+});
+
+test('a null move gets a message saying so', () => {
+  assert.throws(() => CC.buildGame({ pgn: '1. e4 -- 2. d4 *' }), /null move \("--"\)/);
+  // in a variation it only ends that line
+  assert.equal(CC.buildGame({ pgn: '1. e4 (1. d4 -- 2. c4) e5 *' }).plies.length, 2);
+});
+
 test('an engine comment is not shown as commentary, the text after it is', () => {
   const P = CC.buildGame({ pgn: '[Result "*"]\n\n1. e4 {+0.31/20 1.2s Book exit} e5 {Played 1/2 the time} *' });
   assert.equal(P.plies[0].comment, 'Book exit');
