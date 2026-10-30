@@ -69,7 +69,8 @@ function useEditInput({ setup, onChange }) {
     try { e.currentTarget.setPointerCapture(e.pointerId); } catch (err) {}
     setDrag({ piece, from, x: p.x, y: p.y, x0: p.x, y0: p.y, moved: false });
   };
-  const follow = (e) => { if (!drag) return; const p = at(e); setDrag((d) => d && { ...d, x: p.x, y: p.y, moved: d.moved || Math.hypot(p.x - d.x0, p.y - d.y0) > 14 }); };
+  // a mouse move with no button down means the release went unseen (Epiphany/WebKitGTK can drop it): `release` ends the drag
+  const follow = (e, release) => { if (!drag) return; if (e.pointerType === 'mouse' && e.buttons === 0) { release(e); return; } const p = at(e); setDrag((d) => d && { ...d, x: p.x, y: p.y, moved: d.moved || Math.hypot(p.x - d.x0, p.y - d.y0) > 14 }); };
   const E = window.EditCore;
   const handlers = {
     onDown: (e) => {
@@ -78,7 +79,7 @@ function useEditInput({ setup, onChange }) {
       if (held) { onChange(E.put(setup, p.sq, setup.b[p.sq] === held ? null : held)); return; }
       if (setup.b[p.sq]) start(e, setup.b[p.sq], p.sq);
     },
-    onMove: follow,
+    onMove: (e) => follow(e, handlers.onUp),
     onUp: (e) => {
       if (!drag) return;
       const p = at(e), d = drag;
@@ -86,20 +87,24 @@ function useEditInput({ setup, onChange }) {
       if (d.moved) onChange(p.sq < 0 ? E.put(setup, d.from, null) : E.move(setup, d.from, p.sq));
     },
     onCancel: () => setDrag(null),
+    onLostCapture: () => setDrag(null),
   };
   // a tray press that doesn't move is a click (as Enter or Space on the button is): it holds the piece, or lets it go
-  const trayHandlers = (piece) => ({
-    onPointerDown: (e) => { dragged.current = false; start(e, piece, null); },
-    onPointerMove: follow,
-    onPointerUp: (e) => {
+  const trayHandlers = (piece) => {
+    const up = (e) => {
       if (!drag) return;
       const p = at(e), d = drag;
       setDrag(null);
       if (!d.moved) return;
       dragged.current = true;
       if (p.sq >= 0) onChange(E.put(setup, p.sq, piece));
-    },
+    };
+    return {
+    onPointerDown: (e) => { dragged.current = false; start(e, piece, null); },
+    onPointerMove: (e) => follow(e, up),
+    onPointerUp: up,
     onPointerCancel: () => setDrag(null),
+    onLostPointerCapture: () => setDrag(null),
     // picked by keyboard (a click with no pointer: detail 0), the board takes the focus to place it
     onClick: (e) => {
       if (dragged.current) { dragged.current = false; return; }
@@ -107,7 +112,8 @@ function useEditInput({ setup, onChange }) {
       setHeld(held === piece ? null : piece);
       if (e.detail === 0 && held !== piece && boardEl.current) boardEl.current.focus();
     },
-  });
+    };
+  };
   const onKeyDown = (e) => {
     if (e.ctrlKey || e.metaKey || e.altKey) return;
     const step = { ArrowLeft: [-1, 0], ArrowRight: [1, 0], ArrowUp: [0, -1], ArrowDown: [0, 1] }[e.key];
@@ -161,7 +167,7 @@ function EditBoard({ setup, onChange, onDone, onCancel, fenText, onFenText, fenM
     <div ref={flowRef} style={{ position: 'absolute', inset: 0, background: C.bg, overflow: 'hidden', ...flowStyle() }}>
       <BoardSpace lift={!!(drag && drag.moved)}>
       <LineBoard a={1} sq={boardSquares()} v={{ upto: -1, moves: [], base: { b: setup.b }, src: 'you' }} hide={drag && drag.moved && drag.from != null ? drag.from : null} arrows={null} />
-      <div ref={input.boardEl} data-no-drag-scroll onPointerDown={H.onDown} onPointerMove={H.onMove} onPointerUp={H.onUp} onPointerCancel={H.onCancel} onDragStart={(e) => e.preventDefault()}
+      <div ref={input.boardEl} data-no-drag-scroll onPointerDown={H.onDown} onPointerMove={H.onMove} onPointerUp={H.onUp} onPointerCancel={H.onCancel} onLostPointerCapture={H.onLostCapture} onDragStart={(e) => e.preventDefault()}
         tabIndex={0} role="application" aria-label={`Board${held ? `, placing ${trayLabel(held).toLowerCase()}` : ''}`} aria-describedby="edit-board-keys" onKeyDown={(e) => { input.onKeyDown(e); if (e.defaultPrevented) setKbFocus(true); }}
         onFocus={(e) => setKbFocus(e.currentTarget.matches(':focus-visible'))} onBlur={() => setKbFocus(false)}
         title={held ? 'Tap squares to place the piece' : 'Drag a piece to move it, or off the board to take it away'}

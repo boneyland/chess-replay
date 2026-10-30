@@ -407,10 +407,10 @@ function LineBoard({ a, sq, v, hide, arrows }) {
 // The pieces a pawn can become, in the picker's order, and where each sits: a column on the promotion square's file
 const PROMO_PIECES = ['q', 'n', 'r', 'b'];
 const promoPieces = (pr) => PROMO_PIECES.map((t, k) => ({ t, sq: pr.to + (pr.white ? 8 : -8) * k }));
-function BoardTouch({ pos, sel, targets, drag, promo, onDown, onMove, onUp, onCancel }) {
+function BoardTouch({ pos, sel, targets, drag, promo, onDown, onMove, onUp, onCancel, onLostCapture }) {
   const dragged = drag && drag.moved ? pos.b[drag.from] : null;
   return (
-    <div data-no-drag-scroll onPointerDown={onDown} onPointerMove={onMove} onPointerUp={onUp} onPointerCancel={onCancel}
+    <div data-no-drag-scroll onPointerDown={onDown} onPointerMove={onMove} onPointerUp={onUp} onPointerCancel={onCancel} onLostPointerCapture={onLostCapture}
       onDragStart={(e) => e.preventDefault()} title="Drag a piece to try your own move"
       style={{ ...NO_SELECT, position: 'absolute', left: 0, top: 0, width: BW, height: BW, cursor: drag && drag.moved ? 'grabbing' : 'grab', touchAction: 'none' }}>
       {sel != null && <div style={{ position: 'absolute', left: idxXY(sel)[0] * SQ, top: idxXY(sel)[1] * SQ, width: SQ, height: SQ, boxSizing: 'border-box', border: `5px solid ${BOARD.last}`, background: 'rgba(255,255,255,0.12)', pointerEvents: 'none' }} />}
@@ -947,7 +947,11 @@ function useBoardInput({ pos, onPick, onMiss, onMove }) {
         onPick(); setSel(p.sq); setDrag({ from: p.sq, x: p.x, y: p.y, x0: p.x, y0: p.y, moved: false });
       } else { setSel(null); onMiss(); }
     },
-    onMove: (e) => { if (!drag) return; const p = boardXY(e); setDrag((d) => d && { ...d, x: p.x, y: p.y, moved: d.moved || Math.hypot(p.x - d.x0, p.y - d.y0) > 14 }); },
+    onMove: (e) => {
+      if (!drag) return;
+      // a mouse move with no button down means the release went unseen (Epiphany/WebKitGTK can drop it): end the drag here
+      if (e.pointerType === 'mouse' && e.buttons === 0) { handlers.onUp(e); return; }
+      const p = boardXY(e); setDrag((d) => d && { ...d, x: p.x, y: p.y, moved: d.moved || Math.hypot(p.x - d.x0, p.y - d.y0) > 14 }); },
     onUp: (e) => {
       if (!drag) return;
       const p = boardXY(e), d = drag;
@@ -956,6 +960,7 @@ function useBoardInput({ pos, onPick, onMiss, onMove }) {
       if (p.sq !== d.from && playMove(d.from, p.sq)) setSel(null); else { setSel(null); onMiss(); }
     },
     onCancel: () => setDrag(null),
+    onLostCapture: () => setDrag(null),
   };
   const cancelPromo = () => setPromo(null);
   const clear = () => { setSel(null); setDrag(null); setPromo(null); };
