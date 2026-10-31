@@ -418,7 +418,7 @@ function useMoveEval(engine, before, after, own, fen, stored, cloud) {
         handles.push(h);
         const r = await h.promise;
         if (!live) return;
-        if (!r) { setSt((s) => ({ ...s, pending: false })); failed('Stockfish stopped before it finished'); return; }
+        if (!r) { const e = eng.failed && eng.failed(); setSt((s) => ({ ...s, pending: false })); failed('Stockfish stopped before it finished' + (e && e.message ? ': ' + e.message : '')); return; }
         if (r && r.cp != null) { const fin = { ...r, best: A.bestOf(r) }; SF_EVAL_CACHE.set(keyAt(level, which), fin); setSt((s) => ({ ...s, [which]: fin })); }
       }
       if (live) setSt((s) => ({ ...s, pending: false }));
