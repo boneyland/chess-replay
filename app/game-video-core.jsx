@@ -334,6 +334,7 @@ const stopHere = (e) => e.stopPropagation();
 function AnalysisPanel({ box, a, depth, deep, paused, style, children }) {
   const E = React.useContext(EngineMenuContext);
   const [open, setOpen] = React.useState(false);
+  const [whyOpen, setWhyOpen] = React.useState(false); // Go deeper's failure in full (a touchscreen shows no tooltip)
   const live = !!E && paused, shown = open && live, pick = live && E.pick;
   const name = E ? E.name : 'Stockfish';
   // a narrow panel (a laptop's sidebar, a phone) shortens the depth to D22 (the tablebase to TB, the cloud to Cloud
@@ -349,7 +350,9 @@ function AnalysisPanel({ box, a, depth, deep, paused, style, children }) {
           desktop's heading whatever the layout's title gap (the phone's wide one left the depth no room) */}
       <span style={{ flex: '1 1 auto', minWidth: 0, display: 'flex', alignItems: 'center', justifyContent: 'flex-end', gap: tx(16) }}>
       {!shown && paused && <DeeperButton ev={deep} />}
-      {!shown && deep && deep.failed && <span role="status" title={deep.failed} style={{ flex: '0 1 auto', minWidth: 0, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', textTransform: 'none', color: C.blunder }}>{roomy ? deep.failed.split(':')[0] : 'Engine failed'}</span>}
+      {/* Go deeper's failure: short, its reason in the tooltip, and all of it at a tap */}
+      {!shown && deep && deep.failed && <span role="status" title={deep.failed} onClick={(e) => { e.stopPropagation(); setWhyOpen((o) => !o); }} onPointerDown={stopHere}
+        style={{ flex: whyOpen ? '1 1 100%' : '0 1 auto', minWidth: 0, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: whyOpen ? 'normal' : 'nowrap', textTransform: 'none', color: C.blunder, cursor: 'pointer' }}>{whyOpen ? deep.failed : roomy ? deep.failed.split(':')[0] : 'Engine failed'}</span>}
       {!shown && depthText && <span title={depthTip} style={{ flex: 'none', whiteSpace: 'nowrap', letterSpacing: '0.04em' }}>{depthText}</span>}
       {/* smaller on the phone, where the row is tight */}
       {pick
