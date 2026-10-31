@@ -339,6 +339,8 @@ const CLOUD_DEBOUNCE_MS = 300; // after the last position change (stepping throu
 // own: the search settings (AnalysisCore.engineSettings().own; its lines are searched for after only); fen: the game's start FEN, omitted for the standard start.
 // deeper(): searches both positions again, deeper (null when the search can't go further or hasn't finished); it counts
 // for that position only, and a deeper search shows the last result until it passes that result's depth.
+// failed: why a Go deeper search didn't run (the engine wouldn't start, or stopped), shown in place of its depth; the press
+// is then undone, so the + comes back to try again
 // progress: 0–1 through the searches still to run while pending (each one's depth or time limit, whichever it nears first)
 // stored: a loaded analysis's result for after (with before the same moves), standing in for the first search, which
 // then never runs: only a press of Go deeper searches. Results from it carry stored: true; its src names the evals it
@@ -355,6 +357,7 @@ function useMoveEval(engine, before, after, own, fen, stored, cloud) {
   const toSearch = (o, lines = own.lines || 1) => ({ depth: o.depth, movetimeMs: o.time_limit * 1000, lines });
   const baseKey = after ? keyOf(toSearch(own), after) + (stored ? '|' + stored.src : '') : '';
   const [, bump] = React.useState(0);
+  const [fail, setFail] = React.useState(null); // { key: baseKey, msg }
   const level = SF_DEEPER.get(baseKey) || 0;
   const search = toSearch(A.deeperSearch(own, level));
   const sfKey = (moves) => keyOf(search, moves);
@@ -390,9 +393,10 @@ function useMoveEval(engine, before, after, own, fen, stored, cloud) {
     // the searches to run (the start position's two are one)
     const todo = [...new Set(['after', 'before'].filter((w) => !cached(w)).map((w) => keyAt(level, w)))].length;
     let ran = 0;
+    const failed = (msg) => { if (level > 0) { SF_DEEPER.set(baseKey, level - 1); setFail({ key: baseKey, msg }); bump((n) => n + 1); } };
     (async () => {
       let eng;
-      try { eng = await engine.get(); } catch (e) { if (live) setSt((s) => ({ ...s, pending: false })); return; }
+      try { eng = await engine.get(); } catch (e) { if (live) { setSt((s) => ({ ...s, pending: false })); failed('Stockfish didn’t start' + (e && e.message ? ': ' + e.message : '')); } return; }
       for (const which of ['after', 'before']) {
         if (!live) return;
         // the start position is both before and after: its second search is the first one's, cached
@@ -414,6 +418,7 @@ function useMoveEval(engine, before, after, own, fen, stored, cloud) {
         handles.push(h);
         const r = await h.promise;
         if (!live) return;
+        if (!r) { setSt((s) => ({ ...s, pending: false })); failed('Stockfish stopped before it finished'); return; }
         if (r && r.cp != null) { const fin = { ...r, best: A.bestOf(r) }; SF_EVAL_CACHE.set(keyAt(level, which), fin); setSt((s) => ({ ...s, [which]: fin })); }
       }
       if (live) setSt((s) => ({ ...s, pending: false }));
@@ -429,8 +434,8 @@ function useMoveEval(engine, before, after, own, fen, stored, cloud) {
   const done = out.after && !out.after.partial && out.before && !out.before.partial && !out.pending;
   const next = A.deeperSearch(own, level + 1);
   // nothing to go deeper on where both positions show the cloud's answer
-  const deeper = done && !(fromCloud(out.after) && fromCloud(out.before)) && A.canGoDeeper(own, level) ? () => { SF_DEEPER.set(baseKey, level + 1); bump((n) => n + 1); } : null;
-  return { ...out, deeper, deeperTo: deeper ? next : null };
+  const deeper = done && !(fromCloud(out.after) && fromCloud(out.before)) && A.canGoDeeper(own, level) ? () => { SF_DEEPER.set(baseKey, level + 1); setFail(null); bump((n) => n + 1); } : null;
+  return { ...out, deeper, deeperTo: deeper ? next : null, failed: fail && fail.key === baseKey ? fail.msg : null };
 }
 
 // Go deeper: the small + after the search's stats in the Analysis heading, once an eval has finished; sized in em to

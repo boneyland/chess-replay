@@ -349,6 +349,7 @@ function AnalysisPanel({ box, a, depth, deep, paused, style, children }) {
           desktop's heading whatever the layout's title gap (the phone's wide one left the depth no room) */}
       <span style={{ flex: '1 1 auto', minWidth: 0, display: 'flex', alignItems: 'center', justifyContent: 'flex-end', gap: tx(16) }}>
       {!shown && paused && <DeeperButton ev={deep} />}
+      {!shown && deep && deep.failed && <span role="status" title={deep.failed} style={{ flex: '0 1 auto', minWidth: 0, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', textTransform: 'none', color: C.blunder }}>{roomy ? deep.failed.split(':')[0] : 'Engine failed'}</span>}
       {!shown && depthText && <span title={depthTip} style={{ flex: 'none', whiteSpace: 'nowrap', letterSpacing: '0.04em' }}>{depthText}</span>}
       {/* smaller on the phone, where the row is tight */}
       {pick

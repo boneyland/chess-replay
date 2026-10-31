@@ -1567,6 +1567,24 @@ for (const name of BROWSERS) for (const site of SITES) {
       assert.deepEqual(gd.errors, []);
       await gd.ctx.close();
     });
+    // Go deeper where the engine won't start (as on a tablet whose + only vanished): the press says so and the + comes back
+    await t.test('desktop: Go deeper says when Stockfish doesn\'t start', async () => {
+      // (no service worker: Firefox's routes don't see what it fetches)
+      const gd = await open(browser, { width: 1440, height: 900 }, { serviceWorkers: 'block' });
+      const p = gd.page;
+      await gd.ctx.route(/stockfish-19/, (r) => r.abort());
+      await p.goto(base, { waitUntil: 'load' });
+      await loadedOn(p);
+      await p.locator('[data-ply="10"]').click();
+      const deeper = p.getByRole('button', { name: /^Go deeper/ });
+      await deeper.waitFor({ timeout: 20000 });
+      await deeper.click();
+      // (a narrow panel says only "Engine failed"; the reason is its tooltip)
+      await p.locator('[role="status"][title^="Stockfish didn’t start"]').waitFor({ timeout: 10000 });
+      await deeper.waitFor({ timeout: 5000 });
+      assert.deepEqual(gd.errors.filter((e) => !/stockfish-19|Failed to load resource/.test(e)), []);
+      await gd.ctx.close();
+    });
     // the tablebase in a game's analysis (the real service): every position of this KBN v K game has 7 pieces or fewer,
     // so the run asks Lichess (4 requests 4 s apart, the start's answer already shown) and searches none of them (with
     // 20 s a position, a search would show), and 2. Bc4+, which
