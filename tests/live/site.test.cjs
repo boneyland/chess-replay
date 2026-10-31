@@ -1569,10 +1569,11 @@ for (const name of BROWSERS) for (const site of SITES) {
     });
     // Go deeper where the engine won't start (as on a tablet whose + only vanished): the press says so and the + comes back
     await t.test('desktop: Go deeper says when Stockfish doesn\'t start', async () => {
-      // (no service worker: Firefox's routes don't see what it fetches)
-      const gd = await open(browser, { width: 1440, height: 900 }, { serviceWorkers: 'block' });
+      const gd = await open(browser, { width: 1440, height: 900 });
       const p = gd.page;
-      await gd.ctx.route(/stockfish-19/, (r) => r.abort());
+      // the engine files missing, as the page's check for them sees it (a route misses what the service worker fetches
+      // in Firefox, and blocking service workers there turns them off for the rest of the browser's tests)
+      await gd.ctx.addInitScript(() => { const f = window.fetch; window.fetch = (u, o) => (/stockfish-19/.test(String(u)) ? Promise.resolve(new Response('', { status: 404 })) : f(u, o)); });
       await p.goto(base, { waitUntil: 'load' });
       await loadedOn(p);
       await p.locator('[data-ply="10"]').click();
@@ -1582,7 +1583,7 @@ for (const name of BROWSERS) for (const site of SITES) {
       // (a narrow panel says only "Engine failed"; the reason is its tooltip)
       await p.locator('[role="status"][title^="Stockfish didn’t start"]').waitFor({ timeout: 10000 });
       await deeper.waitFor({ timeout: 5000 });
-      assert.deepEqual(gd.errors.filter((e) => !/stockfish-19|Failed to load resource/.test(e)), []);
+      assert.deepEqual(gd.errors, []);
       await gd.ctx.close();
     });
     // a browser without WebAssembly SIMD (Firefox on 32-bit Android) runs the asm.js build, and says it's very slow and weak
