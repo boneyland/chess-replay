@@ -13,11 +13,11 @@
     phone: { margin: 6, gap: 6, evalW: 14, evalGap: 4, pad: [10, 13], scale: 0.9 },
     foldable: { margin: 8, gap: 8, evalW: 20, evalGap: 8, pad: [12, 16], scale: 0.95 },
     tablet: { margin: 8, gap: 8, evalW: 20, evalGap: 8, pad: [12, 16], scale: 0.95 },
-    desktop: { margin: 12, gap: 10, evalW: 24, evalGap: 8, pad: [16, 22], scale: 1 },
+    desktop: { margin: 12, gap: 10, evalW: 24, evalGap: 10, pad: [16, 22], scale: 1 },
   };
   const DESKTOP_VW = 1181;
   const tierOf = (vw, vh) => (vw < 600 || vh < 500 ? 'phone' : vw >= DESKTOP_VW ? 'desktop' : vh >= 0.8 * vw && vh <= 1.2 * vw ? 'foldable' : 'tablet');
-  let MARGIN = 12, GAP = 10, EVAL_W = 24, EVAL_GAP = 8, EVAL_TOTAL = 32, PAD = [16, 22];
+  let MARGIN = 12, GAP = 10, EVAL_W = 24, EVAL_GAP = 10, EVAL_TOTAL = 34, PAD = [16, 22];
   const BAR_GAP = 4;
   // the full-width eval graph's largest height: thinner in a viewport under PLOT_WIDE px wide (desktops included); by the
   // viewport's width (vw), as the viewer measures it, not the stage's
