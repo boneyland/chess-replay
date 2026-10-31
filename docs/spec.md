@@ -7,7 +7,7 @@ The one spec for the app: what it does now, what is planned, and the decisions b
 ## Contents
 
 - [Principles](#principles)
-- [Built](#built): replay and browser analysis, opening names, custom starts and flip, free board and explorer, edit position, play vs human, My games, play vs Stockfish, full Stockfish download, lines (MultiPV), endgame tablebase (in game analysis too), Lichess cloud evaluation, multi-threaded Stockfish, Lichess opening explorer, responsive layout
+- [Built](#built): replay and browser analysis, opening names, custom starts and flip, free board and explorer, edit position, play vs human, My games, play vs Stockfish, full Stockfish download, lines (MultiPV), endgame tablebase (in game analysis too), Lichess cloud evaluation, multi-threaded Stockfish, asm.js Stockfish (no WebAssembly SIMD), Lichess opening explorer, responsive layout
 - [Roadmap](#roadmap): square layouts and breakpoints, Lichess data and multi-threaded Stockfish, player names, Chess960, typed commentary, Maia3, dead positions, chasolver, background music, peer-to-peer online play, app walk-through
 - [Known gaps](#known-gaps)
 - [Decisions log](#decisions-log)
@@ -56,7 +56,7 @@ The page replays a game (the sample, or a loaded PGN) as an animated video with 
 - nmrugg/stockfish.js **v19.0.1 `stockfish-19-lite-single`** (28 KB `.js` + 1.8 MB `.wasm`, GPL-3.0), vendored in `vendor/`, SHA-256 pinned in LAYOUT.md, with a GPL source link in the page. The site can also run the full engine the viewer downloads (see [Full Stockfish download](#full-stockfish-download)). The site serves it next to the page and starts `new Worker(...)` lazily.
 - One engine for the page (`SFEngine`), Hash 64 MB set once, no `ucinewgame` within an analysis. Priorities: the Stockfish opponent's `play`, then own moves, then game analysis; a running search is never interrupted.
 - Search limits are Settings sliders (Game analysis, Your moves), defaults in `TWEAK_DEFAULTS`.
-- Robustness: 30 s start timeout, then the worker is terminated and "Try again" retries; a dead engine reports "Stockfish stopped · play a move to restart it" and is replaced on next use; a search still running 5 s past its movetime has hung (a threaded engine in WebKit or Firefox can, after passing its probe) and moves to a fresh worker, started and probed like the first, the same engine to the page; three hung workers in a row stop the engine as a dead one; the site checks the wasm exists first; a run is dropped only when the game changes, and results merge into the current files.
+- Robustness: 30 s start timeout, then the worker is terminated and "Try again" retries; a dead engine reports "Stockfish stopped · play a move to restart it" and is replaced on next use; a search still running 5 s past its movetime has hung (a threaded engine in WebKit or Firefox can, after passing its probe) and moves to a fresh worker, started and probed like the first, the same engine to the page; three hung workers in a row stop the engine as a dead one; a Go deeper whose engine doesn't start or stops says so in the Analysis header (*Stockfish didn't start* / *Stockfish stopped before it finished*, *Engine failed* in a narrow panel; the engine's reason in its tooltip, all of it at a tap) and undoes the press, so the + comes back; the site checks the wasm exists first; a run is dropped only when the game changes, and results merge into the current files.
 - Time estimate: ~1.3 s per position on a laptop; the ETA during a run comes from the measured rate; the worst case is the time cap × positions.
 
 Benchmarks behind the limits (2026-10-16, Node 22 on this laptop, reference native Stockfish 19 full net 4 s × 7 threads; game 1 Byrne–Fischer, 83 positions, 6 native marks; game 2 a Lichess bullet game, 63 positions, 4 marks):
@@ -210,6 +210,15 @@ Built 2026-10-28 (PR 81, with follow-up fixes). Stockfish searches with several 
 - **Threads setting** (Analysis › ☰, `sfThreads`, `null` = default): 1 to `min(cores − 1, 8)`, default half the cores, at most 4; one value for every search. `SFEngine` sends `setoption name Threads` only on change, between searches, and per search to threaded builds only. The analysis JSON records the threads the run started with (1 when the engine fell back); `sfPartialKey` and the pace estimate include them.
 - **Fallback**: a threaded engine gets up to three starts (Firefox can hang before `uci`, while starting threads, or on its first search); `ready()` also waits for a depth-1 probe search. If it never starts or dies, the page falls back silently to single-thread (Full without a kept single-thread copy runs Lite), Threads is disabled for the rest of the page and the menu says why. A threaded search still running 5 s past its movetime moves to a fresh worker (up to three in a row, then the engine fails).
 - **Not done / open**: **verify** on an iPhone whether 64 MB of hash starts or iOS needs Lichess's 32 MB cap; manual checks on the phone (Firefox Beta on Android) and iPhone Safari.
+
+### asm.js Stockfish (no WebAssembly SIMD)
+
+Built 2026-10-31 (PR 120). Every wasm build of Stockfish 19, Lite and Full, single and threaded, uses WebAssembly SIMD, which Firefox on 32-bit ARM Android lacks: on the user's Samsung SM-T510 tablet (Firefox) no engine ever answered, so Go deeper's + just vanished and own moves showed "Stockfish stopped". There the page runs stockfish.js v19.0.1's **`stockfish-19-asm.js`** instead: Stockfish 19 compiled to JavaScript (3.2 MB, vendored, SHA-256 pinned in LAYOUT.md; the same file on npm and the GitHub release), which runs anywhere, its author says "very slow and weak".
+
+- **Test**: `SFEngine.simdSupport()`, `WebAssembly.validate` on a function returning a v128 (wasm-feature-detect's test). Without SIMD the engine kind is `asm` (`sfKind` in `game-app.jsx`, `SF_SIMD` in `stockfish.jsx`): one thread (threads off from the start, so no threaded tries), no Full (`SF_FULL_OFFERED` false), the page's check for the file looks for the `.js`.
+- **Name**: "Stockfish 19 asm.js (browser)" (`AnalysisCore.ENGINE_NAMES.asm`), so its own-move results, partial runs, analyses and pace estimate (`chess-video.sf-pace.v1.asm`) stay apart from Lite's and Full's.
+- **Told**, in red: the engine menu ("This browser can't run Stockfish's WebAssembly (it has no WebAssembly SIMD), so Stockfish runs as JavaScript (asm.js), which is very slow and weak."), the line under the Analysis panel in place of the drag-a-piece tip ("No WebAssembly SIMD, Stockfish runs as JavaScript: very slow and weak"), and beside "Analyse with Stockfish".
+- **Tests**: `simdSupport` and the asm.js engine answering a search in Node (`tests/sf-engine.test.cjs`), the file pinned and copied (`tests/build.test.cjs`); live (Chromium, Firefox), with the page's `WebAssembly.validate` faked to deny SIMD: only the asm.js file loads, Go deeper reaches a depth and the + comes back, the menu says it's very slow and weak. Measured there: a Go deeper from the sample's move took about 7 s on this laptop.
 
 ### Lichess opening explorer
 
@@ -423,6 +432,12 @@ Deferred by the per-plan reviews; each was true when recorded and may since have
 - The live test asks the real service: a Lichess outage fails it.
 - A game analysis that loses Lichess part-way leaves the rest of its endgame positions to Stockfish without saying so; only the Analysis panel's header ("Tablebase" or a depth) tells them apart.
 
+**asm.js Stockfish** (2026-10-31)
+- **Verify** on the SM-T510 itself: checked only with SIMD faked off in desktop Chromium and Firefox. How slow it is on the tablet, and whether its 30 s start timeout is enough there, is unknown.
+- The WebP export's encoder (`webp_enc_simd`) needs WebAssembly SIMD too, so the export likely fails on such a browser; untouched.
+- The line under the Analysis panel hides where it doesn't fit (a narrow phone panel), as the tip did; the engine menu's note always shows.
+- Its pace estimate starts from the lite engine's model (factor 1), far too fast, until a run has timed enough positions.
+
 **Full Stockfish download** (2026-10-24)
 - The time estimate for Full starts from the lite engine's model until a run with Full has timed enough positions; the benchmarks behind the limits were not redone for Full.
 - A cancelled or failed download starts over (no resume), and the whole 99 MB is held in memory while it is checked.
@@ -487,3 +502,4 @@ Deferred by the per-plan reviews; each was true when recorded and may since have
 - 2026-10-30: MP4 Variable frame rate added as an option beside the constant default; it changes the samples' timestamps, not the pixels, so it is opt-in (some players and editors seek VFR less smoothly) and the constant path is untouched.
 - 2026-10-30: the iframe embed (the notes site) dropped: `render.yaml` sends `frame-ancestors 'self'` and `X-Frame-Options: SAMEORIGIN` against clickjacking, and the embed-only code went with it (the scheme handshake by `postMessage`, reading the parent's palette, sign-in in a new tab from a frame). The CSP's `script-src` names CDN scripts by exact URL rather than host. PGN reading checks castling and promotions in full, reads figurines, long algebraic, `e.p.` and tags inside comments as text, and shows every move as standard SAN.
 - 2026-10-31: the desktop breakpoint moved to a 1181 px wide viewport (tablet up to 1180), for `LayoutCore`'s device tier and `shell.html`'s @media alike, the same width where the full-width eval graph grows. The eval bar is thicker: 20 px with an 8 px gap on a tablet or foldable (the desktop's before; was 16 and 6), 24 px with a 10 px gap on a desktop.
+- 2026-10-31: where WebAssembly SIMD is missing (Firefox on 32-bit Android), the page runs stockfish.js's asm.js build rather than saying Stockfish can't run, and tells the viewer, in red, that it is very slow and weak (PR 120).
