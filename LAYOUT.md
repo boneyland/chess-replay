@@ -25,6 +25,7 @@ What each part of the repo is, with the pinned SHA-256 of every vendored file. B
   - `stockfish-19-lite-single.wasm` sha256 `ee4f115bdb2d32cadf96cada104a05b5ec257d7ad6f57582190b49bc71f096de`
   - `stockfish-19-lite.js` (33,426 bytes) sha256 `dac939ff529668e0168b2f615145ec18b029b753deb6963fd7319d788f964333`
   - `stockfish-19-lite.wasm` (1,697,617 bytes) sha256 `ddf06cdaf0b8e35c11b40530e44db96c2a99c9029c8d621dd9fca97e4872770c`
+  - `stockfish-19-asm.js` (3,155,627 bytes) sha256 `c07dad9a00a89f4b1dcba3971d58d8078715556eac0212368e4aab510e1e27c9`: the asm.js build, which runs only where the browser has no WebAssembly SIMD (very slow and weak, one thread)
 - Not vendored: the full engine, stockfish.js v19.0.1 `single` and, where the page allows threads, the multi-threaded build (GPL-3.0), which the browser downloads from `https://unpkg.com/stockfish@19.0.1/bin/` when the viewer asks and checks against these (pinned in `app/sf-full.js`)
   - `stockfish-19-single.js` (28,130 bytes) sha256 `8071dee87312f74805a859de933e1a1ef465579ab1a51fbd597388cdce9d444d`
   - `stockfish-19-single.wasm` (99,169,054 bytes) sha256 `991bede2f253ebb08ff01fcc48270f4b9c8e66b12d5bd5f8d6f52eb3e3b3a740`

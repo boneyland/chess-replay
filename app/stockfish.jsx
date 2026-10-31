@@ -2,6 +2,9 @@
 // One engine per page, started on first use; a full-game analysis on request; the viewer's own moves.
 // the engine sits next to the page: the multi-threaded build where the page allows threads, else the single-thread one
 const SF_FILE = 'stockfish-19-lite-single', SF_FILE_THREADS = 'stockfish-19-lite';
+// a browser without WebAssembly SIMD runs only the asm.js build (one thread, no Full): very slow and weak, but it runs
+const SF_SIMD = window.SFEngine.simdSupport(), SF_FILE_ASM = 'stockfish-19-asm';
+const SF_ASM_NOTE = 'This browser can’t run Stockfish’s WebAssembly (it has no WebAssembly SIMD), so Stockfish runs as JavaScript (asm.js), which is very slow and weak.';
 const sfMakeWorker = (file) => () => new Worker(file + '.js');
 // A missing engine file only shows up inside the worker (it never reaches the page as an error), so the
 // page checks the wasm is there first rather than waiting out the start timeout
@@ -12,11 +15,11 @@ const sfMakeWorker = (file) => () => new Worker(file + '.js');
 // in 4 needed a second), so it gets up to three tries; then this page runs one thread. Nothing is remembered: a hang
 // can't be told from a browser that can't run threads, and remembering one would turn threads off in Firefox for good
 const SF_PROBE_MS = (threads) => 3000 + 1500 * threads, SF_LITE_LOAD_MS = 10000, SF_THREADED_TRIES = 3;
-const sfFilesPresent = (file) => fetch(file + '.wasm', { method: 'HEAD', cache: 'no-store' }).then((r) => r.ok, () => false);
+const sfFilesPresent = (file) => fetch(file + (file === SF_FILE_ASM ? '.js' : '.wasm'), { method: 'HEAD', cache: 'no-store' }).then((r) => r.ok, () => false);
 
 // Whether Stockfish may search with threads on this page ({ on, cores, reason }, SFEngine.threadSupport); a threaded
 // engine that won't start or dies turns them off for the rest of the page, with the reason the engine menu shows
-let sfThreading = (() => { const s = window.SFEngine.threadSupport(); return { on: s.ok, cores: s.cores, reason: s.reason }; })();
+let sfThreading = (() => { const s = window.SFEngine.threadSupport(); return SF_SIMD ? { on: s.ok, cores: s.cores, reason: s.reason } : { on: false, cores: s.cores, reason: 'Stockfish runs as asm.js here, with one thread' }; })();
 const sfThreadingSubs = new Set();
 function sfThreadsFailed(reason) {
   if (!sfThreading.on) return;
@@ -29,7 +32,7 @@ function useSfThreading() {
   return v;
 }
 
-// kind: 'lite' (next to the page) or 'full' (the viewer's download, sf-full.js); a change quits the engine running, and
+// kind: 'lite' or 'asm' (next to the page) or 'full' (the viewer's download, sf-full.js); a change quits the engine running, and
 // the next use starts the other. onBroken: the full engine's kept copy turned out missing (it is dropped).
 // threads: Threads (engineSettings), changed between searches without a restart; a single-thread engine ignores it
 function useEngine(hashMB, threads, kind = 'lite', onBroken) {
@@ -69,7 +72,7 @@ function useEngine(hashMB, threads, kind = 'lite', onBroken) {
         if (kk === 'full') {
           try { make = await window.SFFull.start(withThreads ? 'threads' : 'single'); } catch (e) { if (broken.current) broken.current(); throw e; }
         } else {
-          const file = withThreads ? SF_FILE_THREADS : SF_FILE;
+          const file = kk === 'asm' ? SF_FILE_ASM : withThreads ? SF_FILE_THREADS : SF_FILE;
           if (!(await sfFilesPresent(file))) throw new Error('The Stockfish files are missing next to this page');
           make = sfMakeWorker(file);
         }
@@ -109,7 +112,7 @@ function useEngine(hashMB, threads, kind = 'lite', onBroken) {
 
 // The full engine's download (the Analysis panel's engine drop-down and menu).
 // state: 'checking', 'absent', 'downloading' (got: bytes so far) or 'ready'; err: why the last download or start failed
-const SF_FULL_OFFERED = !!(window.SFFull && window.SFFull.supported());
+const SF_FULL_OFFERED = SF_SIMD && !!(window.SFFull && window.SFFull.supported());
 const sfMB = (bytes) => Math.round(bytes / 1e6);
 // build: the threaded one where the page allows threads. Which builds are kept is checked once, so the state follows the
 // build at once when threads turn off (the threaded engine wouldn't run): Full stays where its single-thread copy is
@@ -178,7 +181,7 @@ const sfTbPositions = (M) => [M.start.fen, ...M.plies.map((p) => p.fen)].map((f)
 // each engine (name: the settings' engine name; the full engine searches fewer nodes a second)
 const SF_PACE_STORE = 'chess-video.sf-pace.v1', SF_PACE_MIN_POSITIONS = 10;
 // and thread count (one thread keeps the key it always had)
-const sfPaceKey = (name, threads) => (name === window.AnalysisCore.ENGINE_NAMES.full ? SF_PACE_STORE + '.full' : SF_PACE_STORE) + (threads > 1 ? '.t' + threads : '');
+const sfPaceKey = (name, threads) => (name === window.AnalysisCore.ENGINE_NAMES.full ? SF_PACE_STORE + '.full' : name === window.AnalysisCore.ENGINE_NAMES.asm ? SF_PACE_STORE + '.asm' : SF_PACE_STORE) + (threads > 1 ? '.t' + threads : '');
 function readSfPace(name, threads) { try { const f = +localStorage.getItem(sfPaceKey(name, threads)); return f > 0 ? f : 1; } catch (e) { return 1; } }
 function writeSfPace(name, threads, f) { try { localStorage.setItem(sfPaceKey(name, threads), String(f)); } catch (e) {} }
 
@@ -323,7 +326,7 @@ function EngineEmptyState({ M, sf, paused, compact }) {
         {narrow && <span style={{ ...NO_SELECT, font: `500 ${tx(15)}px ${MONO}`, color: C.dim, whiteSpace: 'nowrap' }}>{est}</span>}
       </div>
       {run.resumeAt > 0 && <span style={{ ...NO_SELECT, font: `500 ${tx(15)}px ${MONO}`, color: C.dim }}>{run.resumeAt} of {run.plies} moves analysed so far.</span>}
-      {!compact && <span style={{ ...NO_SELECT, font: `500 ${tx(15)}px ${MONO}`, color: C.dim }}>{engineLabel(sf.game.name)} runs in your browser.</span>}
+      {!compact && <span style={{ ...NO_SELECT, font: `500 ${tx(15)}px ${MONO}`, color: C.dim }}>{engineLabel(sf.game.name)} runs in your browser.{SF_SIMD ? '' : ' ' + SF_ASM_NOTE}</span>}
       {run.err && <span style={{ font: `500 ${tx(15)}px ${MONO}`, color: C.blunder }}>{run.err}</span>}
     </div>
   );

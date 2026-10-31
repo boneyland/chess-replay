@@ -139,12 +139,13 @@
   // to about 10 requests in a minute
   const TB_GAP_MS = 4000;
 
-  // the browser engines (the Analysis panel's engine drop-down): the vendored lite one, or the full one the viewer downloaded (sf-full.js)
-  const ENGINE_NAMES = { lite: 'Stockfish 19 lite (browser)', full: 'Stockfish 19 (browser)' };
+  // the browser engines (the Analysis panel's engine drop-down): the vendored lite one, or the full one the viewer downloaded (sf-full.js);
+  // asm: the vendored asm.js build, the only one a browser without WebAssembly SIMD runs
+  const ENGINE_NAMES = { lite: 'Stockfish 19 lite (browser)', full: 'Stockfish 19 (browser)', asm: 'Stockfish 19 asm.js (browser)' };
   const ENGINE = { name: ENGINE_NAMES.lite, depth: null, time_limit: 3, lines: 1, threads: 1, hash_mb: 64 };
   // The engine settings a viewer can change (Settings → Engine), from the saved tweaks, kept in range; anything
   // missing or out of range falls back to the default. game: as ENGINE (written into the analysis JSON); own: the
-  // search of the viewer's own moves. kind: the engine that runs ('lite' or 'full'), whatever the setting asks for.
+  // search of the viewer's own moves. kind: the engine that runs ('lite', 'full' or 'asm'), whatever the setting asks for.
   // depth null: no depth limit, the search runs for its time limit (a capped depth ends an endgame search in no time,
   // long before it finds a deep mate)
   const SEARCH_LIMITS = { depth: [16, 30], seconds: [1, 20] }, HASH_MB = [16, 32, 64, 128, 256];

@@ -1585,6 +1585,28 @@ for (const name of BROWSERS) for (const site of SITES) {
       assert.deepEqual(gd.errors.filter((e) => !/stockfish-19|Failed to load resource/.test(e)), []);
       await gd.ctx.close();
     });
+    // a browser without WebAssembly SIMD (Firefox on 32-bit Android) runs the asm.js build, and says it's very slow and weak
+    await t.test('desktop: without WebAssembly SIMD, Go deeper runs the asm.js engine', async () => {
+      const gd = await open(browser, { width: 1440, height: 900 });
+      const p = gd.page, got = [];
+      // (only the page's check is fooled: SFEngine.simdSupport's test is 31 bytes)
+      await gd.ctx.addInitScript(() => { const v = WebAssembly.validate; WebAssembly.validate = (b) => (b.length === 31 ? false : v(b)); });
+      p.on('request', (r) => { const f = r.url().split('/').pop(); if (/^stockfish-/.test(f)) got.push(f); });
+      await p.goto(base, { waitUntil: 'load' });
+      await loadedOn(p);
+      await p.locator('[data-ply="10"]').click();
+      const deeper = p.getByRole('button', { name: /^Go deeper/ });
+      await deeper.waitFor({ timeout: 20000 });
+      assert.ok(await p.getByText('Stockfish 19 asm.js', { exact: true }).isVisible(), 'the engine named');
+      await deeper.click();
+      await p.waitForFunction(() => /depth \d+/i.test(document.body.innerText), null, { timeout: 30000 });
+      await deeper.waitFor({ timeout: 60000 });
+      assert.deepEqual([...new Set(got)], ['stockfish-19-asm.js'], 'only the asm.js build loads');
+      await p.getByRole('button', { name: 'Engine options' }).click();
+      await p.getByText(/very slow and weak/).first().waitFor();
+      assert.deepEqual(gd.errors, []);
+      await gd.ctx.close();
+    });
     // the tablebase in a game's analysis (the real service): every position of this KBN v K game has 7 pieces or fewer,
     // so the run asks Lichess (4 requests 4 s apart, the start's answer already shown) and searches none of them (with
     // 20 s a position, a search would show), and 2. Bc4+, which
