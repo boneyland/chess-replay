@@ -5,16 +5,6 @@
   const CC = () => window.ChessCore;
   const clamp = (b, upto) => Math.max(-1, Math.min(b.steps.length - 1, Math.floor(Number(upto)) || 0));
 
-  // Pasted text as a FEN: trimmed, a PGN tag [FEN "…"] unwrapped, runs of spaces collapsed; parseFen's messages pass on
-  function fenFromInput(text) {
-    let t = String(text == null ? '' : text).trim();
-    const tag = /^\[\s*FEN\s+"([^"]*)"\s*\]$/i.exec(t);
-    if (tag) t = tag[1].trim();
-    t = t.replace(/\s+/g, ' ');
-    if (!t) throw new Error('Paste a FEN first');
-    return CC().parseFen(t).fen;
-  }
-
   function fromFen(fen) {
     const s = CC().parseFen(fen == null ? CC().START_FEN : fen);
     return { fen: s.fen, start: { pos: s.pos, ply0: s.ply0 }, steps: [], upto: -1 };
@@ -28,18 +18,23 @@
   // a game on the board (PlayCore) is kept with it
   const save = (b) => ({ fen: b.fen, moves: b.steps.map((s) => s.uci), upto: b.upto, ...(b.game ? { game: b.game } : {}) });
 
-  // The board's moves as a game for the replay: the whole line (not only up to the move shown), with the start's FEN
-  // when it isn't the standard one. date: PGN's YYYY.MM.DD, today when omitted
-  function pgn(b, date) {
-    const d = new Date(), today = `${d.getFullYear()}.${String(d.getMonth() + 1).padStart(2, '0')}.${String(d.getDate()).padStart(2, '0')}`;
-    const tags = [['Event', 'Free board'], ['Site', 'chess-replay'], ['Date', date || today], ['White', 'White'], ['Black', 'Black'], ['Result', '*']];
-    if (b.fen !== CC().START_FEN) tags.push(['SetUp', '1'], ['FEN', b.fen]);
+  // today as PGN's YYYY.MM.DD
+  const today = () => { const d = new Date(); return `${d.getFullYear()}.${String(d.getMonth() + 1).padStart(2, '0')}.${String(d.getDate()).padStart(2, '0')}`; };
+
+  // The board's whole line (not only up to the move shown) as a PGN ending in res: the tags, SetUp and FEN after them when
+  // the start isn't the standard one, then `more`. A move number goes before White's moves, the first move, and Black's
+  // moves where again(j) says (after a comment); after(j) is written after step j's move (its comment)
+  function pgnOf(b, tags, res, { more = [], again = () => false, after = () => '' } = {}) {
+    const all = tags.concat(b.fen !== CC().START_FEN ? [['SetUp', '1'], ['FEN', b.fen]] : [], more);
     const moves = b.steps.map((s, j) => {
       const ply = b.start.ply0 + j, n = Math.floor(ply / 2) + 1;
-      return ply % 2 === 0 ? `${n}. ${s.san}` : j === 0 ? `${n}... ${s.san}` : s.san;
+      return (ply % 2 === 0 ? `${n}. ` : j === 0 || again(j) ? `${n}... ` : '') + s.san + after(j);
     });
-    return tags.map(([k, v]) => `[${k} "${v}"]`).join('\n') + '\n\n' + moves.concat('*').join(' ') + '\n';
+    return all.map(([k, v]) => `[${k} "${v}"]`).join('\n') + '\n\n' + moves.concat(res).join(' ') + '\n';
   }
+
+  // The board's moves as a game for the replay. date: PGN's YYYY.MM.DD, today when omitted
+  const pgn = (b, date) => pgnOf(b, [['Event', 'Free board'], ['Site', 'chess-replay'], ['Date', date || today()], ['White', 'White'], ['Black', 'Black'], ['Result', '*']], '*');
 
   // A stored board back: the legal prefix of its moves, upto clamped (a missing one shows the last move), its game resumed
   // (`now` given for a reload: PlayCore.resume); null when the FEN doesn't parse. Never throws, whatever localStorage held.
@@ -60,5 +55,5 @@
     }
   }
 
-  window.BoardCore = { fenFromInput, fromFen, restore, save, play, go, pos, ucis, label, pgn };
+  window.BoardCore = { fromFen, restore, save, play, go, pos, ucis, label, today, pgnOf, pgn };
 })();

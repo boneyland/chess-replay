@@ -191,6 +191,18 @@ test('the service worker gives its own files the isolation headers', () => {
   assert.equal(r.headers.get('content-type'), 'text/html');
 });
 
+// a server error answering the page gives way to the kept copy; a 404 doesn't, and with no copy the error comes through
+test('the service worker answers a navigation with the kept page when the server errs', async () => {
+  const sw = fs.readFileSync(path.join(ROOT, 'app', 'sw.js'), 'utf8');
+  const kept = new Response('kept', { status: 200 });
+  const run = (status, copy) => new Function('self', 'caches', 'fetch', sw.replace(/__VERSION__/, 'x').replace('__LOCAL__', '[]').replace('__REMOTE__', '[]') + '\nreturn page;')(
+    { addEventListener() {} }, { open: async () => ({ put: async () => {}, match: async () => copy }) }, async () => new Response(String(status), { status }));
+  assert.equal(await (await run(503, kept.clone())('x')).text(), 'kept');
+  assert.equal((await run(404, kept.clone())('x')).status, 404);
+  assert.equal((await run(500, undefined)('x')).status, 500);
+  assert.equal((await run(200, kept.clone())('x')).status, 200);
+});
+
 // a navigation fetched with redirect: 'manual' answers an opaqueredirect (status 0), which can't be rebuilt
 test('the service worker passes a navigation redirect through untouched', () => {
   const sw = fs.readFileSync(path.join(ROOT, 'app', 'sw.js'), 'utf8');

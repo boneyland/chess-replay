@@ -158,7 +158,7 @@
   const inProgress = (b) => !!(b && b.game && !b.game.result);
   const withGame = (b, game) => ({ ...b, game: { ...b.game, ...game } });
   const newId = () => Date.now().toString(36) + Math.random().toString(36).slice(2, 8);
-  const today = () => { const d = new Date(); return `${d.getFullYear()}.${String(d.getMonth() + 1).padStart(2, '0')}.${String(d.getDate()).padStart(2, '0')}`; };
+  const today = () => B().today();
 
   const isSf = (b) => !!(b && b.game && b.game.mode === 'stockfish');
   const claims = (b) => !!(b && b.game && b.game.mode === 'human');
@@ -384,16 +384,12 @@
     const g = b.game, t = parseTc(g.tc), res = g.result ? g.result.result : '*';
     const sf = g.mode === 'stockfish', name = (side) => (!sf ? NAME[side] : side === g.you ? 'You' : 'Stockfish 19');
     const tags = [['Event', sf ? 'Play vs Stockfish' : 'Play vs human'], ['Site', 'chess-replay'], ['Date', g.date], ['White', name('w')], ['Black', name('b')], ['Result', res]];
-    if (b.fen !== CC().START_FEN) tags.push(['SetUp', '1'], ['FEN', b.fen]);
-    if (t) tags.push(['TimeControl', `${t.base / 1000}+${t.inc / 1000}`]);
-    if (g.result) tags.push(['Termination', g.result.reason === 'time' ? 'time forfeit' : 'normal']);
+    const more = [];
+    if (t) more.push(['TimeControl', `${t.base / 1000}+${t.inc / 1000}`]);
+    if (g.result) more.push(['Termination', g.result.reason === 'time' ? 'time forfeit' : 'normal']);
     const clk = (ms) => { const s = Math.max(0, Math.floor(ms / 1000)); return `${Math.floor(s / 3600)}:${String(Math.floor(s / 60) % 60).padStart(2, '0')}:${String(s % 60).padStart(2, '0')}`; };
-    const moves = b.steps.map((s, j) => {
-      const ply = b.start.ply0 + j, n = Math.floor(ply / 2) + 1;
-      const no = ply % 2 === 0 ? `${n}. ` : j === 0 || (t && g.clock.clk[j - 1] != null) ? `${n}... ` : '';
-      return no + s.san + (t && g.clock.clk[j] != null ? ` { [%clk ${clk(g.clock.clk[j])}] }` : '');
-    });
-    return tags.map(([k, v]) => `[${k} "${v}"]`).join('\n') + '\n\n' + moves.concat(res).join(' ') + '\n';
+    const has = (j) => !!t && g.clock.clk[j] != null;
+    return B().pgnOf(b, tags, res, { more, again: (j) => has(j - 1), after: (j) => (has(j) ? ` { [%clk ${clk(g.clock.clk[j])}] }` : '') });
   }
 
   window.PlayCore = {
