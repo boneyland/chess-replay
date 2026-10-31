@@ -326,7 +326,8 @@ function EngineEmptyState({ M, sf, paused, compact }) {
         {narrow && <span style={{ ...NO_SELECT, font: `500 ${tx(15)}px ${MONO}`, color: C.dim, whiteSpace: 'nowrap' }}>{est}</span>}
       </div>
       {run.resumeAt > 0 && <span style={{ ...NO_SELECT, font: `500 ${tx(15)}px ${MONO}`, color: C.dim }}>{run.resumeAt} of {run.plies} moves analysed so far.</span>}
-      {!compact && <span style={{ ...NO_SELECT, font: `500 ${tx(15)}px ${MONO}`, color: C.dim }}>{engineLabel(sf.game.name)} runs in your browser.{SF_SIMD ? '' : ' ' + SF_ASM_NOTE}</span>}
+      {!compact && <span style={{ ...NO_SELECT, font: `500 ${tx(15)}px ${MONO}`, color: C.dim }}>{engineLabel(sf.game.name)} runs in your browser.</span>}
+      {!SF_SIMD && <span style={{ ...NO_SELECT, font: `500 ${tx(15)}px ${MONO}`, color: C.blunder }}>{SF_ASM_NOTE}</span>}
       {run.err && <span style={{ font: `500 ${tx(15)}px ${MONO}`, color: C.blunder }}>{run.err}</span>}
     </div>
   );

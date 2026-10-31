@@ -495,7 +495,7 @@ function GameApp() {
   // the panel while the menu is open; the explanations sit behind ⓘ. A game has no engine menu.
   const MB = sfMB(full.total), stopsAt = 'Each search stops at its depth or time limit, whichever comes first.';
   const engineBody = <>
-    {!SF_SIMD && <div className="twk-note">{SF_ASM_NOTE}</div>}
+    {!SF_SIMD && <div className="twk-note twk-err">{SF_ASM_NOTE}</div>}
     {full.offered && <>
       {t.sfEngine === 'Full' && full.state === 'absent' && <TweakButton label={`Download full Stockfish · ${MB} MB`} onClick={full.download}
         info={`Full Stockfish 19 is stronger than Lite, with the big neural network. It is a ${MB} MB download from unpkg.com, kept in this browser for next time and offline. Until it is downloaded, Lite runs.`} />}
