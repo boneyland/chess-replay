@@ -475,7 +475,7 @@ function EvalBarView({ cp, txt, a }) {
   const f = (winChance(cp) + 1) / 2;
   const flip = ORIENT === 'b', inWhite = cp >= 0, top = inWhite === flip; // the number sits in the part of the bar it favours
   if (!L.eval) return null;
-  const H = L.board.size, ef = Math.round(L.eval.w * 0.62 * 10) / 10; // the number, sized to the bar's width
+  const H = L.board.size, ef = Math.round(L.eval.w * (L.tier === 'phone' ? 0.62 : 0.75) * 10) / 10; // the number, sized to the bar's width: its digits a little over half of it (less on a phone's thin bar)
   return (
     <div style={{ ...NO_SELECT, position: 'absolute', left: L.eval.x, top: L.board.y, width: L.eval.w, height: H, borderRadius: 2, overflow: 'hidden', background: '#2a2320', boxShadow: `0 0 0 1px ${C.line}, ${C.halo}0 0 0 transparent`, opacity: a }}>
       <div style={{ position: 'absolute', left: 0, right: 0, [flip ? 'top' : 'bottom']: 0, height: f * H, background: '#ffffff' }} />
