@@ -506,3 +506,20 @@ test('a cancelled search that hangs answers with its last score, and the next se
   ws[1].finish('e7e5');
   assert.equal((await b.promise).best, 'e7e5');
 });
+
+test('simdSupport: WebAssembly SIMD validates here, and not without it or without WebAssembly', () => {
+  assert.equal(SF.simdSupport(), true);
+  assert.equal(SF.simdSupport({ WebAssembly: { validate: () => false } }), false);
+  assert.equal(SF.simdSupport({}), false);
+  assert.equal(SF.simdSupport({ WebAssembly: { validate: () => { throw new Error('no'); } } }), false);
+});
+
+// the asm.js build, for browsers without WebAssembly SIMD: it speaks UCI as the others do, if slowly
+test('the asm.js engine answers a search', async () => {
+  const e = SF.create(() => nodeWorker('stockfish-19-asm.js'));
+  try {
+    await e.ready();
+    const r = await e.search({ moves: ['e2e4'], depth: 8, movetimeMs: 10000 }).promise;
+    assert.ok(r && r.depth >= 8 && r.cp != null && /^[a-h][1-8][a-h][1-8]/.test(r.best), JSON.stringify(r));
+  } finally { e.quit(); }
+});

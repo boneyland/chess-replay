@@ -38,6 +38,14 @@
     return { ok: true, cores, reason: '' };
   }
 
+  // Whether WebAssembly SIMD is here, which every wasm build of Stockfish 19 needs (Firefox on 32-bit ARM has none: a
+  // Samsung SM-T510's engines never answered, 2026-10-31); without it only the asm.js build runs. A function that
+  // returns a v128 (wasm-feature-detect's test)
+  const SIMD_TEST = [0, 97, 115, 109, 1, 0, 0, 0, 1, 5, 1, 96, 0, 1, 123, 3, 2, 1, 0, 10, 10, 1, 8, 0, 65, 0, 253, 15, 253, 98, 11];
+  function simdSupport(g = globalThis) {
+    try { return !!g.WebAssembly && g.WebAssembly.validate(new Uint8Array(SIMD_TEST)); } catch (e) { return false; }
+  }
+
   // onFail(err): called once when the engine dies, before or after it started. threaded: the multi-threaded build, the only
   // one sent Threads; threads: its count for searches that don't ask for their own (search({ threads })).
   // probeMs: from uciok, ready() also waits for the threads to start and a depth-1 search to answer, failing the engine
@@ -193,5 +201,5 @@
     return { ready, search, setHash, setThreads, threaded, quit, failed: () => failed };
   }
 
-  window.SFEngine = { create, threadSupport, positionCommand, READY_TIMEOUT_MS, HANG_MS };
+  window.SFEngine = { create, threadSupport, simdSupport, positionCommand, READY_TIMEOUT_MS, HANG_MS };
 })();

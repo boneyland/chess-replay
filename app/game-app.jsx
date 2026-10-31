@@ -210,7 +210,7 @@ function GameApp() {
   // Remove the full engine asks first (getting it back is another 99 MB); any change to the download drops the question
   const [askRemove, setAskRemove] = React.useState(false);
   React.useEffect(() => setAskRemove(false), [full.state]);
-  const sfKind = t.sfEngine === 'Full' && full.state === 'ready' ? 'full' : 'lite';
+  const sfKind = !SF_SIMD ? 'asm' : t.sfEngine === 'Full' && full.state === 'ready' ? 'full' : 'lite';
   // threads where the page allows them, lite or full
   const threading = useSfThreading();
   const ES = React.useMemo(() => window.AnalysisCore.engineSettings(t, sfKind, threading), [t.sfDepth, t.sfTime, t.sfOwnDepth, t.sfOwnTime, t.sfHash, t.sfLines, t.sfThreads, sfKind, threading]);
@@ -495,6 +495,7 @@ function GameApp() {
   // the panel while the menu is open; the explanations sit behind ⓘ. A game has no engine menu.
   const MB = sfMB(full.total), stopsAt = 'Each search stops at its depth or time limit, whichever comes first.';
   const engineBody = <>
+    {!SF_SIMD && <div className="twk-note twk-err">{SF_ASM_NOTE}</div>}
     {full.offered && <>
       {t.sfEngine === 'Full' && full.state === 'absent' && <TweakButton label={`Download full Stockfish · ${MB} MB`} onClick={full.download}
         info={`Full Stockfish 19 is stronger than Lite, with the big neural network. It is a ${MB} MB download from unpkg.com, kept in this browser for next time and offline. Until it is downloaded, Lite runs.`} />}

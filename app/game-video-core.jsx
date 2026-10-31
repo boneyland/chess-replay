@@ -334,6 +334,7 @@ const stopHere = (e) => e.stopPropagation();
 function AnalysisPanel({ box, a, depth, deep, paused, style, children }) {
   const E = React.useContext(EngineMenuContext);
   const [open, setOpen] = React.useState(false);
+  const [whyOpen, setWhyOpen] = React.useState(false); // Go deeper's failure in full (a touchscreen shows no tooltip)
   const live = !!E && paused, shown = open && live, pick = live && E.pick;
   const name = E ? E.name : 'Stockfish';
   // a narrow panel (a laptop's sidebar, a phone) shortens the depth to D22 (the tablebase to TB, the cloud to Cloud
@@ -349,6 +350,9 @@ function AnalysisPanel({ box, a, depth, deep, paused, style, children }) {
           desktop's heading whatever the layout's title gap (the phone's wide one left the depth no room) */}
       <span style={{ flex: '1 1 auto', minWidth: 0, display: 'flex', alignItems: 'center', justifyContent: 'flex-end', gap: tx(16) }}>
       {!shown && paused && <DeeperButton ev={deep} />}
+      {/* Go deeper's failure: short, its reason in the tooltip, and all of it at a tap */}
+      {!shown && deep && deep.failed && <span role="status" title={deep.failed} onClick={(e) => { e.stopPropagation(); setWhyOpen((o) => !o); }} onPointerDown={stopHere}
+        style={{ flex: whyOpen ? '1 1 100%' : '0 1 auto', minWidth: 0, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: whyOpen ? 'normal' : 'nowrap', textTransform: 'none', color: C.blunder, cursor: 'pointer' }}>{whyOpen ? deep.failed : roomy ? deep.failed.split(':')[0] : 'Engine failed'}</span>}
       {!shown && depthText && <span title={depthTip} style={{ flex: 'none', whiteSpace: 'nowrap', letterSpacing: '0.04em' }}>{depthText}</span>}
       {/* smaller on the phone, where the row is tight */}
       {pick
@@ -759,7 +763,7 @@ function Analysis({ M, T, S, a, vline, onLine, onPreview, onReplyHover, paused, 
           </span>
         )}
         {sf && !M.hasAnalysis && (sf.run.state === 'running' || paused) && <EngineEmptyState M={M} sf={sf} paused={paused} compact />}
-        {!vline && paused && M.hasEval && <FitOrHide style={{ ...NO_SELECT, font: `500 ${tx(15)}px ${MONO}`, color: C.dim }}>Tip: drag a piece on the board to try your own move.</FitOrHide>}
+        {!vline && paused && M.hasEval && <FitOrHide style={{ ...NO_SELECT, font: `500 ${tx(15)}px ${MONO}`, color: typeof SF_SIMD === 'undefined' || SF_SIMD ? C.dim : C.blunder }}>{typeof SF_SIMD === 'undefined' || SF_SIMD ? 'Tip: drag a piece on the board to try your own move.' : 'No WebAssembly SIMD, Stockfish runs as JavaScript: very slow and weak'}</FitOrHide>}
       </div>
     </AnalysisPanel>
   );
