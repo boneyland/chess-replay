@@ -123,11 +123,11 @@ body:has(.stage-one) .twk-panel { bottom: calc(51px + var(--safe-b)); max-height
 .stage-short .pbtn { width: 34px; height: 28px; }
 .stage-short .pbar-narrow .pbtn-end { display: none; }
 .stage-short .pdock .dock-btn:not(.dock-pop .dock-btn) { height: 28px; }
-/* Device tiers, the same breakpoints as LayoutCore's (app/layout-core.js): a tablet or foldable (a viewport under 1055 px wide) and
+/* Device tiers, the same breakpoints as LayoutCore's (app/layout-core.js): a tablet or foldable (a viewport under 1181 px wide) and
    a phone (under 600 px wide, or under 500 px high held sideways) are tighter than a desktop, not just rearranged. The
    overlays' text (dock, transport bar, Settings, menus, all in rem) is a size smaller, the stage's padding slimmer and
    the transport bar's buttons and gaps smaller */
-@media (max-width: 1054px) {
+@media (max-width: 1180px) {
   html { font-size: calc(15px * var(--text, 1)); }
   .stage:not(.stage-one):not(.stage-short) { padding-block: 8px; gap: 8px; padding-left: max(10px, var(--safe-l)); padding-right: max(10px, var(--safe-r)); }
   .pbar { gap: 8px; padding: 4px 10px; }
@@ -165,18 +165,19 @@ body:has(.stage-one) .twk-panel { bottom: calc(51px + var(--safe-b)); max-height
   .pmenu .dock-group-more { grid-area: mo; }
   .pmenu .dock-icons { grid-area: tail; align-self: end; }
 }
-/* Menu: a small menu above its dock button, its items under Explore, Play and More labels; on a phone they sit in the folded menu */
+/* Menu: a small menu above its dock button, its items under Explore, Play and More labels; on a phone they sit in the folded menu.
+   Anchored to the button's right edge: the button is near the end of the bar, which runs the full width in a window under
+   about 1260 px, where a menu hung from its left edge ran off the screen */
 .dock-new { position: relative; flex: none; }
 .dock-pop {
-  position: absolute; z-index: 60; bottom: calc(100% + 12px); left: 0; display: flex; flex-direction: column; align-items: stretch; gap: 6px;
+  position: absolute; z-index: 60; bottom: calc(100% + 12px); right: 0; display: flex; flex-direction: column; align-items: stretch; gap: 6px;
   width: max-content; padding: 8px; border-radius: 5px; background: var(--panel-glass); border: 1px solid var(--line); box-shadow: 0 12px 32px var(--shadow), var(--halo);
 }
 .dock-pop .dock-btn { text-align: left; }
-/* a short screen (901×376): Explore and Play side by side, anchored to the button's right edge so the wider menu stays on
-   screen; never past the top of the screen, what doesn't fit scrolls */
+/* a short screen (901×376): Explore and Play side by side; never past the top of the screen, what doesn't fit scrolls */
 .dock-pop { max-height: calc(100dvh - 64px); overflow-y: auto; }
 @media (max-height: 480px) {
-  .dock-pop { flex-direction: row; align-items: flex-start; left: auto; right: 0; }
+  .dock-pop { flex-direction: row; align-items: flex-start; }
   .dock-pop .dock-group { display: flex; flex-direction: column; gap: 6px; }
 }
 .dock-menu-label { padding: 6px 4px 0; font: 600 0.625rem var(--mono); letter-spacing: 0.14em; text-transform: uppercase; color: var(--accent); }

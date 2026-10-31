@@ -310,14 +310,14 @@ test('a tall square-ish window shows the eval graph under Analysis', () => {
   assert.equal(LC.compute({ w: 738, h: 800, view: 'free' }).plot, null, 'the replay only');
 });
 
-// one desktop breakpoint, the viewport's 1055 px (vw), for LayoutCore and shell.html's @media alike: the stage is
+// one desktop breakpoint, the viewport's 1181 px (vw), for LayoutCore and shell.html's @media alike: the stage is
 // narrower than the viewport, and judging the tier by it once made a second breakpoint (1024 in CSS, ~1056 here)
-test('the desktop tier starts at a 1055 px viewport', () => {
-  assert.equal(LC.compute({ w: 1023, h: 818, vw: 1055, vh: 900 }).tier, 'desktop');
-  assert.notEqual(LC.compute({ w: 1034, h: 818, vw: 1054, vh: 900 }).tier, 'desktop');
+test('the desktop tier starts at a 1181 px viewport', () => {
+  assert.equal(LC.compute({ w: 1149, h: 818, vw: 1181, vh: 900 }).tier, 'desktop');
+  assert.notEqual(LC.compute({ w: 1160, h: 818, vw: 1180, vh: 900 }).tier, 'desktop');
   assert.equal(LC.compute({ w: 1408, h: 818, vw: 1440, vh: 900 }).tier, 'desktop');
   const css = require('fs').readFileSync(require('path').join(__dirname, '../app/shell.html'), 'utf8');
-  assert.match(css, /@media \(max-width: 1054px\) \{\n  html \{ font-size/);
+  assert.match(css, /@media \(max-width: 1180px\) \{\n  html \{ font-size/);
   assert.doesNotMatch(css, /max-width: 1023px/);
 });
 
