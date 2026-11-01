@@ -54,7 +54,10 @@
   // hangMs: a search can hang after the probe too (WebKit's threaded engine, GitHub Actions 2026-10-28); one still running
   // this long past its movetime moves to a fresh worker (started and probed as the first was), the same engine to the
   // page; HANG_TRIES workers in a row that hang on searches fail the engine
-  function create(makeWorker, { hashMB = 64, threads = 1, readyTimeoutMs = READY_TIMEOUT_MS, probeMs = 0, threaded = false, hangMs = HANG_MS, onFail } = {}) {
+  // hashFallbackMB, onHashFail(mb, to): a hash table the engine can't get memory for ("Failed to allocate 512MB for
+  // transposition table.", after which it answers nothing) moves to a fresh worker with hashFallbackMB, the search that was
+  // running starting again there, and onHashFail says so; one at hashFallbackMB or less fails the engine
+  function create(makeWorker, { hashMB = 64, threads = 1, readyTimeoutMs = READY_TIMEOUT_MS, probeMs = 0, threaded = false, hangMs = HANG_MS, onFail, hashFallbackMB = 64, onHashFail } = {}) {
     let worker = null, hangs = 0;
     const waiting = []; // [regex, resolve] for ready()
     const queue = [];
@@ -84,6 +87,8 @@
       return { cp: l ? l.cp : null, depth: l ? l.depth : 0, lines: linesOf(q), maxDepth: q.maxDepth == null ? (l ? l.depth : 0) : q.maxDepth, pv: l ? l.pv : [], nodes: q.nodes == null ? null : q.nodes, timeMs: q.timeMs == null ? null : q.timeMs, best: !best || best === '(none)' ? null : best };
     };
     const onLine = (line) => {
+      const nomem = /^Failed to allocate (\d+) ?MB for transposition table/.exec(line);
+      if (nomem) return hashFailed(+nomem[1]);
       for (let i = waiting.length - 1; i >= 0; i--) if (waiting[i][0].test(line)) waiting.splice(i, 1)[0][1]();
       if (!cur) return;
       if (line.startsWith('info')) {
@@ -123,42 +128,60 @@
       w.onmessage = (e) => { if (w === worker) onLine(String(e.data)); };
       w.onerror = (e) => { if (w === worker) fail(e); };
     };
-    // q has hung: a fresh worker, which gets every option again before q runs on it (a stopped search answers its last score)
-    const hung = (q) => {
-      if (cur !== q || failed) return;
-      if (++hangs >= HANG_TRIES) return fail(new Error('Stockfish stopped answering'));
+    // a fresh worker, which gets every option again before the search that was running (q) runs on it (a stopped search
+    // answers its last score); a boot under way goes on with the new worker
+    const restart = (q) => {
       cur = null; isReady = false;
-      if (q.stopped) q.resolve(resultOf(q, null));
-      else { Object.assign(q, { last: null, byK: [], maxDepth: null, nodes: null, timeMs: null }); queue.unshift(q); }
+      if (q) { clearTimeout(q.watch); if (q.stopped) q.resolve(resultOf(q, null)); else { Object.assign(q, { last: null, byK: [], maxDepth: null, nodes: null, timeMs: null }); queue.unshift(q); } }
       waiting.length = 0;
+      bootTimers.forEach(clearTimeout);
       try { worker.terminate(); } catch (err) {}
       hashSet = null; threadsSet = 1; linesSet = 1;
       try { spawn(); } catch (err) { return fail(err); }
-      boot().then(() => { isReady = true; pump(); });
+      if (bootDone) runBoot(); else boot().then(() => { isReady = true; pump(); });
+    };
+    // q has hung
+    const hung = (q) => {
+      if (cur !== q || failed) return;
+      if (++hangs >= HANG_TRIES) return fail(new Error('Stockfish stopped answering'));
+      restart(q);
+    };
+    const hashFailed = (mb) => {
+      if (failed) return;
+      if (hashWant <= hashFallbackMB) return fail(new Error(`Not enough memory for Stockfish’s ${mb} MB hash table`));
+      hashWant = hashFallbackMB;
+      if (onHashFail) onHashFail(mb, hashWant);
+      restart(cur);
     };
     spawn();
 
     const expect = (re) => new Promise((res) => waiting.push([re, res]));
     // uci, the options and (probeMs) the probe on the current worker: resolves once it answers, and fail() ends the
-    // engine if it doesn't in time
-    const boot = () => new Promise((resolve) => {
-      const timer = setTimeout(() => fail(new Error('Stockfish did not start')), readyTimeoutMs);
+    // engine if it doesn't in time. A restart() meanwhile runs it again on the new worker (runBoot), and the first
+    // worker's steps stop where they are
+    let bootDone = null, bootTimers = [];
+    const runBoot = () => {
+      const w = worker;
+      bootTimers = [setTimeout(() => fail(new Error('Stockfish did not start')), readyTimeoutMs)];
       (async () => {
-        const ok = expect(/^uciok/); worker.postMessage('uci'); await ok;
+        const ok = expect(/^uciok/); w.postMessage('uci'); await ok;
+        if (w !== worker) return;
         // loaded: from here a threaded engine has probeMs to start its threads and answer a depth-1 search
-        let probe = null;
-        if (probeMs && !failed) { clearTimeout(timer); probe = setTimeout(() => fail(new Error('Stockfish’s threads didn’t start')), probeMs); }
-        worker.postMessage(`setoption name Hash value ${hashWant}`); hashSet = hashWant;
-        if (threadsWant !== threadsSet) { worker.postMessage(`setoption name Threads value ${threadsWant}`); threadsSet = threadsWant; }
-        const rd = expect(/^readyok/); worker.postMessage('isready'); await rd;
-        clearTimeout(timer);
-        if (probe) {
-          const bm = expect(/^bestmove/); worker.postMessage('position startpos'); worker.postMessage('go depth 1'); await bm;
-          clearTimeout(probe);
+        if (probeMs && !failed) { bootTimers.forEach(clearTimeout); bootTimers = [setTimeout(() => fail(new Error('Stockfish’s threads didn’t start')), probeMs)]; }
+        w.postMessage(`setoption name Hash value ${hashWant}`); hashSet = hashWant;
+        if (threadsWant !== threadsSet) { w.postMessage(`setoption name Threads value ${threadsWant}`); threadsSet = threadsWant; }
+        const rd = expect(/^readyok/); w.postMessage('isready'); await rd;
+        if (w !== worker) return;
+        if (probeMs) {
+          const bm = expect(/^bestmove/); w.postMessage('position startpos'); w.postMessage('go depth 1'); await bm;
+          if (w !== worker) return;
         }
-        if (!failed) resolve();
+        bootTimers.forEach(clearTimeout);
+        const done = bootDone; bootDone = null;
+        if (!failed && done) done();
       })();
-    });
+    };
+    const boot = () => new Promise((resolve) => { bootDone = resolve; runBoot(); });
     function ready() {
       if (readyP) return readyP;
       if (failed) return (readyP = Promise.reject(failed)); // the engine died before anyone waited for it
