@@ -284,3 +284,16 @@ test('engineSettings carries threads into game and own searches, 1 where threads
   assert.equal(A.engineSettings({ sfThreads: 6 }).game.threads, 1);
   assert.equal(A.engineSettings({}).own.threads, 1);
 });
+
+test('hashChoices: above 128 MB only where not touch only and, where known, with 4 GB or more', () => {
+  const all = [16, 32, 64, 128, 256, 512], small = [16, 32, 64, 128];
+  assert.deepEqual(A.hashChoices(), all);
+  assert.deepEqual(A.hashChoices({ touchOnly: false }), all); // Firefox and Safari don't say how much memory
+  assert.deepEqual(A.hashChoices({ touchOnly: false, memoryGB: 8 }), all);
+  assert.deepEqual(A.hashChoices({ touchOnly: false, memoryGB: 4 }), all);
+  assert.deepEqual(A.hashChoices({ touchOnly: false, memoryGB: 2 }), small);
+  assert.deepEqual(A.hashChoices({ touchOnly: true, memoryGB: 8 }), small); // a phone or tablet
+  // a stored size this device isn't offered gets the default
+  assert.equal(A.engineSettings({ sfHash: 512 }, 'lite', undefined, small).game.hash_mb, 64);
+  assert.equal(A.engineSettings({ sfHash: 128 }, 'lite', undefined, small).game.hash_mb, 128);
+});

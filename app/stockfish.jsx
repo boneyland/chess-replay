@@ -4,6 +4,8 @@
 const SF_FILE = 'stockfish-19-lite-single', SF_FILE_THREADS = 'stockfish-19-lite';
 // a browser without WebAssembly SIMD runs only the asm.js build (one thread, no Full): very slow and weak, but it runs
 const SF_SIMD = window.SFEngine.simdSupport(), SF_FILE_ASM = 'stockfish-19-asm';
+// the hash sizes offered here (AnalysisCore.hashChoices)
+const SF_HASH_CHOICES = window.AnalysisCore.hashChoices({ touchOnly: !!window.matchMedia && window.matchMedia('(any-pointer: coarse)').matches && !window.matchMedia('(any-pointer: fine)').matches, memoryGB: navigator.deviceMemory });
 const SF_ASM_NOTE = 'This browser can’t run Stockfish’s WebAssembly (it has no WebAssembly SIMD), so Stockfish runs as JavaScript (asm.js), which is very slow and weak.';
 const sfMakeWorker = (file) => () => new Worker(file + '.js');
 // A missing engine file only shows up inside the worker (it never reaches the page as an error), so the
@@ -35,14 +37,16 @@ function useSfThreading() {
 // kind: 'lite' or 'asm' (next to the page) or 'full' (the viewer's download, sf-full.js); a change quits the engine running, and
 // the next use starts the other. onBroken: the full engine's kept copy turned out missing (it is dropped).
 // threads: Threads (engineSettings), changed between searches without a restart; a single-thread engine ignores it
-function useEngine(hashMB, threads, kind = 'lite', onBroken) {
-  const ref = React.useRef(null), hash = React.useRef(hashMB), want = React.useRef(kind), has = React.useRef(kind), broken = React.useRef(onBroken);
+// onHashFail(mb, to): the engine couldn't get memory for an mb MB hash table and runs with to MB (SFEngine)
+function useEngine(hashMB, threads, kind = 'lite', onBroken, onHashFail) {
+  const ref = React.useRef(null), hash = React.useRef(hashMB), want = React.useRef(kind), has = React.useRef(kind), broken = React.useRef(onBroken), hashFail = React.useRef(onHashFail);
   const nThreads = React.useRef(threads), threaded = React.useRef(false);
   hash.current = hashMB;
   nThreads.current = threads;
   // set while rendering, not in an effect: the panels' effects run before this one and must not get the engine being replaced
   want.current = kind;
   broken.current = onBroken;
+  hashFail.current = onHashFail;
   React.useEffect(() => { if (ref.current) ref.current.then((eng) => eng.setHash(hashMB), () => {}); }, [hashMB]);
   React.useEffect(() => { if (ref.current) ref.current.then((eng) => eng.setThreads(threads), () => {}); }, [threads]);
   const [status, setStatus] = React.useState('idle');
@@ -85,7 +89,7 @@ function useEngine(hashMB, threads, kind = 'lite', onBroken) {
           if (ref.current === mine) { ref.current = null; setStatus('stopped'); }
         };
         const eng = window.SFEngine.create(make, { hashMB: hash.current, threaded: withThreads, threads: withThreads ? nThreads.current : 1, probeMs: withThreads ? SF_PROBE_MS(nThreads.current) : 0,
-          ...(withThreads && kk === 'lite' ? { readyTimeoutMs: SF_LITE_LOAD_MS } : {}), onFail });
+          ...(withThreads && kk === 'lite' ? { readyTimeoutMs: SF_LITE_LOAD_MS } : {}), onFail, onHashFail: (mb, to) => { hash.current = to; if (hashFail.current) hashFail.current(mb, to); } });
         await eng.ready();
         up = true;
         return eng;

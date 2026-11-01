@@ -161,7 +161,14 @@
   const threadChoices = (cores) => [...Array(Math.max(1, Math.min((cores | 0) - 1, 8))).keys()].map((i) => i + 1);
   const defaultThreads = (cores) => Math.max(1, Math.min(4, Math.floor((cores | 0) / 2)));
   // threading: { on, cores } (SFEngine.threadSupport): off, every search runs one thread
-  function engineSettings(t = {}, kind = 'lite', threading = { on: false, cores: 1 }) {
+  // The hash sizes this device is offered: above BIG_HASH_MB only where it isn't touch only (a phone or tablet: a coarse
+  // pointer and no fine one, and a tab there gets little memory; a touchscreen PC has a touchpad or mouse too, and
+  // headless Firefox reports no pointer at all) and, where the browser says (Chromium's navigator.deviceMemory, rounded,
+  // at most 8), with 4 GB of memory or more. A size the engine still can't get falls back to 64 MB (SFEngine's onHashFail)
+  const BIG_HASH_MB = 128;
+  const hashChoices = ({ touchOnly = false, memoryGB } = {}) => (!touchOnly && !(memoryGB < 4) ? HASH_MB : HASH_MB.filter((mb) => mb <= BIG_HASH_MB));
+  // hashes: hashChoices() here; a stored size not among them gets the default
+  function engineSettings(t = {}, kind = 'lite', threading = { on: false, cores: 1 }, hashes = HASH_MB) {
     const pick = (v, [lo, hi], step, dflt) => { const x = +v; return Number.isFinite(x) && x >= lo && x <= hi ? Math.round(x / step) * step : dflt; };
     const pickDepth = (v, dflt) => (v === null ? null : pick(v, SEARCH_LIMITS.depth, 1, dflt));
     // a time limit in range snaps to the nearest stop
@@ -169,7 +176,7 @@
     const name = ENGINE_NAMES[kind] || ENGINE.name;
     const threads = !threading || !threading.on ? 1 : threadChoices(threading.cores).includes(+t.sfThreads) ? +t.sfThreads : defaultThreads(threading.cores);
     return {
-      game: { ...ENGINE, name, threads, depth: pickDepth(t.sfDepth, ENGINE.depth), time_limit: pickTime(t.sfTime, ENGINE.time_limit), hash_mb: HASH_MB.includes(+t.sfHash) ? +t.sfHash : ENGINE.hash_mb },
+      game: { ...ENGINE, name, threads, depth: pickDepth(t.sfDepth, ENGINE.depth), time_limit: pickTime(t.sfTime, ENGINE.time_limit), hash_mb: hashes.includes(+t.sfHash) ? +t.sfHash : ENGINE.hash_mb },
       own: { name, depth: pickDepth(t.sfOwnDepth, OWN.depth), time_limit: pickTime(t.sfOwnTime, OWN.time_limit), lines: LINES.includes(+t.sfLines) ? +t.sfLines : OWN.lines, threads },
     };
   }
@@ -317,5 +324,5 @@
     return { result: { cp, depth: 0, pv: best ? [best] : [], best, nodes: null, timeMs: null, tb: { category: t.category, dtz: t.dtz, dtm: t.dtm } }, failed: false };
   }
 
-  window.AnalysisCore = { C, TB_GAP_MS, ENGINE, ENGINE_NAMES, SEARCH_LIMITS, DEPTHS, SECONDS, HASH_MB, LINES, threadChoices, defaultThreads, engineSettings, secondsPerPosition, paceFactor, blendPace, deeperSearch, canGoDeeper, bestOf, winningChances, infoToScore, infoStats, rateMove, rateByOutcome, tbWonOnly, mateLine, positionFens, playerStats, buildAnalysisJson, runAnalysis };
+  window.AnalysisCore = { C, TB_GAP_MS, ENGINE, ENGINE_NAMES, SEARCH_LIMITS, DEPTHS, SECONDS, HASH_MB, hashChoices, LINES, threadChoices, defaultThreads, engineSettings, secondsPerPosition, paceFactor, blendPace, deeperSearch, canGoDeeper, bestOf, winningChances, infoToScore, infoStats, rateMove, rateByOutcome, tbWonOnly, mateLine, positionFens, playerStats, buildAnalysisJson, runAnalysis };
 })();
