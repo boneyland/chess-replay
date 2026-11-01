@@ -2189,6 +2189,14 @@ for (const name of BROWSERS) for (const site of SITES) {
     await t.test('desktop: Play vs Stockfish flags a blunder', async () => {
       const g = await open(browser, { width: 1440, height: 900 });
       const p = g.page, label = p.locator('.plabel');
+      // the engine's depths and bestmoves, when each came (ms since the page began): what the move is rated from
+      await p.addInitScript(() => {
+        const out = window.__sfOut = [], W = window.Worker;
+        window.Worker = class extends W {
+          get onmessage() { return super.onmessage; }
+          set onmessage(f) { super.onmessage = f && ((e) => { const m = typeof e.data === 'string' && e.data.match(/^(bestmove \S+|info depth \d+)/); if (m) out.push([Math.round(performance.now()), m[1]]); return f(e); }); }
+        };
+      });
       const panel = (title) => p.evaluate((tt) => { const d = [...document.querySelectorAll('div')].find((e) => e.firstElementChild && e.firstElementChild.firstElementChild && e.firstElementChild.firstElementChild.textContent === tt && getComputedStyle(e.firstElementChild).textTransform === 'uppercase'); return d ? d.innerText : ''; }, title);
       await p.goto(base, { waitUntil: 'load' });
       await loadedOn(p);
@@ -2204,8 +2212,11 @@ for (const name of BROWSERS) for (const site of SITES) {
       // measured in the game, whose board is larger than the replay's on the wide frame: by its touch layer, as a few
       // pieces don't span the board
       const b = await p.evaluate(() => { const r = [...document.querySelectorAll('div')].find((d) => d.style.touchAction === 'none').getBoundingClientRect(); return { x0: r.left, y0: r.top, sq: r.width / 8 }; });
-      // Stockfish searches the position while the player thinks: the move is rated against that search
-      await p.waitForTimeout(5000);
+      // Stockfish searches the position while the player thinks: the move is rated against that search, which finds the
+      // mate (Qe8#) at once, so wait for its bestmove, however long the engine takes to start (a move made before it had
+      // started went unrated after a fixed 5 s in WebKit on GitHub, 2026-11-01)
+      const t0 = await p.evaluate(() => performance.now());
+      await assert.doesNotReject(p.waitForFunction((t0) => window.__sfOut.some(([t, m]) => t > t0 && m.startsWith('bestmove')), t0, { timeout: 30000 }), 'the search before the move ends');
       const f = square(b, 'e2'), tt = square(b, 'c4');
       await p.mouse.move(f.x, f.y);
       await p.mouse.down();
@@ -2213,7 +2224,13 @@ for (const name of BROWSERS) for (const site of SITES) {
       await p.mouse.up();
       await assert.doesNotReject(label.filter({ hasText: /^1… dxc4$/ }).waitFor({ timeout: 20000 }), 'Stockfish takes the queen');
       const info = await panel('Play vs Stockfish');
-      assert.match(info, /Blunder: 1\. Qc4[\s\S]*drops the queen/);
+      // if the move went unrated: each search since the game began, as the depth it reached and its bestmove
+      const searched = await p.evaluate((t0) => {
+        let d = 0; const r = [];
+        for (const [t, m] of window.__sfOut) if (t > t0) { if (m.startsWith('bestmove')) { r.push(`${t - Math.round(t0)} ms: depth ${d}, ${m}`); d = 0; } else d = Math.max(d, +m.split(' ')[2]); }
+        return r;
+      }, t0);
+      assert.match(info, /Blunder: 1\. Qc4[\s\S]*drops the queen/, `${info}\nengine: ${searched.join('; ')}`);
       assert.doesNotMatch(info, /better was/i, 'not the better move yet');
       await p.screenshot({ path: path.join(OUT, host + '-sf-blunder.png') });
       const stored = await p.evaluate(() => localStorage.getItem('chess-video.files.v1'));
