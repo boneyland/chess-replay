@@ -69,7 +69,10 @@ function useEditInput({ setup, onChange }) {
     try { e.currentTarget.setPointerCapture(e.pointerId); } catch (err) {}
     setDrag({ piece, from, x: p.x, y: p.y, x0: p.x, y0: p.y, moved: false });
   };
-  const follow = (e) => { if (!drag) return; const p = at(e); setDrag((d) => d && { ...d, x: p.x, y: p.y, moved: d.moved || Math.hypot(p.x - d.x0, p.y - d.y0) > 14 }); };
+  // a drag once the pointer is 14 px from where it went down; also asked where it is let go, as the render with the last
+  // move's state may not have run yet (a quick flick read as a tap)
+  const moved = (d, p) => d.moved || Math.hypot(p.x - d.x0, p.y - d.y0) > 14;
+  const follow = (e) => { if (!drag) return; const p = at(e); setDrag((d) => d && { ...d, x: p.x, y: p.y, moved: moved(d, p) }); };
   const E = window.EditCore;
   const handlers = {
     onDown: (e) => {
@@ -83,7 +86,7 @@ function useEditInput({ setup, onChange }) {
       if (!drag) return;
       const p = at(e), d = drag;
       setDrag(null);
-      if (d.moved) onChange(p.sq < 0 ? E.put(setup, d.from, null) : E.move(setup, d.from, p.sq));
+      if (moved(d, p)) onChange(p.sq < 0 ? E.put(setup, d.from, null) : E.move(setup, d.from, p.sq));
     },
     onCancel: () => setDrag(null),
   };
@@ -95,7 +98,7 @@ function useEditInput({ setup, onChange }) {
       if (!drag) return;
       const p = at(e), d = drag;
       setDrag(null);
-      if (!d.moved) return;
+      if (!moved(d, p)) return;
       dragged.current = true;
       if (p.sq >= 0) onChange(E.put(setup, p.sq, piece));
     },

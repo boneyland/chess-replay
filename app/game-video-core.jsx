@@ -945,6 +945,9 @@ function useBoardInput({ pos, onPick, onMiss, onMove }) {
     const [vx, vy] = view(Math.max(0, Math.min(7, Math.floor(x / SQ))), Math.max(0, Math.min(7, Math.floor(y / SQ))));
     return { x, y, sq: vy * 8 + vx };
   };
+  // a drag once the pointer is 14 px from where it went down; also asked where it is let go, as the render with the last
+  // move's state may not have run yet (a quick flick read as a tap)
+  const moved = (d, p) => d.moved || Math.hypot(p.x - d.x0, p.y - d.y0) > 14;
   const handlers = {
     onDown: (e) => {
       const p = boardXY(e);
@@ -962,12 +965,12 @@ function useBoardInput({ pos, onPick, onMiss, onMove }) {
         onPick(); setSel(p.sq); setDrag({ from: p.sq, x: p.x, y: p.y, x0: p.x, y0: p.y, moved: false });
       } else { setSel(null); onMiss(); }
     },
-    onMove: (e) => { if (!drag) return; const p = boardXY(e); setDrag((d) => d && { ...d, x: p.x, y: p.y, moved: d.moved || Math.hypot(p.x - d.x0, p.y - d.y0) > 14 }); },
+    onMove: (e) => { if (!drag) return; const p = boardXY(e); setDrag((d) => d && { ...d, x: p.x, y: p.y, moved: moved(d, p) }); },
     onUp: (e) => {
       if (!drag) return;
       const p = boardXY(e), d = drag;
       setDrag(null);
-      if (!d.moved) return; // a tap keeps the piece selected; the next tap picks its square
+      if (!moved(d, p)) return; // a tap keeps the piece selected; the next tap picks its square
       if (p.sq !== d.from && playMove(d.from, p.sq)) setSel(null); else { setSel(null); onMiss(); }
     },
     onCancel: () => setDrag(null),
