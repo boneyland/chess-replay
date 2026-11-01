@@ -1660,7 +1660,12 @@ for (const name of BROWSERS) for (const site of SITES) {
       for (const asm of [true, false]) {
         const ac = await open(browser, { width: 1440, height: 900 });
         const p = ac.page;
-        await ac.ctx.route('https://lichess.org/api/cloud-eval**', (r) => r.fulfill({ status: 200, contentType: 'application/json', headers: { 'access-control-allow-origin': '*' }, body: JSON.stringify({ ...cloud, depth: 25 }) }));
+        // the page's own fetch answers for the cloud: a Playwright route in Firefox leaks into later contexts (the next
+        // tests' offline reload and explorer scroll failed on GitHub after one)
+        await ac.ctx.addInitScript((ans) => {
+          const f = window.fetch;
+          window.fetch = function (u) { return String(u).startsWith('https://lichess.org/api/cloud-eval') ? Promise.resolve(new Response(JSON.stringify(ans), { status: 200, headers: { 'Content-Type': 'application/json' } })) : f.apply(this, arguments); };
+        }, { ...cloud, depth: 25 });
         if (asm) await ac.ctx.addInitScript(() => { const v = WebAssembly.validate; WebAssembly.validate = (b) => (b.length === 31 ? false : v(b)); });
         await p.addInitScript(spyEngine, {});
         await p.addInitScript(() => { try { localStorage.setItem('chess-video.tweaks.v1', JSON.stringify({ cloudEval: true, cloudPrefer: true, sfOwnTime: 1 })); } catch (e) {} });
