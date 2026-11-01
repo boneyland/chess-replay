@@ -181,8 +181,8 @@ test('engineSettings: the defaults, the viewer’s values in range, and the defa
   assert.deepEqual(d.game, A.ENGINE);
   assert.deepEqual(d.own, { name: A.ENGINE.name, depth: null, time_limit: 5, lines: 1, threads: 1 });
   assert.equal(d.game.depth, null, 'no depth limit by default');
-  const s = A.engineSettings({ sfDepth: 16, sfTime: 1, sfOwnDepth: 30, sfOwnTime: 20, sfHash: 256, sfLines: 5 });
-  assert.deepEqual([s.game.depth, s.game.time_limit, s.game.hash_mb, s.game.name], [16, 1, 256, A.ENGINE.name]);
+  const s = A.engineSettings({ sfDepth: 16, sfTime: 1, sfOwnDepth: 30, sfOwnTime: 20, sfHash: 512, sfLines: 5 });
+  assert.deepEqual([s.game.depth, s.game.time_limit, s.game.hash_mb, s.game.name], [16, 1, 512, A.ENGINE.name]);
   assert.deepEqual(s.own, { name: A.ENGINE.name, depth: 30, time_limit: 20, lines: 5, threads: 1 });
   assert.equal(s.game.lines, 1, 'a game\'s analysis always searches one line');
   for (const bad of [0, 6, 2.5, 'x', null]) assert.equal(A.engineSettings({ sfLines: bad }).own.lines, 1, String(bad));
