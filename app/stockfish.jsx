@@ -6,7 +6,7 @@ const SF_FILE = 'stockfish-19-lite-single', SF_FILE_THREADS = 'stockfish-19-lite
 const SF_SIMD = window.SFEngine.simdSupport(), SF_FILE_ASM = 'stockfish-19-asm';
 // the hash sizes offered here (AnalysisCore.hashChoices)
 const SF_HASH_CHOICES = window.AnalysisCore.hashChoices({ touchOnly: !!window.matchMedia && window.matchMedia('(any-pointer: coarse)').matches && !window.matchMedia('(any-pointer: fine)').matches, memoryGB: navigator.deviceMemory });
-const SF_ASM_NOTE = 'This browser can’t run Stockfish’s WebAssembly (it has no WebAssembly SIMD), so Stockfish runs as JavaScript (asm.js), which is very slow and weak.';
+const SF_ASM_NOTE = 'This browser can’t run Stockfish’s WebAssembly (it has no WebAssembly SIMD), so Stockfish runs as JavaScript (asm.js), which is very slow and weak. Open this page in Chrome for full-strength Stockfish.';
 const sfMakeWorker = (file) => () => new Worker(file + '.js');
 // A missing engine file only shows up inside the worker (it never reaches the page as an error), so the
 // page checks the wasm is there first rather than waiting out the start timeout
