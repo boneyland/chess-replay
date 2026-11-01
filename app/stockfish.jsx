@@ -437,8 +437,10 @@ function useMoveEval(engine, before, after, own, fen, stored, cloud) {
   const fromCloud = (r) => !!(r && r.source === 'cloud');
   const done = out.after && !out.after.partial && out.before && !out.before.partial && !out.pending;
   const next = A.deeperSearch(own, level + 1);
-  // nothing to go deeper on where both positions show the cloud's answer
-  const deeper = done && !(fromCloud(out.after) && fromCloud(out.before)) && A.canGoDeeper(own, level) ? () => { SF_DEEPER.set(baseKey, level + 1); setFail(null); bump((n) => n + 1); } : null;
+  // nothing to go deeper on where both positions show a cloud answer at least as deep as the next search would reach
+  // (a search without a depth limit may always go further)
+  const cloudDeep = (r) => fromCloud(r) && next.depth != null && r.depth >= next.depth;
+  const deeper = done && !(cloudDeep(out.after) && cloudDeep(out.before)) && A.canGoDeeper(own, level) ? () => { SF_DEEPER.set(baseKey, level + 1); setFail(null); bump((n) => n + 1); } : null;
   return { ...out, deeper, deeperTo: deeper ? next : null, failed: fail && fail.key === baseKey ? fail.msg : null };
 }
 
