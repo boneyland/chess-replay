@@ -258,6 +258,21 @@
     return Math.round(Math.max(100, Math.min(THINK_MS, left / 30 + parseTc(b.game.tc).inc / 2)));
   }
 
+  // A player's move in a Stockfish game, rated from the search before it and Stockfish's search after it ({ cp, depth },
+  // White's point of view): the classification (AnalysisCore.rateMove's), or null when the searches are too shallow to
+  // say. Both at MIN_RATED_DEPTH rate any move; short of it (a slow engine: Stockfish's 3 s reply reached depth 12 in
+  // WebKit on GitHub Actions, the asm.js engine less), a blunder losing BIG_LOSS_CP or more (about a piece, a mate) still
+  // counts once both reach SHALLOW_DEPTH, as a hanging queen is plain at any depth while a borderline inaccuracy isn't
+  const MIN_RATED_DEPTH = 15, SHALLOW_DEPTH = 8, BIG_LOSS_CP = 300;
+  function rateMove({ before, after, you, playedIsBest, isCheckmate }) {
+    if (!before || !after || before.cp == null || after.cp == null) return null;
+    const depth = Math.min(before.depth || 0, after.depth || 0);
+    if (depth < SHALLOW_DEPTH) return null;
+    const r = window.AnalysisCore.rateMove({ bestEval: before.cp, currentEval: after.cp, isWhite: you === 'w', playedIsBest, isCheckmate });
+    if (depth >= MIN_RATED_DEPTH || (r.classification === 'blunder' && r.evalLoss >= BIG_LOSS_CP)) return r.classification;
+    return null;
+  }
+
   // The board with a player's move flagged ({ j, cls, best, text }; text, critiqueText's line, is optional): only in a
   // Stockfish game, for a step still on the board that the player played, once per step; the board as it was otherwise.
   // A rating that lands after the end still counts
@@ -393,7 +408,7 @@
   }
 
   window.PlayCore = {
-    canMate, lockedDead, positionKey, outcome, TIME_CONTROLS, parseTc, start, inProgress, move, canTakeback, takeback, thinkMs, addCritique, critiqueText,
+    canMate, lockedDead, positionKey, outcome, TIME_CONTROLS, parseTc, start, inProgress, move, canTakeback, takeback, thinkMs, MIN_RATED_DEPTH, SHALLOW_DEPTH, BIG_LOSS_CP, rateMove, addCritique, critiqueText,
     resign, agreeDraw, claimable, claimDraw, flag, pause, runClock, timeLeft, resultText, resume, pgn,
   };
 })();
