@@ -565,6 +565,23 @@ test('a Hash too big from the start: ready() comes on the fresh worker, threads 
   assert.ok(ws[1].posted.includes('setoption name Threads value 4'));
 });
 
+test('a smaller Hash asked for while a bigger one fails is kept, and hashMB() says what runs', async () => {
+  const ws = [], told = [];
+  const e = SF.create(() => { const w = fakeWorker({ maxHashMB: 256 }); ws.push(w); return w; }, { onHashFail: (mb, to) => told.push([mb, to]) });
+  await e.ready();
+  assert.equal(e.hashMB(), 64);
+  e.setHash(512);
+  const s = e.search({ moves: [], depth: 5, movetimeMs: 100 });
+  e.setHash(32); // before Stockfish's failure for 512 arrives
+  await until(() => ws.length === 2 && ws[1].posted.some((m) => m.startsWith('go depth 5')));
+  assert.deepEqual(told, [[512, 32]]);
+  assert.equal(e.failed(), null);
+  assert.equal(e.hashMB(), 32);
+  assert.ok(ws[1].posted.includes('setoption name Hash value 32'), ws[1].posted.join(' | '));
+  ws[1].finish('e2e4');
+  assert.equal((await s.promise).best, 'e2e4');
+});
+
 test('no memory even for the fallback hash fails the engine and says why', async () => {
   let failedWith = null;
   const e = SF.create(() => fakeWorker({ maxHashMB: 32 }), { onFail: (err) => { failedWith = err; } });

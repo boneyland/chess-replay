@@ -223,8 +223,8 @@
   // are searched, then it is asked again; after a request that fails otherwise (offline, an error, the timeout) the run
   // asks no more. tablebaseOn(): whether the setting is still on (turned off, the run asks no more). A position the
   // tablebase calls won without a distance to mate (tbWonOnly) next to a searched one is searched too (kept as its sf),
-  // so the move between them is rated on two searches. onSearched(R, { searches, tbMs }): the engine searches made
-  // and the time spent on the tablebase since the last call, for the run's pace. now, sleep: the clock, for tests
+  // so the move between them is rated on two searches. onSearched(R, { searches, tbMs, tbAsks }): the engine searches made,
+  // and the time spent on the tablebase and its requests since the last call, for the run's pace. now, sleep: the clock, for tests
   async function runAnalysis({ engine, ucis, sans, headers, signal, onProgress, earlier = [], onSearched, settings = ENGINE, startFen = window.ChessCore.START_FEN, tablebase = null, tablebaseOn = () => true, tbGapMs = TB_GAP_MS, now = Date.now, sleep = (ms) => new Promise((r) => setTimeout(r, ms)) }) {
     const CC = window.ChessCore, LC = window.LichessCore;
     const N = ucis.length, R = earlier.slice(0, N + 1);
@@ -232,7 +232,7 @@
     let tbFailed = false, lastAsk = -Infinity;
     const pace = async () => { const wait = lastAsk + tbGapMs - now(); if (wait > 0) await sleep(wait); lastAsk = now(); };
     const backedOff = () => !!(tablebase.backedOff && tablebase.backedOff('tablebase'));
-    let searches = 0, tbMs = 0;
+    let searches = 0, tbMs = 0, tbAsks = 0;
     const search = async (k) => {
       const r = await engine.search({ moves: ucis.slice(0, k), fen: startFen, depth: settings.depth, movetimeMs: settings.time_limit * 1000, threads: settings.threads, priority: 'game' }).promise;
       searches++;
@@ -246,7 +246,7 @@
       if (fens && !tbFailed && tablebaseOn() && !backedOff() && LC.pieceCount(fens[k]) <= LC.TB_MAX_PIECES) {
         const t0 = now();
         const got = await tablebaseResult(tablebase, fens[k], pace, tablebaseOn);
-        tbMs += now() - t0;
+        tbMs += now() - t0; tbAsks++;
         if (signal.aborted) return null;
         if (got.failed && !backedOff()) tbFailed = true;
         r = got.result;
@@ -264,8 +264,8 @@
         }
       }
       R.push(r);
-      if (onSearched) onSearched(R.slice(), { searches, tbMs });
-      searches = 0; tbMs = 0;
+      if (onSearched) onSearched(R.slice(), { searches, tbMs, tbAsks });
+      searches = 0; tbMs = 0; tbAsks = 0;
       if (k > 0) onProgress(k, N);
     }
     const start = CC.parseFen(startFen);

@@ -335,6 +335,7 @@ function AnalysisPanel({ box, a, depth, deep, paused, style, children }) {
   const E = React.useContext(EngineMenuContext);
   const [open, setOpen] = React.useState(false);
   const [whyOpen, setWhyOpen] = React.useState(false); // Go deeper's failure in full (a touchscreen shows no tooltip)
+  React.useEffect(() => setWhyOpen(false), [deep && deep.failed]); // a new failure starts short again
   const live = !!E && paused, shown = open && live, pick = live && E.pick;
   const name = E ? E.name : 'Stockfish';
   // a narrow panel (a laptop's sidebar, a phone) shortens the depth to D22 (the tablebase to TB, the cloud to Cloud
@@ -682,6 +683,8 @@ function Commentary({ M, T, S, a, book, line }) {
 // tb: the endgame tablebase's answer for the position on the board (useTablebase); onTb plays one of its moves
 function Analysis({ M, T, S, a, vline, onLine, onPreview, onReplyHover, paused, sf, own, onReply, deep, tb, onTb }) {
   const c = lastPly(T, S);
+  // Stockfish runs as asm.js here (stockfish.jsx, which a page without the engine doesn't load)
+  const sfAsm = typeof SF_SIMD !== 'undefined' && !SF_SIMD;
   // the Tablebase block goes under the lines; the panel scrolls to it where it doesn't fit
   const box = tb && !L.analysis.flow ? { ...L.analysis, scroll: true } : L.analysis;
   const tbEl = tb && <div style={{ marginTop: tx(12), paddingTop: tx(12), borderTop: `1px solid ${C.line}` }}><TablebaseBlock t={tb} onPlay={onTb} /></div>;
@@ -763,7 +766,7 @@ function Analysis({ M, T, S, a, vline, onLine, onPreview, onReplyHover, paused, 
           </span>
         )}
         {sf && !M.hasAnalysis && (sf.run.state === 'running' || paused) && <EngineEmptyState M={M} sf={sf} paused={paused} compact />}
-        {!vline && paused && M.hasEval && <FitOrHide style={{ ...NO_SELECT, font: `500 ${tx(15)}px ${MONO}`, color: typeof SF_SIMD === 'undefined' || SF_SIMD ? C.dim : C.blunder }}>{typeof SF_SIMD === 'undefined' || SF_SIMD ? 'Tip: drag a piece on the board to try your own move.' : 'No WebAssembly SIMD: Stockfish is very slow and weak here. Use Chrome'}</FitOrHide>}
+        {!vline && paused && M.hasEval && <FitOrHide style={{ ...NO_SELECT, font: `500 ${tx(15)}px ${MONO}`, color: sfAsm ? C.blunder : C.dim }}>{sfAsm ? SF_ASM_SHORT : 'Tip: drag a piece on the board to try your own move.'}</FitOrHide>}
       </div>
     </AnalysisPanel>
   );
