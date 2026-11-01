@@ -151,8 +151,8 @@
   const SEARCH_LIMITS = { depth: [16, 30], seconds: [1, 30] }, HASH_MB = [16, 32, 64, 128, 256];
   // the depth slider's stops: 16 to 30, then no limit
   const DEPTHS = [...Array(SEARCH_LIMITS.depth[1] - SEARCH_LIMITS.depth[0] + 1).keys()].map((i) => SEARCH_LIMITS.depth[0] + i).concat([null]);
-  // the time limit slider's stops: whole seconds to 10, then every 2 s
-  const SECONDS = [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 12, 14, 16, 18, 20, 22, 24, 26, 28, 30];
+  // the time limit slider's stops: whole seconds to 10, every 2 s to 20, then 25 and 30
+  const SECONDS = [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 12, 14, 16, 18, 20, 25, 30];
   // own.lines: the lines (MultiPV) the viewer's own searches show; a game's analysis always searches one
   const LINES = [1, 2, 3, 4, 5];
   const OWN = { depth: null, time_limit: 5, lines: 1 };
