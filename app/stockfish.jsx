@@ -17,6 +17,9 @@ const sfMakeWorker = (file) => () => new Worker(file + '.js');
 // in 4 needed a second), so it gets up to three tries; then this page runs one thread. Nothing is remembered: a hang
 // can't be told from a browser that can't run threads, and remembering one would turn threads off in Firefox for good
 const SF_PROBE_MS = (threads) => 3000 + 1500 * threads, SF_LITE_LOAD_MS = 10000, SF_THREADED_TRIES = 3;
+// The asm.js engine (3.2 MB of JavaScript, compiled as it loads) gets this long to start: about 1–1.7 s in Firefox on a
+// laptop, but the Samsung SM-T510 it runs on went past 30 s on a first visit ("Stockfish did not start", 2026-11-01)
+const SF_ASM_LOAD_MS = 120000;
 const sfFilesPresent = (file) => fetch(file + (file === SF_FILE_ASM ? '.js' : '.wasm'), { method: 'HEAD', cache: 'no-store' }).then((r) => r.ok, () => false);
 
 // Whether Stockfish may search with threads on this page ({ on, cores, reason }, SFEngine.threadSupport); a threaded
@@ -99,7 +102,7 @@ function useEngine(hashMB, threads, kind = 'lite', onBroken, onHashFail) {
           if (ref.current === mine) { ref.current = null; setStatus('stopped'); setWhy(sfReason(err)); }
         };
         const eng = window.SFEngine.create(make, { hashMB: hash.current, threaded: withThreads, threads: withThreads ? nThreads.current : 1, probeMs: withThreads ? SF_PROBE_MS(nThreads.current) : 0,
-          ...(withThreads && kk === 'lite' ? { readyTimeoutMs: SF_LITE_LOAD_MS } : {}), onFail, onHashFail: (mb, to) => { hash.current = to; if (hashFail.current) hashFail.current(mb, to); } });
+          ...(withThreads && kk === 'lite' ? { readyTimeoutMs: SF_LITE_LOAD_MS } : kk === 'asm' ? { readyTimeoutMs: SF_ASM_LOAD_MS } : {}), onFail, onHashFail: (mb, to) => { hash.current = to; if (hashFail.current) hashFail.current(mb, to); } });
         await eng.ready();
         up = true;
         return eng;
