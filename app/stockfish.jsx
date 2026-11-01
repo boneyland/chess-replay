@@ -338,6 +338,7 @@ const SF_EVAL_CACHE = new Map(); // finished searches by settings and move list,
 const SF_DEEPER = new Map(); // presses of Go deeper by position (its key at the base settings), for the session
 const CLOUD = window.LichessCore ? window.LichessCore.create() : null; // Lichess's cloud evaluation, cached for the session
 const CLOUD_DEBOUNCE_MS = 300; // after the last position change (stepping through moves asks nothing for the ones passed)
+const CLOUD_DEEP_ENOUGH = 35; // a cloud answer this deep is past what a search with no depth limit reaches in the browser
 
 // Evaluates the positions before and after the viewer's move (move lists from the start, or from fen); the score streams in.
 // own: the search settings (AnalysisCore.engineSettings().own; its lines are searched for after only); fen: the game's start FEN, omitted for the standard start.
@@ -438,8 +439,8 @@ function useMoveEval(engine, before, after, own, fen, stored, cloud) {
   const done = out.after && !out.after.partial && out.before && !out.before.partial && !out.pending;
   const next = A.deeperSearch(own, level + 1);
   // nothing to go deeper on where both positions show a cloud answer at least as deep as the next search would reach
-  // (a search without a depth limit may always go further)
-  const cloudDeep = (r) => fromCloud(r) && next.depth != null && r.depth >= next.depth;
+  // (CLOUD_DEEP_ENOUGH for one with no depth limit)
+  const cloudDeep = (r) => fromCloud(r) && r.depth >= (next.depth == null ? CLOUD_DEEP_ENOUGH : next.depth);
   const deeper = done && !(cloudDeep(out.after) && cloudDeep(out.before)) && A.canGoDeeper(own, level) ? () => { SF_DEEPER.set(baseKey, level + 1); setFail(null); bump((n) => n + 1); } : null;
   return { ...out, deeper, deeperTo: deeper ? next : null, failed: fail && fail.key === baseKey ? fail.msg : null };
 }
