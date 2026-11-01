@@ -148,11 +148,11 @@
   // search of the viewer's own moves. kind: the engine that runs ('lite', 'full' or 'asm'), whatever the setting asks for.
   // depth null: no depth limit, the search runs for its time limit (a capped depth ends an endgame search in no time,
   // long before it finds a deep mate)
-  const SEARCH_LIMITS = { depth: [16, 30], seconds: [1, 30] }, HASH_MB = [16, 32, 64, 128, 256];
+  const SEARCH_LIMITS = { depth: [16, 30], seconds: [1, 60] }, HASH_MB = [16, 32, 64, 128, 256];
   // the depth slider's stops: 16 to 30, then no limit
   const DEPTHS = [...Array(SEARCH_LIMITS.depth[1] - SEARCH_LIMITS.depth[0] + 1).keys()].map((i) => SEARCH_LIMITS.depth[0] + i).concat([null]);
-  // the time limit slider's stops: whole seconds to 10, every 2 s to 20, then 25 and 30
-  const SECONDS = [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 12, 14, 16, 18, 20, 25, 30];
+  // the time limit slider's stops: whole seconds to 10, every 2 s to 20, then 25, 30 and 60
+  const SECONDS = [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 12, 14, 16, 18, 20, 25, 30, 60];
   // own.lines: the lines (MultiPV) the viewer's own searches show; a game's analysis always searches one
   const LINES = [1, 2, 3, 4, 5];
   const OWN = { depth: null, time_limit: 5, lines: 1 };
