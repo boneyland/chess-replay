@@ -22,6 +22,8 @@ function fakeWorker({ silent = false, noReady = false } = {}) {
   return w;
 }
 const tick = () => new Promise((r) => setTimeout(r, 5));
+// ticks until cond holds (a loaded build machine can take more than one tick over a chain of worker answers)
+const until = async (cond, ms = 2000) => { for (const t0 = Date.now(); !cond() && Date.now() - t0 < ms;) await tick(); };
 const positions = (w) => w.posted.filter((s) => s.startsWith('position'));
 
 test('positionCommand', () => {
@@ -394,7 +396,7 @@ test('probeMs: ready waits for a depth-1 search after readyok', async () => {
   let w, ok = false;
   const e = SF.create(() => (w = fakeWorker()), { threaded: true, threads: 4, probeMs: 1000 });
   const r = e.ready().then(() => { ok = true; });
-  await tick();
+  await until(() => w && w.posted.includes('go depth 1'));
   assert.equal(ok, false, 'not ready before the probe answers');
   assert.ok(w.posted.includes('go depth 1'), w.posted.join(' | '));
   assert.ok(w.posted.indexOf('setoption name Threads value 4') < w.posted.indexOf('go depth 1'));

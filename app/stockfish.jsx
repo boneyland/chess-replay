@@ -338,6 +338,7 @@ const SF_EVAL_CACHE = new Map(); // finished searches by settings and move list,
 const SF_DEEPER = new Map(); // presses of Go deeper by position (its key at the base settings), for the session
 const CLOUD = window.LichessCore ? window.LichessCore.create() : null; // Lichess's cloud evaluation, cached for the session
 const CLOUD_DEBOUNCE_MS = 300; // after the last position change (stepping through moves asks nothing for the ones passed)
+const CLOUD_DEEP_ENOUGH = 35; // a cloud answer this deep is past what a search with no depth limit reaches in the browser
 
 // Evaluates the positions before and after the viewer's move (move lists from the start, or from fen); the score streams in.
 // own: the search settings (AnalysisCore.engineSettings().own; its lines are searched for after only); fen: the game's start FEN, omitted for the standard start.
@@ -352,7 +353,7 @@ const CLOUD_DEBOUNCE_MS = 300; // after the last position change (stepping throu
 // cloud: Settings › Online › Lichess cloud evaluation ({ on, prefer }); with stored, only once Go deeper is pressed
 // (the analysis's own eval stands until then, and its ratings are never touched): each position asks the cloud (after CLOUD_DEBOUNCE_MS, at once when cached) while the local search runs; whichever comes first
 // shows, and a finished local search replaces the cloud's only when deeper. prefer: a position the cloud has as deep
-// as the local depth limit (No limit: the slider's top stop) isn't searched locally. A miss falls back silently
+// as the local depth limit (No limit: CLOUD_DEEP_ENOUGH) isn't searched locally. A miss falls back silently
 const cloudSetting = (tw) => ({ on: !!(tw && tw.cloudEval), prefer: !!(tw && tw.cloudPrefer) });
 function useMoveEval(engine, before, after, own, fen, stored, cloud) {
   const A = window.AnalysisCore;
@@ -386,7 +387,7 @@ function useMoveEval(engine, before, after, own, fen, stored, cloud) {
       asked[which] = new Promise((res) => { timers.push(setTimeout(() => CLOUD.cloudEval(f, n, { signal: ctl.signal }).then(res), CLOUD_DEBOUNCE_MS)); })
         .then((r) => { if (live && r) setSt((s) => ({ ...s, cloud: { ...s.cloud, [which]: r } })); return r; });
     }
-    const cloudLimit = search.depth == null ? A.SEARCH_LIMITS.depth[1] : search.depth;
+    const cloudLimit = search.depth == null ? CLOUD_DEEP_ENOUGH : search.depth;
     const keyAt = (lv, which) => keyOf(toSearch(A.deeperSearch(own, lv), lines(which)), moves[which]);
     const at = (lv, which) => (lv === 0 && stored ? stored : SF_EVAL_CACHE.get(keyAt(lv, which)) || null);
     const handles = [], cached = (which) => at(level, which);
@@ -437,8 +438,10 @@ function useMoveEval(engine, before, after, own, fen, stored, cloud) {
   const fromCloud = (r) => !!(r && r.source === 'cloud');
   const done = out.after && !out.after.partial && out.before && !out.before.partial && !out.pending;
   const next = A.deeperSearch(own, level + 1);
-  // nothing to go deeper on where both positions show the cloud's answer
-  const deeper = done && !(fromCloud(out.after) && fromCloud(out.before)) && A.canGoDeeper(own, level) ? () => { SF_DEEPER.set(baseKey, level + 1); setFail(null); bump((n) => n + 1); } : null;
+  // nothing to go deeper on where both positions show a cloud answer at least as deep as the next search would reach
+  // (CLOUD_DEEP_ENOUGH for one with no depth limit)
+  const cloudDeep = (r) => fromCloud(r) && r.depth >= (next.depth == null ? CLOUD_DEEP_ENOUGH : next.depth);
+  const deeper = done && !(cloudDeep(out.after) && cloudDeep(out.before)) && A.canGoDeeper(own, level) ? () => { SF_DEEPER.set(baseKey, level + 1); setFail(null); bump((n) => n + 1); } : null;
   return { ...out, deeper, deeperTo: deeper ? next : null, failed: fail && fail.key === baseKey ? fail.msg : null };
 }
 

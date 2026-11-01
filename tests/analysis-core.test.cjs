@@ -187,7 +187,7 @@ test('engineSettings: the defaults, the viewer’s values in range, and the defa
   assert.equal(s.game.lines, 1, 'a game\'s analysis always searches one line');
   for (const bad of [0, 6, 2.5, 'x', null]) assert.equal(A.engineSettings({ sfLines: bad }).own.lines, 1, String(bad));
   assert.equal(A.engineSettings({ sfLines: '3' }).own.lines, 3);
-  const bad = A.engineSettings({ sfDepth: 15, sfTime: 21, sfOwnDepth: 'x', sfOwnTime: null, sfHash: 100 });
+  const bad = A.engineSettings({ sfDepth: 15, sfTime: 31, sfOwnDepth: 'x', sfOwnTime: null, sfHash: 100 });
   assert.deepEqual([bad.game.depth, bad.game.time_limit, bad.game.hash_mb, bad.own.depth, bad.own.time_limit], [null, 3, 64, null, 5]);
   // a viewer who picked a depth keeps it; one who moved back to No limit stores null
   assert.deepEqual([A.engineSettings({ sfOwnDepth: 24 }).own.depth, A.engineSettings({ sfOwnDepth: null }).own.depth], [24, null]);
@@ -237,15 +237,17 @@ test('deeperSearch: +4 depth and twice the time per press, up to the sliders\' c
   assert.deepEqual(A.deeperSearch(own, 0), own);
   assert.deepEqual(A.deeperSearch(own, 1), { depth: 28, time_limit: 6 });
   assert.deepEqual(A.deeperSearch(own, 2), { depth: 30, time_limit: 12 });
-  assert.deepEqual(A.deeperSearch(own, 3), { depth: 30, time_limit: 20 });
+  assert.deepEqual(A.deeperSearch(own, 3), { depth: 30, time_limit: 24 });
+  assert.deepEqual(A.deeperSearch(own, 4), { depth: 30, time_limit: 30 });
   assert.equal(A.canGoDeeper(own, 1), true);
-  assert.equal(A.canGoDeeper(own, 2), true);
-  assert.equal(A.canGoDeeper(own, 3), false);
+  assert.equal(A.canGoDeeper(own, 3), true);
+  assert.equal(A.canGoDeeper(own, 4), false);
   assert.equal(A.canGoDeeper({ depth: 30, time_limit: 3 }, 0), true); // the time can still grow
-  assert.equal(A.canGoDeeper({ depth: 30, time_limit: 20 }, 0), false);
+  assert.equal(A.canGoDeeper({ depth: 30, time_limit: 30 }, 0), false);
   // no depth limit: only the time doubles
   assert.deepEqual(A.deeperSearch({ depth: null, time_limit: 5 }, 1), { depth: null, time_limit: 10 });
-  assert.equal(A.canGoDeeper({ depth: null, time_limit: 5 }, 2), false);
+  assert.equal(A.canGoDeeper({ depth: null, time_limit: 5 }, 2), true);
+  assert.equal(A.canGoDeeper({ depth: null, time_limit: 5 }, 3), false); // 5, 10, 20, 30 s
 });
 
 test('runAnalysis searches and records the settings it is given', async () => {

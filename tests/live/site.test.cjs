@@ -1492,6 +1492,9 @@ for (const name of BROWSERS) for (const site of SITES) {
       await p.waitForFunction(() => /cloud depth \d+/i.test(document.body.innerText), null, { timeout: 20000 });
       assert.doesNotMatch(await text(), /Thinking/i);
       assert.equal(sent.length, asked + 1, 'from the cache');
+      // nothing to go deeper on: a timed search in the browser doesn't reach the cloud's depth 60
+      await p.waitForTimeout(1000);
+      assert.equal(await p.getByRole('button', { name: /^Go deeper/ }).count(), 0);
       // the browser logs the miss's 404 itself
       assert.deepEqual(ce.errors.filter((e) => !/status of 404 .*lichess\.org\/api\/cloud-eval/.test(e)), []);
       await ce.ctx.close();
