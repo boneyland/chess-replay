@@ -1652,6 +1652,31 @@ for (const name of BROWSERS) for (const site of SITES) {
       assert.deepEqual(gd.errors, []);
       await gd.ctx.close();
     });
+    // Prefer cloud with the asm.js engine: a cloud answer of depth 25 (faked) is deeper than asm.js gets (22 counts as
+    // enough), so it searches nothing; Lite (35 with No limit) still searches the same position
+    await t.test('desktop: Prefer cloud takes a depth-25 cloud answer with asm.js, while Lite still searches', async () => {
+      const cloud = JSON.parse(fs.readFileSync(path.join(__dirname, '..', 'fixtures', 'cloud-e4-3lines.json'), 'utf8'));
+      const E4 = 'rnbqkbnr/pppppppp/8/8/4P3/8/PPPP1PPP/RNBQKBNR b KQkq - 0 1';
+      for (const asm of [true, false]) {
+        const ac = await open(browser, { width: 1440, height: 900 });
+        const p = ac.page;
+        await ac.ctx.route('https://lichess.org/api/cloud-eval**', (r) => r.fulfill({ status: 200, contentType: 'application/json', headers: { 'access-control-allow-origin': '*' }, body: JSON.stringify({ ...cloud, depth: 25 }) }));
+        if (asm) await ac.ctx.addInitScript(() => { const v = WebAssembly.validate; WebAssembly.validate = (b) => (b.length === 31 ? false : v(b)); });
+        await p.addInitScript(spyEngine, {});
+        await p.addInitScript(() => { try { localStorage.setItem('chess-video.tweaks.v1', JSON.stringify({ cloudEval: true, cloudPrefer: true, sfOwnTime: 1 })); } catch (e) {} });
+        await p.goto(base, { waitUntil: 'load' });
+        await loadedOn(p);
+        await setUpFen(p, E4);
+        await p.waitForFunction(() => /cloud depth 25/i.test(document.body.innerText), null, { timeout: 20000 });
+        await p.waitForTimeout(asm ? 3000 : 0);
+        if (!asm) await p.waitForFunction(() => window.__sf.posted.some((m) => /^go movetime/.test(m)), null, { timeout: 30000 });
+        const seen = await p.evaluate(() => window.__sf);
+        assert.equal(seen.posted.some((m) => /^go movetime/.test(m)), !asm, (asm ? 'asm.js' : 'lite') + ': ' + seen.posted.filter((m) => /^go/.test(m)).join(' | '));
+        if (asm) assert.ok(seen.urls.every((u) => /stockfish-19-asm\.js$/.test(u)), seen.urls.join(' '));
+        assert.deepEqual(ac.errors, []);
+        await ac.ctx.close();
+      }
+    });
     // the tablebase in a game's analysis (the real service): every position of this KBN v K game has 7 pieces or fewer,
     // so the run asks Lichess (4 requests 4 s apart, the start's answer already shown) and searches none of them (with
     // 20 s a position, a search would show), and 2. Bc4+, which

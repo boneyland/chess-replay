@@ -196,6 +196,12 @@
   function deeperSearch(own, level) {
     return { depth: own.depth == null ? null : Math.min(SEARCH_LIMITS.depth[1], own.depth + 4 * level), time_limit: Math.min(SEARCH_LIMITS.seconds[1], own.time_limit * Math.pow(2, level)) };
   }
+  // The cloud depth that counts as deep enough for a search of this depth limit (null: none) by this engine (its name,
+  // engineSettings().own.name): Prefer cloud doesn't search a position the cloud has this deep, and Go deeper isn't
+  // offered over cloud answers this deep. With no limit, past what the engine reaches in the browser: 35 for lite and full,
+  // 22 for asm.js (also its cap), which reached 22 in a minute on a fast laptop and 19 on a Samsung SM-T510 (2026-11-01)
+  const CLOUD_ENOUGH = 35, CLOUD_ENOUGH_ASM = 22;
+  const cloudEnough = (depth, name) => (name === ENGINE_NAMES.asm ? Math.min(depth == null ? CLOUD_ENOUGH_ASM : depth, CLOUD_ENOUGH_ASM) : depth == null ? CLOUD_ENOUGH : depth);
   const canGoDeeper = (own, level) => { const a = deeperSearch(own, level), b = deeperSearch(own, level + 1); return a.depth !== b.depth || a.time_limit !== b.time_limit; };
 
   // A line of uci moves from pos → its SANs, stopping at the first illegal move
@@ -324,5 +330,5 @@
     return { result: { cp, depth: 0, pv: best ? [best] : [], best, nodes: null, timeMs: null, tb: { category: t.category, dtz: t.dtz, dtm: t.dtm } }, failed: false };
   }
 
-  window.AnalysisCore = { C, TB_GAP_MS, ENGINE, ENGINE_NAMES, SEARCH_LIMITS, DEPTHS, SECONDS, HASH_MB, hashChoices, LINES, threadChoices, defaultThreads, engineSettings, secondsPerPosition, paceFactor, blendPace, deeperSearch, canGoDeeper, bestOf, winningChances, infoToScore, infoStats, rateMove, rateByOutcome, tbWonOnly, mateLine, positionFens, playerStats, buildAnalysisJson, runAnalysis };
+  window.AnalysisCore = { C, TB_GAP_MS, ENGINE, ENGINE_NAMES, SEARCH_LIMITS, DEPTHS, SECONDS, HASH_MB, hashChoices, LINES, threadChoices, defaultThreads, engineSettings, secondsPerPosition, paceFactor, blendPace, deeperSearch, canGoDeeper, cloudEnough, bestOf, winningChances, infoToScore, infoStats, rateMove, rateByOutcome, tbWonOnly, mateLine, positionFens, playerStats, buildAnalysisJson, runAnalysis };
 })();
