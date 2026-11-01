@@ -1,7 +1,7 @@
 const test = require('node:test');
 const assert = require('node:assert/strict');
 const { loadUnit } = require('./load.cjs');
-loadUnit('chess-core.js'); loadUnit('board-core.js'); loadUnit('play-core.js');
+loadUnit('chess-core.js'); loadUnit('board-core.js'); loadUnit('analysis-core.js'); loadUnit('play-core.js');
 const B = window.BoardCore, P = window.PlayCore, CC = window.ChessCore;
 const playAll = (b, ucis) => ucis.reduce((x, u) => B.play(x, CC.stepFromUci(B.pos(x), u)), b);
 
@@ -379,4 +379,21 @@ test('a dead position with bishops of one colour: none can take a pawn, and the 
   // Black's dark bishop on White's side can check White's king, but it always has a light square to step to and Black's
   // king can't come to help
   assert.equal(dead('8/8/1k6/p1p1p1p1/P1P1P1P1/8/4K3/2b5 w - - 0 1'), true);
+});
+
+test('a Stockfish game rates a move at depth 15, and short of it only a blunder of a piece or more from depth 8', () => {
+  const rate = (bcp, bd, acp, ad, you = 'w', playedIsBest = false) => P.rateMove({ before: { cp: bcp, depth: bd }, after: { cp: acp, depth: ad }, you, playedIsBest, isCheckmate: false });
+  // 1. Qc4?? in WebKit on GitHub Actions: mate found before it, Stockfish's 3 s reply only depth 12
+  assert.equal(rate(9990, 202, -900, 12), 'blunder', 'a hanging queen at depth 12');
+  assert.equal(rate(30, 20, -9980, 9), 'blunder', 'walking into a mate at depth 9');
+  assert.equal(rate(-30, 20, 900, 12, 'b'), 'blunder', 'from Black\'s side too');
+  assert.equal(rate(30, 20, -900, 7), null, 'below depth 8 nothing is rated');
+  assert.equal(rate(30, 14, -150, 14), null, 'a blunder under a piece waits for depth 15');
+  assert.equal(rate(30, 14, -40, 14), null, 'so does a mistake');
+  assert.equal(rate(30, 20, -40, 15), 'inaccuracy', 'at depth 15 anything is rated');
+  assert.equal(rate(30, 15, -150, 16), 'blunder');
+  assert.equal(rate(30, 16, 28, 16), 'best');
+  assert.equal(rate(30, 20, -900, 12, 'w', true), null, 'the best move is never a blunder');
+  assert.equal(P.rateMove({ before: null, after: { cp: 0, depth: 20 }, you: 'w' }), null, 'no search before it');
+  assert.equal(P.rateMove({ before: { cp: null, depth: 20 }, after: { cp: 0, depth: 20 }, you: 'w' }), null);
 });

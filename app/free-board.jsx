@@ -125,10 +125,10 @@ const playerName = (G, side) => (G && G.mode === 'stockfish' ? (side === G.you ?
 // Stockfish's reply lands no sooner than this after the player's move, so it reads as a reply rather than a jump
 const REPLY_PAUSE_MS = 600;
 // the search of the position the player is to move in, the "before" of their move: long enough to rate it, then it stops
-// rather than run the CPU (a phone's battery) for as long as they think; their move stops it sooner. A move is rated
-// only when both searches reached MIN_RATED_DEPTH. Neither it nor Stockfish's reply has a depth limit: a capped depth
-// ends an endgame search at once, short of a deep mate
-const BEFORE_SEARCH = { depth: null, movetimeMs: 5000 }, MIN_RATED_DEPTH = 15;
+// rather than run the CPU (a phone's battery) for as long as they think; their move stops it sooner. Whether the two
+// searches are deep enough to rate the move is PlayCore.rateMove's call. Neither it nor Stockfish's reply has a depth
+// limit: a capped depth ends an endgame search at once, short of a deep mate
+const BEFORE_SEARCH = { depth: null, movetimeMs: 5000 };
 const FLAGGED = ['inaccuracy', 'mistake', 'blunder'];
 
 // Stockfish's side of a game against it. While the player is to move it searches the position at 'own' priority (the
@@ -178,8 +178,8 @@ function useEngineOpponent(board, onChange, sf) {
       // the player's move, rated from the search before it and Stockfish's search after it (both White's point of view)
       let next = b;
       const j = n - 1, played = b.steps[j], best = bf && A.bestOf(bf);
-      if (played && best && bf.cp != null && r.cp != null && bf.depth >= MIN_RATED_DEPTH && r.depth >= MIN_RATED_DEPTH) {
-        const cls = A.rateMove({ bestEval: bf.cp, currentEval: r.cp, isWhite: you === 'w', playedIsBest: played.uci === best, isCheckmate: played.san.endsWith('#') }).classification;
+      const cls = played && best ? P.rateMove({ before: bf, after: r, you, playedIsBest: played.uci === best, isCheckmate: played.san.endsWith('#') }) : null;
+      if (cls) {
         const mated = (you === 'w' ? r.cp : -r.cp) <= -(A.C.MATE_SCORE_CP - A.C.MATE_BAND_CP);
         if (FLAGGED.includes(cls)) next = P.addCritique(next, { j, cls, best, text: P.critiqueText(played.pos, r.pv, you, cls, mated) });
       }
