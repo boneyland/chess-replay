@@ -79,9 +79,8 @@ function useFlowHeight(frame, ref) {
   });
 }
 // The board's own 768 px space, scaled to L.board: the board, its touch layer, arrows and badges position from 0,0 in it
-// lift: the board's space paints over the panels and tray (a piece dragged from the tray must stay on top)
-function BoardSpace({ children, lift }) {
-  return <div style={{ position: 'absolute', left: L.board.x, top: L.board.y, width: BW, height: BW, transform: `scale(${L.board.size / BW})`, transformOrigin: '0 0', ...(lift && { zIndex: 20 }) }}>{children}</div>;
+function BoardSpace({ children }) {
+  return <div style={{ position: 'absolute', left: L.board.x, top: L.board.y, width: BW, height: BW, transform: `scale(${L.board.size / BW})`, transformOrigin: '0 0' }}>{children}</div>;
 }
 
 // The side at the bottom ('b' turns the board round). view() maps a board column and row (0 = a, 0 = rank 8) to where it
@@ -409,13 +408,25 @@ function LineBoard({ a, sq, v, hide, arrows }) {
   );
 }
 
+// A dragged piece ('N', 'p'…) at board pixels x, y of el (the board's touch layer), drawn over everything on the page: the
+// stage clips what is inside it, so the dock, bars and panels would cover it there. Its own compositing layer: drawn in the
+// scaled board, its shadow left trails Epiphany (WebKitGTK) never repainted
+function DragGhost({ el, piece, x, y }) {
+  if (!el) return null;
+  const r = el.getBoundingClientRect(), k = r.width / BW, s = SQ * 1.1 * k;
+  return ReactDOM.createPortal(
+    <img src={img(piece === piece.toUpperCase() ? 'w' : 'b', piece.toLowerCase())} alt=""
+      style={{ position: 'fixed', left: r.left + x * k - s / 2, top: r.top + y * k - s / 2, width: s, height: s, pointerEvents: 'none', filter: `drop-shadow(0 ${10 * k}px ${12 * k}px rgba(0,0,0,0.45))`, willChange: 'transform', transform: 'translateZ(0)', zIndex: 100 }} />,
+    document.body);
+}
+
 // The pieces a pawn can become, in the picker's order, and where each sits: a column on the promotion square's file
 const PROMO_PIECES = ['q', 'n', 'r', 'b'];
 const promoPieces = (pr) => PROMO_PIECES.map((t, k) => ({ t, sq: pr.to + (pr.white ? 8 : -8) * k }));
 function BoardTouch({ pos, sel, targets, drag, promo, onDown, onMove, onUp, onCancel }) {
-  const dragged = drag && drag.moved ? pos.b[drag.from] : null;
+  const dragged = drag && drag.moved ? pos.b[drag.from] : null, el = React.useRef(null);
   return (
-    <div data-no-drag-scroll onPointerDown={onDown} onPointerMove={onMove} onPointerUp={onUp} onPointerCancel={onCancel}
+    <div ref={el} data-no-drag-scroll onPointerDown={onDown} onPointerMove={onMove} onPointerUp={onUp} onPointerCancel={onCancel}
       onDragStart={(e) => e.preventDefault()} title="Drag a piece to try your own move"
       style={{ ...NO_SELECT, position: 'absolute', left: 0, top: 0, width: BW, height: BW, cursor: drag && drag.moved ? 'grabbing' : 'grab', touchAction: 'none' }}>
       {sel != null && <div style={{ position: 'absolute', left: idxXY(sel)[0] * SQ, top: idxXY(sel)[1] * SQ, width: SQ, height: SQ, boxSizing: 'border-box', border: `5px solid ${BOARD.last}`, background: 'rgba(255,255,255,0.12)', pointerEvents: 'none' }} />}
@@ -426,11 +437,7 @@ function BoardTouch({ pos, sel, targets, drag, promo, onDown, onMove, onUp, onCa
             : <div style={{ width: 28, height: 28, borderRadius: '50%', background: 'rgba(21,16,13,0.32)' }} />}
         </div>
       ))}
-      {/* its own compositing layer: drawn in the scaled board, its shadow left trails Epiphany (WebKitGTK) never repainted */}
-      {dragged && (
-        <img src={img(dragged === dragged.toUpperCase() ? 'w' : 'b', dragged.toLowerCase())} alt=""
-          style={{ position: 'absolute', left: drag.x - SQ * 0.55, top: drag.y - SQ * 0.55, width: SQ * 1.1, height: SQ * 1.1, pointerEvents: 'none', filter: 'drop-shadow(0 10px 12px rgba(0,0,0,0.45))', willChange: 'transform', transform: 'translateZ(0)', zIndex: 3 }} />
-      )}
+      {dragged && <DragGhost el={el.current} piece={dragged} x={drag.x} y={drag.y} />}
       {promo && <div style={{ position: 'absolute', inset: 0, background: 'rgba(21,16,13,0.45)', pointerEvents: 'none', zIndex: 4 }} />}
       {promo && promoPieces(promo).map(({ t, sq }) => (
         <div key={t} role="button" aria-label={'Promote to ' + { q: 'queen', r: 'rook', b: 'bishop', n: 'knight' }[t]}
