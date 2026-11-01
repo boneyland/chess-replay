@@ -8,12 +8,16 @@ loadUnit('sf-engine.js');
 const SF = window.SFEngine;
 
 // A scripted engine: answers uci/isready (unless silent); each `go` waits for finish(best, infoLine)
-function fakeWorker({ silent = false, noReady = false } = {}) {
+// maxHashMB: a larger Hash gets Stockfish's allocation failure, after which the worker answers nothing
+function fakeWorker({ silent = false, noReady = false, maxHashMB = Infinity } = {}) {
   const w = { posted: [], onmessage: null, onerror: null };
   const say = (line) => setTimeout(() => w.onmessage && w.onmessage({ data: line }), 0);
+  let dead = false;
   w.postMessage = (s) => {
     w.posted.push(s);
-    if (silent) return;
+    if (silent || dead) return;
+    const h = /^setoption name Hash value (\d+)$/.exec(s);
+    if (h && +h[1] > maxHashMB) { dead = true; say(`Failed to allocate ${h[1]}MB for transposition table.`); return; }
     if (s === 'uci') say('uciok');
     if (s === 'isready' && !noReady) say('readyok');
   };
@@ -523,5 +527,59 @@ test('the asm.js engine answers a search', async () => {
     await e.ready();
     const r = await e.search({ moves: ['e2e4'], depth: 8, movetimeMs: 10000 }).promise;
     assert.ok(r && r.depth >= 8 && r.cp != null && /^[a-h][1-8][a-h][1-8]/.test(r.best), JSON.stringify(r));
+  } finally { e.quit(); }
+});
+
+// a hash table the device can't give memory for: the engine says so and answers nothing more; a fresh worker with 64 MB
+// takes over, the search that was running starts again there, and onHashFail says what happened
+test('a Hash the engine can\'t allocate moves to a fresh worker with 64 MB, and the search runs there', async () => {
+  const ws = [], told = [];
+  const e = SF.create(() => { const w = fakeWorker({ maxHashMB: 256 }); ws.push(w); return w; }, { onHashFail: (mb, to) => told.push([mb, to]) });
+  await e.ready();
+  e.setHash(512);
+  const s = e.search({ moves: ['e2e4'], depth: 5, movetimeMs: 100 });
+  await until(() => ws.length === 2 && ws[1].posted.some((m) => m.startsWith('go depth 5')));
+  assert.deepEqual(told, [[512, 64]]);
+  assert.ok(ws[1].posted.includes('setoption name Hash value 64'), ws[1].posted.join(' | '));
+  assert.ok(!ws[1].posted.includes('setoption name Hash value 512'));
+  ws[1].finish('e7e5');
+  assert.equal((await s.promise).best, 'e7e5');
+  assert.equal(e.failed(), null);
+  // later searches stay on the new worker at 64 MB
+  const s2 = e.search({ moves: [], depth: 5, movetimeMs: 100 });
+  await tick();
+  assert.equal(ws.length, 2);
+  ws[1].finish('d2d4');
+  assert.equal((await s2.promise).best, 'd2d4');
+});
+
+test('a Hash too big from the start: ready() comes on the fresh worker, threads probe included', async () => {
+  const ws = [], told = [];
+  const e = SF.create(() => { const w = fakeWorker({ maxHashMB: 256 }); ws.push(w); return w; }, { hashMB: 512, threaded: true, threads: 4, probeMs: 1000, onHashFail: (mb, to) => told.push([mb, to]) });
+  const r = e.ready();
+  await until(() => ws.length === 2 && ws[1].posted.includes('go depth 1'));
+  ws[1].finish('e2e4');
+  await r;
+  assert.deepEqual(told, [[512, 64]]);
+  assert.ok(ws[1].posted.indexOf('setoption name Hash value 64') < ws[1].posted.indexOf('go depth 1'));
+  assert.ok(ws[1].posted.includes('setoption name Threads value 4'));
+});
+
+test('no memory even for the fallback hash fails the engine and says why', async () => {
+  let failedWith = null;
+  const e = SF.create(() => fakeWorker({ maxHashMB: 32 }), { onFail: (err) => { failedWith = err; } });
+  await assert.rejects(e.ready(), /Not enough memory for Stockfish’s 64 MB hash table/);
+  assert.match(String(failedWith && failedWith.message), /Not enough memory/);
+  assert.equal(await e.search({ moves: [], depth: 5, movetimeMs: 100 }).promise, null);
+});
+
+test('the real engine: a Hash past its 2 GB cap falls back to 64 MB and searches', async () => {
+  const told = [];
+  const e = SF.create(() => nodeWorker(), { hashMB: 2048, onHashFail: (mb, to) => told.push([mb, to]) });
+  try {
+    await e.ready();
+    const r = await e.search({ moves: ['e2e4'], depth: 8, movetimeMs: 2000 }).promise;
+    assert.deepEqual(told, [[2048, 64]]);
+    assert.ok(r && r.best, JSON.stringify(r));
   } finally { e.quit(); }
 });

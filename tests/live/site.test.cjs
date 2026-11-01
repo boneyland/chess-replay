@@ -137,7 +137,8 @@ const editBox = async (page) => {
 // hang: how many threaded engines (the first ones) never get a search, as Firefox's first one in a page sometimes doesn't;
 // hangReady: how many never answer at all (they never get uci); hangSearch: how many answer their probe (go depth 1),
 // then never get another search, as WebKit's on GitHub once didn't answer one
-function spyEngine({ cores = 8, noSharedMemory = false, hang = 0, hangReady = 0, hangSearch = 0 } = {}) {
+// bigHash: Hash 512 reaches the engine as this many MB (2048: more than any build can allocate, as on a device short of memory)
+function spyEngine({ cores = 8, noSharedMemory = false, hang = 0, hangReady = 0, hangSearch = 0, bigHash = 0 } = {}) {
   // at: when each worker started, ended: [which, when] each was terminated (ms since the page began)
   const seen = window.__sf = { urls: [], posted: [], nps: [], at: [], ended: [] };
   Object.defineProperty(Navigator.prototype, 'hardwareConcurrency', { get: () => cores });
@@ -150,7 +151,10 @@ function spyEngine({ cores = 8, noSharedMemory = false, hang = 0, hangReady = 0,
       this.mute = threaded && hangReady-- > 0 ? /^uci$/ : threaded && hang-- > 0 ? /^go/ : threaded && hangSearch-- > 0 ? /^go (?!depth 1$)/ : null;
     }
     terminate() { seen.ended.push([this.n, Math.round(performance.now())]); return super.terminate(); }
-    postMessage(m, ...rest) { if (typeof m === 'string') seen.posted.push(m); if (this.mute && typeof m === 'string' && this.mute.test(m)) return; return super.postMessage(m, ...rest); }
+    postMessage(m, ...rest) {
+      if (bigHash && m === 'setoption name Hash value 512') m = `setoption name Hash value ${bigHash}`;
+      if (typeof m === 'string') seen.posted.push(m); if (this.mute && typeof m === 'string' && this.mute.test(m)) return; return super.postMessage(m, ...rest);
+    }
     get onmessage() { return super.onmessage; }
     set onmessage(f) { super.onmessage = f && ((e) => { const m = typeof e.data === 'string' && e.data.match(/ nps (\d+)/); if (m) seen.nps.push(+m[1]); return f(e); }); }
   };
@@ -783,6 +787,40 @@ for (const name of BROWSERS) for (const site of SITES) {
       return p.evaluate(() => window.__sf);
     };
     const threadedOf = (seen) => seen.urls.filter((u) => /stockfish-19-lite\.js$/.test(u)).length, singleOf = (seen) => seen.urls.filter((u) => /stockfish-19-lite-single\.js$/.test(u)).length;
+    // a hash table the device can't give memory for: Stockfish says so and stops answering; the page starts it again with
+    // 64 MB, the move is still rated, and the setting goes back to 64 MB with a note saying why
+    await t.test('desktop: a hash table the engine can\'t allocate falls back to 64 MB and says so', async () => {
+      const nb = await open(browser, { width: 1440, height: 900 });
+      const p = nb.page;
+      await p.addInitScript(spyEngine, { bigHash: 2048 });
+      await p.addInitScript(() => { try { localStorage.setItem('chess-video.tweaks.v1', JSON.stringify({ sfOwnTime: 1, sfHash: 512 })); } catch (e) {} });
+      await p.goto(base, { waitUntil: 'load' });
+      await loadedOn(p);
+      const seen = await ownMoveRated(p);
+      const hashes = seen.posted.filter((m) => m.startsWith('setoption name Hash'));
+      assert.deepEqual([hashes[0], hashes.at(-1)], ['setoption name Hash value 2048', 'setoption name Hash value 64'], hashes.join(' | '));
+      await p.getByRole('button', { name: 'Engine options' }).click();
+      assert.equal(await p.locator('#tw-sf-hash').inputValue(), '64 MB');
+      const note = p.getByText(/couldn’t give Stockfish 2048 MB for its hash table, so it uses 64 MB/);
+      await assert.doesNotReject(note.waitFor({ timeout: 3000 }));
+      await note.scrollIntoViewIfNeeded();
+      await p.screenshot({ path: path.join(OUT, host + '-hash-fallback.png') });
+      assert.equal(await p.evaluate(() => JSON.parse(localStorage.getItem('chess-video.tweaks.v1')).sfHash), 64);
+      assert.deepEqual(nb.errors, []);
+      await nb.ctx.close();
+    });
+    // a phone or tablet (touch only: no mouse or touchpad) isn't offered the hash sizes above 128 MB; Playwright's Firefox can't emulate one
+    if (name !== 'firefox') await t.test('phone: the hash table goes up to 128 MB', async () => {
+      const ph = await open(browser, { width: 390, height: 844 }, phone({}));
+      const p = ph.page;
+      await p.goto(base, { waitUntil: 'load' });
+      await loadedOn(p);
+      assert.equal(await p.evaluate(() => matchMedia('(any-pointer: coarse)').matches && !matchMedia('(any-pointer: fine)').matches), true);
+      await p.getByRole('button', { name: 'Engine options' }).click();
+      assert.deepEqual(await p.locator('#tw-sf-hash option').allTextContents(), ['16 MB', '32 MB', '64 MB', '128 MB']);
+      assert.deepEqual(ph.errors, []);
+      await ph.ctx.close();
+    });
     await t.test('desktop: a threaded engine that never searches is replaced, and after three, one thread runs', async () => {
       for (const hang of [1, 3]) {
         const nb = await open(browser, { width: 1440, height: 900 });
