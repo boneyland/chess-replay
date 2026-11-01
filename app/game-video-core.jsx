@@ -763,7 +763,7 @@ function Analysis({ M, T, S, a, vline, onLine, onPreview, onReplyHover, paused, 
           </span>
         )}
         {sf && !M.hasAnalysis && (sf.run.state === 'running' || paused) && <EngineEmptyState M={M} sf={sf} paused={paused} compact />}
-        {!vline && paused && M.hasEval && <FitOrHide style={{ ...NO_SELECT, font: `500 ${tx(15)}px ${MONO}`, color: typeof SF_SIMD === 'undefined' || SF_SIMD ? C.dim : C.blunder }}>{typeof SF_SIMD === 'undefined' || SF_SIMD ? 'Tip: drag a piece on the board to try your own move.' : 'No WebAssembly SIMD, Stockfish runs as JavaScript: very slow and weak'}</FitOrHide>}
+        {!vline && paused && M.hasEval && <FitOrHide style={{ ...NO_SELECT, font: `500 ${tx(15)}px ${MONO}`, color: typeof SF_SIMD === 'undefined' || SF_SIMD ? C.dim : C.blunder }}>{typeof SF_SIMD === 'undefined' || SF_SIMD ? 'Tip: drag a piece on the board to try your own move.' : 'No WebAssembly SIMD: Stockfish is very slow and weak here. Use Chrome'}</FitOrHide>}
       </div>
     </AnalysisPanel>
   );
