@@ -135,9 +135,10 @@
   // the eval a move's rating takes for a position: a search of it where one was made beside the tablebase's answer
   const rateCp = (r) => (r.sf ? r.sf.cp : r.cp);
 
-  // the least time between a game analysis's requests to the tablebase: Lichess publishes no limit, and it answered 429
-  // to about 10 requests in a minute
-  const TB_GAP_MS = 4000;
+  // the least time between a game analysis's requests to the tablebase: Lichess publishes no limit for it, only one
+  // request at a time and a minute's wait after a 429 (lichess.org/api, rate limiting); 120 requests 4, 2 and 1 s apart
+  // and 80 back to back all answered (2026-11-01)
+  const TB_GAP_MS = 1000;
 
   // the browser engines (the Analysis panel's engine drop-down): the vendored lite one, or the full one the viewer downloaded (sf-full.js);
   // asm: the vendored asm.js build, the only one a browser without WebAssembly SIMD runs

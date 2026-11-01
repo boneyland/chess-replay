@@ -185,7 +185,7 @@ test('the run\'s requests go tbGapMs apart; an answer the client already has doe
   // position 0's answer is cached: position 1's is the first request, every later one 4 s after the one before
   assert.deepEqual(at, [0, 0, 4000, 8000, 12000]);
   assert.deepEqual(waits, Array(3).fill(4000));
-  assert.equal(A.TB_GAP_MS, 4000);
+  assert.equal(A.TB_GAP_MS, 1000);
 });
 
 test('the setting off (no client) sends nothing; more than 7 pieces is never asked', async () => {
