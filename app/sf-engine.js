@@ -146,10 +146,12 @@
       if (++hangs >= HANG_TRIES) return fail(new Error('Stockfish stopped answering'));
       restart(q);
     };
+    // judged by the size last sent (hashSet), not hashWant, which a setHash() may have changed since; a smaller size asked
+    // for meanwhile is kept. The hang count starts again with the new worker
     const hashFailed = (mb) => {
       if (failed) return;
-      if (hashWant <= hashFallbackMB) return fail(new Error(`Not enough memory for Stockfish’s ${mb} MB hash table`));
-      hashWant = hashFallbackMB;
+      if ((hashSet == null ? mb : hashSet) <= hashFallbackMB) return fail(new Error(`Not enough memory for Stockfish’s ${mb} MB hash table`));
+      hashWant = Math.min(hashWant, hashFallbackMB); hangs = 0;
       if (onHashFail) onHashFail(mb, hashWant);
       restart(cur);
     };
@@ -221,7 +223,8 @@
       try { worker.terminate(); } catch (e) {}
     }
 
-    return { ready, search, setHash, setThreads, threaded, quit, failed: () => failed };
+    // hashMB(): the hash size the engine runs with (or will, before the next search), after any fallback
+    return { ready, search, setHash, setThreads, threaded, quit, failed: () => failed, hashMB: () => hashWant };
   }
 
   window.SFEngine = { create, threadSupport, simdSupport, positionCommand, READY_TIMEOUT_MS, HANG_MS };

@@ -6,7 +6,13 @@ const SF_FILE = 'stockfish-19-lite-single', SF_FILE_THREADS = 'stockfish-19-lite
 const SF_SIMD = window.SFEngine.simdSupport(), SF_FILE_ASM = 'stockfish-19-asm';
 // the hash sizes offered here (AnalysisCore.hashChoices)
 const SF_HASH_CHOICES = window.AnalysisCore.hashChoices({ touchOnly: !!window.matchMedia && window.matchMedia('(any-pointer: coarse)').matches && !window.matchMedia('(any-pointer: fine)').matches, memoryGB: navigator.deviceMemory });
-const SF_ASM_NOTE = 'This browser can’t run Stockfish’s WebAssembly (it has no WebAssembly SIMD), so Stockfish runs as JavaScript (asm.js), which is very slow and weak. Open this page in Chrome for full-strength Stockfish.';
+// what to do about it: on iPhone and iPad every browser is Safari's WebKit, which has SIMD from iOS 16.4 (an iPad
+// says it is a Mac, with touch)
+const SF_IOS = /iP(hone|ad|od)/.test(navigator.userAgent) || (/Macintosh/.test(navigator.userAgent) && navigator.maxTouchPoints > 1);
+const SF_ASM_FIX = SF_IOS ? 'Update to iOS 16.4 or later' : 'Use Chrome';
+const SF_ASM_NOTE = `This browser can’t run Stockfish’s WebAssembly (it has no WebAssembly SIMD), so Stockfish runs as JavaScript (asm.js), which is very slow and weak. ${SF_IOS ? SF_ASM_FIX : 'Open this page in Chrome'} for full-strength Stockfish.`;
+// the same, in a line (the Analysis panel's tip row)
+const SF_ASM_SHORT = `No WebAssembly SIMD: Stockfish is very slow and weak here. ${SF_ASM_FIX}`;
 const sfMakeWorker = (file) => () => new Worker(file + '.js');
 // A missing engine file only shows up inside the worker (it never reaches the page as an error), so the
 // page checks the wasm is there first rather than waiting out the start timeout
@@ -23,7 +29,8 @@ const SF_ASM_LOAD_MS = 120000;
 // ...so where it is the engine, it starts this soon after the page, not on the first search, which would otherwise wait
 // for all of that (the page has drawn by then, and the engine compiles in its own worker)
 const SF_ASM_EARLY_MS = 1500;
-const sfFilesPresent = (file) => fetch(file + (file === SF_FILE_ASM ? '.js' : '.wasm'), { method: 'HEAD', cache: 'no-store' }).then((r) => r.ok, () => false);
+// url: the engine file to check (its .wasm, or the asm.js build's one .js)
+const sfFilesPresent = (url) => fetch(url, { method: 'HEAD', cache: 'no-store' }).then((r) => r.ok, () => false);
 
 // Whether Stockfish may search with threads on this page ({ on, cores, reason }, SFEngine.threadSupport); a threaded
 // engine that won't start or dies turns them off for the rest of the page, with the reason the engine menu shows
@@ -93,7 +100,7 @@ function useEngine(hashMB, threads, kind = 'lite', onBroken, onHashFail) {
           try { make = await window.SFFull.start(withThreads ? 'threads' : 'single'); } catch (e) { if (broken.current) broken.current(); throw e; }
         } else {
           const file = kk === 'asm' ? SF_FILE_ASM : withThreads ? SF_FILE_THREADS : SF_FILE;
-          if (!(await sfFilesPresent(file))) throw new Error('The Stockfish files are missing next to this page');
+          if (!(await sfFilesPresent(file + (kk === 'asm' ? '.js' : '.wasm')))) throw new Error('The Stockfish files are missing next to this page');
           make = sfMakeWorker(file);
         }
         threaded.current = withThreads;
@@ -197,7 +204,8 @@ function readSfPartial(ucis, settings, fen, tb) {
 function writeSfPartial(ucis, settings, searched, fen, tb) {
   try { if (searched) localStorage.setItem(SF_PARTIAL_STORE, JSON.stringify({ key: sfPartialKey(ucis, settings, fen, tb), searched })); else localStorage.removeItem(SF_PARTIAL_STORE); } catch (e) {}
 }
-// A position the tablebase answers costs about this in a run: one request, AnalysisCore.TB_GAP_MS after the last
+// A position the tablebase answers costs at least this in a run: one request, AnalysisCore.TB_GAP_MS after the last
+// (a slow answer costs more; a run then counts the time its requests took)
 const SF_TB_SECONDS = window.AnalysisCore.TB_GAP_MS / 1000;
 // which of a game's positions (0: the start, k: after k moves) are small enough for the tablebase
 const sfTbPositions = (M) => [M.start.fen, ...M.plies.map((p) => p.fen)].map((f) => window.LichessCore.pieceCount(f) <= window.LichessCore.TB_MAX_PIECES);
@@ -234,8 +242,8 @@ function useGameAnalysis(M, files, getFiles, commit, engine, settings, tbOn) {
   React.useEffect(() => { setResumeAt(Math.max(0, readSfPartial(M.plies.map((p) => p.uci), settings, M.start.fen, tb).length - 1)); }, [ucisKey, setKey, M.start.fen]);
   // the positions the tablebase will answer, near-free in the estimate (an uncertain answer is searched after all)
   const tbAt = React.useMemo(() => (tb ? sfTbPositions(M) : []), [ucisKey, M.start.fen, tb]);
-  // seconds for positions from..N: Stockfish's at perSec, the tablebase's at SF_TB_SECONDS
-  const secondsFrom = (from, perSec) => { let t = 0; for (let k = from; k <= M.plies.length; k++) t += tbAt[k] ? SF_TB_SECONDS : perSec; return t; };
+  // seconds for positions from..N: Stockfish's at perSec, the tablebase's at tbSec
+  const secondsFrom = (from, perSec, tbSec = SF_TB_SECONDS) => { let t = 0; for (let k = from; k <= M.plies.length; k++) t += tbAt[k] ? tbSec : perSec; return t; };
   React.useEffect(() => () => { if (run.current) { run.current.signal.aborted = true; run.current = null; } setSt(idle); }, [files.pgn, files.gameIndex || 0, !!files.sample, files.analysis]);
   const start = async () => {
     if (run.current) return;
@@ -243,27 +251,34 @@ function useGameAnalysis(M, files, getFiles, commit, engine, settings, tbOn) {
     run.current = me;
     const ucis = M.plies.map((p) => p.uci), sans = M.plies.map((p) => p.san), N = ucis.length;
     const T = tb, prior = perPos;
-    let S = settings, earlier = readSfPartial(ucis, S, M.start.fen, T), d0 = Math.max(0, earlier.length - 1);
+    let S = { ...settings }, earlier = readSfPartial(ucis, S, M.start.fen, T), d0 = Math.max(0, earlier.length - 1);
     // the run's own pace: positions timed from when the engine is ready (its start-up isn't a position's cost)
-    const timed = { n: 0, sec: 0, last: 0 };
+    const timed = { n: 0, sec: 0, last: 0, tbN: 0, tbSec: 0 };
     // { sec, at }: the latest estimate and when it was made; a timer counts it down in between
     me.eta = { sec: secondsFrom(earlier.length, prior), at: Date.now() };
     setSt({ state: 'running', done: d0, total: N, etaSec: Math.round(me.eta.sec), err: '' });
     try {
       const eng = await engine.get();
       // an engine that fell back to one thread searches, records and resumes as one
-      if (eng && !eng.threaded && S.threads !== 1) { S = { ...S, threads: 1 }; earlier = readSfPartial(ucis, S, M.start.fen, T); d0 = Math.max(0, earlier.length - 1); }
+      // and one whose hash table fell back (SFEngine's hashMB) as that size; so does one that falls back during the run:
+      // S is runAnalysis's own settings object, so the analysis records the size the run ended with, and its partial
+      // run is kept under the settings the page now has (GameApp offers no bigger size for the rest of the visit)
+      const hashNow = () => (eng && eng.hashMB ? eng.hashMB() : S.hash_mb);
+      if (eng && ((!eng.threaded && S.threads !== 1) || hashNow() !== S.hash_mb)) { S = { ...S, threads: eng.threaded ? S.threads : 1, hash_mb: hashNow() }; earlier = readSfPartial(ucis, S, M.start.fen, T); d0 = Math.max(0, earlier.length - 1); }
       timed.last = Date.now();
       const json = await window.AnalysisCore.runAnalysis({
         engine: eng, ucis, sans, headers: M.headers, signal: me.signal, earlier, settings: S, startFen: M.start.fen, tablebase: T ? TB : null, tablebaseOn: () => tbRef.current,
-        onSearched: (R, { searches = 0, tbMs = 0 } = {}) => {
+        onSearched: (R, { searches = 0, tbMs = 0, tbAsks = 0 } = {}) => {
+          S.hash_mb = hashNow();
           writeSfPartial(ucis, S, R, M.start.fen, T);
           if (JSON.stringify(S) + (T ? ' tablebase' : '') === setKeyRef.current) setResumeAt(Math.max(0, R.length - 1));
           const now = Date.now();
           // the searches' time only: the tablebase's (its requests and the waits between them) says nothing of this device's pace
           if (searches) { timed.sec += Math.max(0, now - timed.last - tbMs) / 1000; timed.n += searches; }
           timed.last = now;
-          me.eta = { sec: secondsFrom(R.length, A.blendPace(prior, timed.sec, timed.n)), at: now };
+          // the tablebase's own time per request, where its answers come slower than TB_GAP_MS
+          if (tbAsks) { timed.tbSec += tbMs / 1000; timed.tbN += tbAsks; }
+          me.eta = { sec: secondsFrom(R.length, A.blendPace(prior, timed.sec, timed.n), timed.tbN ? Math.max(SF_TB_SECONDS, timed.tbSec / timed.tbN) : SF_TB_SECONDS), at: now };
         },
         onProgress: (d, n) => { if (run.current === me && d > d0 && me.eta) setSt((s) => ({ ...s, done: d, total: n, etaSec: Math.round(me.eta.sec) })); },
       });

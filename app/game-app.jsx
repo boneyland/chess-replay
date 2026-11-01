@@ -213,10 +213,15 @@ function GameApp() {
   const sfKind = !SF_SIMD ? 'asm' : t.sfEngine === 'Full' && full.state === 'ready' ? 'full' : 'lite';
   // threads where the page allows them, lite or full
   const threading = useSfThreading();
-  const ES = React.useMemo(() => window.AnalysisCore.engineSettings(t, sfKind, threading, SF_HASH_CHOICES), [t.sfDepth, t.sfTime, t.sfOwnDepth, t.sfOwnTime, t.sfHash, t.sfLines, t.sfThreads, sfKind, threading]);
-  // a hash table this device couldn't give memory for: the setting goes back to what the engine now runs with, and says why
-  const [hashNote, setHashNote] = React.useState('');
-  const onHashFail = React.useCallback((mb, to) => { setTweak('sfHash', to); setHashNote(`This device couldn’t give Stockfish ${mb} MB for its hash table, so it uses ${to} MB.`); }, [setTweak]);
+  // a hash table this device couldn't give memory for: for the rest of this visit sizes from the one that failed up aren't
+  // offered (a stored size among them gets the default, what the engine now runs with), and a note says why. The saved
+  // setting is left alone: the memory may be there next time
+  const [hashCap, setHashCap] = React.useState(Infinity), [hashNote, setHashNote] = React.useState('');
+  const hashChoices = React.useMemo(() => SF_HASH_CHOICES.filter((mb) => mb < hashCap), [hashCap]);
+  const ES = React.useMemo(() => window.AnalysisCore.engineSettings(t, sfKind, threading, hashChoices), [t.sfDepth, t.sfTime, t.sfOwnDepth, t.sfOwnTime, t.sfHash, t.sfLines, t.sfThreads, sfKind, threading, hashChoices]);
+  const hashAsked = React.useRef(ES.game.hash_mb);
+  hashAsked.current = ES.game.hash_mb;
+  const onHashFail = React.useCallback((mb, to) => { setHashCap((c) => Math.min(c, mb, hashAsked.current)); setHashNote(`This device couldn’t give Stockfish ${mb} MB for its hash table, so it uses ${to} MB for this visit.`); }, []);
   const engine = useEngine(ES.game.hash_mb, ES.game.threads, sfKind, full.broken, onHashFail);
   const queenInVideo = t.queenInVideo !== false;
   const showCommentary = t.commentary !== false;
@@ -475,7 +480,7 @@ function GameApp() {
   const exportVideo = () => { setPanel(false); setQueenOpen(false); video.run({ start: clipT.start, end: clipT.end, suffix: clipSuffix, audio: t.sound === false || webp ? null
     : () => window.Sfx.renderTrack(window.SFX_DATA || {}, soundSet, window.Sfx.track(MV, clipOpts.S, clipT.start, clipT.end), soundVolume, clipT.end - clipT.start) }); };
   const depthText = (d) => (d == null ? 'No limit' : String(d)), SF_KEYS = ['sfDepth', 'sfTime', 'sfOwnDepth', 'sfOwnTime', 'sfLines', 'sfHash', 'sfThreads'];
-  const sfChanged = JSON.stringify(ES) !== JSON.stringify(window.AnalysisCore.engineSettings(window.TWEAK_DEFAULTS, sfKind, threading, SF_HASH_CHOICES));
+  const sfChanged = JSON.stringify(ES) !== JSON.stringify(window.AnalysisCore.engineSettings(window.TWEAK_DEFAULTS, sfKind, threading, hashChoices));
   const askQueen = () => { setQueenOpen((q) => !q); setPanel(false); };
   // the Queen panel opens centred over its button in the transport bar, or over the menu button when the dock is folded
   // into a menu (a phone frame, or a window under 900 px), kept on screen
@@ -526,7 +531,7 @@ function GameApp() {
     <TweakSlider id="tw-sf-otime" label="Your moves: time limit per position" value={ES.own.time_limit} stops={window.AnalysisCore.SECONDS} unit="s" onChange={(v) => setTweak('sfOwnTime', v)} info={`For the moves you play on the board. ${stopsAt}`} />
     <TweakSelect id="tw-sf-lines" label="Your moves: lines" value={String(ES.own.lines)} options={window.AnalysisCore.LINES.map(String)} onChange={(v) => setTweak('sfLines', parseInt(v, 10))}
       info="Above one, Stockfish shows that many best moves, with an arrow each. Every line takes its share of the search, so each one goes less deep in the same time." />
-    <TweakSelect id="tw-sf-hash" label="Hash table" value={ES.game.hash_mb + ' MB'} options={SF_HASH_CHOICES.map((x) => x + ' MB')} onChange={(v) => { setHashNote(''); setTweak('sfHash', parseInt(v, 10)); }}
+    <TweakSelect id="tw-sf-hash" label="Hash table" value={ES.game.hash_mb + ' MB'} options={hashChoices.map((x) => x + ' MB')} onChange={(v) => { setHashNote(''); setTweak('sfHash', parseInt(v, 10)); }}
       info={`Helps long searches${SF_HASH_CHOICES.length < window.AnalysisCore.HASH_MB.length ? '; larger sizes aren’t offered on this device, a touchscreen with no mouse or touchpad, or short of memory' : '; a big table on a device short of memory falls back to 64 MB'}.`} />
     {hashNote && <div className="twk-note twk-err" role="status">{hashNote}</div>}
     {/* sfThreads null (the default): half the cores, at most 4 */}

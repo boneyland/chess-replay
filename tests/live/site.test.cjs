@@ -790,7 +790,7 @@ for (const name of BROWSERS) for (const site of SITES) {
     };
     const threadedOf = (seen) => seen.urls.filter((u) => /stockfish-19-lite\.js$/.test(u)).length, singleOf = (seen) => seen.urls.filter((u) => /stockfish-19-lite-single\.js$/.test(u)).length;
     // a hash table the device can't give memory for: Stockfish says so and stops answering; the page starts it again with
-    // 64 MB, the move is still rated, and the setting goes back to 64 MB with a note saying why
+    // 64 MB, the move is still rated, and the setting shows 64 MB for this visit (bigger sizes not offered) with a note saying why
     await t.test('desktop: a hash table the engine can\'t allocate falls back to 64 MB and says so', async () => {
       const nb = await open(browser, { width: 1440, height: 900 });
       const p = nb.page;
@@ -807,7 +807,9 @@ for (const name of BROWSERS) for (const site of SITES) {
       await assert.doesNotReject(note.waitFor({ timeout: 3000 }));
       await note.scrollIntoViewIfNeeded();
       await p.screenshot({ path: path.join(OUT, host + '-hash-fallback.png') });
-      assert.equal(await p.evaluate(() => JSON.parse(localStorage.getItem('chess-video.tweaks.v1')).sfHash), 64);
+      // the saved setting stays: the memory may be there next visit
+      assert.equal(await p.evaluate(() => JSON.parse(localStorage.getItem('chess-video.tweaks.v1')).sfHash), 512);
+      assert.ok(!(await p.locator('#tw-sf-hash option').allTextContents()).includes('512 MB'));
       assert.deepEqual(nb.errors, []);
       await nb.ctx.close();
     });
