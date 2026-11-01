@@ -34,6 +34,15 @@ function useSfThreading() {
   return v;
 }
 
+// An engine failure as words: an Error's message, a worker's ErrorEvent (its message, which can be empty), or anything else
+const sfReason = (e) => (!e ? '' : e.message ? String(e.message) : e.type === 'error' ? 'the engine’s worker crashed' : String(e));
+// What the Analysis panel says while the engine is down (status 'unavailable' or 'stopped'), with why, so a failure on
+// a device we can't test on can be read off the screen. then: what to do next, after a stop
+function sfDownText(status, why, then = 'play a move to restart it') {
+  const r = why ? ` (${why})` : '';
+  return status === 'unavailable' ? 'Stockfish can’t run here' + r : `Stockfish stopped${r} · ${then}`;
+}
+
 // kind: 'lite' or 'asm' (next to the page) or 'full' (the viewer's download, sf-full.js); a change quits the engine running, and
 // the next use starts the other. onBroken: the full engine's kept copy turned out missing (it is dropped).
 // threads: Threads (engineSettings), changed between searches without a restart; a single-thread engine ignores it
@@ -50,6 +59,7 @@ function useEngine(hashMB, threads, kind = 'lite', onBroken, onHashFail) {
   React.useEffect(() => { if (ref.current) ref.current.then((eng) => eng.setHash(hashMB), () => {}); }, [hashMB]);
   React.useEffect(() => { if (ref.current) ref.current.then((eng) => eng.setThreads(threads), () => {}); }, [threads]);
   const [status, setStatus] = React.useState('idle');
+  const [why, setWhy] = React.useState(''); // why the engine stopped or can't run (sfDownText shows it)
   // the engine of the other kind, quit (its running search answers null)
   const drop = React.useCallback(() => {
     if (has.current === want.current) return false;
@@ -64,7 +74,7 @@ function useEngine(hashMB, threads, kind = 'lite', onBroken, onHashFail) {
   const get = React.useCallback(() => {
     drop();
     if (!ref.current) {
-      setStatus('loading');
+      setStatus('loading'); setWhy('');
       // an engine that dies later is dropped too: the panels say so, and the next use starts a new one
       let mine = null;
       const k = has.current;
@@ -83,10 +93,10 @@ function useEngine(hashMB, threads, kind = 'lite', onBroken, onHashFail) {
         threaded.current = withThreads;
         // a threaded engine that dies before it is ready is start()'s to handle (ready() rejects, and it falls back)
         let up = false;
-        const onFail = () => {
+        const onFail = (err) => {
           if (!up && withThreads) return;
           if (withThreads) sfThreadsFailed('The threaded engine stopped');
-          if (ref.current === mine) { ref.current = null; setStatus('stopped'); }
+          if (ref.current === mine) { ref.current = null; setStatus('stopped'); setWhy(sfReason(err)); }
         };
         const eng = window.SFEngine.create(make, { hashMB: hash.current, threaded: withThreads, threads: withThreads ? nThreads.current : 1, probeMs: withThreads ? SF_PROBE_MS(nThreads.current) : 0,
           ...(withThreads && kk === 'lite' ? { readyTimeoutMs: SF_LITE_LOAD_MS } : {}), onFail, onHashFail: (mb, to) => { hash.current = to; if (hashFail.current) hashFail.current(mb, to); } });
@@ -106,12 +116,12 @@ function useEngine(hashMB, threads, kind = 'lite', onBroken, onHashFail) {
         sfThreadsFailed('The threaded engine didn’t start');
         return attempt(false, kk);
       };
-      mine = ref.current = start().then((eng) => { if (ref.current === mine) setStatus('ready'); return eng; }, (e) => { if (ref.current === mine) { setStatus('unavailable'); ref.current = null; } throw e; });
+      mine = ref.current = start().then((eng) => { if (ref.current === mine) setStatus('ready'); return eng; }, (e) => { if (ref.current === mine) { setStatus('unavailable'); setWhy(sfReason(e)); ref.current = null; } throw e; });
       mine.catch(() => {});
     }
     return ref.current;
   }, []);
-  return { get, status };
+  return { get, status, why };
 }
 
 // The full engine's download (the Analysis panel's engine drop-down and menu).
@@ -499,7 +509,7 @@ const fmtSf = (cp) => {
 };
 
 // The Analysis panel while the viewer plays their own line: their move, its eval, what it costs, Stockfish's reply
-function OwnMoveAnalysis({ M, vline, own, status, onReply, onHover }) {
+function OwnMoveAnalysis({ M, vline, own, status, why, onReply, onHover }) {
   const step = vline.moves[vline.upto], ply = vline.at + vline.upto, isWhite = (M.ply0 + ply) % 2 === 0;
   const { before, after } = own;
   const done = before && after && !before.partial && !after.partial;
@@ -507,7 +517,7 @@ function OwnMoveAnalysis({ M, vline, own, status, onReply, onHover }) {
   const bad = rated && ['inaccuracy', 'mistake', 'blunder'].includes(rated.classification);
   const col = bad ? clsColor(rated.classification) : lineAccent('you');
   const who = step.byEngine ? 'STOCKFISH’S REPLY' : 'YOUR MOVE';
-  const verdict = !rated ? (status === 'unavailable' ? 'Stockfish can’t run here' : status === 'stopped' ? 'Stockfish stopped · play a move to restart it' : 'Stockfish is thinking…')
+  const verdict = !rated ? (status === 'unavailable' || status === 'stopped' ? sfDownText(status, why) : 'Stockfish is thinking…')
     : step.uci === before.best ? 'Stockfish’s choice'
     : rated.evalLoss > 0 ? `−${Math.round(rated.evalLoss)} cp vs ${own.bestSan || before.best}` : `as good as ${own.bestSan || before.best}`;
   const replies = engineSteps(step.pos, after && after.pv);

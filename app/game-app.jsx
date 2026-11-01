@@ -492,7 +492,7 @@ function GameApp() {
     window.addEventListener('resize', place);
     return () => window.removeEventListener('resize', place);
   }, [queenOpen, phone]);
-  const sf = { engine, own: ES.own, game: ES.game, book, status: engine.status, run: analysis, start: analysis.start, stop: analysis.stop, estimateMin: analysis.estimateMin };
+  const sf = { engine, own: ES.own, game: ES.game, book, status: engine.status, why: engine.why, run: analysis, start: analysis.start, stop: analysis.stop, estimateMin: analysis.estimateMin };
 
   // The Analysis panel's engine menu (EngineMenuContext): the Lite/Full choice in its title row, and these settings in
   // the panel while the menu is open; the explanations sit behind ⓘ. A game has no engine menu.

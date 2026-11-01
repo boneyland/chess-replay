@@ -137,8 +137,9 @@ const editBox = async (page) => {
 // hang: how many threaded engines (the first ones) never get a search, as Firefox's first one in a page sometimes doesn't;
 // hangReady: how many never answer at all (they never get uci); hangSearch: how many answer their probe (go depth 1),
 // then never get another search, as WebKit's on GitHub once didn't answer one
-// bigHash: Hash 512 reaches the engine as this many MB (2048: more than any build can allocate, as on a device short of memory)
-function spyEngine({ cores = 8, noSharedMemory = false, hang = 0, hangReady = 0, hangSearch = 0, bigHash = 0 } = {}) {
+// bigHash: Hash 512 reaches the engine as this many MB (2048: more than any build can allocate, as on a device short of memory);
+// noMemory: every Hash does, so even the 64 MB fallback fails
+function spyEngine({ cores = 8, noSharedMemory = false, hang = 0, hangReady = 0, hangSearch = 0, bigHash = 0, noMemory = false } = {}) {
   // at: when each worker started, ended: [which, when] each was terminated (ms since the page began)
   const seen = window.__sf = { urls: [], posted: [], nps: [], at: [], ended: [] };
   Object.defineProperty(Navigator.prototype, 'hardwareConcurrency', { get: () => cores });
@@ -153,6 +154,7 @@ function spyEngine({ cores = 8, noSharedMemory = false, hang = 0, hangReady = 0,
     terminate() { seen.ended.push([this.n, Math.round(performance.now())]); return super.terminate(); }
     postMessage(m, ...rest) {
       if (bigHash && m === 'setoption name Hash value 512') m = `setoption name Hash value ${bigHash}`;
+      if (noMemory && typeof m === 'string' && m.startsWith('setoption name Hash value ')) m = 'setoption name Hash value 2048';
       if (typeof m === 'string') seen.posted.push(m); if (this.mute && typeof m === 'string' && this.mute.test(m)) return; return super.postMessage(m, ...rest);
     }
     get onmessage() { return super.onmessage; }
@@ -806,6 +808,22 @@ for (const name of BROWSERS) for (const site of SITES) {
       await note.scrollIntoViewIfNeeded();
       await p.screenshot({ path: path.join(OUT, host + '-hash-fallback.png') });
       assert.equal(await p.evaluate(() => JSON.parse(localStorage.getItem('chess-video.tweaks.v1')).sfHash), 64);
+      assert.deepEqual(nb.errors, []);
+      await nb.ctx.close();
+    });
+    // an engine that stops says why in the panel (a failure on a device we can't test on can then be read off its screen)
+    await t.test('desktop: Stockfish stopped says why', async () => {
+      const nb = await open(browser, { width: 1440, height: 900 });
+      const p = nb.page;
+      await p.addInitScript(spyEngine, { noMemory: true });
+      await p.goto(base, { waitUntil: 'load' });
+      await loadedOn(p);
+      await settled(p);
+      const b = await boardBox(p), f = square(b, 'd2'), tt = square(b, 'd4');
+      await p.mouse.move(f.x, f.y); await p.mouse.down(); await p.mouse.move(tt.x, tt.y, { steps: 8 }); await p.mouse.up();
+      const why = p.getByText(/Stockfish (stopped|can’t run here) \(Not enough memory for Stockfish’s 2048 MB hash table\)/i);
+      await assert.doesNotReject(why.waitFor({ timeout: 30000 }));
+      await p.screenshot({ path: path.join(OUT, host + '-stopped-why.png') });
       assert.deepEqual(nb.errors, []);
       await nb.ctx.close();
     });
