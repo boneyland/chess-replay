@@ -89,7 +89,7 @@ function OpeningExplorer({ board, book, onPlay, onHover }) {
 
 // The Analysis panel before the first move: the start position's eval and Stockfish's best line, whose moves play
 // on the board when picked (as its replies do after a move)
-function StartAnalysis({ board, ev, status, onLine, onHover }) {
+function StartAnalysis({ board, ev, status, why, onLine, onHover }) {
   const after = ev.after, down = status === 'unavailable' || status === 'stopped';
   const line = engineSteps(board.start.pos, after && after.pv);
   const turn = board.start.pos.turn === 'w' ? 'White' : 'Black';
@@ -102,7 +102,7 @@ function StartAnalysis({ board, ev, status, onLine, onHover }) {
       </div>
       {/* under the move and the eval, spanning the panel, as in OwnMoveAnalysis */}
       <div style={{ marginTop: anGap(6), font: `600 ${tx(16)}px ${MONO}`, letterSpacing: '0.08em', textTransform: 'uppercase', color: C.last }}>
-        {turn} to move{down ? ` · ${status === 'unavailable' ? 'Stockfish can’t run here' : 'Stockfish stopped · play a move to restart it'}` : !after || after.partial ? ' · Thinking…' : ''}
+        {turn} to move{down ? ` · ${sfDownText(status, why)}` : !after || after.partial ? ' · Thinking…' : ''}
       </div>
       <div style={{ marginTop: anGap(16), paddingTop: anGap(14), borderTop: `1px solid ${C.line}`, font: `500 ${tx(18)}px ${MONO}`, color: C.dim, display: 'flex', flexDirection: 'column', gap: anGap(8) }}>
         {after && after.lines && after.lines.length > 1 ? <EngineLines lines={after.lines} pos={board.start.pos} ply0={board.start.ply0} c={0} onPick={onLine} onHover={onHover} cloud={after.source === 'cloud'} />
@@ -284,7 +284,7 @@ function GameStatus({ board, onChange, down }) {
   const clockNote = G.clock && !board.steps.length ? 'The clocks start with the first move' : ' ';
   if (sfGame) {
     const mine = turn === G.you;
-    const trouble = down === 'unavailable' ? 'Stockfish can’t run here' : down === 'stopped' ? 'Stockfish stopped · Take back or Resign' : null;
+    const trouble = down ? sfDownText(down, sf.why, 'Take back or Resign') : null;
     return (
       <React.Fragment>
         <div style={{ display: 'flex', flexDirection: 'column', gap: tx(6) }}>
@@ -442,10 +442,10 @@ function FreeBoard({ board, onChange, tw, sf, nav, orient, book }) {
         : <AnalysisPanel box={L.analysis} a={1} paused depth={down ? null : searchDepth(ev.after)} deep={ev}>
         {upto < 0
           ? <React.Fragment>
-            <StartAnalysis board={board} ev={ev} status={sf.status} onLine={onReply} onHover={setPv} />
+            <StartAnalysis board={board} ev={ev} status={sf.status} why={sf.why} onLine={onReply} onHover={setPv} />
           </React.Fragment>
           : <React.Fragment>
-            <OwnMoveAnalysis M={MV} vline={{ at: 0, moves: steps, upto, src: 'you' }} own={own} status={sf.status} onReply={onReply} onHover={setPv} />
+            <OwnMoveAnalysis M={MV} vline={{ at: 0, moves: steps, upto, src: 'you' }} own={own} status={sf.status} why={sf.why} onReply={onReply} onHover={setPv} />
             <FitOrHide style={{ ...NO_SELECT, display: 'block', marginTop: tx(8), font: `500 ${tx(15)}px ${MONO}`, color: C.dim }}>← → step · <KeyCap>Home</KeyCap> the start · <KeyCap>End</KeyCap> the last move</FitOrHide>
           </React.Fragment>}
       </AnalysisPanel>}

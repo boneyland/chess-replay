@@ -137,8 +137,9 @@ const editBox = async (page) => {
 // hang: how many threaded engines (the first ones) never get a search, as Firefox's first one in a page sometimes doesn't;
 // hangReady: how many never answer at all (they never get uci); hangSearch: how many answer their probe (go depth 1),
 // then never get another search, as WebKit's on GitHub once didn't answer one
-// bigHash: Hash 512 reaches the engine as this many MB (2048: more than any build can allocate, as on a device short of memory)
-function spyEngine({ cores = 8, noSharedMemory = false, hang = 0, hangReady = 0, hangSearch = 0, bigHash = 0 } = {}) {
+// bigHash: Hash 512 reaches the engine as this many MB (2048: more than any build can allocate, as on a device short of memory);
+// noMemory: every Hash does, so even the 64 MB fallback fails
+function spyEngine({ cores = 8, noSharedMemory = false, hang = 0, hangReady = 0, hangSearch = 0, bigHash = 0, noMemory = false } = {}) {
   // at: when each worker started, ended: [which, when] each was terminated (ms since the page began)
   const seen = window.__sf = { urls: [], posted: [], nps: [], at: [], ended: [] };
   Object.defineProperty(Navigator.prototype, 'hardwareConcurrency', { get: () => cores });
@@ -153,6 +154,7 @@ function spyEngine({ cores = 8, noSharedMemory = false, hang = 0, hangReady = 0,
     terminate() { seen.ended.push([this.n, Math.round(performance.now())]); return super.terminate(); }
     postMessage(m, ...rest) {
       if (bigHash && m === 'setoption name Hash value 512') m = `setoption name Hash value ${bigHash}`;
+      if (noMemory && typeof m === 'string' && m.startsWith('setoption name Hash value ')) m = 'setoption name Hash value 2048';
       if (typeof m === 'string') seen.posted.push(m); if (this.mute && typeof m === 'string' && this.mute.test(m)) return; return super.postMessage(m, ...rest);
     }
     get onmessage() { return super.onmessage; }
@@ -806,6 +808,22 @@ for (const name of BROWSERS) for (const site of SITES) {
       await note.scrollIntoViewIfNeeded();
       await p.screenshot({ path: path.join(OUT, host + '-hash-fallback.png') });
       assert.equal(await p.evaluate(() => JSON.parse(localStorage.getItem('chess-video.tweaks.v1')).sfHash), 64);
+      assert.deepEqual(nb.errors, []);
+      await nb.ctx.close();
+    });
+    // an engine that stops says why in the panel (a failure on a device we can't test on can then be read off its screen)
+    await t.test('desktop: Stockfish stopped says why', async () => {
+      const nb = await open(browser, { width: 1440, height: 900 });
+      const p = nb.page;
+      await p.addInitScript(spyEngine, { noMemory: true });
+      await p.goto(base, { waitUntil: 'load' });
+      await loadedOn(p);
+      await settled(p);
+      const b = await boardBox(p), f = square(b, 'd2'), tt = square(b, 'd4');
+      await p.mouse.move(f.x, f.y); await p.mouse.down(); await p.mouse.move(tt.x, tt.y, { steps: 8 }); await p.mouse.up();
+      const why = p.getByText(/Stockfish (stopped|can’t run here) \(Not enough memory for Stockfish’s 2048 MB hash table\)/i);
+      await assert.doesNotReject(why.waitFor({ timeout: 30000 }));
+      await p.screenshot({ path: path.join(OUT, host + '-stopped-why.png') });
       assert.deepEqual(nb.errors, []);
       await nb.ctx.close();
     });
@@ -1639,6 +1657,9 @@ for (const name of BROWSERS) for (const site of SITES) {
       p.on('request', (r) => { const f = r.url().split('/').pop(); if (/^stockfish-/.test(f)) got.push(f); });
       await p.goto(base, { waitUntil: 'load' });
       await loadedOn(p);
+      // it starts with the page, before anything asks for a search (it takes long to start on the slow devices that need it)
+      for (let i = 0; i < 50 && !got.includes('stockfish-19-asm.js'); i++) await p.waitForTimeout(100);
+      assert.ok(got.includes('stockfish-19-asm.js'), 'the asm.js engine loads with the page: ' + got.join(' '));
       await p.locator('[data-ply="10"]').click();
       const deeper = p.getByRole('button', { name: /^Go deeper/ });
       await deeper.waitFor({ timeout: 20000 });
@@ -1651,6 +1672,36 @@ for (const name of BROWSERS) for (const site of SITES) {
       await p.getByText(/very slow and weak/).first().waitFor();
       assert.deepEqual(gd.errors, []);
       await gd.ctx.close();
+    });
+    // Prefer cloud with the asm.js engine: a cloud answer of depth 25 (faked) is deeper than asm.js gets (22 counts as
+    // enough), so it searches nothing; Lite (35 with No limit) still searches the same position
+    await t.test('desktop: Prefer cloud takes a depth-25 cloud answer with asm.js, while Lite still searches', async () => {
+      const cloud = JSON.parse(fs.readFileSync(path.join(__dirname, '..', 'fixtures', 'cloud-e4-3lines.json'), 'utf8'));
+      const E4 = 'rnbqkbnr/pppppppp/8/8/4P3/8/PPPP1PPP/RNBQKBNR b KQkq - 0 1';
+      for (const asm of [true, false]) {
+        const ac = await open(browser, { width: 1440, height: 900 });
+        const p = ac.page;
+        // the page's own fetch answers for the cloud: a Playwright route in Firefox leaks into later contexts (the next
+        // tests' offline reload and explorer scroll failed on GitHub after one)
+        await ac.ctx.addInitScript((ans) => {
+          const f = window.fetch;
+          window.fetch = function (u) { return String(u).startsWith('https://lichess.org/api/cloud-eval') ? Promise.resolve(new Response(JSON.stringify(ans), { status: 200, headers: { 'Content-Type': 'application/json' } })) : f.apply(this, arguments); };
+        }, { ...cloud, depth: 25 });
+        if (asm) await ac.ctx.addInitScript(() => { const v = WebAssembly.validate; WebAssembly.validate = (b) => (b.length === 31 ? false : v(b)); });
+        await p.addInitScript(spyEngine, {});
+        await p.addInitScript(() => { try { localStorage.setItem('chess-video.tweaks.v1', JSON.stringify({ cloudEval: true, cloudPrefer: true, sfOwnTime: 1 })); } catch (e) {} });
+        await p.goto(base, { waitUntil: 'load' });
+        await loadedOn(p);
+        await setUpFen(p, E4);
+        await p.waitForFunction(() => /cloud depth 25/i.test(document.body.innerText), null, { timeout: 20000 });
+        await p.waitForTimeout(asm ? 3000 : 0);
+        if (!asm) await p.waitForFunction(() => window.__sf.posted.some((m) => /^go movetime/.test(m)), null, { timeout: 30000 });
+        const seen = await p.evaluate(() => window.__sf);
+        assert.equal(seen.posted.some((m) => /^go movetime/.test(m)), !asm, (asm ? 'asm.js' : 'lite') + ': ' + seen.posted.filter((m) => /^go/.test(m)).join(' | '));
+        if (asm) assert.ok(seen.urls.every((u) => /stockfish-19-asm\.js$/.test(u)), seen.urls.join(' '));
+        assert.deepEqual(ac.errors, []);
+        await ac.ctx.close();
+      }
     });
     // the tablebase in a game's analysis (the real service): every position of this KBN v K game has 7 pieces or fewer,
     // so the run asks Lichess (4 requests 4 s apart, the start's answer already shown) and searches none of them (with

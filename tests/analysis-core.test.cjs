@@ -297,3 +297,14 @@ test('hashChoices: above 128 MB only where not touch only and, where known, with
   assert.equal(A.engineSettings({ sfHash: 512 }, 'lite', undefined, small).game.hash_mb, 64);
   assert.equal(A.engineSettings({ sfHash: 128 }, 'lite', undefined, small).game.hash_mb, 128);
 });
+
+test('cloudEnough: 35 with no depth limit, the limit otherwise; asm.js at most 22', () => {
+  const N = A.ENGINE_NAMES;
+  assert.equal(A.cloudEnough(null, N.lite), 35);
+  assert.equal(A.cloudEnough(null, N.full), 35);
+  assert.equal(A.cloudEnough(24, N.lite), 24);
+  assert.equal(A.cloudEnough(null, N.asm), 22);
+  assert.equal(A.cloudEnough(18, N.asm), 18);
+  assert.equal(A.cloudEnough(30, N.asm), 22);
+  assert.equal(A.cloudEnough(null, undefined), 35); // no engine name: as lite
+});
