@@ -20,6 +20,9 @@ const SF_PROBE_MS = (threads) => 3000 + 1500 * threads, SF_LITE_LOAD_MS = 10000,
 // The asm.js engine (3.2 MB of JavaScript, compiled as it loads) gets this long to start: about 1–1.7 s in Firefox on a
 // laptop, but the Samsung SM-T510 it runs on went past 30 s on a first visit ("Stockfish did not start", 2026-11-01)
 const SF_ASM_LOAD_MS = 120000;
+// ...so where it is the engine, it starts this soon after the page, not on the first search, which would otherwise wait
+// for all of that (the page has drawn by then, and the engine compiles in its own worker)
+const SF_ASM_EARLY_MS = 1500;
 const sfFilesPresent = (file) => fetch(file + (file === SF_FILE_ASM ? '.js' : '.wasm'), { method: 'HEAD', cache: 'no-store' }).then((r) => r.ok, () => false);
 
 // Whether Stockfish may search with threads on this page ({ on, cores, reason }, SFEngine.threadSupport); a threaded
@@ -124,6 +127,11 @@ function useEngine(hashMB, threads, kind = 'lite', onBroken, onHashFail) {
     }
     return ref.current;
   }, []);
+  React.useEffect(() => {
+    if (kind !== 'asm') return;
+    const id = setTimeout(() => get().catch(() => {}), SF_ASM_EARLY_MS);
+    return () => clearTimeout(id);
+  }, [kind]);
   return { get, status, why };
 }
 

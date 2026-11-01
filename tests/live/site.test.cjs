@@ -1657,6 +1657,9 @@ for (const name of BROWSERS) for (const site of SITES) {
       p.on('request', (r) => { const f = r.url().split('/').pop(); if (/^stockfish-/.test(f)) got.push(f); });
       await p.goto(base, { waitUntil: 'load' });
       await loadedOn(p);
+      // it starts with the page, before anything asks for a search (it takes long to start on the slow devices that need it)
+      for (let i = 0; i < 50 && !got.includes('stockfish-19-asm.js'); i++) await p.waitForTimeout(100);
+      assert.ok(got.includes('stockfish-19-asm.js'), 'the asm.js engine loads with the page: ' + got.join(' '));
       await p.locator('[data-ply="10"]').click();
       const deeper = p.getByRole('button', { name: /^Go deeper/ });
       await deeper.waitFor({ timeout: 20000 });
