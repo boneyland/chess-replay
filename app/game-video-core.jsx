@@ -136,7 +136,7 @@ const cpOf = (M, i) => (i < 0 ? M.evalStart : plyCp(M.plies[i]));
 function evalNow(M, T, S) {
   const c = lastPly(T, S);
   if (c < 0) return { c, cp: M.evalStart, k: 1 };
-  const k = MOTION.move(cl01((T - S.tp[c] - S.md[c] * 0.6) / 0.55));
+  const k = MOTION.move(cl01((T - S.tp[c] - S.md[c] * 0.3) / 0.55));
   return { c, k, cp: lerp(cpOf(M, c - 1), cpOf(M, c), k) };
 }
 
@@ -721,7 +721,7 @@ function Analysis({ M, T, S, a, vline, onLine, onPreview, onReplyHover, paused, 
     </AnalysisPanel>
   );
   const P = M.plies[c], cls = P.cls;
-  const k = cl01((T - S.tp[c] - S.md[c]) / 0.25);
+  const k = cl01((T - S.tp[c] - S.md[c] * 0.6) / 0.25);
   const { cp } = evalNow(M, T, S);
   const col = cls === 'none' ? C.ink : clsColor(cls);
   const big = headline();
