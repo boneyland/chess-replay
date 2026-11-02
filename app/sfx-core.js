@@ -116,7 +116,7 @@
 
   // ---- the player: Web Audio, started by the viewer's first tap or key (browsers keep it silent until then) ----
   function createPlayer(get) {
-    let ctx = null, wanted = SETS[0];
+    let ctx = null, wanted = SETS[0], waking = null; // waking: a gesture's resume() while it settles
     const cache = new Map(); // `${set}/${kind}` → AudioBuffer, or a promise while it downloads and decodes
     function load(set, kind) {
       const key = set + '/' + kind;
@@ -132,7 +132,7 @@
     function unlock() {
       try {
         if (!ctx) { const AC = window.AudioContext || window.webkitAudioContext; if (!AC) return; ctx = new AC(); prepare(wanted); }
-        if (ctx.state === 'suspended') ctx.resume();
+        if (ctx.state === 'suspended' && !waking) { const w = (waking = Promise.resolve(ctx.resume()).catch(() => {})); w.then(() => { if (waking === w) waking = null; }); }
       } catch (e) {}
     }
     if (typeof window.addEventListener === 'function') ['pointerdown', 'keydown'].forEach((ev) => window.addEventListener(ev, unlock, true));
@@ -143,7 +143,13 @@
       if (buf && typeof buf.then === 'function') { const asked = Date.now(); buf.then((b) => { if (Date.now() - asked < 300) go(b); }); } else go(buf);
     }
     function play(set, kindList, volume, end) {
-      if (!ctx || ctx.state !== 'running') return; // before the first gesture: nothing queues up to burst out later
+      if (!ctx) return; // before the first gesture: nothing queues up to burst out later
+      // Firefox starts the audio suspended in the gesture that makes it, running a moment later: the move that gesture
+      // made (the first Next) plays then, if soon
+      if (ctx.state !== 'running') {
+        if (waking) { const asked = Date.now(); waking.then(() => { if (ctx.state === 'running' && Date.now() - asked < 300) play(set, kindList, volume, end); }); }
+        return;
+      }
       set = SETS.includes(set) ? set : SETS[0];
       if (set !== wanted) prepare(set);
       // a gain per sound, so moving the volume slider doesn't change one still ringing

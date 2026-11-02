@@ -92,3 +92,42 @@ test('track: each ply sounds when it lands, the end of the game after the last, 
   assert.deepEqual(X.track(M, S, 3, 3.9).map((e) => e.kinds), [['move', 'check']]); // no room for the end sound
   assert.deepEqual(X.track({ ...M, result: '*' }, S, 0, 10).length, 3);
 });
+
+// A fake Web Audio context that, like Firefox's, is created suspended in the first gesture and runs once resume() settles
+function fakeAudio(initial) {
+  const started = [], made = [];
+  class Ctx {
+    constructor() { this.state = initial; this.sampleRate = 8000; this.currentTime = 0; this.destination = {}; made.push(this); }
+    resume() { return Promise.resolve().then(() => { this.state = 'running'; }); }
+    createBuffer(ch, n) { const d = new Float32Array(n); return { duration: n / 8000, getChannelData: () => d }; }
+    createGain() { return { gain: {}, connect() {} }; }
+    createBufferSource() { return { connect() {}, start() { started.push(this.buffer); } }; }
+  }
+  return { Ctx, started, made };
+}
+
+test('player: a sound asked for in the gesture that starts the audio plays once it runs (Firefox starts it suspended)', async () => {
+  for (const initial of ['suspended', 'running']) {
+    const was = window.AudioContext, fake = fakeAudio(initial);
+    window.AudioContext = fake.Ctx;
+    try {
+      const p = X.createPlayer(async () => null);
+      p.unlock(); // the first tap or key
+      p.play('Wood', ['move'], 70); // the move that tap made, in the same gesture
+      await new Promise((ok) => setTimeout(ok, 20));
+      assert.equal(fake.started.length, 1, `${initial}: the first move sounds`);
+    } finally { window.AudioContext = was; }
+  }
+});
+
+test('player: nothing plays before the first gesture, and nothing queues up to play after it', async () => {
+  const was = window.AudioContext, fake = fakeAudio('suspended');
+  window.AudioContext = fake.Ctx;
+  try {
+    const p = X.createPlayer(async () => null);
+    p.play('Wood', ['move'], 70); // playback with no gesture yet
+    p.unlock();
+    await new Promise((ok) => setTimeout(ok, 20));
+    assert.equal(fake.started.length, 0);
+  } finally { window.AudioContext = was; }
+});
