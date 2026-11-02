@@ -133,10 +133,14 @@ function useSchedule(M, CUES, d) {
 }
 const lastPly = (T, S) => { let k = -1; for (let i = 0; i < S.N; i++) { if (T >= S.tp[i]) k = i; else break; } return k; };
 const cpOf = (M, i) => (i < 0 ? M.evalStart : plyCp(M.plies[i]));
+// a move on screen for under a second (a short Seconds per move, or a long game squeezed into the video) shows its
+// analysis at once: the eval count and the panel's fade would end too late to read
+const QUICK_MOVE = 1;
+const quickMove = (S, c) => c + 1 < S.N && S.tp[c + 1] - S.tp[c] < QUICK_MOVE;
 function evalNow(M, T, S) {
   const c = lastPly(T, S);
   if (c < 0) return { c, cp: M.evalStart, k: 1 };
-  const k = MOTION.move(cl01((T - S.tp[c] - S.md[c] * 0.6) / 0.55));
+  const k = quickMove(S, c) ? 1 : MOTION.move(cl01((T - S.tp[c] - S.md[c] * 0.3) / 0.55));
   return { c, k, cp: lerp(cpOf(M, c - 1), cpOf(M, c), k) };
 }
 
@@ -650,7 +654,8 @@ function Commentary({ M, T, S, a, book, line }) {
   const bookAt = line ? line.book : c < 0 ? null : book ? book[c] : c < 12 && M.opening ? { eco: M.eco, name: M.opening } : null;
   const txt = (c >= 0 ? M.plies[c].comment : M.intro) || '';
   const qtxt = (c >= 0 && M.plies[c].queenText) || '';
-  const t0 = c >= 0 ? S.tp[c] + S.md[c] + 0.1 : S.tp[0] - 1.5;
+  // with the Analysis panel's fade, before the piece lands
+  const t0 = c >= 0 ? S.tp[c] + S.md[c] * 0.6 : S.tp[0] - 1.5;
   // one typewriter across the comment, then Queen's sentence
   const total = txt.length + qtxt.length;
   const avail = (c + 1 < S.N ? S.tp[c + 1] : t0 + 8) - t0;
@@ -721,7 +726,7 @@ function Analysis({ M, T, S, a, vline, onLine, onPreview, onReplyHover, paused, 
     </AnalysisPanel>
   );
   const P = M.plies[c], cls = P.cls;
-  const k = cl01((T - S.tp[c] - S.md[c]) / 0.25);
+  const k = quickMove(S, c) ? 1 : cl01((T - S.tp[c] - S.md[c] * 0.6) / 0.25);
   const { cp } = evalNow(M, T, S);
   const col = cls === 'none' ? C.ink : clsColor(cls);
   const big = headline();
