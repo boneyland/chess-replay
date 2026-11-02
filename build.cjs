@@ -19,6 +19,7 @@ const units = [
   ['edit-core.js', read(path.join(app, 'edit-core.js'))],
   ['layout-core.js', read(path.join(app, 'layout-core.js'))],
   ['play-core.js', read(path.join(app, 'play-core.js'))],
+  ['dead-core.js', read(path.join(app, 'dead-core.js'))],
   ['games-core.js', read(path.join(app, 'games-core.js'))],
   ['sf-engine.js', read(path.join(app, 'sf-engine.js'))],
   ['sf-full.js', read(path.join(app, 'sf-full.js'))],
@@ -45,7 +46,7 @@ fs.mkdirSync(path.join(dir, 'out', 'site'), { recursive: true });
 const DESCRIPTION = 'Replay an annotated chess game as a broadcast-style video: move ratings, best lines, commentary and an eval graph, with Stockfish in your browser.';
 // A link preview's image needs an absolute URL: the host's own (Render sets RENDER_EXTERNAL_URL; a local build points at Render)
 const SITE_URL = (process.env.RENDER_EXTERNAL_URL || 'https://chess-replay.onrender.com').replace(/\/$/, '');
-const VENDOR = ['stockfish-19-asm.js', 'stockfish-19-lite-single.js', 'stockfish-19-lite-single.wasm', 'stockfish-19-lite.js', 'stockfish-19-lite.wasm', 'webp_enc_simd.js', 'webp_enc_simd.wasm', 'mediabunny.min.js'];
+const VENDOR = ['stockfish-19-asm.js', 'stockfish-19-lite-single.js', 'stockfish-19-lite-single.wasm', 'stockfish-19-lite.js', 'stockfish-19-lite.wasm', 'webp_enc_simd.js', 'webp_enc_simd.wasm', 'mediabunny.min.js', 'chasolver.wasm'];
 const ICON = 'data:image/svg+xml,' + encodeURIComponent('<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 32 32"><rect width="32" height="32" rx="6" fill="#9a6a1c"/><circle cx="16" cy="9.5" r="4" fill="#fffaf2"/><path d="M12.5 14h7l1.5 9h-10z M8.5 24h15v3h-15z" fill="#fffaf2"/></svg>');
 // The document shell around the page. It doesn't zoom (maximum-scale, user-scalable): a browser set to ignore that (iPhone Safari, Chrome's Force
 // enable zoom) still lets the viewer pinch
@@ -115,6 +116,8 @@ fs.writeFileSync(path.join(dir, 'out', 'site', 'chess-game-video.html'), site.re
 // 1653×944 frame from the player)
 fs.copyFileSync(path.join(app, 'og-image.png'), path.join(dir, 'out', 'site', 'og-image.png'));
 for (const f of VENDOR) fs.copyFileSync(path.join(dir, 'vendor', f), path.join(dir, 'out', 'site', f));
+// the dead-position prover's Worker, which runs chasolver.wasm (a Worker is started from a file of the page's own origin)
+fs.copyFileSync(path.join(app, 'dead-worker.js'), path.join(dir, 'out', 'site', 'dead-worker.js'));
 for (const f of SOUND_FILES) { fs.mkdirSync(path.dirname(path.join(dir, 'out', 'site', f)), { recursive: true }); fs.copyFileSync(path.join(SOUNDS, f.slice('sounds/'.length)), path.join(dir, 'out', 'site', f)); }
 // Add to Home Screen opens the page without the browser's bars (iPhone Safari has no other way to lose them).
 // The icons are the tab icon above drawn as PNGs; the maskable and Apple ones are full-bleed for the launcher to round.
@@ -134,7 +137,7 @@ fs.writeFileSync(path.join(dir, 'out', 'site', 'manifest.webmanifest'), JSON.str
 // The service worker (app/sw.js) and what it keeps: the files next to the page, and the CDN files the page names (React
 // and the fonts' stylesheet in shell.html, the export's libraries in export.jsx). Its VERSION changes with any of
 // them, so a deploy that changes one replaces the kept copies; the page itself is fetched afresh on every visit.
-const SW_LOCAL = ['chess-game-video.html', 'manifest.webmanifest', ...fs.readdirSync(ICONS), ...VENDOR, ...SOUND_FILES];
+const SW_LOCAL = ['chess-game-video.html', 'manifest.webmanifest', ...fs.readdirSync(ICONS), ...VENDOR, 'dead-worker.js', ...SOUND_FILES];
 const swSrc = read(path.join(app, 'sw.js'));
 const swHash = require('crypto').createHash('sha256').update(swSrc).update(JSON.stringify(SW_REMOTE));
 for (const f of SW_LOCAL.slice(1)) swHash.update(fs.readFileSync(path.join(dir, 'out', 'site', f)));

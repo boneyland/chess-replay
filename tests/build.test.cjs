@@ -21,7 +21,7 @@ test('the sample commentary has an intro and comments on moves', () => {
 // String.replace would expand $' or $& in a script; the page must carry each plain unit's code as written
 test('the built page inlines the plain units verbatim', () => {
   const page = fs.readFileSync(path.join(ROOT, 'out', 'site', 'chess-game-video.html'), 'utf8');
-  const units = ['src/pieces.js', 'app/chess-core.js', 'app/analysis-core.js', 'app/openings-core.js', 'app/board-core.js', 'app/edit-core.js', 'app/play-core.js', 'app/games-core.js', 'app/sf-engine.js', 'app/queen-core.js', 'app/sfx-core.js', 'app/webp-core.js', 'app/export-draw.js', 'src/sample-game.js', 'src/game-data.js', 'app/sample-analysis.js'];
+  const units = ['src/pieces.js', 'app/chess-core.js', 'app/analysis-core.js', 'app/openings-core.js', 'app/board-core.js', 'app/edit-core.js', 'app/play-core.js', 'app/dead-core.js', 'app/games-core.js', 'app/sf-engine.js', 'app/queen-core.js', 'app/sfx-core.js', 'app/webp-core.js', 'app/export-draw.js', 'src/sample-game.js', 'src/game-data.js', 'app/sample-analysis.js'];
   for (const u of units) {
     const code = fs.readFileSync(path.join(ROOT, u), 'utf8');
     assert.ok(page.includes(code), u);
@@ -219,4 +219,12 @@ test('the service worker passes a navigation redirect through untouched', () => 
   const isolated = new Function('self', 'caches', 'fetch', sw.replace(/__VERSION__/, 'x').replace('__LOCAL__', '[]').replace('__REMOTE__', '[]') + '\nreturn isolated;')({ addEventListener() {} }, {}, () => {});
   const redirect = { type: 'opaqueredirect', status: 0, headers: new Headers() };
   assert.equal(isolated(redirect), redirect);
+});
+
+// the dead-position prover runs in a Worker from the site, next to its module, and the service worker keeps both
+test('the site serves the dead-position worker and chasolver.wasm, and sw.js keeps them', () => {
+  for (const f of ['dead-worker.js', 'chasolver.wasm']) assert.ok(fs.existsSync(path.join(ROOT, 'out', 'site', f)), f);
+  const sw = fs.readFileSync(path.join(ROOT, 'out', 'site', 'sw.js'), 'utf8');
+  assert.match(sw, /"dead-worker\.js"/);
+  assert.match(sw, /"chasolver\.wasm"/);
 });
