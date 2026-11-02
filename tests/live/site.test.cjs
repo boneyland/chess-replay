@@ -147,11 +147,14 @@ function spyEngine({ cores = 8, noSharedMemory = false, hang = 0, hangReady = 0,
   const W = window.Worker;
   window.Worker = class extends W {
     constructor(url, ...rest) {
-      super(url, ...rest); this.n = seen.urls.push(String(url)) - 1; seen.at.push(Math.round(performance.now()));
+      super(url, ...rest);
+      // the dead-position prover's worker (chasolver) isn't an engine
+      if (/dead-worker\.js$/.test(String(url))) { this.n = -1; return; }
+      this.n = seen.urls.push(String(url)) - 1; seen.at.push(Math.round(performance.now()));
       const threaded = /stockfish-19-lite\.js$/.test(String(url));
       this.mute = threaded && hangReady-- > 0 ? /^uci$/ : threaded && hang-- > 0 ? /^go/ : threaded && hangSearch-- > 0 ? /^go (?!depth 1$)/ : null;
     }
-    terminate() { seen.ended.push([this.n, Math.round(performance.now())]); return super.terminate(); }
+    terminate() { if (this.n >= 0) seen.ended.push([this.n, Math.round(performance.now())]); return super.terminate(); }
     postMessage(m, ...rest) {
       if (bigHash && m === 'setoption name Hash value 512') m = `setoption name Hash value ${bigHash}`;
       if (noMemory && typeof m === 'string' && m.startsWith('setoption name Hash value ')) m = 'setoption name Hash value 2048';
