@@ -199,6 +199,17 @@ test('clip range: the whole game spans the video, and a move range sits between 
   assert.ok(at(5, 5).end > at(5, 5).start);
 });
 
+test('schedule: a move that ends a section holds no longer than its own time', () => {
+  const fx = (f) => require('fs').readFileSync(require('path').join(__dirname, 'fixtures', f), 'utf8');
+  const M = CC.buildGame({ pgn: fx('byrne-fischer.pgn'), analysis: fx('byrne-fischer_analysis.json') });
+  const TM = CC.timing(M, { secondsPerMove: 1.6, keyHold: 1.5 });
+  const S = CC.schedule(M, CC.cues(TM.scenes), TM.d);
+  const ends = CC.plan(M).map((r) => r[2]).filter((b) => b >= 0 && b < M.plies.length - 1);
+  assert.ok(ends.length >= 2);
+  // scene lengths are rounded to 0.1 s, which a section's moves share
+  for (const i of ends) assert.ok(Math.abs(S.tp[i + 1] - S.tp[i] - TM.d[i]) < 0.06, `ply ${i} holds ${S.tp[i + 1] - S.tp[i]} s, not ${TM.d[i]} s`);
+});
+
 test('annotatedPgn writes marks as NAGs, evals, clocks, notes and the better line, and reads back the same game', () => {
   const pgn = '[White "A"]\n[Black "B"]\n[Result "*"]\n\n1. e4 { [%eval 0.3] [%clk 0:05:00] } e5 { [%eval 0.25] [%clk 0:04:58] } 2. Qh5 { [%eval -0.1] } Ke7?? { [%eval 5.0] } ( 2... Nc6 3. Bc4 ) *';
   const M = CC.buildGame({ pgn, notes: '[INTRO]\nA {short} game.\n[4]\nThe king walks.' });
