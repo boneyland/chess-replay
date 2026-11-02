@@ -60,6 +60,8 @@ const ce = console.error; console.error = (...a) => { __errs.push(a.map(String).
   if (dev.state !== 'Booted') execFileSync('xcrun', ['simctl', 'boot', dev.udid]);
   execFileSync('xcrun', ['simctl', 'bootstatus', dev.udid, '-b'], { stdio: 'ignore', timeout: 300000 });
   undo.push(() => execFileSync('xcrun', ['simctl', 'shutdown', dev.udid]));
+  // Safari open before the session: the first run's session timed out "finding or launching a compatible remote Safari"
+  try { execFileSync('xcrun', ['simctl', 'launch', dev.udid, 'com.apple.mobilesafari'], { stdio: 'ignore', timeout: 60000 }); } catch (e) { t.diagnostic(`launching Safari: ${e.message}`); }
 
   const wd = spawn('safaridriver', ['-p', String(WD_PORT)], { stdio: 'inherit' });
   undo.push(() => wd.kill());
@@ -78,7 +80,9 @@ const ce = console.error; console.error = (...a) => { __errs.push(a.map(String).
   const until = (fn, timeout, msg, ...a) => browser.waitUntil(() => js(fn, ...a), { timeout, interval: 250, timeoutMsg: msg });
   const errors = () => js(() => window.__errs || ['the logger did not load']);
   const shot = (name) => browser.saveScreenshot(path.join(OUT, `ios-${name}.png`));
-  const tap = async (x, y) => browser.action('pointer', { parameters: { pointerType: 'touch' } })
+  // the pointer type whose taps reach the page: the first test finds it (touch on the first run moved nothing)
+  let ptr = 'touch';
+  const tap = async (x, y, type = ptr) => browser.action('pointer', { parameters: { pointerType: type } })
     .move({ x: Math.round(x), y: Math.round(y), origin: 'viewport' }).down().pause(60).up().perform();
   // a shown button by its accessible name (aria-label, else its text), as getByRole finds it
   const button = (name) => js((n) => {
@@ -111,6 +115,34 @@ const ce = console.error; console.error = (...a) => { __errs.push(a.map(String).
     assert.deepEqual(await js(() => ({ iso: self.crossOriginIsolated, sab: typeof SharedArrayBuffer })), { iso: true, sab: 'function' });
   });
 
+  // which events a WebDriver tap gives the page, as touch and as mouse, on an empty square (e4)
+  await t.test('a tap reaches the page as pointer events', async () => {
+    const b = await boardBox(page), p = square(b, 'e4'), seen = {};
+    for (const type of ['touch', 'mouse']) {
+      await js(() => {
+        window.__taps = [];
+        if (!window.__tapsOn) for (const k of ['pointerdown', 'pointerup', 'touchstart', 'touchend', 'mousedown', 'click']) document.addEventListener(k, (e) => window.__taps.push(k + (e.pointerType ? ':' + e.pointerType : '')), true);
+        window.__tapsOn = true;
+      });
+      try { await tap(p.x, p.y, type); seen[type] = await js(() => window.__taps); } catch (e) { seen[type] = ['failed: ' + e.message.split('\n')[0]]; }
+      t.diagnostic(`${type} tap: ${seen[type].join(' ') || 'nothing'}`);
+    }
+    ptr = ['touch', 'mouse'].find((k) => seen[k].includes('pointerup:' + k) || seen[k].some((e) => /^pointerup/.test(e))) || 'touch';
+    t.diagnostic(`taps as ${ptr}`);
+    assert.ok(Object.values(seen).some((l) => l.some((e) => /^pointerdown/.test(e))), 'no tap gave a pointerdown');
+  });
+
+  await t.test('the service worker takes over the page', { timeout: 90000 }, async () => {
+    const reg = () => browser.executeAsync((done) => navigator.serviceWorker.getRegistration().then((r) => done(r ? ['installing', 'waiting', 'active'].map((k) => `${k} ${r[k] ? r[k].state : '-'}`).join(', ') : 'none'), (e) => done('error ' + e.message)));
+    await until(() => !!navigator.serviceWorker, 5000, 'no navigator.serviceWorker');
+    t.diagnostic(`before the reload: ${await reg()}`);
+    await browser.url(URL_);
+    await loaded();
+    try { await until(() => !!navigator.serviceWorker.controller, 30000, 'no service worker controls the page'); }
+    catch (e) { t.diagnostic(`after the reload: ${await reg().catch((x) => x.message)}`); throw e; }
+    assert.deepEqual(await errors(), []);
+  });
+
   await t.test('a tap-tap move gets a Stockfish verdict', { timeout: 180000 }, async () => {
     const b = await boardBox(page);
     for (const sq of ['e2', 'e4']) { const p = square(b, sq); await tap(p.x, p.y); }
@@ -121,15 +153,23 @@ const ce = console.error; console.error = (...a) => { __errs.push(a.map(String).
     assert.deepEqual(await errors(), []);
   });
 
-  // iPhone Safari has no element full screen (its way out of the bars is Add to Home Screen), so the menu has no
-  // Full screen item: Playwright's WebKit for Linux reports full screen as there
-  await t.test('the menu opens, with no Full screen item', { timeout: 30000 }, async () => {
-    assert.equal(await js(() => !!(document.fullscreenEnabled || document.webkitFullscreenEnabled)), false, 'Safari reports full screen');
+  // the menu has a Full screen item where Safari reports element full screen, and it works: iOS 26.5's Safari reports
+  // it (the first run here), though older iPhone Safari had none
+  await t.test('the menu opens, and its Full screen item follows what Safari reports', { timeout: 30000 }, async () => {
+    const fs_ = await js(() => !!(document.fullscreenEnabled || document.webkitFullscreenEnabled));
+    t.diagnostic(`element full screen reported: ${fs_}`);
     await tapButton('Menu');
     await until(() => [...document.querySelectorAll('button')].some((b) => (b.getAttribute('aria-label') || b.innerText).trim() === 'Ask Queen' && b.getClientRects().length), 3000, 'the menu did not open');
-    assert.equal(await button('Full screen'), null, 'a Full screen item');
     await shot('menu');
+    if (!fs_) { assert.equal(await button('Full screen'), null, 'a Full screen item'); await tapButton('Menu'); return; }
+    await tapButton('Full screen');
+    await until(() => !!(document.fullscreenElement || document.webkitFullscreenElement), 5000, 'Full screen did not go full screen');
+    const v = await js(() => ({ w: innerWidth, h: innerHeight, top: getComputedStyle(document.documentElement).paddingTop }));
+    t.diagnostic(`full screen: ${v.w}×${v.h}, root padding ${v.top}`);
+    await shot('full-screen');
     await tapButton('Menu');
+    await tapButton('Exit full screen');
+    await until(() => !(document.fullscreenElement || document.webkitFullscreenElement), 5000, 'Exit full screen did not leave it');
   });
 
   // the browser's codecs, which the MP4 export uses: Linux WebKit has no H.264 encoder and writes WebM instead
@@ -141,12 +181,5 @@ const ce = console.error; console.error = (...a) => { __errs.push(a.map(String).
     });
     t.diagnostic(`H.264 ${got.avc} · AAC ${got.aac}`);
     assert.equal(got.avc, true);
-  });
-
-  await t.test('the service worker takes over the page', { timeout: 60000 }, async () => {
-    await browser.url(URL_);
-    await loaded();
-    await until(() => !!(navigator.serviceWorker && navigator.serviceWorker.controller), 30000, 'no service worker controls the page');
-    assert.deepEqual(await errors(), []);
   });
 });
