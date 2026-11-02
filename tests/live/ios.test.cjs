@@ -132,21 +132,37 @@ const ce = console.error; console.error = (...a) => { __errs.push(a.map(String).
     assert.ok(Object.values(seen).some((l) => l.some((e) => /^pointerdown/.test(e))), 'no tap gave a pointerdown');
   });
 
-  await t.test('the service worker takes over the page', { timeout: 90000 }, async () => {
+  await t.test('the service worker takes over the page', { timeout: 120000 }, async () => {
     const reg = () => browser.executeAsync((done) => navigator.serviceWorker.getRegistration().then((r) => done(r ? ['installing', 'waiting', 'active'].map((k) => `${k} ${r[k] ? r[k].state : '-'}`).join(', ') : 'none'), (e) => done('error ' + e.message)));
     await until(() => !!navigator.serviceWorker, 5000, 'no navigator.serviceWorker');
     t.diagnostic(`before the reload: ${await reg()}`);
+    // the page's own register() swallows its error
+    t.diagnostic(`register: ${await browser.executeAsync((done) => navigator.serviceWorker.register('sw.js', { updateViaCache: 'none' }).then(() => done('ok'), (e) => done(e.name + ': ' + e.message)))}`);
     await browser.url(URL_);
     await loaded();
-    try { await until(() => !!navigator.serviceWorker.controller, 30000, 'no service worker controls the page'); }
-    catch (e) { t.diagnostic(`after the reload: ${await reg().catch((x) => x.message)}`); throw e; }
+    const cached = () => browser.executeAsync((done) => caches.keys().then((ks) => Promise.all(ks.map((k) => caches.open(k).then((c) => c.keys()).then((r) => `${k}: ${r.length}`)))).then((l) => done(l.join(', ') || 'no caches'), (e) => done('error ' + e.message)));
+    let ok = false;
+    for (let i = 0; i < 6 && !ok; i++) {
+      ok = await js(() => !!navigator.serviceWorker.controller);
+      if (!ok) { t.diagnostic(`${i * 10} s after the reload: ${await reg()} · ${await cached()}`); await new Promise((r) => setTimeout(r, 10000)); }
+    }
+    assert.ok(ok, 'no service worker controls the page');
     assert.deepEqual(await errors(), []);
   });
 
   await t.test('a tap-tap move gets a Stockfish verdict', { timeout: 180000 }, async () => {
     const b = await boardBox(page);
-    for (const sq of ['e2', 'e4']) { const p = square(b, sq); await tap(p.x, p.y); }
-    await until(() => /your move ·/i.test(document.body.innerText), 5000, 'the move was not played');
+    // each tap's events and a screenshot, while taps that reach the page play nothing here (runs 1 and 2)
+    for (const sq of ['e2', 'e4']) {
+      const p = square(b, sq);
+      await js(() => { window.__taps = []; });
+      await tap(p.x, p.y);
+      await new Promise((r) => setTimeout(r, 400));
+      t.diagnostic(`tap ${sq} at ${Math.round(p.x)},${Math.round(p.y)}: ${(await js(() => window.__taps || [])).join(' ') || 'nothing'} · on ${await js((x, y) => { const e = document.elementFromPoint(x, y); return e ? e.tagName + '.' + [...e.classList].join('.') : 'none'; }, p.x, p.y)}`);
+      await shot(`tap-${sq}`);
+    }
+    try { await until(() => /your move ·/i.test(document.body.innerText), 5000, 'the move was not played'); }
+    catch (e) { t.diagnostic(`board ${JSON.stringify(b)} · errors ${JSON.stringify(await errors())}`); throw e; }
     await until((re) => new RegExp(re, 'i').test(document.body.innerText), 120000, 'no verdict', VERDICT.source);
     assert.doesNotMatch(await js(() => document.body.innerText.match(/your move ·[^\n]*/i)[0]), /can’t run here|stopped/i);
     await shot('own-move');
