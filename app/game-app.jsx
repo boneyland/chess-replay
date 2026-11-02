@@ -628,7 +628,7 @@ function GameApp() {
           ? <EditBoard setup={editing.setup} onChange={editTo} onDone={editDone} onCancel={editCancel} fenText={editing.text} onFenText={editText} fenMsg={editing.msg} doneLabel={editing.play ? 'Start game' : 'Done'} orient={t.flip ? 'b' : 'w'} nav={nav} overlay={panel || newMenu || menu || queenOpen} />
           : board
           ? <FreeBoard board={board} onChange={commitBoard} tw={t} sf={sf} nav={nav} orient={t.flip ? 'b' : 'w'} book={book && !board.game ? window.Openings.book() : null} />
-          : <GameVideo M={MV} tw={video.busy ? { ...t, cameraPush: false, exporting: true } : t} d={TM.d} probe={probe} queen={queenArrow} nav={nav} scheme={scheme} sf={sf} orient={t.flip ? 'b' : 'w'} />}
+          : <GameVideo M={MV} tw={video.busy ? { ...t, exporting: true } : t} d={TM.d} probe={probe} queen={queenArrow} nav={nav} scheme={scheme} sf={sf} orient={t.flip ? 'b' : 'w'} />}
       </CompositionStage>
       </EngineMenuContext.Provider>
       <input ref={inputRef} id="game-files" type="file" multiple accept=".pgn,.txt,.json,application/json,text/plain" hidden onChange={(e) => { loadFiles(e.target.files); e.target.value = ''; }} />
@@ -749,7 +749,7 @@ function GameApp() {
             <TweakSelect id="tw-clip-to" label="To" aria="Export to" value={clipToOpts.find((o) => o.i === clipTo).s} options={clipToOpts.map((o) => o.s)} onChange={(v) => setClip((c) => ({ ...c, to: clipToOpts.find((o) => o.s === v).i }))} />
           </div>
           <TweakButton label={`${webp ? 'Export animated WebP (' : 'Export video (MP4, '}${!webp && mp4Vfr ? 'up to ' : ''}${exportFps} fps${!webp && mp4Vfr ? ', variable' : ''}, ${fmtLen(clipT.end - clipT.start)})`} disabled={video.busy} onClick={exportVideo} />
-          <div className="twk-note">Renders every frame in this tab: about {fmtLen(Math.ceil((clipT.end - clipT.start) * exportFps * 0.04))} for {clipSuffix ? 'these moves' : 'this game'}, longer on a phone. Higher frame rates are smoother but slower. Each move’s clip runs from just before it until the board settles. {webp ? 'No sound, and it loops; a smaller width or quality makes a smaller file, and Lossless a much larger one.' : `Includes move sounds when on${window.Sfx.exportSet(soundSet) !== soundSet ? ` (${window.Sfx.exportSet(soundSet)} in place of ${soundSet}, whose licence is non-commercial)` : ''}; a lower quality makes a smaller file.`} No camera push.</div>
+          <div className="twk-note">Renders every frame in this tab: about {fmtLen(Math.ceil((clipT.end - clipT.start) * exportFps * 0.04))} for {clipSuffix ? 'these moves' : 'this game'}, longer on a phone. Higher frame rates are smoother but slower. Each move’s clip runs from just before it until the board settles. {webp ? 'No sound, and it loops; a smaller width or quality makes a smaller file, and Lossless a much larger one.' : `Includes move sounds when on${window.Sfx.exportSet(soundSet) !== soundSet ? ` (${window.Sfx.exportSet(soundSet)} in place of ${soundSet}, whose licence is non-commercial)` : ''}; a lower quality makes a smaller file.`}</div>
         </> },
         { id: 'sound', label: 'Sound', body: <>
           <TweakToggle id="tw-sound" label="Move sounds" value={t.sound !== false} onChange={(v) => setTweak('sound', v)} />

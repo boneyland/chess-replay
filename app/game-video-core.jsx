@@ -1126,7 +1126,8 @@ function GameVideo({ M, tw, d, probe, queen, nav, scheme, sf, orient }) {
   return (
     <div data-screen-label={'t=' + Math.floor(T) + 's'} style={{ position: 'absolute', inset: 0, background: C.bg, overflow: 'hidden' }}>
       <div style={{ position: 'absolute', inset: 0, opacity: fade }}>
-        <div ref={flowRef} style={{ position: 'absolute', inset: 0, transformOrigin: '0 0', ...flowStyle(), ...(f > 0 && { transform: `translate(${cx}px,${cy}px) scale(${sc}) translate(${-cx}px,${-cy}px)` }) }}>
+        {/* an export keeps the page still and has the compositor zoom the layers in here (data-push, export-draw.js) */}
+        <div ref={flowRef} data-push={f > 0 && tw.exporting ? `${sc} ${cx} ${cy}` : undefined} style={{ position: 'absolute', inset: 0, transformOrigin: '0 0', ...flowStyle(), ...(f > 0 && !tw.exporting && { transform: `translate(${cx}px,${cy}px) scale(${sc}) translate(${-cx}px,${-cy}px)` }) }}>
           <EvalBar M={M} T={T} S={S} a={enter(1)} tb={tbBar(tb)} />
           <PlayerBar M={M} T={T} S={S} side="b" a={enter(1)} pieces={pieces} />
           <BoardSpace>
