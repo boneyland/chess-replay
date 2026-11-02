@@ -147,11 +147,14 @@ function spyEngine({ cores = 8, noSharedMemory = false, hang = 0, hangReady = 0,
   const W = window.Worker;
   window.Worker = class extends W {
     constructor(url, ...rest) {
-      super(url, ...rest); this.n = seen.urls.push(String(url)) - 1; seen.at.push(Math.round(performance.now()));
+      super(url, ...rest);
+      // the dead-position prover's worker (chasolver) isn't an engine
+      if (/dead-worker\.js$/.test(String(url))) { this.n = -1; return; }
+      this.n = seen.urls.push(String(url)) - 1; seen.at.push(Math.round(performance.now()));
       const threaded = /stockfish-19-lite\.js$/.test(String(url));
       this.mute = threaded && hangReady-- > 0 ? /^uci$/ : threaded && hang-- > 0 ? /^go/ : threaded && hangSearch-- > 0 ? /^go (?!depth 1$)/ : null;
     }
-    terminate() { seen.ended.push([this.n, Math.round(performance.now())]); return super.terminate(); }
+    terminate() { if (this.n >= 0) seen.ended.push([this.n, Math.round(performance.now())]); return super.terminate(); }
     postMessage(m, ...rest) {
       if (bigHash && m === 'setoption name Hash value 512') m = `setoption name Hash value ${bigHash}`;
       if (noMemory && typeof m === 'string' && m.startsWith('setoption name Hash value ')) m = 'setoption name Hash value 2048';
@@ -1389,6 +1392,66 @@ for (const name of BROWSERS) for (const site of SITES) {
       assert.match(await p.locator('body').innerText(), /Play vs human/);
       assert.deepEqual(ep.errors, []);
       await ep.ctx.close();
+    });
+    // Dead positions (chasolver in a Worker): bishops of both colours behind a full pawn lock, which only chasolver proves
+    // (canMate and lockedDead don't). A game ends there; a loaded game marks the move and shows DEAD while paused, never
+    // while playing; the free board says when one side can no longer win
+    await t.test('desktop: dead positions end a game, and show on a loaded game and the free board', async () => {
+      const dp = await open(browser, { width: 1440, height: 900 });
+      const p = dp.page, BEFORE = '2b1k3/3N4/8/1p1p1p1p/1P1P1P1P/8/8/2B1K3 b - - 0 1';
+      const touch = async () => { const r = await p.locator('[title="Drag a piece to try your own move"]').boundingBox(); return { x0: r.x, y0: r.y, sq: r.width / 8 }; };
+      await p.goto(base, { waitUntil: 'load' });
+      await loadedOn(p);
+      // Play vs human from the position before 1... Bxd7 (Black to move, so the board is turned)
+      await p.getByRole('button', { name: 'Menu', exact: true }).click();
+      await p.getByRole('button', { name: 'Play vs human' }).click();
+      const dialog = p.getByRole('dialog', { name: 'Play vs human' });
+      await dialog.waitFor({ timeout: 3000 });
+      await dialog.getByRole('radiogroup', { name: 'Start from' }).getByRole('radio', { name: 'Set-up position' }).click();
+      await dialog.getByRole('button', { name: 'Set up position…' }).click();
+      const field = p.getByRole('textbox', { name: 'FEN' });
+      await typeFen(field, BEFORE);
+      await p.getByRole('button', { name: 'Start game' }).click();
+      await field.waitFor({ state: 'detached', timeout: 5000 });
+      await settled(p);
+      const b = await touch(), f = square(b, 'c8', true), to = square(b, 'd7', true);
+      await p.mouse.move(f.x, f.y);
+      await p.mouse.down();
+      await p.mouse.move(to.x, to.y, { steps: 8 });
+      await p.mouse.up();
+      await assert.doesNotReject(p.getByText('Draw: dead position, neither side can mate').waitFor({ timeout: 15000 }));
+      assert.equal(await p.locator('.dead-block').count(), 0, 'no block in a game');
+      await p.screenshot({ path: path.join(OUT, host + '-dead-game.png') });
+      // the same game loaded as a PGN: the pill on 1... Bxd7, then DEAD and the block once stepped there
+      await p.getByRole('button', { name: 'Menu', exact: true }).click();
+      await p.getByRole('button', { name: 'Paste PGN' }).click();
+      const pgn = p.getByRole('dialog', { name: 'Paste PGN' });
+      await pgn.getByRole('textbox', { name: 'PGN' }).pressSequentially(`[SetUp "1"]\n[FEN "${BEFORE}"]\n\n1... Bxd7 2. Kd2 Ke7 3. Ke3 Ke6 *\n`);
+      await pgn.getByRole('button', { name: 'Load' }).click();
+      await Promise.race([pgn.waitFor({ state: 'detached', timeout: 5000 }), pgn.getByRole('alert').filter({ hasText: /\S/ }).waitFor({ timeout: 5000 })]);
+      assert.equal(await pgn.count(), 0, 'the PGN loads: ' + (await pgn.getByRole('alert').innerText().catch(() => '')));
+      await assert.doesNotReject(p.locator('.dead-pill').waitFor({ timeout: 15000 }));
+      assert.equal(await p.locator('.dead-pill').count(), 1);
+      assert.equal(await p.locator('.dead-pill').evaluate((el) => el.previousElementSibling.textContent), 'Bxd7', 'after the move that left it dead');
+      await p.locator('[data-ply="0"]').click();
+      await assert.doesNotReject(p.locator('.dead-block').filter({ hasText: /Dead position · ½–½/i }).waitFor({ timeout: 15000 }));
+      assert.match(await p.locator('.dead-block').innerText(), /Neither side can mate by any series of legal moves \(FIDE 5\.2\.2\)/);
+      assert.match(await p.locator('body').innerText(), /\bDEAD\b/);
+      await p.screenshot({ path: path.join(OUT, host + '-dead-replay.png') });
+      // playing: no block, no pill, no DEAD on the bar
+      await p.keyboard.press('Home');
+      await p.getByRole('button', { name: 'Play (space)' }).click();
+      await p.waitForTimeout(2500);
+      assert.equal(await p.locator('.dead-block, .dead-pill').count(), 0, 'nothing while the video plays');
+      await p.getByRole('button', { name: /^Pause/ }).click();
+      // the free board: a lone king against a king and rook
+      await setUpFen(p, '8/8/8/4k3/8/8/r7/4K3 w - - 0 1');
+      await assert.doesNotReject(p.locator('.dead-block').filter({ hasText: /White can no longer win/i }).waitFor({ timeout: 15000 }));
+      assert.match(await p.locator('.dead-block').innerText(), /No series of legal moves lets White mate\. Black still can\./);
+      assert.doesNotMatch(await p.locator('body').innerText(), /\bDEAD\b/, 'not a dead position');
+      await p.screenshot({ path: path.join(OUT, host + '-dead-free.png') });
+      assert.deepEqual(dp.errors, []);
+      await dp.ctx.close();
     });
     // Paste PGN: an empty box or a PGN that doesn't build gets a plain message and changes nothing; a good one, loaded
     // with Ctrl+Enter, is the loaded game, from the free board too

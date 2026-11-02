@@ -478,9 +478,10 @@ function LineChips({ name, nameColor, accent, moves, ply0, c, legal, sel, onPick
   );
 }
 
-// tb: the endgame tablebase's result for the position shown ({ cp, txt }, tbBar), drawn instead of the evals
-function EvalBar({ M, T, S, a, tb }) {
-  if (tb) return <EvalBarView cp={tb.cp} txt={tb.txt} a={a} />;
+// tb: the endgame tablebase's result for the position shown ({ cp, txt }, tbBar), drawn instead of the evals; dead: a dead
+// position's (deadBar), drawn instead of both
+function EvalBar({ M, T, S, a, tb, dead }) {
+  if (dead || tb) return <EvalBarView cp={(dead || tb).cp} txt={(dead || tb).txt} a={a} />;
   const { c, cp } = evalNow(M, T, S);
   const shown = c >= 0 ? M.plies[c] : null;
   const txt = !M.hasEval ? '' : shown && shown.checkmate && T > S.tp[c] + 1 ? fmtEval(shown) : shown && (shown.mate != null || shown.won) ? fmtEval(shown) : fmtEval({ cp });
@@ -574,7 +575,8 @@ function Header({ M, a }) {
   );
 }
 
-function MoveList({ M, T, S, a, paused, onPick }) {
+// deadAt: the ply after which the position is dead (useFirstDead), marked with a pill on the paused list
+function MoveList({ M, T, S, a, paused, onPick, deadAt }) {
   const c = lastPly(T, S);
   // the moves wrap in lines, as the Analysis panel's lines do: a light chip for White's move, a dark one for Black's,
   // the move number before White's (and before the first, when the game starts on Black's). A line is a chip (CHIP)
@@ -635,6 +637,7 @@ function MoveList({ M, T, S, a, paused, onPick }) {
         <span className="mv" role="button" data-ply={i} tabIndex={i === focusPly ? 0 : -1} title={`Go to ${label(M, i)}`} onClick={(e) => { e.stopPropagation(); onPick(i); }}
           onKeyDown={(e) => moveKey(e, i)}
           style={{ opacity: ahead ? 0.5 : 1, height: CHIP, boxSizing: 'border-box', display: 'flex', alignItems: 'center', padding: `0 ${tx(8)}px`, borderRadius: 2, cursor: 'pointer', font: `${cur ? 700 : 600} ${tx(16)}px ${MONO}`, background: white ? '#f1ebe1' : '#2a2320', color: white ? '#15100d' : '#efe8de', border: edge, boxShadow: cur ? `0 0 0 3px ${C.last}` : 'none' }}>{P.san}{P.mark || ''}</span>
+        {paused && i === deadAt && <DeadPill />}
       </span>
     );
   }
@@ -693,13 +696,15 @@ function Commentary({ M, T, S, a, book, line }) {
 }
 
 // tb: the endgame tablebase's answer for the position on the board (useTablebase); onTb plays one of its moves
-function Analysis({ M, T, S, a, vline, onLine, onPreview, onReplyHover, paused, sf, own, onReply, deep, tb, onTb }) {
+// dead: chasolver's answers for the position on the board (useDead), for the dead-position block above the tablebase's
+function Analysis({ M, T, S, a, vline, onLine, onPreview, onReplyHover, paused, sf, own, onReply, deep, tb, onTb, dead }) {
   const c = lastPly(T, S);
   // Stockfish runs as asm.js here (stockfish.jsx, which a page without the engine doesn't load)
   const sfAsm = typeof SF_SIMD !== 'undefined' && !SF_SIMD;
   // the Tablebase block goes under the lines; the panel scrolls to it where it doesn't fit
-  const box = tb && !L.analysis.flow ? { ...L.analysis, scroll: true } : L.analysis;
-  const tbEl = tb && <div style={{ marginTop: tx(12), paddingTop: tx(12), borderTop: `1px solid ${C.line}` }}><TablebaseBlock t={tb} onPlay={onTb} /></div>;
+  const deadEl = deadWords(dead) && <div style={{ marginTop: tx(12), paddingTop: tx(12), borderTop: `1px solid ${C.line}` }}><DeadBlock d={dead} /></div>;
+  const box = (tb || deadEl) && !L.analysis.flow ? { ...L.analysis, scroll: true } : L.analysis;
+  const tbEl = (tb || deadEl) && <React.Fragment>{deadEl}{tb && <div style={{ marginTop: tx(12), paddingTop: tx(12), borderTop: `1px solid ${C.line}` }}><TablebaseBlock t={tb} onPlay={onTb} /></div>}</React.Fragment>;
   // Go deeper's search of this move, once it has passed the analysis's (deep: useMoveEval's)
   const deeper = paused && deep && deep.after && !deep.after.stored ? deep.after : null;
   // this move's own search when the analysis recorded it, else the engine settings
@@ -767,6 +772,7 @@ function Analysis({ M, T, S, a, vline, onLine, onPreview, onReplyHover, paused, 
             sel={vline && vline.src === 'queen' ? vline.upto : null} onPick={(j) => onLine('queen', qLegal, j)} onHover={(j) => onPreview('queen', qLegal, j)} />
         )}
         {P.advice && <span style={{ color: C.inaccuracy }}>{P.advice}</span>}
+        {deadWords(dead) && <div style={{ paddingTop: tx(8), borderTop: `1px solid ${C.line}` }}><DeadBlock d={dead} /></div>}
         {tb && <div style={{ paddingTop: tx(8), borderTop: `1px solid ${C.line}` }}><TablebaseBlock t={tb} onPlay={onTb} /></div>}
         {vline && (
           <span style={{ font: `500 ${tx(15)}px ${MONO}`, color: C.dim }}>
@@ -1045,6 +1051,8 @@ function GameVideo({ M, tw, d, probe, queen, nav, scheme, sf, orient }) {
   // the endgame tablebase for the position on the board, while paused (never in the video or its export)
   const shownFen = () => window.ChessCore.fenAfter(M.start.fen, (vline ? M.plies.slice(0, vline.at).concat(vline.moves.slice(0, vline.upto + 1)) : M.plies.slice(0, cNow + 1)).map((p) => p.san), touchPos);
   const tb = useTablebase(playing ? null : shownFen(), tw.tablebase !== false);
+  // chasolver on the position on the board, while paused; and the move after which the game's position is first dead
+  const dead = useDead(playing ? null : touchPos), deadAt = useFirstDead(M);
   const onTb = (uci) => { const step = window.ChessCore.stepFromUci(touchPos, uci); if (step) { tl.setPlaying(false); input.clear(); playOwn(step); } };
   React.useEffect(() => { if (!vline) input.clear(); }, [vline]);
   // Stockfish on the viewer's line: the positions before and after the move on the board, as move lists from the start
@@ -1133,7 +1141,7 @@ function GameVideo({ M, tw, d, probe, queen, nav, scheme, sf, orient }) {
       <div style={{ position: 'absolute', inset: 0, opacity: fade }}>
         {/* an export keeps the page still and has the compositor zoom the layers in here (data-push, export-draw.js) */}
         <div ref={flowRef} data-push={f > 0 && tw.exporting ? `${sc} ${cx} ${cy}` : undefined} style={{ position: 'absolute', inset: 0, transformOrigin: '0 0', ...flowStyle(), ...(f > 0 && !tw.exporting && { transform: `translate(${cx}px,${cy}px) scale(${sc}) translate(${-cx}px,${-cy}px)` }) }}>
-          <EvalBar M={M} T={T} S={S} a={enter(1)} tb={tbBar(tb)} />
+          <EvalBar M={M} T={T} S={S} a={enter(1)} tb={tbBar(tb)} dead={deadBar(dead)} />
           <PlayerBar M={M} T={T} S={S} side="b" a={enter(1)} pieces={pieces} />
           <BoardSpace>
             <Board M={M} T={T} S={S} a={enter(0)} arrows={tw.bestArrows} pieces={pieces} queen={queen} vline={pv || vline} hide={input.drag && input.drag.moved ? input.drag.from : null} lines={tw.bestArrows && own ? lineArrows(own.after) : null} />
@@ -1141,9 +1149,9 @@ function GameVideo({ M, tw, d, probe, queen, nav, scheme, sf, orient }) {
           </BoardSpace>
           <PlayerBar M={M} T={T} S={S} side="w" a={enter(1)} pieces={pieces} />
           {L.header && <Header M={M} a={enter(2)} />}
-          <MoveList M={M} T={T} S={S} a={enter(3)} paused={!playing} onPick={goTo} />
+          <MoveList M={M} T={T} S={S} a={enter(3)} paused={!playing} onPick={goTo} deadAt={deadAt} />
           <Commentary M={M} T={T} S={S} a={enter(4)} book={sf ? sf.book : null} line={lineKey ? { book: lineBook } : null} />
-          <Analysis M={M} T={T} S={S} a={enter(5)} vline={vline} onLine={onLine} onPreview={onPreview} onReplyHover={onReplyHover} paused={!playing} sf={sf} own={own} onReply={onReply} deep={gameEval} tb={tb} onTb={onTb} />
+          <Analysis M={M} T={T} S={S} a={enter(5)} vline={vline} onLine={onLine} onPreview={onPreview} onReplyHover={onReplyHover} paused={!playing} sf={sf} own={own} onReply={onReply} deep={gameEval} tb={tb} onTb={onTb} dead={dead} />
           {L.plot && <EvalPlot M={M} T={T} S={S} a={enter(6)} paused={!playing} onPick={goTo} />}
         </div>
         <div style={{ position: 'absolute', inset: 0, pointerEvents: 'none', boxShadow: `inset 0 0 220px rgba(228,85,63,${0.55 * flash})` }} />

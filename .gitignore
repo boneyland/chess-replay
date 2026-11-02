@@ -10,3 +10,5 @@ games/
 # shared permissions and skills, for cloud sessions too
 !.claude/settings.json
 !.claude/skills/
+# chasolver-wasm build output (tools/chasolver-wasm/build.sh)
+tools/chasolver-wasm/target/

@@ -131,6 +131,11 @@
     return { half, seen };
   }
 
+  // chasolver's answers (DeadCore, through dead.jsx): (pos, color) → true when color can't mate by any legal sequence,
+  // false when it can, null when not known (yet); read synchronously, so a game only ends on an answer already in
+  let prover = null;
+  const setProver = (fn) => { prover = fn || null; };
+
   // The end of the game in the position after the board's last move, or null while it goes on. With claim (vs human) a
   // threefold repetition and the fifty-move rule only let the side to move claim a draw (claimable); the game ends by
   // itself at a fivefold repetition or after 75 moves, as FIDE's rules have it. Without, the 3 and 50 end it
@@ -143,6 +148,7 @@
     const draw = (reason) => ({ result: '1/2-1/2', reason });
     if (!canMate(pos, 'w') && !canMate(pos, 'b')) return draw('material');
     if (lockedDead(pos)) return draw('dead');
+    if (prover && prover(pos, 'w') === true && prover(pos, 'b') === true) return draw('dead');
     const { half, seen } = drawCounts(board);
     if (claim) return half >= 150 ? draw('seventyfive') : seen >= 5 ? draw('fivefold') : null;
     if (half >= 100) return draw('fifty');
@@ -188,13 +194,15 @@
     return { ...c, left: { ...c.left, [side]: timeLeft(b, side, now) }, since: null };
   };
 
-  // The side to move out of time: a loss, or a draw when the other side has no mating material. The board as it was otherwise
+  // The side to move out of time: a loss, or a draw when the other side can't mate (no mating material, or the prover
+  // says so). The board as it was otherwise
   function flag(b, now) {
     if (!inProgress(b) || !b.game.clock || b.game.clock.since == null) return b;
     const side = B().pos(b).turn;
     if (timeLeft(b, side, now) > 0) return b;
     const c = charged(b, now), opp = other(side);
-    const result = canMate(B().pos(b), opp) ? (opp === 'w' ? '1-0' : '0-1') : '1/2-1/2';
+    const pos = B().pos(b), dead = !canMate(pos, opp) || (prover && prover(pos, opp) === true);
+    const result = dead ? '1/2-1/2' : opp === 'w' ? '1-0' : '0-1';
     return withGame(b, { clock: { ...c, left: { ...c.left, [side]: 0 } }, result: { result, reason: 'time', side } });
   }
 
@@ -212,6 +220,16 @@
     const result = outcome(next, claims(b));
     if (result && clock) clock = { ...clock, since: null };
     return withGame(next, { clock, result });
+  }
+
+  // The game ended by an answer that came after its last move (the prover's, for this position or an earlier one: a
+  // dead position stays dead after any legal move), with the side to move's clock charged to `now` and stopped; else
+  // the board as it was
+  function recheck(b, now) {
+    if (!inProgress(b)) return b;
+    const result = outcome(b, claims(b));
+    if (!result) return b;
+    return withGame(b, { clock: b.game.clock ? charged(b, now) : b.game.clock, result });
   }
 
   // Whether a takeback can go: in a game in progress, with a move to take back (against Stockfish, one of the player's)
@@ -340,7 +358,7 @@
     const why = {
       checkmate: 'Checkmate', stalemate: 'Stalemate', repetition: 'Draw by threefold repetition', fifty: 'Draw by the fifty-move rule',
       fivefold: 'Draw by fivefold repetition', seventyfive: 'Draw by the 75-move rule',
-      material: 'Draw: neither side can mate', dead: 'Draw: dead position, the pawns are locked', agreement: 'Draw by agreement', resign: `${NAME[r.side]} resigned`,
+      material: 'Draw: neither side can mate', dead: 'Draw: dead position, neither side can mate', agreement: 'Draw by agreement', resign: `${NAME[r.side]} resigned`,
       time: r.result === '1/2-1/2' ? `${NAME[r.side]}’s flag fell, but ${NAME[other(r.side)]} can’t mate` : `${NAME[r.side]}’s flag fell`,
     }[r.reason];
     return { score, why };
@@ -409,6 +427,6 @@
 
   window.PlayCore = {
     canMate, lockedDead, positionKey, outcome, TIME_CONTROLS, parseTc, start, inProgress, move, canTakeback, takeback, thinkMs, MIN_RATED_DEPTH, SHALLOW_DEPTH, BIG_LOSS_CP, rateMove, addCritique, critiqueText,
-    resign, agreeDraw, claimable, claimDraw, flag, pause, runClock, timeLeft, resultText, resume, pgn,
+    resign, agreeDraw, claimable, claimDraw, flag, recheck, setProver, pause, runClock, timeLeft, resultText, resume, pgn,
   };
 })();

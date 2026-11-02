@@ -362,6 +362,9 @@ function FreeBoard({ board, onChange, tw, sf, nav, orient, book }) {
   // result replaces the eval in the bar
   const boardFen = () => window.ChessCore.fenAfter(board.fen, steps.slice(0, upto + 1).map((s) => s.san), pos);
   const tb = useTablebase(G ? null : boardFen(), tw.tablebase !== false), tbv = tbBar(tb);
+  // chasolver on the position on the board: in a game it ends the game (the answer may come after the move: PlayCore's
+  // recheck), and nothing shows; elsewhere DEAD on the eval bar and the Analysis panel's block
+  const dead = useDead(pos), deadv = G ? null : deadBar(dead);
   // Lichess's opening explorer (Settings › Online), asked where the tablebase isn't, in place of the local book
   const xf = explorerFilters(tw), xl = useExplorer(G || tb ? null : boardFen(), tw.explorer === true, xf);
   // the running clock: redrawn ten times a second, and the game ends when it reaches zero
@@ -369,6 +372,10 @@ function FreeBoard({ board, onChange, tw, sf, nav, orient, book }) {
   const [, tick] = React.useState(0);
   const latest = React.useRef(null);
   latest.current = { board, onChange };
+  React.useEffect(() => {
+    const { board: b, onChange: set } = latest.current, r = P.recheck(b, Date.now());
+    if (r !== b) set(r);
+  }, [live, boardKey, dead && dead.w, dead && dead.b]);
   React.useEffect(() => {
     if (!running) return;
     const id = setInterval(() => {
@@ -428,7 +435,7 @@ function FreeBoard({ board, onChange, tw, sf, nav, orient, book }) {
     : { white: { name: 'White' }, black: { name: 'Black' }, event: 'Free board', site: from, eco: named && named.eco, opening: named && named.name };
   return (
     <div ref={flowRef} style={{ position: 'absolute', inset: 0, background: C.bg, overflow: 'hidden', ...flowStyle() }}>
-      {!G && (tbv ? <EvalBarView cp={tbv.cp} txt={tbv.txt} a={1} /> : <EvalBarView cp={cp == null ? 0 : cp} txt={cp == null ? (down ? '' : '…') : fmtSf(cp)} a={1} />)}
+      {!G && (deadv || tbv ? <EvalBarView cp={(deadv || tbv).cp} txt={(deadv || tbv).txt} a={1} /> : <EvalBarView cp={cp == null ? 0 : cp} txt={cp == null ? (down ? '' : '…') : fmtSf(cp)} a={1} />)}
       <FreeBar pos={pos} side="b" a={1} clock={clockOf('b')} name={G ? playerName(G, 'b') : null} />
       <BoardSpace>
         <LineBoard a={1} sq={boardSquares()} v={pv && pv.length ? { upto: upto + pv.length, moves: [...steps.slice(0, upto + 1), ...pv], base: board.start.pos, src: 'you' } : { upto, moves: steps, base: board.start.pos, src: 'you' }} hide={input.drag && input.drag.moved ? input.drag.from : null} arrows={hovArrows(!G && tw.bestArrows !== false ? lineArrows(ev.after) : null, hov)} />
@@ -443,9 +450,11 @@ function FreeBoard({ board, onChange, tw, sf, nav, orient, book }) {
         {upto < 0
           ? <React.Fragment>
             <StartAnalysis board={board} ev={ev} status={sf.status} why={sf.why} onLine={onReply} onHover={setPv} />
+            {deadWords(dead) && <div style={{ marginTop: tx(12), paddingTop: tx(12), borderTop: `1px solid ${C.line}` }}><DeadBlock d={dead} /></div>}
           </React.Fragment>
           : <React.Fragment>
             <OwnMoveAnalysis M={MV} vline={{ at: 0, moves: steps, upto, src: 'you' }} own={own} status={sf.status} why={sf.why} onReply={onReply} onHover={setPv} />
+            {deadWords(dead) && <div style={{ marginTop: tx(12), paddingTop: tx(12), borderTop: `1px solid ${C.line}` }}><DeadBlock d={dead} /></div>}
             <FitOrHide style={{ ...NO_SELECT, display: 'block', marginTop: tx(8), font: `500 ${tx(15)}px ${MONO}`, color: C.dim }}>← → step · <KeyCap>Home</KeyCap> the start · <KeyCap>End</KeyCap> the last move</FitOrHide>
           </React.Fragment>}
       </AnalysisPanel>}

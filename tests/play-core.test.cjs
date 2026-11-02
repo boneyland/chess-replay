@@ -350,7 +350,7 @@ test('a dead position behind locked pawns ends the game; one a king can break in
   const g = game('5+3', [['g3g4', 1000]], '8/8/1k6/p1p1p1p1/P1P1P3/6P1/4K3/8 w - - 0 1');
   assert.deepEqual(g.game.result, { result: '1/2-1/2', reason: 'dead' });
   assert.equal(g.game.clock.since, null);
-  assert.deepEqual(P.resultText(g.game.result), { score: '½–½', why: 'Draw: dead position, the pawns are locked' });
+  assert.deepEqual(P.resultText(g.game.result), { score: '½–½', why: 'Draw: dead position, neither side can mate' });
   assert.deepEqual(sfGame('w', null, [['g3g4', 0]], '8/8/1k6/p1p1p1p1/P1P1P3/6P1/4K3/8 w - - 0 1').game.result.reason, 'dead');
   // and stays ended through a reload
   assert.deepEqual(B.restore(JSON.parse(JSON.stringify(B.save(g)))).game.result, g.game.result);
@@ -396,4 +396,65 @@ test('a Stockfish game rates a move at depth 15, and short of it only a blunder 
   assert.equal(rate(30, 20, -900, 12, 'w', true), null, 'the best move is never a blunder');
   assert.equal(P.rateMove({ before: null, after: { cp: 0, depth: 20 }, you: 'w' }), null, 'no search before it');
   assert.equal(P.rateMove({ before: { cp: null, depth: 20 }, after: { cp: 0, depth: 20 }, you: 'w' }), null);
+});
+
+// chasolver's answers reach PlayCore through a prover: (pos, color) → true (color can't mate), false, or null (unknown)
+const LOCK = '4k3/8/8/1p1p1p1p/1P1P1P1P/8/8/4K1N1 w - - 0 1'; // a knight: not lockedDead's to prove
+const keyOf = (pos) => CC.toFen(pos);
+const proverFrom = (table) => (pos, c) => { const v = table[keyOf(pos)]; return v ? v[c] : null; };
+const afterNf3 = (b) => keyOf(B.pos(playAll(b, ['g1f3'])));
+
+test('a position the prover calls dead for both sides ends the game as a dead draw', (t) => {
+  t.after(() => P.setProver(null));
+  const g = P.start(B.fromFen(LOCK), '5+3', '2026.11.02');
+  P.setProver(proverFrom({ [afterNf3(g)]: { w: true, b: true } }));
+  const after = P.move(g, CC.stepFromUci(B.pos(g), 'g1f3'), 1000);
+  assert.deepEqual(after.game.result, { result: '1/2-1/2', reason: 'dead' });
+  assert.equal(after.game.clock.since, null);
+});
+
+test('unknown, or unwinnable for one side only, plays on', (t) => {
+  t.after(() => P.setProver(null));
+  const g = P.start(B.fromFen(LOCK), null, '2026.11.02');
+  for (const v of [null, { w: true, b: false }, { w: true, b: null }]) {
+    P.setProver(v ? proverFrom({ [afterNf3(g)]: v }) : () => null);
+    assert.equal(P.move(g, CC.stepFromUci(B.pos(g), 'g1f3'), 1000).game.result, null);
+  }
+  P.setProver(null);
+  assert.equal(P.move(g, CC.stepFromUci(B.pos(g), 'g1f3'), 1000).game.result, null);
+});
+
+test('a flag fall is a draw when the prover says the opponent can\'t mate', (t) => {
+  t.after(() => P.setProver(null));
+  // after Nf3 Black flags; White has a knight and pawns, so canMate alone calls it a loss
+  const black = game('5+0', [['g1f3', 0]], LOCK);
+  const last = keyOf(B.pos(black)); // Black to move, Black flags
+  assert.deepEqual(P.flag(black, 300001).game.result, { result: '1-0', reason: 'time', side: 'b' });
+  P.setProver(proverFrom({ [last]: { w: true, b: false } }));
+  assert.deepEqual(P.flag(black, 300001).game.result, { result: '1/2-1/2', reason: 'time', side: 'b' });
+  P.setProver(proverFrom({ [last]: { w: false, b: true } }));
+  assert.deepEqual(P.flag(black, 300001).game.result, { result: '1-0', reason: 'time', side: 'b' });
+  P.setProver(proverFrom({ [last]: { w: null, b: null } }));
+  assert.deepEqual(P.flag(black, 300001).game.result, { result: '1-0', reason: 'time', side: 'b' });
+});
+
+test('recheck ends a game whose position the prover has since called dead', (t) => {
+  t.after(() => P.setProver(null));
+  const g0 = P.start(B.fromFen(LOCK), '5+3', '2026.11.02');
+  const g1 = P.move(g0, CC.stepFromUci(B.pos(g0), 'g1f3'), 1000);
+  const g2 = P.move(g1, CC.stepFromUci(B.pos(g1), 'e8d8'), 3000);
+  assert.equal(P.recheck(g2, 4000), g2, 'nothing proven: unchanged');
+  // the answer for the position after Nf3 came late; the position now is dead too
+  P.setProver(proverFrom({ [keyOf(B.pos(g2))]: { w: true, b: true } }));
+  const r = P.recheck(g2, 4000);
+  assert.deepEqual(r.game.result, { result: '1/2-1/2', reason: 'dead' });
+  assert.equal(r.game.clock.since, null);
+  assert.equal(r.game.clock.left.w, g2.game.clock.left.w - 1000, 'the side to move charged to now');
+  assert.equal(r.steps.length, g2.steps.length);
+  // a finished game is left alone
+  assert.equal(P.recheck(r, 5000), r);
+});
+
+test('a dead position\'s text', () => {
+  assert.deepEqual(P.resultText({ result: '1/2-1/2', reason: 'dead' }), { score: '½–½', why: 'Draw: dead position, neither side can mate' });
 });

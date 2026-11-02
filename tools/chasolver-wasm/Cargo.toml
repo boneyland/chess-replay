@@ -1,0 +1,21 @@
+# chasolver (https://github.com/miguel-ambrona/chasolver, MIT) built to WebAssembly for the page's dead-position checks:
+# build.sh writes vendor/chasolver.wasm, pinned by SHA-256 in LAYOUT.md
+[package]
+name = "chasolver-wasm"
+version = "0.1.0"
+edition = "2021"
+publish = false
+
+[lib]
+crate-type = ["cdylib"]
+
+[dependencies]
+chasolver = "=3.0.0"
+chess = "3.2"
+
+[profile.release]
+opt-level = 3
+lto = true
+codegen-units = 1
+panic = "abort"
+strip = true
