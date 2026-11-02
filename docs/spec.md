@@ -147,7 +147,7 @@ The viewer sees a position or puzzle somewhere (a book diagram, a screen, someon
 
 - The player picks White, Black or random; the board is drawn from the player's side and never turns. Stockfish plays at full strength (no strength setting: "prepare to get crushed") at the engine's `play` priority, after a short pause; its think time is capped so its clock doesn't flag.
 - Same ends, Take back (back to the player's previous turn, Stockfish's reply included) and time controls as vs human, minus draw offers and claims: threefold repetition and the fifty-move rule end the game by themselves.
-- Stockfish quietly rates the player's moves (`critique`: `{ j, cls, best, text }`); an inaccuracy, mistake or blunder is flagged in the Commentary box with a short line, and the better move and evals show only after the game.
+- Stockfish quietly rates the player's moves (`critique`: `{ j, cls, best, text }`); an inaccuracy, mistake or blunder is flagged in the Commentary box with a short line, and the better move and evals show only after the game. A move is rated when the search before it and Stockfish's reply search both reach depth 15; short of that (a slow engine), only a blunder losing 300 cp or more (about a piece, or a mate) is flagged, once both reach depth 8 (`PlayCore.rateMove`).
 
 ### Full Stockfish download
 
@@ -426,7 +426,7 @@ Deferred by the per-plan reviews; each was true when recorded and may since have
 
 **Play vs Stockfish** (2026-10-21)
 - Playing Black, if the engine dies before Stockfish's first move there is nothing to take back: only Resign or a reload restarts it.
-- A move played before the "before" search reaches depth 15 (just after the engine loads), and the move before a reload, go unrated.
+- A move played before the "before" search reaches depth 15 (just after the engine loads; depth 8 for a blunder of a piece or more), and the move before a reload, go unrated. On a slow engine (the asm.js one, a slow phone) the reply search often stops short of depth 15 in its 3 s, so smaller inaccuracies, mistakes and blunders go unflagged, silently.
 - On the phone the Commentary box cuts the how-it-works text short (it scrolls).
 - No draw offers against Stockfish; the player can resign while Stockfish thinks.
 
@@ -513,4 +513,5 @@ Deferred by the per-plan reviews; each was true when recorded and may since have
 - 2026-11-01: Hash table's 256 and 512 MB aren't offered on touch-only devices or where Chromium says the device has under 4 GB (not on touch alone: touchscreen PCs are often powerful); a size the engine can't allocate falls back to 64 MB, the search going on and a note saying so. Same day: the fallback lasts the visit and leaves the saved setting alone (one short-of-memory moment no longer changes it for good).
 - 2026-11-01: with the asm.js engine, a cloud answer of depth 22 counts as deep enough (Prefer cloud, Go deeper), in place of 35: it reached 22 in a minute on a fast laptop and 19 on the Samsung tablet.
 - 2026-11-01: the asm.js engine gets 120 s to start (was the default 30 s): it starts in 1–1.7 s in Firefox on a laptop, but on the Samsung SM-T510 a first visit to a PR preview ended in "Stockfish did not start", which the panel now shows as the reason. It also starts 1.5 s after the page loads rather than on the first search (`SF_ASM_EARLY_MS`), so a move doesn't wait for it.
+- 2026-11-02: in Play vs Stockfish a move short of depth 15 in either search is still flagged when it is a blunder losing 300 cp or more and both searches reached depth 8: in WebKit on GitHub Actions Stockfish's 3 s reply reached only depth 12, so 1. Qc4, a hanging queen, went unrated, and the asm.js engine likely never rated anything. A hanging piece or a mate is plain at depth 8, a borderline inaccuracy isn't. Searching past the think time was turned down (the engine never interrupts a running search, so it would hold up the next position's search, and costs a phone's battery), as was a note in the Game box that a move went unrated (on a slow phone, after nearly every move).
 - 2026-11-02: Lichess's lisp move sounds (EdinburghCollective, CC BY-NC-SA 4.0) added as a sound set, despite being non-commercial (the repo is then not all free software; README's Licence says so). Kept out of video exports, which viewers may post on monetised channels: an export with lisp chosen uses Lichess sfx (`Sfx.exportSet`), and the Export note says so.
