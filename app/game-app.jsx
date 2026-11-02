@@ -33,7 +33,7 @@ const GAMES = 'chess-video.games.v1';
 const readGames = () => { try { return window.GamesCore.read(localStorage.getItem(GAMES)); } catch (e) { return []; } };
 
 // Full screen hides the browser's bars, and the phone layouts grow into the space. The item shows only where the browser
-// says it works: older iPhone Safari had no element full screen (only <video>), iOS 26.5's has it (seen in the Simulator)
+// says it works: older iPhone Safari had no element full screen (only <video>), iOS 26.5's has it (seen in the Simulator).
 // An installed copy opened full screen (the manifest) has no bars to hide
 const fsElement = () => document.fullscreenElement || document.webkitFullscreenElement || null;
 const FS_OK = !!(document.fullscreenEnabled || document.webkitFullscreenEnabled) && !(() => { try { return window.matchMedia('(display-mode: fullscreen)').matches; } catch (e) { return false; } })();
