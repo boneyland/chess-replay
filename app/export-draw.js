@@ -312,10 +312,21 @@
       // as html2canvas drew the whole stage: on white, then the stage's own box, then its layers
       cx.save();
       cx.setTransform(1, 0, 0, 1, 0, 0);
+      cx.imageSmoothingQuality = 'high';
       cx.fillStyle = '#ffffff'; cx.fillRect(0, 0, W, H);
       const rs = getComputedStyle(root);
       if (!clear(rs.backgroundColor)) { cx.fillStyle = rs.backgroundColor; cx.fillRect(0, 0, W, H); }
-      for (const n of layers) { const l = cache.get(n); if (l) cx.drawImage(l.bmp, Math.round(l.x), Math.round(l.y)); }
+      // the camera push: the page stays still while exporting and names the zoom on the box it would have transformed
+      // (data-push="<scale> <x> <y>", round that point in the stage's CSS px), and its layers are drawn zoomed here, so
+      // their bitmaps stay reusable
+      for (const n of layers) {
+        const l = cache.get(n);
+        if (!l) continue;
+        const p = n.parentElement && n.parentElement.closest('[data-push]');
+        if (!p || !root.contains(p)) { cx.drawImage(l.bmp, Math.round(l.x), Math.round(l.y)); continue; }
+        const [k, px0, py0] = p.dataset.push.split(' ').map(Number), ox = px0 * scale, oy = py0 * scale;
+        cx.drawImage(l.bmp, ox + k * (l.x - ox), oy + k * (l.y - oy), k * l.bmp.width, k * l.bmp.height);
+      }
       cx.restore();
     };
     return { draw, stats, done: () => root.removeAttribute('data-export-root') };

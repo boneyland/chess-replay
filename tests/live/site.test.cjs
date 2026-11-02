@@ -2711,9 +2711,26 @@ for (const name of BROWSERS) for (const site of SITES) {
           const a = document.createElement('canvas'); a.width = W; a.height = H; a.getContext('2d').drawImage(shot, 0, 0);
           out.push({ t, board, bar, plot, letterSpacing: 'letterSpacing' in b.getContext('2d'), psnr: psnr(pixels(a), pixels(b), boxes), old: a.toDataURL('image/png'), neu: b.toDataURL('image/png') });
         }
+        // the camera push, as an export names it on the page (data-push): the same frame zoomed round that point, the
+        // layers' bitmaps reused. Against the unpushed frame zoomed as a whole, over the board's box
+        const bd = window.ExportDraw.layersOf(el).find((n) => n.querySelectorAll('img').length >= 20);
+        let flow = bd.parentElement;
+        while (!/^0(px)? 0(px)?/.test(flow.style.transformOrigin)) flow = flow.parentElement; // the box the push transforms in playback
+        const R = el.getBoundingClientRect(), r = bd.getBoundingClientRect();
+        const px0 = r.left - R.left + r.width / 2, py0 = r.top - R.top + r.height / 2;
+        const flat = document.createElement('canvas'); flat.width = W; flat.height = H; await stage.draw(flat.getContext('2d'));
+        flow.dataset.push = `1.1 ${px0} ${py0}`;
+        const pushed = document.createElement('canvas'); pushed.width = W; pushed.height = H; await stage.draw(pushed.getContext('2d'));
+        delete flow.dataset.push;
+        const want = document.createElement('canvas'); want.width = W; want.height = H;
+        const wx = want.getContext('2d'); wx.translate(px0, py0); wx.scale(1.1, 1.1); wx.translate(-px0, -py0); wx.drawImage(flat, 0, 0);
+        const zoomed = { left: px0 - 0.5 * 1.1 * r.width + 4, top: py0 - 0.5 * 1.1 * r.height + 4, right: px0 + 0.5 * 1.1 * r.width - 4, bottom: py0 + 0.5 * 1.1 * r.height - 4 };
+        out.push({ push: psnr(pixels(want), pixels(pushed), [zoomed]), still: psnr(pixels(flat), pixels(pushed), [zoomed]) });
         stage.done();
         return out;
       });
+      const push = got.pop();
+      assert.ok(push.push > 30 && push.push > push.still + 6, `the pushed frame is the frame zoomed (${push.push.toFixed(2)} dB; unzoomed ${push.still.toFixed(2)} dB)`);
       // both pictures of each frame, to see what differs where it fails
       for (const f of got) for (const [k, v] of [['html2canvas', f.old], ['drawn', f.neu]]) fs.writeFileSync(path.join(OUT, `${host}-export-frame-${f.t}-${k}.png`), Buffer.from(v.split(',')[1], 'base64'));
       const all = got.map((f) => `${f.t} s ${f.psnr.toFixed(2)} dB`).join(', ');
