@@ -195,7 +195,7 @@ const ce = console.error; console.error = (...a) => { __errs.push(a.map(String).
           const props = el[key], down = props.onPointerDown;
           props.onPointerDown = (e) => {
             const r = e.currentTarget.getBoundingClientRect();
-            window.__taps.push(`react-down@${Math.round(e.clientX - r.left)},${Math.round(e.clientY - r.top)}/${Math.round(r.width)} ${window.__boardState()}`);
+            window.__taps.push(`react-down@${Math.round(e.clientX - r.left)},${Math.round(e.clientY - r.top)}/${Math.round(r.width)} ${window.__boardState()} window.event ${window.event ? window.event.type : 'none'}`);
             try { return down(e); } catch (x) { window.__taps.push('react-down threw ' + x.message); throw x; }
           };
           props.__wrapped = true;
@@ -222,6 +222,10 @@ const ce = console.error; console.error = (...a) => { __errs.push(a.map(String).
         requestAnimationFrame(mark('raf'));
         setTimeout(() => done(JSON.stringify(got)), 2000);
       })}`);
+      if (sq === 'e2') {
+        await new Promise((r) => setTimeout(r, 6000));
+        t.diagnostic(`6 s after e2: ${await js(() => `${window.__commits} commits, ${document.querySelector('[data-no-drag-scroll]').children.length} children`)}`);
+      }
       t.diagnostic(`after ${sq}: ${await js(() => { const el = document.querySelector('[data-no-drag-scroll]'); return el ? `${el.children.length} children, selected ${[...el.querySelectorAll('div')].some((d) => d.style.border.startsWith('5px'))}` : 'no board touch layer'; })}`);
       await shot(`tap-${sq}`);
     }
