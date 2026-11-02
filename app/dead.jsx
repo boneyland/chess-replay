@@ -22,10 +22,11 @@ function deadFen(pos) {
 // the position after a loaded game's ply (its FEN carries neither castling nor en passant: the ply has them)
 const plyPos = (p) => ({ ...window.ChessCore.posFromFen(p.fen), castle: p.castle, ep: p.ep });
 
+const DEAD_BOTH = { w: 'unwinnable', b: 'unwinnable' };
 // chasolver's answers for the position (null asks nothing): { w, b }, each 'unwinnable', 'winnable', 'undecided' or
-// undefined while it's asked
-function useDead(pos) {
-  const fen = pos ? deadFen(pos) : null, k = fen ? window.DeadCore.key(fen) : null;
+// undefined while it's asked; known: the position is already known to be dead (it follows one), so nothing is asked
+function useDead(pos, known) {
+  const fen = pos && !known ? deadFen(pos) : null, k = fen ? window.DeadCore.key(fen) : null;
   const [st, setSt] = React.useState({ k: null, v: null });
   const c = fen ? deadClient() : null;
   const hit = c ? { w: c.cached(fen, 'w'), b: c.cached(fen, 'b') } : null;
@@ -36,7 +37,7 @@ function useDead(pos) {
     c.both(fen, { signal: ctl.signal }).then((v) => { if (!ctl.signal.aborted) setSt({ k, v }); });
     return () => ctl.abort();
   }, [k, done]);
-  if (!fen) return null;
+  if (!fen) return pos && known ? DEAD_BOTH : null;
   return done ? hit : st.k === k ? st.v : hit;
 }
 

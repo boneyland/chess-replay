@@ -1051,8 +1051,10 @@ function GameVideo({ M, tw, d, probe, queen, nav, scheme, sf, orient }) {
   // the endgame tablebase for the position on the board, while paused (never in the video or its export)
   const shownFen = () => window.ChessCore.fenAfter(M.start.fen, (vline ? M.plies.slice(0, vline.at).concat(vline.moves.slice(0, vline.upto + 1)) : M.plies.slice(0, cNow + 1)).map((p) => p.san), touchPos);
   const tb = useTablebase(playing ? null : shownFen(), tw.tablebase !== false);
-  // chasolver on the position on the board, while paused; and the move after which the game's position is first dead
-  const dead = useDead(playing ? null : touchPos), deadAt = useFirstDead(M);
+  // the move after which the game's position is first dead; and chasolver on the position on the board, while paused,
+  // unasked from there on (a line branches from the position after ply at − 1)
+  const deadAt = useFirstDead(M), pastDead = deadAt != null && (vline ? vline.at - 1 : cNow) >= deadAt;
+  const dead = useDead(playing ? null : touchPos, pastDead);
   const onTb = (uci) => { const step = window.ChessCore.stepFromUci(touchPos, uci); if (step) { tl.setPlaying(false); input.clear(); playOwn(step); } };
   React.useEffect(() => { if (!vline) input.clear(); }, [vline]);
   // Stockfish on the viewer's line: the positions before and after the move on the board, as move lists from the start
