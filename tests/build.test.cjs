@@ -70,13 +70,14 @@ test('render.yaml lets no other site frame the page', () => {
 });
 
 // The Lichess sound sets travel inside the page
-test('the built page carries the four Lichess sound sets as MP3s, and the Wood set needs no data', () => {
+test('the built page carries the five Lichess sound sets as MP3s, and the Wood set needs no data', () => {
   const page = fs.readFileSync(path.join(ROOT, 'out', 'site', 'chess-game-video.html'), 'utf8');
   const data = JSON.parse(page.match(/window\.SFX_DATA = (\{.*?\});\n/)[1]);
-  assert.deepEqual(Object.keys(data), ['futuristic', 'nes', 'piano', 'sfx']);
+  assert.deepEqual(Object.keys(data), ['futuristic', 'lisp', 'nes', 'piano', 'sfx']);
   for (const [set, sounds] of Object.entries(data)) {
     assert.deepEqual(Object.keys(sounds), ['move', 'capture', 'check', 'victory', 'draw'], set);
-    for (const [kind, b64] of Object.entries(sounds)) assert.equal(Buffer.from(b64, 'base64').subarray(0, 3).toString(), 'ID3', `${set}/${kind}`);
+    // an ID3 tag, or (lisp) straight into an MPEG audio frame
+    for (const [kind, b64] of Object.entries(sounds)) { const b = Buffer.from(b64, 'base64'); assert.ok(b.subarray(0, 3).toString() === 'ID3' || (b[0] === 0xff && (b[1] & 0xe0) === 0xe0), `${set}/${kind}`); }
   }
 });
 

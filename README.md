@@ -18,7 +18,7 @@ A browser app for replaying and playing chess games, at https://chess-replay.onr
 - **Ask Queen**: a commentary on the position from queen-pawn-8, a chess language model on a Hugging Face Space (needs a connection)
 - **Export**: any game, or a stretch of it, as an MP4 video (with the move sounds, in a chosen quality, optionally at a variable frame rate) or an animated WebP (a chosen width and quality, up to lossless), at 8 to 30 frames a second; it records the page as you see it, so the text size and layout carry over
 - **Layouts for every screen**: one responsive page, a board with a sidebar on a wide window and one column on a narrow one, with a Text size setting; light or dark to match the system; full screen where the browser allows it, and Add to Home Screen opens it as an app
-- **Move sounds**: a synthesized Wood set and four of Lichess's sets
+- **Move sounds**: a synthesized Wood set and five of Lichess's sets
 - **Offline**: a service worker keeps the page, the engine and everything they load
 
 https://github.com/user-attachments/assets/d15445d0-b356-4954-b791-e700a717ab14
@@ -57,6 +57,7 @@ Built into the page or served with it:
 - Colin M.L. Burnett's chess pieces, the `cburnett` set as on Lichess (GPL-2.0-or-later)
 - Lichess's [chess-openings](https://github.com/lichess-org/chess-openings) tables (CC0)
 - The futuristic, nes, piano and sfx move sounds by [Enigmahack](https://github.com/Enigmahack), from [Lichess's source](https://github.com/lichess-org/lila) (AGPL-3.0-or-later)
+- The lisp move sounds by [EdinburghCollective](https://lichess.org/@/EdinburghCollective), unchanged from [Lichess's source](https://github.com/lichess-org/lila) ([CC BY-NC-SA 4.0](https://creativecommons.org/licenses/by-nc-sa/4.0/)): non-commercial, so video exports use the sfx set in their place
 - [libwebp](https://chromium.googlesource.com/webm/libwebp) (BSD-3-Clause), built to WebAssembly by [Squoosh](https://github.com/GoogleChromeLabs/squoosh) and packaged by [jSquash](https://github.com/jamsinclair/jSquash) (Apache-2.0), for the WebP export
 - [Mediabunny](https://github.com/Vanilagy/mediabunny) 1.61.0 by Vanilagy (MPL-2.0), for the MP4 export
 
@@ -69,4 +70,4 @@ Used to build it: [@babel/standalone](https://babeljs.io/docs/babel-standalone) 
 
 ## Licence
 
-GPL-3.0-or-later (`LICENSE`), the same as the bundled Stockfish. The Lichess sound files keep their own licence, the AGPL-3.0-or-later, which GPL-3.0 section 13 allows them to be combined with. The WebP encoder keeps libwebp's BSD-3-Clause and the Squoosh glue's Apache-2.0 licences, both compatible with the GPL-3.0.
+GPL-3.0-or-later (`LICENSE`), the same as the bundled Stockfish. The Enigmahack sound files keep their own licence, the AGPL-3.0-or-later, which GPL-3.0 section 13 allows them to be combined with. The lisp sound files (`vendor/sounds/lisp/`) are not covered by the GPL: they stay under CC BY-NC-SA 4.0, a separate work shipped alongside, and may not be used commercially. The WebP encoder keeps libwebp's BSD-3-Clause and the Squoosh glue's Apache-2.0 licences, both compatible with the GPL-3.0.
