@@ -43,10 +43,25 @@ test('cue: the sound of the move now on the board, and the end of the game when 
   assert.deepEqual(X.cue({ ...M, result: '*' }, 1, 2, true), { kinds: ['move', 'check'], end: null });
 });
 
-test('every set but the built-in one has its five sounds in the page data', () => {
+test('every set but the built-in one has its five sound files', () => {
   assert.equal(X.SETS[0], 'Lichess sfx'); // the default, also for a stored set that no longer exists
+  assert.equal(X.soundUrl('Lichess lisp', 'victory'), 'sounds/lisp/Victory.mp3');
+  assert.equal(X.soundUrl('Lichess NES', 'move'), 'sounds/nes/Move.mp3');
+  assert.equal(X.soundUrl('Wood', 'move'), null);
+  assert.equal(X.soundUrl('Gone', 'move'), null);
   assert.deepEqual(X.SETS.filter((s) => s !== 'Wood').map((s) => X.SET_DIR[s]).sort(), ['futuristic', 'lisp', 'nes', 'piano', 'sfx']);
   assert.deepEqual(X.KINDS, ['move', 'capture', 'check', 'victory', 'draw']);
+});
+
+test('fetchSound: the bytes, or null for a missing file or no connection', async () => {
+  const was = global.fetch, bytes = new ArrayBuffer(4);
+  try {
+    global.fetch = async (u) => (u === 'ok' ? { ok: true, arrayBuffer: async () => bytes } : { ok: false });
+    assert.equal(await X.fetchSound('ok'), bytes);
+    assert.equal(await X.fetchSound('gone'), null);
+    global.fetch = async () => { throw new TypeError('Failed to fetch'); };
+    assert.equal(await X.fetchSound('ok'), null);
+  } finally { global.fetch = was; }
 });
 
 test('exportSet: a non-commercial set is swapped for the default in exports, the others kept', () => {
@@ -76,4 +91,43 @@ test('track: each ply sounds when it lands, the end of the game after the last, 
   assert.deepEqual(X.track(M, S, 2, 3.5), [{ at: 0.5, kinds: ['capture'] }]); // a ply landing at the end is left out
   assert.deepEqual(X.track(M, S, 3, 3.9).map((e) => e.kinds), [['move', 'check']]); // no room for the end sound
   assert.deepEqual(X.track({ ...M, result: '*' }, S, 0, 10).length, 3);
+});
+
+// A fake Web Audio context that, like Firefox's, is created suspended in the first gesture and runs once resume() settles
+function fakeAudio(initial) {
+  const started = [], made = [];
+  class Ctx {
+    constructor() { this.state = initial; this.sampleRate = 8000; this.currentTime = 0; this.destination = {}; made.push(this); }
+    resume() { return Promise.resolve().then(() => { this.state = 'running'; }); }
+    createBuffer(ch, n) { const d = new Float32Array(n); return { duration: n / 8000, getChannelData: () => d }; }
+    createGain() { return { gain: {}, connect() {} }; }
+    createBufferSource() { return { connect() {}, start() { started.push(this.buffer); } }; }
+  }
+  return { Ctx, started, made };
+}
+
+test('player: a sound asked for in the gesture that starts the audio plays once it runs (Firefox starts it suspended)', async () => {
+  for (const initial of ['suspended', 'running']) {
+    const was = window.AudioContext, fake = fakeAudio(initial);
+    window.AudioContext = fake.Ctx;
+    try {
+      const p = X.createPlayer(async () => null);
+      p.unlock(); // the first tap or key
+      p.play('Wood', ['move'], 70); // the move that tap made, in the same gesture
+      await new Promise((ok) => setTimeout(ok, 20));
+      assert.equal(fake.started.length, 1, `${initial}: the first move sounds`);
+    } finally { window.AudioContext = was; }
+  }
+});
+
+test('player: nothing plays before the first gesture, and nothing queues up to play after it', async () => {
+  const was = window.AudioContext, fake = fakeAudio('suspended');
+  window.AudioContext = fake.Ctx;
+  try {
+    const p = X.createPlayer(async () => null);
+    p.play('Wood', ['move'], 70); // playback with no gesture yet
+    p.unlock();
+    await new Promise((ok) => setTimeout(ok, 20));
+    assert.equal(fake.started.length, 0);
+  } finally { window.AudioContext = was; }
 });

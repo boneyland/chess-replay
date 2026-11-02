@@ -1,6 +1,6 @@
 // Move sounds: which sounds a move makes, when its piece lands, the built-in Wood set (synthesized here) and the
 // player. The Lichess sets are Enigmahack's (AGPL-3.0-or-later) and EdinburghCollective's lisp (CC BY-NC-SA 4.0),
-// inlined by build.cjs as window.SFX_DATA.
+// MP3s that build.cjs serves next to the page (soundUrl) and the service worker keeps from the first visit.
 (function () {
   // the first is the default
   const SETS = ['Lichess sfx', 'Lichess piano', 'Lichess NES', 'Lichess futuristic', 'Lichess lisp', 'Wood'];
@@ -10,6 +10,10 @@
   const NON_COMMERCIAL = ['Lichess lisp'];
   const exportSet = (set) => (SETS.includes(set) && !NON_COMMERCIAL.includes(set) ? set : SETS[0]);
   const KINDS = ['move', 'capture', 'check', 'victory', 'draw'];
+  // a Lichess sound's file, next to the page; null for Wood (made here) or a set that's gone
+  const soundUrl = (set, kind) => (SET_DIR[set] ? `sounds/${SET_DIR[set]}/${kind[0].toUpperCase()}${kind.slice(1)}.mp3` : null);
+  // a file's bytes, or null if it can't be had (offline before the service worker kept it)
+  const fetchSound = (url) => fetch(url).then((r) => (r.ok ? r.arrayBuffer() : null), () => null);
   const END_DELAY = 0.6; // seconds between the last move's sound and the end of the game's
 
   // played together: the move or capture, and a check on top
@@ -79,27 +83,27 @@
     return out;
   }
 
-  // a sound as an AudioBuffer in ctx's sample rate, or a promise of one while a Lichess file decodes; null if the set
-  // has no such sound
-  function decode(ctx, data, set, kind) {
+  // a sound as an AudioBuffer in ctx's sample rate, or a promise of one (null if it can't be had) while a Lichess file
+  // downloads and decodes; null if the set has no such sound. get(url) fetches a file's bytes
+  function decode(ctx, get, set, kind) {
     if (set === 'Wood') {
       const s = synth(kind, ctx.sampleRate), b = ctx.createBuffer(1, s.length, ctx.sampleRate);
       b.getChannelData(0).set(s);
       return b;
     }
-    const b64 = data[SET_DIR[set]] && data[SET_DIR[set]][kind];
-    if (!b64) return null;
-    return ctx.decodeAudioData(Uint8Array.from(atob(b64), (ch) => ch.charCodeAt(0)).buffer);
+    const url = soundUrl(set, kind);
+    if (!url) return null;
+    return get(url).then((bytes) => (bytes ? ctx.decodeAudioData(bytes) : null));
   }
   const gainOf = (volume) => Math.max(0, Math.min(1, (volume == null ? 70 : volume) / 100));
 
   // Mixes a track() into a stereo AudioBuffer dur seconds long, offline, for the video export
-  async function renderTrack(data, set, events, volume, dur, rate = 48000) {
+  async function renderTrack(get, set, events, volume, dur, rate = 48000) {
     const OAC = window.OfflineAudioContext || window.webkitOfflineAudioContext;
     if (!OAC) return null;
     set = exportSet(set);
     const ctx = new OAC(2, Math.max(1, Math.ceil(dur * rate)), rate), bufs = {};
-    for (const k of new Set(events.flatMap((e) => e.kinds))) { try { bufs[k] = await decode(ctx, data, set, k); } catch (e) { bufs[k] = null; } }
+    for (const k of new Set(events.flatMap((e) => e.kinds))) { try { bufs[k] = await decode(ctx, get, set, k); } catch (e) { bufs[k] = null; } }
     const gain = ctx.createGain();
     gain.gain.value = gainOf(volume);
     gain.connect(ctx.destination);
@@ -111,15 +115,16 @@
   }
 
   // ---- the player: Web Audio, started by the viewer's first tap or key (browsers keep it silent until then) ----
-  function createPlayer(data) {
-    let ctx = null, wanted = SETS[0];
-    const cache = new Map(); // `${set}/${kind}` → AudioBuffer, or a promise while it decodes
+  function createPlayer(get) {
+    let ctx = null, wanted = SETS[0], waking = null; // waking: a gesture's resume() while it settles
+    const cache = new Map(); // `${set}/${kind}` → AudioBuffer, or a promise while it downloads and decodes
     function load(set, kind) {
       const key = set + '/' + kind;
       if (cache.has(key)) return cache.get(key);
-      let v = decode(ctx, data, set, kind);
+      let v = decode(ctx, get, set, kind);
       if (!v) return null;
-      if (typeof v.then === 'function') v = v.then((buf) => { cache.set(key, buf); return buf; }, () => { cache.set(key, null); return null; });
+      // a file that couldn't be had is asked for again next time (offline before it was kept); one that won't decode isn't
+      if (typeof v.then === 'function') v = v.then((buf) => { if (buf) cache.set(key, buf); else cache.delete(key); return buf; }, () => { cache.set(key, null); return null; });
       cache.set(key, v);
       return v;
     }
@@ -127,18 +132,24 @@
     function unlock() {
       try {
         if (!ctx) { const AC = window.AudioContext || window.webkitAudioContext; if (!AC) return; ctx = new AC(); prepare(wanted); }
-        if (ctx.state === 'suspended') ctx.resume();
+        if (ctx.state === 'suspended' && !waking) { const w = (waking = Promise.resolve(ctx.resume()).catch(() => {})); w.then(() => { if (waking === w) waking = null; }); }
       } catch (e) {}
     }
     if (typeof window.addEventListener === 'function') ['pointerdown', 'keydown'].forEach((ev) => window.addEventListener(ev, unlock, true));
     function start(set, kind, delay, gain) {
       const buf = load(set, kind);
       const go = (b) => { if (!b) return; const src = ctx.createBufferSource(); src.buffer = b; src.connect(gain); src.start(ctx.currentTime + delay); };
-      // still decoding (the first sound of a newly picked set): play it if it's ready soon, else let it go
+      // still downloading or decoding (the first sound of a newly picked set): play it if it's ready soon, else let it go
       if (buf && typeof buf.then === 'function') { const asked = Date.now(); buf.then((b) => { if (Date.now() - asked < 300) go(b); }); } else go(buf);
     }
     function play(set, kindList, volume, end) {
-      if (!ctx || ctx.state !== 'running') return; // before the first gesture: nothing queues up to burst out later
+      if (!ctx) return; // before the first gesture: nothing queues up to burst out later
+      // Firefox starts the audio suspended in the gesture that makes it, running a moment later: the move that gesture
+      // made (the first Next) plays then, if soon
+      if (ctx.state !== 'running') {
+        if (waking) { const asked = Date.now(); waking.then(() => { if (ctx.state === 'running' && Date.now() - asked < 300) play(set, kindList, volume, end); }); }
+        return;
+      }
       set = SETS.includes(set) ? set : SETS[0];
       if (set !== wanted) prepare(set);
       // a gain per sound, so moving the volume slider doesn't change one still ringing
@@ -151,5 +162,5 @@
     return { play, prepare, unlock };
   }
 
-  window.Sfx = { SETS, SET_DIR, NON_COMMERCIAL, exportSet, KINDS, kinds, endKind, landed, cue, track, synth, renderTrack, createPlayer };
+  window.Sfx = { SETS, SET_DIR, NON_COMMERCIAL, exportSet, KINDS, soundUrl, fetchSound, kinds, endKind, landed, cue, track, synth, renderTrack, createPlayer };
 })();

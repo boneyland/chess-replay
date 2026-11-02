@@ -69,16 +69,24 @@ test('render.yaml lets no other site frame the page', () => {
   assert.equal(h['X-Frame-Options'], 'SAMEORIGIN');
 });
 
-// The Lichess sound sets travel inside the page
-test('the built page carries the five Lichess sound sets as MP3s, and the Wood set needs no data', () => {
-  const page = fs.readFileSync(path.join(ROOT, 'out', 'site', 'chess-game-video.html'), 'utf8');
-  const data = JSON.parse(page.match(/window\.SFX_DATA = (\{.*?\});\n/)[1]);
-  assert.deepEqual(Object.keys(data), ['futuristic', 'lisp', 'nes', 'piano', 'sfx']);
-  for (const [set, sounds] of Object.entries(data)) {
-    assert.deepEqual(Object.keys(sounds), ['move', 'capture', 'check', 'victory', 'draw'], set);
+// The Lichess sound sets are served next to the page, one MP3 per sound, and the service worker keeps them all
+test('the built site serves the five Lichess sound sets as MP3s where Sfx.soundUrl names them, kept by sw.js', () => {
+  const { loadUnit } = require('./load.cjs');
+  loadUnit('sfx-core.js');
+  const X = window.Sfx, site = path.join(ROOT, 'out', 'site');
+  const page = fs.readFileSync(path.join(site, 'chess-game-video.html'), 'utf8');
+  assert.doesNotMatch(page, /SFX_DATA/, 'no sounds inlined in the page');
+  const LOCAL = JSON.parse(fs.readFileSync(path.join(site, 'sw.js'), 'utf8').match(/^const LOCAL = (\[.*?\]);/m)[1]);
+  const sets = X.SETS.filter((s) => s !== 'Wood');
+  assert.deepEqual(sets.map((s) => X.SET_DIR[s]).sort(), ['futuristic', 'lisp', 'nes', 'piano', 'sfx']);
+  for (const set of sets) for (const kind of X.KINDS) {
+    const url = X.soundUrl(set, kind), b = fs.readFileSync(path.join(site, url));
     // an ID3 tag, or (lisp) straight into an MPEG audio frame
-    for (const [kind, b64] of Object.entries(sounds)) { const b = Buffer.from(b64, 'base64'); assert.ok(b.subarray(0, 3).toString() === 'ID3' || (b[0] === 0xff && (b[1] & 0xe0) === 0xe0), `${set}/${kind}`); }
+    assert.ok(b.subarray(0, 3).toString() === 'ID3' || (b[0] === 0xff && (b[1] & 0xe0) === 0xe0), url);
+    assert.ok(b.equals(fs.readFileSync(path.join(ROOT, 'vendor', url))), url + ' is the vendored file');
+    assert.ok(LOCAL.includes(url), url + ' kept by sw.js');
   }
+  assert.equal(LOCAL.filter((f) => f.startsWith('sounds/')).length, sets.length * X.KINDS.length);
 });
 
 // an unmatched } in the page's stylesheet makes the browser drop the rule after it (it once hid the drop overlay)
