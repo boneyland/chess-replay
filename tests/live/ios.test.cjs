@@ -156,6 +156,9 @@ const ce = console.error; console.error = (...a) => { __errs.push(a.map(String).
     const reg = () => browser.executeAsync((done) => navigator.serviceWorker.getRegistration().then((r) => done(r ? ['installing', 'waiting', 'active'].map((k) => `${k} ${r[k] ? r[k].state : '-'}`).join(', ') : 'none'), (e) => done('error ' + e.message)));
     await until(() => !!navigator.serviceWorker, 5000, 'no navigator.serviceWorker');
     t.diagnostic(`before the reload: ${await reg()}`);
+    // run 5 had a registration with no worker at all: whether the script loads, and what a register() of it says
+    t.diagnostic(`sw.js: ${await browser.executeAsync((done) => fetch('sw.js', { cache: 'no-store' }).then((r) => done(`${r.status} ${r.headers.get('content-type')}`), (e) => done('error ' + e.message)))}`);
+    t.diagnostic(`register: ${await browser.executeAsync((done) => { setTimeout(() => done('still pending after 10 s'), 10000); navigator.serviceWorker.register('sw.js', { updateViaCache: 'none' }).then((r) => done('ok, scope ' + r.scope), (e) => done(e.name + ': ' + e.message)); })}`);
     await browser.url(URL_);
     await loaded();
     const cached = () => browser.executeAsync((done) => caches.keys().then((ks) => Promise.all(ks.map((k) => caches.open(k).then((c) => c.keys()).then((r) => `${k}: ${r.length}`)))).then((l) => done(l.join(', ') || 'no caches'), (e) => done('error ' + e.message)));
@@ -173,10 +176,16 @@ const ce = console.error; console.error = (...a) => { __errs.push(a.map(String).
     // each tap's events and a screenshot, while taps that reach the page play nothing here (runs 1 and 2)
     for (const sq of ['e2', 'e4']) {
       const p = square(b, sq);
-      await js(() => { window.__taps = []; });
+      await js(() => {
+        window.__taps = [];
+        const el = document.querySelector('[data-no-drag-scroll]');
+        if (!window.__boardOn && el) for (const k of ['pointerdown', 'pointermove', 'pointerup', 'pointercancel', 'touchstart', 'touchend', 'touchcancel', 'mousedown', 'click']) el.addEventListener(k, (e) => window.__taps.push(`${k}${e.defaultPrevented ? '!' : ''}#${e.pointerId != null ? e.pointerId : ''}`));
+        window.__boardOn = true;
+      });
       await tap(p.x, p.y);
       await new Promise((r) => setTimeout(r, 400));
       t.diagnostic(`tap ${sq} at ${Math.round(p.x)},${Math.round(p.y)}: ${(await js(() => window.__taps || [])).join(' ') || 'nothing'} · on ${await js((x, y) => { const e = document.elementFromPoint(x, y); return e ? e.tagName + '.' + [...e.classList].join('.') : 'none'; }, p.x, p.y)}`);
+      t.diagnostic(`after ${sq}: ${await js(() => { const el = document.querySelector('[data-no-drag-scroll]'); return el ? `${el.children.length} children, selected ${[...el.querySelectorAll('div')].some((d) => d.style.border.startsWith('5px'))}` : 'no board touch layer'; })}`);
       await shot(`tap-${sq}`);
     }
     try { await until(() => /your move ·/i.test(document.body.innerText), 5000, 'the move was not played'); }
