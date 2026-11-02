@@ -13,7 +13,7 @@
   // a Lichess sound's file, next to the page; null for Wood (made here) or a set that's gone
   const soundUrl = (set, kind) => (SET_DIR[set] ? `sounds/${SET_DIR[set]}/${kind[0].toUpperCase()}${kind.slice(1)}.mp3` : null);
   // a file's bytes, or null if it can't be had (offline before the service worker kept it)
-  const fetchSound = (url) => fetch(url).then((r) => (r.ok ? r.arrayBuffer() : null), () => null);
+  const fetchSound = (url) => fetch(url, { priority: 'high' }).then((r) => (r.ok ? r.arrayBuffer() : null), () => null);
   const END_DELAY = 0.6; // seconds between the last move's sound and the end of the game's
 
   // played together: the move or capture, and a check on top
@@ -118,17 +118,27 @@
   function createPlayer(get) {
     let ctx = null, wanted = SETS[0], waking = null; // waking: a gesture's resume() while it settles
     const cache = new Map(); // `${set}/${kind}` → AudioBuffer, or a promise while it downloads and decodes
+    // url → a file's bytes (a promise), fetched as soon as its set is chosen, before the first gesture makes an AudioContext:
+    // on a first visit, fetched only then, the first moves' files queued behind Stockfish and the service worker's install
+    const files = new Map();
+    function file(url) {
+      if (!files.has(url)) files.set(url, Promise.resolve(get(url)).catch(() => null).then((b) => { if (!b) files.delete(url); return b; }));
+      return files.get(url).then((b) => b && b.slice(0)); // decodeAudioData detaches what it's given
+    }
     function load(set, kind) {
       const key = set + '/' + kind;
       if (cache.has(key)) return cache.get(key);
-      let v = decode(ctx, get, set, kind);
+      let v = decode(ctx, file, set, kind);
       if (!v) return null;
       // a file that couldn't be had is asked for again next time (offline before it was kept); one that won't decode isn't
       if (typeof v.then === 'function') v = v.then((buf) => { if (buf) cache.set(key, buf); else cache.delete(key); return buf; }, () => { cache.set(key, null); return null; });
       cache.set(key, v);
       return v;
     }
-    const prepare = (set) => { wanted = SETS.includes(set) ? set : SETS[0]; if (ctx) KINDS.forEach((k) => load(wanted, k)); };
+    const prepare = (set) => {
+      wanted = SETS.includes(set) ? set : SETS[0];
+      KINDS.forEach((k) => { const url = soundUrl(wanted, k); if (url) file(url); if (ctx) load(wanted, k); });
+    };
     function unlock() {
       try {
         if (!ctx) { const AC = window.AudioContext || window.webkitAudioContext; if (!AC) return; ctx = new AC(); prepare(wanted); }
