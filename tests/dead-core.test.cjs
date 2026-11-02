@@ -107,6 +107,37 @@ test('a worker that can\'t start, or fails, answers undecided without caching it
   assert.equal(c3.cached(KK, 'w'), undefined);
 });
 
+test('after a worker fails to load, asks answer undecided without a new worker until retryMs has passed', async () => {
+  let t = 0, made = 0;
+  const w = () => ({ postMessage: (m) => setTimeout(() => w.cur.onmessage({ data: { id: m.id, verdict: 'undecided', error: true } })), terminate() {} });
+  const c = D.create({ makeWorker: () => { made++; return (w.cur = w()); }, retryMs: 1000, now: () => t });
+  assert.equal(await c.ask(KK, 'w'), 'undecided');
+  assert.equal(await c.ask(KK, 'b'), 'undecided');
+  assert.equal(await D.firstDead([START, KK], c), null);
+  assert.equal(made, 1, 'one worker for all of them');
+  t = 1000;
+  assert.equal(await c.ask(KK, 'w'), 'undecided');
+  assert.equal(made, 2, 'tried again after retryMs');
+  // the same for a Worker that throws, and one whose load fails with an error event
+  let thrown = 0;
+  const c2 = D.create({ makeWorker: () => { thrown++; throw new Error('no Worker'); }, retryMs: 1000, now: () => t });
+  await c2.ask(KK, 'w'); await c2.ask(KK, 'b');
+  assert.equal(thrown, 1);
+  const f = fakeWorkers({});
+  const c3 = D.create({ makeWorker: f.make, retryMs: 1000, now: () => t });
+  const p = c3.ask(KK, 'w');
+  f.made[0].onerror({ preventDefault() {} });
+  await p; await c3.ask(KK, 'b');
+  assert.equal(f.made.length, 1);
+  // a search past its time isn't a load failure: the next ask starts a worker at once
+  const slow = fakeWorkers({ [START + ' w']: 'winnable' }, { delay: 50 });
+  const c4 = D.create({ makeWorker: slow.make, timeoutMs: 10, retryMs: 1000, now: () => t });
+  assert.equal(await c4.ask(START, 'w'), 'undecided');
+  c4.ask(START, 'b');
+  assert.equal(slow.made.length, 2);
+  c4.close();
+});
+
 test('firstDead finds the first position dead for both sides and stops there', async () => {
   const KR = '8/8/8/4k3/8/8/r7/4K3 w - - 0 1', LATER = '8/8/8/8/8/8/8/1K1k4 b - - 0 2';
   const f = fakeWorkers({ [START + ' w']: 'winnable', [START + ' b']: 'winnable', [KR + ' w']: 'unwinnable', [KR + ' b']: 'winnable', [KK + ' w']: 'unwinnable', [KK + ' b']: 'unwinnable' });
