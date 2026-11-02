@@ -155,7 +155,7 @@ const ce = console.error; console.error = (...a) => { __errs.push(a.map(String).
     assert.ok(Object.values(seen).some((l) => l.some((e) => /^pointerdown/.test(e))), 'no tap gave a pointerdown');
   });
 
-  await t.test('the service worker takes over the page', { timeout: 120000 }, async () => {
+  await t.test('the service worker takes over the page', { timeout: 120000 }, async (st) => {
     const reg = () => browser.executeAsync((done) => navigator.serviceWorker.getRegistration().then((r) => done(r ? ['installing', 'waiting', 'active'].map((k) => `${k} ${r[k] ? r[k].state : '-'}`).join(', ') : 'none'), (e) => done('error ' + e.message)));
     await until(() => !!navigator.serviceWorker, 5000, 'no navigator.serviceWorker');
     t.diagnostic(`before the reload: ${await reg()}`);
@@ -173,7 +173,7 @@ const ce = console.error; console.error = (...a) => { __errs.push(a.map(String).
     }
     // not asserted: on GitHub's Simulator the worker stayed installing for 3 minutes without opening its cache (run 7),
     // while Playwright's WebKit runs the same worker; what it reaches is said instead
-    if (!ok) t.todo('the service worker never took over here (a Simulator limit, it seems)');
+    if (!ok) st.todo('the service worker never took over here (a Simulator limit, it seems)');
     assert.deepEqual(await errors(), []);
   });
 
@@ -209,6 +209,16 @@ const ce = console.error; console.error = (...a) => { __errs.push(a.map(String).
       await new Promise((r) => setTimeout(r, 400));
       t.diagnostic(`tap ${sq} at ${Math.round(p.x)},${Math.round(p.y)}: ${(await js(() => window.__taps || [])).join(' ') || 'nothing'} · on ${await js((x, y) => { const e = document.elementFromPoint(x, y); return e ? e.tagName + '.' + [...e.classList].join('.') : 'none'; }, p.x, p.y)}`);
       t.diagnostic(`state after ${sq}: ${await js(() => window.__boardState())}`);
+      // run 8: the board's props held the selection while its DOM never showed it, so whether the page's timers, message
+      // ports (React's scheduler) and animation frames still run
+      t.diagnostic(`page clock after ${sq}: ${await browser.executeAsync((done) => {
+        const got = { vis: document.visibilityState, focus: document.hasFocus() };
+        const t0 = performance.now(), mark = (k) => () => { got[k] = Math.round(performance.now() - t0); };
+        setTimeout(mark('timeout'), 0);
+        const mc = new MessageChannel(); mc.port1.onmessage = mark('message'); mc.port2.postMessage(0);
+        requestAnimationFrame(mark('raf'));
+        setTimeout(() => done(JSON.stringify(got)), 2000);
+      })}`);
       t.diagnostic(`after ${sq}: ${await js(() => { const el = document.querySelector('[data-no-drag-scroll]'); return el ? `${el.children.length} children, selected ${[...el.querySelectorAll('div')].some((d) => d.style.border.startsWith('5px'))}` : 'no board touch layer'; })}`);
       await shot(`tap-${sq}`);
     }
