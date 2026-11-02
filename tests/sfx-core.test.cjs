@@ -131,3 +131,20 @@ test('player: nothing plays before the first gesture, and nothing queues up to p
     assert.equal(fake.started.length, 0);
   } finally { window.AudioContext = was; }
 });
+
+test('player: the chosen set downloads as the page loads, before any gesture, once; a failed file is asked for again', async () => {
+  const asked = [];
+  let fail = true;
+  const p = X.createPlayer(async (u) => { asked.push(u); return fail && /Move/.test(u) ? null : new ArrayBuffer(8); });
+  p.prepare('Lichess lisp'); // the page's first render, no AudioContext yet
+  await new Promise((ok) => setTimeout(ok, 0));
+  assert.deepEqual(asked.sort(), X.KINDS.map((k) => X.soundUrl('Lichess lisp', k)).sort());
+  fail = false;
+  asked.length = 0;
+  p.prepare('Lichess lisp');
+  await new Promise((ok) => setTimeout(ok, 0));
+  assert.deepEqual(asked, ['sounds/lisp/Move.mp3'], 'only the file that failed is asked for again');
+  asked.length = 0;
+  p.prepare('Wood');
+  assert.deepEqual(asked, [], 'Wood is made here');
+});
