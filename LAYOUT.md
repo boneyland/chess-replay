@@ -36,12 +36,17 @@ What each part of the repo is, with the pinned SHA-256 of every vendored file. B
   - `webp_enc_simd.wasm` sha256 `39c279269ec1163b987b6d69749458e3d5b03b9585f58b6ca5455b76b504a305`
 - `vendor/mediabunny.min.js`: the MP4 export's muxer, Mediabunny 1.61.0 (MPL-2.0, `mediabunny.LICENSE`, https://github.com/Vanilagy/mediabunny), the unchanged `dist/bundles/mediabunny.min.mjs` (an ES module, renamed `.js` so every host serves it as JavaScript); the site serves it next to the page
   - `mediabunny.min.js` sha256 `fa696c53494b6b09a8b310ec51e3c44a59e79513234fb832255a38c686162009`
-- `vendor/sounds/`: Lichess's futuristic, nes, piano and sfx sound sets by Enigmahack (AGPL-3.0-or-later, per lila's `COPYING.md`), unchanged files from `public/sound/` at lila commit `b003cfa2fab3a07ed6192e9edb8544f012b38e7f`; the page inlines them. Lichess's other sets aren't free (standard, woodland, robot, instrument) or are non-commercial (lisp), so they're left out. The built-in Wood set is synthesized in `sfx-core.js`
+- `vendor/sounds/`: Lichess's futuristic, nes, piano and sfx sound sets by Enigmahack (AGPL-3.0-or-later) and its lisp set by EdinburghCollective (CC BY-NC-SA 4.0, https://creativecommons.org/licenses/by-nc-sa/4.0/), per lila's `COPYING.md`, unchanged files from `public/sound/` at lila commit `b003cfa2fab3a07ed6192e9edb8544f012b38e7f`; the page inlines them. lisp is non-commercial, so video exports use the default set in its place (`Sfx.exportSet`). Lichess's other sets aren't free (standard, woodland, robot, instrument), so they're left out. The built-in Wood set is synthesized in `sfx-core.js`
   - `futuristic/Move.mp3` sha256 `e68edeb6dfc9d0510b553c7d94adbb249c07e52c8e1c6ae1a207dea56c08195a`
   - `futuristic/Capture.mp3` sha256 `d043743b359844536b991600253453de9d3f95d6ca4688f25ec3eebcf0316874`
   - `futuristic/Check.mp3` sha256 `dcc348cfb2f84bfa12daab3ea40b2970c41e9b33df8818a7788774bf485c312d`
   - `futuristic/Victory.mp3` sha256 `43abe23ee2bce78b99ba1977429c7ddfe36b4f7f0dd41b37b5e2f341ca86607c`
   - `futuristic/Draw.mp3` sha256 `e935da7d2bd2b096f42ed25ed7113fe307e930b4093bb2dd85b039a7e99906b3`
+  - `lisp/Move.mp3` sha256 `2b161d54b1cbdb683175b09c29cc65a5575c635e9d946e52ae471dcbf69f727d`
+  - `lisp/Capture.mp3` sha256 `b933f1a39a97e45e35450d8b757cab34c66ef7f3e1548e289f1bf182bebd7030`
+  - `lisp/Check.mp3` sha256 `3b85d980931cd531ae5980b1770325da8fd74c2930d30f93a50fc0215d7c4bc3`
+  - `lisp/Victory.mp3` sha256 `41cfe64e7b0f6c1c151b72a6c24a4a1c3dbee30efa4ad6f0e6fe30031048c15a`
+  - `lisp/Draw.mp3` sha256 `247b34d773d02aa6fc4041e9ddadb09a065aa3e2007d2cdf79a7074c4bac9b07`
   - `nes/Move.mp3` sha256 `dd2537a1fe4e769cf81f2243a886869cecc747c03fc74302c26e82d1d30444f0`
   - `nes/Capture.mp3` sha256 `db0fee5a96c0638548e2f2522dce6541ca0e6a3cf75b50e0092817d9e00ecbb9`
   - `nes/Check.mp3` sha256 `0d7f8760ffafa45baf1a7e9deafa398bf3aedbe76ab5bd0dbf03055c2697d6ef`

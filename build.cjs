@@ -4,9 +4,9 @@ const dir = __dirname, src = path.join(dir, 'src'), app = path.join(dir, 'app');
 const Babel = require(path.join(dir, 'babel', 'babel.min.js'));
 const jsx = (code, name) => Babel.transform(code, { filename: name, presets: ['react'] }).code;
 const read = (p) => fs.readFileSync(p, 'utf8');
-// Lichess's Enigmahack sound sets (AGPL-3.0-or-later, vendor/sounds), inlined as base64 MP3s: { sfx: { move: '…' }, … }
+// Lichess's sound sets (vendor/sounds: Enigmahack's AGPL-3.0-or-later ones and EdinburghCollective's lisp, CC BY-NC-SA 4.0), inlined as base64 MP3s: { sfx: { move: '…' }, … }
 const SOUNDS = path.join(dir, 'vendor', 'sounds');
-const soundsData = () => Object.fromEntries(['futuristic', 'nes', 'piano', 'sfx'].map((set) => [set, Object.fromEntries(['Move', 'Capture', 'Check', 'Victory', 'Draw'].map((f) => [f.toLowerCase(), fs.readFileSync(path.join(SOUNDS, set, f + '.mp3')).toString('base64')]))]));
+const soundsData = () => Object.fromEntries(['futuristic', 'lisp', 'nes', 'piano', 'sfx'].map((set) => [set, Object.fromEntries(['Move', 'Capture', 'Check', 'Victory', 'Draw'].map((f) => [f.toLowerCase(), fs.readFileSync(path.join(SOUNDS, set, f + '.mp3')).toString('base64')]))]));
 const units = [
   ['pieces.js', read(path.join(src, 'pieces.js'))],
   ['chess-core.js', read(path.join(app, 'chess-core.js'))],
