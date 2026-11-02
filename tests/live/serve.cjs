@@ -7,7 +7,7 @@ const PAGE = '/chess-game-video.html';
 // render.yaml's `headers:` entries, all for every path (/*)
 const HEADERS = Object.fromEntries([...fs.readFileSync(path.join(__dirname, '..', '..', 'render.yaml'), 'utf8')
   .matchAll(/- path: \/\*\n\s+name: (.+)\n\s+value: (.+)/g)].map((m) => [m[1].trim(), m[2].trim()]));
-const TYPES = { '.html': 'text/html; charset=utf-8', '.js': 'text/javascript; charset=utf-8', '.wasm': 'application/wasm', '.webmanifest': 'application/manifest+json', '.png': 'image/png', '.json': 'application/json' };
+const TYPES = { '.html': 'text/html; charset=utf-8', '.js': 'text/javascript; charset=utf-8', '.wasm': 'application/wasm', '.webmanifest': 'application/manifest+json', '.png': 'image/png', '.json': 'application/json', '.mp3': 'audio/mpeg' };
 
 function serve(dir, port = 0) {
   const root = path.resolve(dir);

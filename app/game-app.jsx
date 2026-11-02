@@ -478,7 +478,7 @@ function GameApp() {
   const plyTag = (i) => `${Math.floor((MV.ply0 + i) / 2) + 1}${(MV.ply0 + i) % 2 ? 'b' : 'w'}`;
   const clipSuffix = clipFrom < 0 && clipTo >= NP ? '' : `_${clipFrom < 0 ? 'start' : plyTag(clipFrom)}-${clipTo >= NP ? 'end' : plyTag(clipTo)}`;
   const exportVideo = () => { setPanel(false); setQueenOpen(false); video.run({ start: clipT.start, end: clipT.end, suffix: clipSuffix, audio: t.sound === false || webp ? null
-    : () => window.Sfx.renderTrack(window.SFX_DATA || {}, soundSet, window.Sfx.track(MV, clipOpts.S, clipT.start, clipT.end), soundVolume, clipT.end - clipT.start) }); };
+    : () => window.Sfx.renderTrack(window.Sfx.fetchSound, soundSet, window.Sfx.track(MV, clipOpts.S, clipT.start, clipT.end), soundVolume, clipT.end - clipT.start) }); };
   const depthText = (d) => (d == null ? 'No limit' : String(d)), SF_KEYS = ['sfDepth', 'sfTime', 'sfOwnDepth', 'sfOwnTime', 'sfLines', 'sfHash', 'sfThreads'];
   const sfChanged = JSON.stringify(ES) !== JSON.stringify(window.AnalysisCore.engineSettings(window.TWEAK_DEFAULTS, sfKind, threading, hashChoices));
   const askQueen = () => { setQueenOpen((q) => !q); setPanel(false); };

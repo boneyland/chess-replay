@@ -1,5 +1,5 @@
 // ---------- move sounds ----------
-const sfxPlayer = window.Sfx.createPlayer(window.SFX_DATA || {});
+const sfxPlayer = window.Sfx.createPlayer(window.Sfx.fetchSound);
 
 // A sound when a piece lands: in playback, stepping through the game, and on the moves of a line shown on the board.
 // Silent while exporting (the export steps through the player) and when a new game loads.

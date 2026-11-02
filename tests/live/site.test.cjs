@@ -2396,6 +2396,12 @@ for (const name of BROWSERS) for (const site of SITES) {
       await p.waitForFunction(() => navigator.serviceWorker && navigator.serviceWorker.controller, null, { timeout: 20000 });
       // the install has kept the engine (it activates, and so controls the page, only once everything is kept)
       assert.ok(await p.evaluate(async (sf) => !!(await caches.match(sf + '.wasm')), SF), 'the engine is kept');
+      // and every set's move sounds, so picking a set offline still plays it
+      assert.deepEqual(await p.evaluate(async () => {
+        const out = [];
+        for (const set of window.Sfx.SETS) for (const k of window.Sfx.KINDS) { const u = window.Sfx.soundUrl(set, k); if (u && !(await caches.match(u))) out.push(u); }
+        return out;
+      }), [], 'sound files not kept');
       // and every font file the fonts' stylesheet names (one missed shows as a font that can't load offline)
       assert.deepEqual(await p.evaluate(async () => {
         const css = await (await caches.match('https://fonts.googleapis.com/css2', { ignoreSearch: true })).text();

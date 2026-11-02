@@ -43,10 +43,25 @@ test('cue: the sound of the move now on the board, and the end of the game when 
   assert.deepEqual(X.cue({ ...M, result: '*' }, 1, 2, true), { kinds: ['move', 'check'], end: null });
 });
 
-test('every set but the built-in one has its five sounds in the page data', () => {
+test('every set but the built-in one has its five sound files', () => {
   assert.equal(X.SETS[0], 'Lichess sfx'); // the default, also for a stored set that no longer exists
+  assert.equal(X.soundUrl('Lichess lisp', 'victory'), 'sounds/lisp/Victory.mp3');
+  assert.equal(X.soundUrl('Lichess NES', 'move'), 'sounds/nes/Move.mp3');
+  assert.equal(X.soundUrl('Wood', 'move'), null);
+  assert.equal(X.soundUrl('Gone', 'move'), null);
   assert.deepEqual(X.SETS.filter((s) => s !== 'Wood').map((s) => X.SET_DIR[s]).sort(), ['futuristic', 'lisp', 'nes', 'piano', 'sfx']);
   assert.deepEqual(X.KINDS, ['move', 'capture', 'check', 'victory', 'draw']);
+});
+
+test('fetchSound: the bytes, or null for a missing file or no connection', async () => {
+  const was = global.fetch, bytes = new ArrayBuffer(4);
+  try {
+    global.fetch = async (u) => (u === 'ok' ? { ok: true, arrayBuffer: async () => bytes } : { ok: false });
+    assert.equal(await X.fetchSound('ok'), bytes);
+    assert.equal(await X.fetchSound('gone'), null);
+    global.fetch = async () => { throw new TypeError('Failed to fetch'); };
+    assert.equal(await X.fetchSound('ok'), null);
+  } finally { global.fetch = was; }
 });
 
 test('exportSet: a non-commercial set is swapped for the default in exports, the others kept', () => {

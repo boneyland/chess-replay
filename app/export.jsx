@@ -204,8 +204,8 @@ function useVideoExport({ fps, format, webp, mp4Quality, mp4Vfr = false, save, s
       // Full (0) and Half are taken against the canvas drawn now, whatever Settings' widths were worked out from
       const wpx = webp.width === 'Half' ? Math.round(W / 2) : webp.width;
       enc = format === 'WebP' ? await webpEncoder(cv, W, H, fps, { ...webp, width: wpx }) : await mp4Encoder(cv, W, H, fps, audio, mp4Quality, mp4Vfr);
-      // html2canvas copies the whole document every frame: leave out the scripts (the page inlines its sounds
-      // and opening tables) and the page around the stage, but keep the head and every stylesheet (fonts and base styles)
+      // html2canvas copies the whole document every frame: leave out the scripts (the page inlines its
+      // opening tables) and the page around the stage, but keep the head and every stylesheet (fonts and base styles)
       const keep = (n) => n.tagName === 'STYLE' || n.tagName === 'LINK' || n.tagName === 'HEAD' || n.closest('head');
       const skip = (target) => (n) => n.tagName === 'SCRIPT' || (!keep(n) && n !== target && !n.contains(target) && !target.contains(n));
       // the stage drawn layer by layer, each redrawn only when its markup changes (export-draw.js)

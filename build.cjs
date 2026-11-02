@@ -4,9 +4,10 @@ const dir = __dirname, src = path.join(dir, 'src'), app = path.join(dir, 'app');
 const Babel = require(path.join(dir, 'babel', 'babel.min.js'));
 const jsx = (code, name) => Babel.transform(code, { filename: name, presets: ['react'] }).code;
 const read = (p) => fs.readFileSync(p, 'utf8');
-// Lichess's sound sets (vendor/sounds: Enigmahack's AGPL-3.0-or-later ones and EdinburghCollective's lisp, CC BY-NC-SA 4.0), inlined as base64 MP3s: { sfx: { move: '…' }, … }
+// Lichess's sound sets (vendor/sounds: Enigmahack's AGPL-3.0-or-later ones and EdinburghCollective's lisp, CC BY-NC-SA 4.0),
+// served next to the page as sounds/<set>/<Kind>.mp3 (Sfx.soundUrl) and kept by the service worker from the first visit
 const SOUNDS = path.join(dir, 'vendor', 'sounds');
-const soundsData = () => Object.fromEntries(['futuristic', 'lisp', 'nes', 'piano', 'sfx'].map((set) => [set, Object.fromEntries(['Move', 'Capture', 'Check', 'Victory', 'Draw'].map((f) => [f.toLowerCase(), fs.readFileSync(path.join(SOUNDS, set, f + '.mp3')).toString('base64')]))]));
+const SOUND_FILES = ['futuristic', 'lisp', 'nes', 'piano', 'sfx'].flatMap((set) => ['Move', 'Capture', 'Check', 'Victory', 'Draw'].map((f) => `sounds/${set}/${f}.mp3`));
 const units = [
   ['pieces.js', read(path.join(src, 'pieces.js'))],
   ['chess-core.js', read(path.join(app, 'chess-core.js'))],
@@ -22,7 +23,6 @@ const units = [
   ['sf-engine.js', read(path.join(app, 'sf-engine.js'))],
   ['sf-full.js', read(path.join(app, 'sf-full.js'))],
   ['queen-core.js', read(path.join(app, 'queen-core.js'))],
-  ['sounds-data.js', 'window.SFX_DATA = ' + JSON.stringify(soundsData()) + ';'],
   ['sfx-core.js', read(path.join(app, 'sfx-core.js'))],
   ['drag-scroll.js', read(path.join(app, 'drag-scroll.js'))],
   ['webp-core.js', read(path.join(app, 'webp-core.js'))],
@@ -111,10 +111,11 @@ const CSP = [
   "form-action 'none'",
 ].join('; ');
 fs.writeFileSync(path.join(dir, 'out', 'site', 'chess-game-video.html'), site.replace('<meta charset="utf-8">\n', () => `<meta charset="utf-8">\n<meta http-equiv="Content-Security-Policy" content="${CSP}">\n`));
-// the engine, the WebP export's encoder and the MP4 export's muxer, served next to the page, and the link preview's image (a
+// the engine, the WebP export's encoder, the MP4 export's muxer and the move sounds, served next to the page, and the link preview's image (a
 // 1653×944 frame from the player)
 fs.copyFileSync(path.join(app, 'og-image.png'), path.join(dir, 'out', 'site', 'og-image.png'));
 for (const f of VENDOR) fs.copyFileSync(path.join(dir, 'vendor', f), path.join(dir, 'out', 'site', f));
+for (const f of SOUND_FILES) { fs.mkdirSync(path.dirname(path.join(dir, 'out', 'site', f)), { recursive: true }); fs.copyFileSync(path.join(SOUNDS, f.slice('sounds/'.length)), path.join(dir, 'out', 'site', f)); }
 // Add to Home Screen opens the page without the browser's bars (iPhone Safari has no other way to lose them).
 // The icons are the tab icon above drawn as PNGs; the maskable and Apple ones are full-bleed for the launcher to round.
 const ICONS = path.join(app, 'icons');
@@ -133,7 +134,7 @@ fs.writeFileSync(path.join(dir, 'out', 'site', 'manifest.webmanifest'), JSON.str
 // The service worker (app/sw.js) and what it keeps: the files next to the page, and the CDN files the page names (React
 // and the fonts' stylesheet in shell.html, the export's libraries in export.jsx). Its VERSION changes with any of
 // them, so a deploy that changes one replaces the kept copies; the page itself is fetched afresh on every visit.
-const SW_LOCAL = ['chess-game-video.html', 'manifest.webmanifest', ...fs.readdirSync(ICONS), ...VENDOR];
+const SW_LOCAL = ['chess-game-video.html', 'manifest.webmanifest', ...fs.readdirSync(ICONS), ...VENDOR, ...SOUND_FILES];
 const swSrc = read(path.join(app, 'sw.js'));
 const swHash = require('crypto').createHash('sha256').update(swSrc).update(JSON.stringify(SW_REMOTE));
 for (const f of SW_LOCAL.slice(1)) swHash.update(fs.readFileSync(path.join(dir, 'out', 'site', f)));
