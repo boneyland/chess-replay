@@ -435,9 +435,10 @@
     return [['Opening', 0, oe], ['Middlegame', oe + 1, cs - 1], ['Critical', cs, ce], ['Endgame', ce + 1, N - 1]];
   }
 
-  // Per-ply hold times and the resulting scene list. Lead/tail values must match the schedule in game-video.jsx.
+  // Per-ply hold times and the resulting scene list. The only padding is LEAD before the first move (the title card
+  // fading out) and TAIL after the last; sections follow one another with no gap, so no move holds longer for ending one.
   const KEY_CLS = ['blunder', 'mistake', 'inaccuracy', 'brilliant', 'good', 'interesting'];
-  const MAX_TOTAL = 300, TITLE = 5, OUTRO = 7, READ_CAP = 6;
+  const MAX_TOTAL = 300, TITLE = 5, OUTRO = 7, READ_CAP = 6, LEAD = 1.2, TAIL = 2.6;
   function timing(M, o) {
     const spm = o.secondsPerMove || 1.6, hold = o.keyHold == null ? 1.5 : o.keyHold, read = o.readSpeed || 22; // characters a second
     const ranges = plan(M);
@@ -450,7 +451,7 @@
     });
     if (o.fastOpening) { const [, a, b] = ranges[0]; for (let i = a; i <= b; i++) if (!M.plies[i].comment && !M.plies[i].mark) d[i] *= 0.55; }
     const live = ranges.filter((r) => r[2] >= r[1]);
-    const lt = (name) => { const gi = live.findIndex((r) => r[0] === name); return gi < 0 ? 0 : (gi === 0 ? 1.2 : 0.6) + (gi === live.length - 1 ? 2.6 : 0.5); };
+    const lt = (name) => { const gi = live.findIndex((r) => r[0] === name); return gi < 0 ? 0 : (gi === 0 ? LEAD : 0) + (gi === live.length - 1 ? TAIL : 0); };
     const fixed = TITLE + OUTRO + ranges.reduce((s, r) => s + (r[2] >= r[1] ? lt(r[0]) : 0.1), 0);
     const sum = d.reduce((s, x) => s + x, 0);
     const capped = fixed + sum > MAX_TOTAL;
@@ -478,7 +479,7 @@
       else if (pendingStart == null) pendingStart = CUES[name];
     });
     groups.forEach((g, gi) => {
-      const lead = gi === 0 ? 1.2 : 0.6, tail = gi === groups.length - 1 ? 2.6 : 0.5;
+      const lead = gi === 0 ? LEAD : 0, tail = gi === groups.length - 1 ? TAIL : 0;
       let tot = 0; for (let i = g.a; i <= g.b; i++) tot += d[i];
       const span = g.end - g.start - lead - tail; let acc = 0;
       for (let i = g.a; i <= g.b; i++) { tp[i] = g.start + lead + (acc / tot) * span; acc += d[i]; }
