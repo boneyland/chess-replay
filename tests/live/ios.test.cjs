@@ -46,9 +46,6 @@ test('ios · safari · local build', async (t) => {
 addEventListener('error', (e) => __errs.push('error: ' + e.message + ' ' + (e.filename || '') + ':' + (e.lineno || '')));
 addEventListener('unhandledrejection', (e) => __errs.push('unhandled rejection: ' + (e.reason && (e.reason.stack || e.reason.message) || e.reason)));
 addEventListener('securitypolicyviolation', (e) => __errs.push('CSP: ' + e.violatedDirective + ' ' + e.blockedURI));
-// React's commits, counted through the hook React looks for at load (React DevTools'): whether a tap's update reaches the DOM
-window.__commits = 0;
-window.__REACT_DEVTOOLS_GLOBAL_HOOK__ = { supportsFiber: true, renderers: new Map(), inject: () => 1, checkDCE: () => {}, onScheduleFiberRoot: () => {}, onCommitFiberRoot: () => { window.__commits++; }, onCommitFiberUnmount: () => {}, onPostCommitFiberRoot: () => {} };
 const ce = console.error; console.error = (...a) => { __errs.push(a.map(String).join(' ')); ce.apply(console, a); };
 `);
   const html = fs.readFileSync(path.join(SITE, 'chess-game-video.html'), 'utf8');
@@ -180,57 +177,33 @@ const ce = console.error; console.error = (...a) => { __errs.push(a.map(String).
     assert.deepEqual(await errors(), []);
   });
 
-  await t.test('a tap-tap move gets a Stockfish verdict', { timeout: 180000 }, async () => {
-    const b = await boardBox(page);
-    // each tap's events and a screenshot, while taps that reach the page play nothing here (runs 1 and 2)
-    for (const sq of ['e2', 'e4']) {
-      const p = square(b, sq);
-      await js(() => {
-        window.__taps = [`${window.__commits} commits before`];
-        const el = document.querySelector('[data-no-drag-scroll]');
-        if (!window.__boardOn && el) for (const k of ['pointerdown', 'pointermove', 'pointerup', 'pointercancel', 'touchstart', 'touchend', 'touchcancel', 'mousedown', 'click']) el.addEventListener(k, (e) => window.__taps.push(`${k}${e.defaultPrevented ? '!' : ''}#${e.pointerId != null ? e.pointerId : ''}`));
-        // React's own handler on the layer (its props on the node): whether it runs, and with what
-        const key = el && Object.keys(el).find((k) => k.startsWith('__reactProps'));
-        if (key && !el[key].__wrapped) {
-          const props = el[key], down = props.onPointerDown;
-          props.onPointerDown = (e) => {
-            const r = e.currentTarget.getBoundingClientRect();
-            window.__taps.push(`react-down@${Math.round(e.clientX - r.left)},${Math.round(e.clientY - r.top)}/${Math.round(r.width)} ${window.__boardState()} window.event ${window.event ? window.event.type : 'none'}`);
-            try { return down(e); } catch (x) { window.__taps.push('react-down threw ' + x.message); throw x; }
-          };
-          props.__wrapped = true;
-        } else if (!key) window.__taps.push('no React props on the layer');
-        // the board's props (BoardTouch, the layer's parent fiber): the position it's given and what's selected
-        window.__boardState = () => {
-          const l = document.querySelector('[data-no-drag-scroll]'), fk = l && Object.keys(l).find((k) => k.startsWith('__reactFiber'));
-          const bp = fk && l[fk].return && l[fk].return.memoizedProps;
-          return bp ? `turn ${bp.pos && bp.pos.turn} e2 ${bp.pos && bp.pos.b[52]} sel ${bp.sel} drag ${bp.drag ? bp.drag.from : '-'} promo ${!!bp.promo}` : 'no board props';
-        };
-        window.__boardOn = true;
-      });
-      await tap(p.x, p.y);
-      await new Promise((r) => setTimeout(r, 400));
-      t.diagnostic(`tap ${sq} at ${Math.round(p.x)},${Math.round(p.y)}: ${(await js(() => window.__taps || [])).join(' ') || 'nothing'} · on ${await js((x, y) => { const e = document.elementFromPoint(x, y); return e ? e.tagName + '.' + [...e.classList].join('.') : 'none'; }, p.x, p.y)}`);
-      t.diagnostic(`state after ${sq}: ${await js(() => window.__boardState())} · ${await js(() => window.__commits)} commits · ${await js(() => `${document.querySelectorAll('[data-no-drag-scroll]').length} layers`)}`);
-      // run 8: the board's props held the selection while its DOM never showed it, so whether the page's timers, message
-      // ports (React's scheduler) and animation frames still run
-      t.diagnostic(`page clock after ${sq}: ${await browser.executeAsync((done) => {
-        const got = { vis: document.visibilityState, focus: document.hasFocus() };
-        const t0 = performance.now(), mark = (k) => () => { got[k] = Math.round(performance.now() - t0); };
-        setTimeout(mark('timeout'), 0);
-        const mc = new MessageChannel(); mc.port1.onmessage = mark('message'); mc.port2.postMessage(0);
-        requestAnimationFrame(mark('raf'));
-        setTimeout(() => done(JSON.stringify(got)), 2000);
-      })}`);
-      if (sq === 'e2') {
-        await new Promise((r) => setTimeout(r, 6000));
-        t.diagnostic(`6 s after e2: ${await js(() => `${window.__commits} commits, ${document.querySelector('[data-no-drag-scroll]').children.length} children`)}`);
-      }
-      t.diagnostic(`after ${sq}: ${await js(() => { const el = document.querySelector('[data-no-drag-scroll]'); return el ? `${el.children.length} children, selected ${[...el.querySelectorAll('div')].some((d) => d.style.border.startsWith('5px'))}` : 'no board touch layer'; })}`);
-      await shot(`tap-${sq}`);
+  // Runs 1–11: WebDriver's taps reach the board's React handler on the right squares, and its state takes e2, but the page
+  // never draws the selection and e4 plays nothing. So the move is tried three ways, each on a freshly loaded page, to
+  // tell safaridriver's input from the app: WebDriver's quick tap, a slow one (held 250 ms, a second apart), and pointer
+  // events dispatched by the page's own script. Only the first counts; the others say which side the fault is on
+  await t.test('a tap-tap move gets a Stockfish verdict', { timeout: 240000 }, async () => {
+    const played = () => js(() => /your move ·/i.test(document.body.innerText));
+    const slowTap = (x, y) => browser.action('pointer', { parameters: { pointerType: ptr } })
+      .move({ x: Math.round(x), y: Math.round(y), origin: 'viewport' }).down().pause(250).up().perform();
+    const scripted = (x, y) => js((cx, cy) => {
+      const el = document.elementFromPoint(cx, cy), o = { bubbles: true, cancelable: true, composed: true, clientX: cx, clientY: cy, pointerId: 7, pointerType: 'touch', isPrimary: true, button: 0, buttons: 1 };
+      el.dispatchEvent(new PointerEvent('pointerdown', o));
+      el.dispatchEvent(new PointerEvent('pointerup', { ...o, buttons: 0 }));
+    }, x, y);
+    const ways = [['WebDriver tap', (x, y) => tap(x, y), 300], ['slow WebDriver tap', slowTap, 1000], ['scripted pointer events', scripted, 300]];
+    const got = {};
+    for (const [name, how, gap] of ways) {
+      await browser.url(URL_);
+      await loaded();
+      await new Promise((r) => setTimeout(r, 1500));
+      const b = await boardBox(page);
+      for (const sq of ['e2', 'e4']) { const p = square(b, sq); await how(p.x, p.y); await new Promise((r) => setTimeout(r, gap)); }
+      got[name] = await browser.waitUntil(played, { timeout: 5000, interval: 250 }).then(() => true, () => false);
+      t.diagnostic(`${name}: ${got[name] ? 'played e4' : 'played nothing'}`);
+      await shot(`move-${name.replace(/\W+/g, '-')}`);
+      if (name === 'WebDriver tap' && got[name]) break;
     }
-    try { await until(() => /your move ·/i.test(document.body.innerText), 5000, 'the move was not played'); }
-    catch (e) { t.diagnostic(`board ${JSON.stringify(b)} · errors ${JSON.stringify(await errors())}`); throw e; }
+    assert.ok(got['WebDriver tap'], `WebDriver's taps played no move (${Object.entries(got).map(([k, v]) => `${k}: ${v}`).join(', ')})`);
     await until((re) => new RegExp(re, 'i').test(document.body.innerText), 120000, 'no verdict', VERDICT.source);
     assert.doesNotMatch(await js(() => document.body.innerText.match(/your move ·[^\n]*/i)[0]), /can’t run here|stopped/i);
     await shot('own-move');
