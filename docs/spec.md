@@ -360,7 +360,16 @@ Games end by themselves in a dead position (no legal sequence of moves mates eit
 
 ### chasolver (*needs design*)
 
-[chasolver](https://github.com/miguel-ambrona/chasolver) (Miguel Ambrona, MIT, a Rust crate, v3.0.0 of 2026-06-22; site https://chasolver.org) is CHA's successor: given a position and an intended winner it finds a helpmate or proves none exists (`winnability`), and has been run on every timeout of Lichess's standard rated games. The candidate engine for Dead positions: built to WebAssembly and served next to the page like `vendor/`, loaded on a game's first move (or first flag fall), so `PlayCore` asks it rather than growing its own search. Open: its WebAssembly size and speed per move on a phone **verify**; whether it builds for `wasm32` without changes **verify**; whether it replaces `canMate`/`lockedDead` or backs them up when they can't prove a position; what a game shows while it is still loading (offline before it is kept, the flood fills alone).
+[chasolver](https://github.com/miguel-ambrona/chasolver) (Miguel Ambrona, MIT, a Rust crate, v3.0.0 of 2026-06-22; site https://chasolver.org) is CHA's successor: given a position and an intended winner it finds a helpmate or proves none exists (`winnability`), and has been run on every timeout of Lichess's standard rated games. The candidate engine for Dead positions: built to WebAssembly and served next to the page like `vendor/`, loaded on a game's first move (or first flag fall), so `PlayCore` asks it rather than growing its own search.
+
+Built for `wasm32-unknown-unknown` on 2026-11-02 without changes (Rust 1.99.1): a bare C-ABI wrapper crate (the page writes a FEN into a 256-byte buffer, `solve(len, winner, fast)` returns unwinnable, winnable or undecided), with no other dependency than the `chess` crate chasolver already uses, no imports, no wasm-bindgen, `lto`, `panic = "abort"`, `strip`. It is 1.05 MB (104 KB gzipped, mostly `chess`'s move tables) and instantiates in ~5 ms. In Node on the laptop it agreed with every classification in the crate's own test files, both sides of each position (137,900 checks, none wrong or undecided):
+
+| Set | Full search: median / p99 / max | Fast check: max | Memory |
+|---|---|---|---|
+| `tests/lichess.txt`, 65,536 positions from Lichess games | 0.034 ms / 0.68 ms / 48 ms | 4 ms | 16 MB |
+| `tests/positions.txt`, 3,414 hard community positions | 0.12 ms / 260 ms / 2.7 s | 2.6 s | 242 MB |
+
+So a search on every move of a real game is cheap, but rare constructed positions take seconds (it has to run in a Worker) and grow the module's memory, which never shrinks (restart the worker after a search that grew it a lot?). `is_unwinnable_fast` never called a winnable side unwinnable, but proved only 2% of the Lichess positions' sides, so it can only be a first try. Open: speed on a phone **verify**; how the `.wasm` is built and pinned (`vendor/` holds upstream releases, and chasolver publishes no WebAssembly build: Rust in Render's build, or a committed build pinned by SHA-256 with its recipe); whether it replaces `canMate`/`lockedDead` or backs them up when they can't prove a position; what a game shows while it is still loading (offline before it is kept, the flood fills alone).
 
 ### Background music
 
