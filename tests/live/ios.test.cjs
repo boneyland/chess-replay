@@ -60,17 +60,27 @@ const ce = console.error; console.error = (...a) => { __errs.push(a.map(String).
   if (dev.state !== 'Booted') execFileSync('xcrun', ['simctl', 'boot', dev.udid]);
   execFileSync('xcrun', ['simctl', 'bootstatus', dev.udid, '-b'], { stdio: 'ignore', timeout: 300000 });
   undo.push(() => execFileSync('xcrun', ['simctl', 'shutdown', dev.udid]));
-  // Safari open before the session: the first run's session timed out "finding or launching a compatible remote Safari"
-  try { execFileSync('xcrun', ['simctl', 'launch', dev.udid, 'com.apple.mobilesafari'], { stdio: 'ignore', timeout: 60000 }); } catch (e) { t.diagnostic(`launching Safari: ${e.message}`); }
-
   const wd = spawn('safaridriver', ['-p', String(WD_PORT)], { stdio: 'inherit' });
   undo.push(() => wd.kill());
   for (let i = 0; i < 50 && !(await wdUp()); i++) await new Promise((r) => setTimeout(r, 200));
   const { remote } = await import('webdriverio');
-  const browser = await remote({
-    hostname: '127.0.0.1', port: WD_PORT, path: '/', logLevel: 'warn', connectionRetryTimeout: 300000, connectionRetryCount: 1,
-    capabilities: { browserName: 'safari', platformName: 'iOS', 'safari:useSimulator': true, 'safari:deviceUDID': dev.udid },
-  });
+  // safaridriver gives up after ~30 s "finding or launching a compatible remote Safari", often on a freshly booted
+  // Simulator (2 of the first 3 runs, once twice in a row): each try first has Safari show a page, then waits for it
+  let browser;
+  for (let i = 1; !browser; i++) {
+    try { execFileSync('xcrun', ['simctl', 'openurl', dev.udid, local.url + 'manifest.webmanifest'], { stdio: 'ignore', timeout: 60000 }); } catch (e) { t.diagnostic(`opening Safari: ${e.message}`); }
+    await new Promise((r) => setTimeout(r, 10000));
+    try {
+      browser = await remote({
+        hostname: '127.0.0.1', port: WD_PORT, path: '/', logLevel: 'error', connectionRetryTimeout: 120000, connectionRetryCount: 0,
+        capabilities: { browserName: 'safari', platformName: 'iOS', 'safari:useSimulator': true, 'safari:deviceUDID': dev.udid },
+      });
+    } catch (e) {
+      t.diagnostic(`session, try ${i}: ${e.message.slice(0, 160)}`);
+      if (i === 5) throw e;
+      try { execFileSync('xcrun', ['simctl', 'terminate', dev.udid, 'com.apple.mobilesafari'], { stdio: 'ignore' }); } catch (x) {}
+    }
+  }
   undo.push(() => browser.deleteSession());
   t.diagnostic(`Safari ${browser.capabilities.browserVersion}`);
 
