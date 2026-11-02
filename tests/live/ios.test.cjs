@@ -46,6 +46,9 @@ test('ios · safari · local build', async (t) => {
 addEventListener('error', (e) => __errs.push('error: ' + e.message + ' ' + (e.filename || '') + ':' + (e.lineno || '')));
 addEventListener('unhandledrejection', (e) => __errs.push('unhandled rejection: ' + (e.reason && (e.reason.stack || e.reason.message) || e.reason)));
 addEventListener('securitypolicyviolation', (e) => __errs.push('CSP: ' + e.violatedDirective + ' ' + e.blockedURI));
+// React's commits, counted through the hook React looks for at load (React DevTools'): whether a tap's update reaches the DOM
+window.__commits = 0;
+window.__REACT_DEVTOOLS_GLOBAL_HOOK__ = { supportsFiber: true, renderers: new Map(), inject: () => 1, checkDCE: () => {}, onScheduleFiberRoot: () => {}, onCommitFiberRoot: () => { window.__commits++; }, onCommitFiberUnmount: () => {}, onPostCommitFiberRoot: () => {} };
 const ce = console.error; console.error = (...a) => { __errs.push(a.map(String).join(' ')); ce.apply(console, a); };
 `);
   const html = fs.readFileSync(path.join(SITE, 'chess-game-video.html'), 'utf8');
@@ -183,7 +186,7 @@ const ce = console.error; console.error = (...a) => { __errs.push(a.map(String).
     for (const sq of ['e2', 'e4']) {
       const p = square(b, sq);
       await js(() => {
-        window.__taps = [];
+        window.__taps = [`${window.__commits} commits before`];
         const el = document.querySelector('[data-no-drag-scroll]');
         if (!window.__boardOn && el) for (const k of ['pointerdown', 'pointermove', 'pointerup', 'pointercancel', 'touchstart', 'touchend', 'touchcancel', 'mousedown', 'click']) el.addEventListener(k, (e) => window.__taps.push(`${k}${e.defaultPrevented ? '!' : ''}#${e.pointerId != null ? e.pointerId : ''}`));
         // React's own handler on the layer (its props on the node): whether it runs, and with what
@@ -208,7 +211,7 @@ const ce = console.error; console.error = (...a) => { __errs.push(a.map(String).
       await tap(p.x, p.y);
       await new Promise((r) => setTimeout(r, 400));
       t.diagnostic(`tap ${sq} at ${Math.round(p.x)},${Math.round(p.y)}: ${(await js(() => window.__taps || [])).join(' ') || 'nothing'} · on ${await js((x, y) => { const e = document.elementFromPoint(x, y); return e ? e.tagName + '.' + [...e.classList].join('.') : 'none'; }, p.x, p.y)}`);
-      t.diagnostic(`state after ${sq}: ${await js(() => window.__boardState())}`);
+      t.diagnostic(`state after ${sq}: ${await js(() => window.__boardState())} · ${await js(() => window.__commits)} commits · ${await js(() => `${document.querySelectorAll('[data-no-drag-scroll]').length} layers`)}`);
       // run 8: the board's props held the selection while its DOM never showed it, so whether the page's timers, message
       // ports (React's scheduler) and animation frames still run
       t.diagnostic(`page clock after ${sq}: ${await browser.executeAsync((done) => {
