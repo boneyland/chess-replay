@@ -143,7 +143,8 @@ test('firstDead finds the first position dead for both sides and stops there', a
   const f = fakeWorkers({ [START + ' w']: 'winnable', [START + ' b']: 'winnable', [KR + ' w']: 'unwinnable', [KR + ' b']: 'winnable', [KK + ' w']: 'unwinnable', [KK + ' b']: 'unwinnable' });
   const c = D.create({ makeWorker: f.make });
   assert.equal(await D.firstDead([START, KR, KK, LATER], c), 2);
-  assert.ok(!f.sent().some((m) => m.fen === LATER));
+  const asked = f.sent().map((m) => m.fen + ' ' + m.side);
+  assert.deepEqual(asked, [START + ' w', KR + ' w', KR + ' b', KK + ' b'], 'a side once unable to mate, and a second side after a winnable first, are not asked');
   assert.equal(await D.firstDead([START, KR], c), null);
 });
 

@@ -85,13 +85,22 @@
     return { ask, cached, both, close };
   }
 
-  // The index of the first FEN where neither side can mate, asked in order and stopping there (a dead position stays
-  // dead after any legal move); null when none is proven, or when signal aborts
+  // The index of the first FEN where neither side can mate, or null when none is proven, or when signal aborts. The FENs
+  // are a game's positions in order, a legal move apart, and a side that can't mate stays so after any legal move: so
+  // each side is asked until it's proven unable to mate and not after, and a position's second side only when its first
+  // is proven (about one ask per position); the search stops at the first dead one
   async function firstDead(fens, client, { signal } = {}) {
+    const gone = { w: false, b: false };
     for (let i = 0; i < fens.length; i++) {
-      const v = await client.both(fens[i], { signal });
-      if (signal && signal.aborted) return null;
-      if (v.w === 'unwinnable' && v.b === 'unwinnable') return i;
+      let dead = true;
+      for (const side of ['w', 'b']) {
+        if (gone[side]) continue;
+        const v = await client.ask(fens[i], side, { signal });
+        if (signal && signal.aborted) return null;
+        if (v !== 'unwinnable') { dead = false; break; }
+        gone[side] = true;
+      }
+      if (dead) return i;
     }
     return null;
   }
