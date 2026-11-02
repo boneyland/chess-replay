@@ -91,6 +91,8 @@ const ce = console.error; console.error = (...a) => { __errs.push(a.map(String).
   const until = (fn, timeout, msg, ...a) => browser.waitUntil(() => js(fn, ...a), { timeout, interval: 250, timeoutMsg: msg });
   const errors = () => js(() => window.__errs || ['the logger did not load']);
   const shot = (name) => browser.saveScreenshot(path.join(OUT, `ios-${name}.png`));
+  // the Simulator's whole screen, Safari's bars included (WebDriver's screenshot leaves them blank)
+  const screen = (name) => { try { execFileSync('xcrun', ['simctl', 'io', dev.udid, 'screenshot', path.join(OUT, `ios-${name}-screen.png`)], { stdio: 'ignore', timeout: 30000 }); } catch (e) { t.diagnostic(`screen ${name}: ${e.message}`); } };
   // the pointer type whose taps reach the page: the first test finds it (touch on the first run moved nothing)
   let ptr = 'touch';
   // and how far a tap lands from the point asked for, in page pixels: the first test measures it, as run 4's taps hit
@@ -122,6 +124,7 @@ const ce = console.error; console.error = (...a) => { __errs.push(a.map(String).
     assert.equal(b.n, 32, 'pieces on the board');
     assert.ok(b.x0 >= 0 && b.x0 + 8 * b.sq <= v.w + 1, `the board (${Math.round(8 * b.sq)} px) fits the ${v.w} px width`);
     await shot('phone');
+    screen('phone');
     assert.deepEqual(await errors(), []);
   });
 
@@ -152,7 +155,7 @@ const ce = console.error; console.error = (...a) => { __errs.push(a.map(String).
     assert.ok(Object.values(seen).some((l) => l.some((e) => /^pointerdown/.test(e))), 'no tap gave a pointerdown');
   });
 
-  await t.test('the service worker takes over the page', { timeout: 120000 }, async () => {
+  await t.test('the service worker takes over the page', { timeout: 240000 }, async () => {
     const reg = () => browser.executeAsync((done) => navigator.serviceWorker.getRegistration().then((r) => done(r ? ['installing', 'waiting', 'active'].map((k) => `${k} ${r[k] ? r[k].state : '-'}`).join(', ') : 'none'), (e) => done('error ' + e.message)));
     await until(() => !!navigator.serviceWorker, 5000, 'no navigator.serviceWorker');
     t.diagnostic(`before the reload: ${await reg()}`);
@@ -163,7 +166,8 @@ const ce = console.error; console.error = (...a) => { __errs.push(a.map(String).
     await loaded();
     const cached = () => browser.executeAsync((done) => caches.keys().then((ks) => Promise.all(ks.map((k) => caches.open(k).then((c) => c.keys()).then((r) => `${k}: ${r.length}`)))).then((l) => done(l.join(', ') || 'no caches'), (e) => done('error ' + e.message)));
     let ok = false;
-    for (let i = 0; i < 6 && !ok; i++) {
+    // runs 2, 5 and 6: still installing 30–50 s after the reload, its cache not yet opened
+    for (let i = 0; i < 18 && !ok; i++) {
       ok = await js(() => !!navigator.serviceWorker.controller);
       if (!ok) { t.diagnostic(`${i * 10} s after the reload: ${await reg()} · ${await cached()}`); await new Promise((r) => setTimeout(r, 10000)); }
     }
@@ -180,6 +184,17 @@ const ce = console.error; console.error = (...a) => { __errs.push(a.map(String).
         window.__taps = [];
         const el = document.querySelector('[data-no-drag-scroll]');
         if (!window.__boardOn && el) for (const k of ['pointerdown', 'pointermove', 'pointerup', 'pointercancel', 'touchstart', 'touchend', 'touchcancel', 'mousedown', 'click']) el.addEventListener(k, (e) => window.__taps.push(`${k}${e.defaultPrevented ? '!' : ''}#${e.pointerId != null ? e.pointerId : ''}`));
+        // React's own handler on the layer (its props on the node): whether it runs, and with what
+        const key = el && Object.keys(el).find((k) => k.startsWith('__reactProps'));
+        if (key && !el[key].__wrapped) {
+          const props = el[key], down = props.onPointerDown;
+          props.onPointerDown = (e) => {
+            const r = e.currentTarget.getBoundingClientRect();
+            window.__taps.push(`react-down@${Math.round(e.clientX - r.left)},${Math.round(e.clientY - r.top)}/${Math.round(r.width)}`);
+            try { return down(e); } catch (x) { window.__taps.push('react-down threw ' + x.message); throw x; }
+          };
+          props.__wrapped = true;
+        } else if (!key) window.__taps.push('no React props on the layer');
         window.__boardOn = true;
       });
       await tap(p.x, p.y);
@@ -210,7 +225,10 @@ const ce = console.error; console.error = (...a) => { __errs.push(a.map(String).
     const v = await js(() => ({ w: innerWidth, h: innerHeight, top: getComputedStyle(document.documentElement).paddingTop }));
     t.diagnostic(`full screen: ${v.w}×${v.h}, root padding ${v.top}`);
     await shot('full-screen');
-    await tapButton('Menu');
+    // the menu can stay open over the full-screen page (run 6), where a tap on Menu would close it
+    if (!(await button('Exit full screen'))) await tapButton('Menu');
+    await until(() => [...document.querySelectorAll('button')].some((b) => (b.getAttribute('aria-label') || b.innerText).trim() === 'Exit full screen' && b.getClientRects().length), 3000, 'no Exit full screen item');
+    screen('full-screen');
     await tapButton('Exit full screen');
     await until(() => !(document.fullscreenElement || document.webkitFullscreenElement), 5000, 'Exit full screen did not leave it');
   });
