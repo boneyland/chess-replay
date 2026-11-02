@@ -45,8 +45,15 @@ test('cue: the sound of the move now on the board, and the end of the game when 
 
 test('every set but the built-in one has its five sounds in the page data', () => {
   assert.equal(X.SETS[0], 'Lichess sfx'); // the default, also for a stored set that no longer exists
-  assert.deepEqual(X.SETS.filter((s) => s !== 'Wood').map((s) => X.SET_DIR[s]).sort(), ['futuristic', 'nes', 'piano', 'sfx']);
+  assert.deepEqual(X.SETS.filter((s) => s !== 'Wood').map((s) => X.SET_DIR[s]).sort(), ['futuristic', 'lisp', 'nes', 'piano', 'sfx']);
   assert.deepEqual(X.KINDS, ['move', 'capture', 'check', 'victory', 'draw']);
+});
+
+test('exportSet: a non-commercial set is swapped for the default in exports, the others kept', () => {
+  assert.deepEqual(X.NON_COMMERCIAL, ['Lichess lisp']);
+  assert.equal(X.exportSet('Lichess lisp'), 'Lichess sfx');
+  for (const s of X.SETS.filter((s) => s !== 'Lichess lisp')) assert.equal(X.exportSet(s), s);
+  assert.equal(X.exportSet('Gone'), 'Lichess sfx');
 });
 
 test('synth: every Wood sound is short, audible, never clips, and the same every time', () => {

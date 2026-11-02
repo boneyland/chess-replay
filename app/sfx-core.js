@@ -1,9 +1,14 @@
 // Move sounds: which sounds a move makes, when its piece lands, the built-in Wood set (synthesized here) and the
-// player. The Lichess sets are Enigmahack's (AGPL-3.0-or-later), inlined by build.cjs as window.SFX_DATA.
+// player. The Lichess sets are Enigmahack's (AGPL-3.0-or-later) and EdinburghCollective's lisp (CC BY-NC-SA 4.0),
+// inlined by build.cjs as window.SFX_DATA.
 (function () {
   // the first is the default
-  const SETS = ['Lichess sfx', 'Lichess piano', 'Lichess NES', 'Lichess futuristic', 'Wood'];
-  const SET_DIR = { 'Lichess sfx': 'sfx', 'Lichess piano': 'piano', 'Lichess NES': 'nes', 'Lichess futuristic': 'futuristic' };
+  const SETS = ['Lichess sfx', 'Lichess piano', 'Lichess NES', 'Lichess futuristic', 'Lichess lisp', 'Wood'];
+  const SET_DIR = { 'Lichess sfx': 'sfx', 'Lichess piano': 'piano', 'Lichess NES': 'nes', 'Lichess futuristic': 'futuristic', 'Lichess lisp': 'lisp' };
+  // non-commercial sets (lisp, CC BY-NC-SA): played on the page but kept out of exported videos, which viewers may post
+  // anywhere, monetised channels included; an export uses the default set in their place
+  const NON_COMMERCIAL = ['Lichess lisp'];
+  const exportSet = (set) => (SETS.includes(set) && !NON_COMMERCIAL.includes(set) ? set : SETS[0]);
   const KINDS = ['move', 'capture', 'check', 'victory', 'draw'];
   const END_DELAY = 0.6; // seconds between the last move's sound and the end of the game's
 
@@ -92,7 +97,7 @@
   async function renderTrack(data, set, events, volume, dur, rate = 48000) {
     const OAC = window.OfflineAudioContext || window.webkitOfflineAudioContext;
     if (!OAC) return null;
-    set = SETS.includes(set) ? set : SETS[0];
+    set = exportSet(set);
     const ctx = new OAC(2, Math.max(1, Math.ceil(dur * rate)), rate), bufs = {};
     for (const k of new Set(events.flatMap((e) => e.kinds))) { try { bufs[k] = await decode(ctx, data, set, k); } catch (e) { bufs[k] = null; } }
     const gain = ctx.createGain();
@@ -146,5 +151,5 @@
     return { play, prepare, unlock };
   }
 
-  window.Sfx = { SETS, SET_DIR, KINDS, kinds, endKind, landed, cue, track, synth, renderTrack, createPlayer };
+  window.Sfx = { SETS, SET_DIR, NON_COMMERCIAL, exportSet, KINDS, kinds, endKind, landed, cue, track, synth, renderTrack, createPlayer };
 })();
