@@ -275,7 +275,7 @@ function GameStatus({ board, onChange, down }) {
           <div style={{ marginLeft: 'auto' }}><FrameButton primary onClick={again}>Play again</FrameButton></div>
         </div>
         {row(<FrameButton primary color={C.last} onClick={() => onChange(free)}>Analyse on the free board</FrameButton>)}
-        {hint('← → step through the game')}
+        {board.steps.length > 0 && hint('← → step through the game')}
       </React.Fragment>
     );
   }
