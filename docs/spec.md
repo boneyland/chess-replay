@@ -400,6 +400,11 @@ A short guided tour for a first visit: steps that point at the dock, the transpo
 
 Deferred by the per-plan reviews; each was true when recorded and may since have been fixed.
 
+**iOS Safari** (2026-11-02, the `ios` job: Safari 26.5 on an iPhone 17 Simulator)
+- **Verify** on a real iPhone that tap-tap and drag moves work: in the Simulator, WebDriver's touch taps reach the board's handler and select e2 in its state, but the page never draws the selection and the second tap plays nothing; pointer events dispatched by the page's own script play the move. The job fails on this until it's settled.
+- Safari 26.5 has element full screen on iPhone, and the Full screen item works there; the comment in `app/game-app.jsx` saying iPhone Safari has none is out of date.
+- The service worker is slow to take over in the Simulator (often still installing after 60 s, its cache not yet opened); Playwright's WebKit runs the same worker, so this isn't asserted there.
+
 **Responsive layout** (2026-10-26)
 - The Analysis panel hides the search depth when narrower than 440·text px (at 1024×768, for one).
 - `tests/live/android.test.cjs` wasn't run locally for this change (no device); GitHub Actions' `android` job covers it.
