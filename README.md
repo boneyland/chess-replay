@@ -60,6 +60,7 @@ Built into the page or served with it:
 - The lisp move sounds by [EdinburghCollective](https://lichess.org/@/EdinburghCollective), unchanged from [Lichess's source](https://github.com/lichess-org/lila) ([CC BY-NC-SA 4.0](https://creativecommons.org/licenses/by-nc-sa/4.0/)): non-commercial, so video exports use the sfx set in their place
 - [libwebp](https://chromium.googlesource.com/webm/libwebp) (BSD-3-Clause), built to WebAssembly by [Squoosh](https://github.com/GoogleChromeLabs/squoosh) and packaged by [jSquash](https://github.com/jamsinclair/jSquash) (Apache-2.0), for the WebP export
 - [Mediabunny](https://github.com/Vanilagy/mediabunny) 1.61.0 by Vanilagy (MPL-2.0), for the MP4 export
+- [chasolver](https://github.com/miguel-ambrona/chasolver) 3.0.0 by Miguel Ambrona (MIT, `vendor/chasolver.LICENSE`), with the [chess](https://crates.io/crates/chess) crate (MIT), built to WebAssembly here (`tools/chasolver-wasm/`), which proves dead positions
 
 Loaded from CDNs when the page runs:
 - [React](https://react.dev/) 18.3.1 (MIT)
@@ -70,4 +71,4 @@ Used to build it: [@babel/standalone](https://babeljs.io/docs/babel-standalone) 
 
 ## Licence
 
-GPL-3.0-or-later (`LICENSE`), the same as the bundled Stockfish. The Enigmahack sound files keep their own licence, the AGPL-3.0-or-later, which GPL-3.0 section 13 allows them to be combined with. The lisp sound files (`vendor/sounds/lisp/`) are not covered by the GPL: they stay under CC BY-NC-SA 4.0, a separate work shipped alongside, and may not be used commercially. The WebP encoder keeps libwebp's BSD-3-Clause and the Squoosh glue's Apache-2.0 licences, both compatible with the GPL-3.0.
+GPL-3.0-or-later (`LICENSE`), the same as the bundled Stockfish. The Enigmahack sound files keep their own licence, the AGPL-3.0-or-later, which GPL-3.0 section 13 allows them to be combined with. The lisp sound files (`vendor/sounds/lisp/`) are not covered by the GPL: they stay under CC BY-NC-SA 4.0, a separate work shipped alongside, and may not be used commercially. The WebP encoder keeps libwebp's BSD-3-Clause and the Squoosh glue's Apache-2.0 licences, both compatible with the GPL-3.0, and chasolver its MIT licence.
