@@ -83,6 +83,7 @@ const ce = console.error; console.error = (...a) => { __errs.push(a.map(String).
   }
   undo.push(() => browser.deleteSession());
   t.diagnostic(`Safari ${browser.capabilities.browserVersion}`);
+  await browser.setTimeout({ script: 15000 });
 
   // Playwright's page.evaluate, for board.cjs
   const page = { evaluate: (fn, ...a) => browser.execute(fn, ...a) };
@@ -92,8 +93,11 @@ const ce = console.error; console.error = (...a) => { __errs.push(a.map(String).
   const shot = (name) => browser.saveScreenshot(path.join(OUT, `ios-${name}.png`));
   // the pointer type whose taps reach the page: the first test finds it (touch on the first run moved nothing)
   let ptr = 'touch';
+  // and how far a tap lands from the point asked for, in page pixels: the first test measures it, as run 4's taps hit
+  // a rank above the square asked for (the page starts below Safari's top bar)
+  let off = { x: 0, y: 0 };
   const tap = async (x, y, type = ptr) => browser.action('pointer', { parameters: { pointerType: type } })
-    .move({ x: Math.round(x), y: Math.round(y), origin: 'viewport' }).down().pause(60).up().perform();
+    .move({ x: Math.round(x - off.x), y: Math.round(y - off.y), origin: 'viewport' }).down().pause(60).up().perform();
   // a shown button by its accessible name (aria-label, else its text), as getByRole finds it
   const button = (name) => js((n) => {
     const b = [...document.querySelectorAll('button, [role="button"]')].find((e) => (e.getAttribute('aria-label') || e.innerText || '').trim() === n && e.getClientRects().length);
@@ -131,14 +135,20 @@ const ce = console.error; console.error = (...a) => { __errs.push(a.map(String).
     for (const type of ['touch', 'mouse']) {
       await js(() => {
         window.__taps = [];
-        if (!window.__tapsOn) for (const k of ['pointerdown', 'pointerup', 'touchstart', 'touchend', 'mousedown', 'click']) document.addEventListener(k, (e) => window.__taps.push(k + (e.pointerType ? ':' + e.pointerType : '')), true);
+        if (!window.__tapsOn) for (const k of ['pointerdown', 'pointerup', 'touchstart', 'touchend', 'mousedown', 'click']) document.addEventListener(k, (e) => window.__taps.push(k + (e.pointerType ? ':' + e.pointerType : '') + (k === 'pointerdown' ? `@${Math.round(e.clientX)},${Math.round(e.clientY)}` : '')), true);
         window.__tapsOn = true;
       });
       try { await tap(p.x, p.y, type); seen[type] = await js(() => window.__taps); } catch (e) { seen[type] = ['failed: ' + e.message.split('\n')[0]]; }
       t.diagnostic(`${type} tap: ${seen[type].join(' ') || 'nothing'}`);
     }
     ptr = ['touch', 'mouse'].find((k) => seen[k].includes('pointerup:' + k) || seen[k].some((e) => /^pointerup/.test(e))) || 'touch';
-    t.diagnostic(`taps as ${ptr}`);
+    const at = (seen[ptr].find((e) => /^pointerdown/.test(e)) || '').match(/@(-?\d+),(-?\d+)/);
+    if (at) off = { x: +at[1] - Math.round(p.x), y: +at[2] - Math.round(p.y) };
+    t.diagnostic(`taps as ${ptr}, asked for ${Math.round(p.x)},${Math.round(p.y)}, landing off by ${off.x},${off.y}`);
+    // the correction lands a tap where it's asked
+    await js(() => { window.__taps = []; });
+    await tap(p.x, p.y);
+    t.diagnostic(`corrected tap: ${(await js(() => window.__taps)).join(' ')}`);
     assert.ok(Object.values(seen).some((l) => l.some((e) => /^pointerdown/.test(e))), 'no tap gave a pointerdown');
   });
 
@@ -146,8 +156,6 @@ const ce = console.error; console.error = (...a) => { __errs.push(a.map(String).
     const reg = () => browser.executeAsync((done) => navigator.serviceWorker.getRegistration().then((r) => done(r ? ['installing', 'waiting', 'active'].map((k) => `${k} ${r[k] ? r[k].state : '-'}`).join(', ') : 'none'), (e) => done('error ' + e.message)));
     await until(() => !!navigator.serviceWorker, 5000, 'no navigator.serviceWorker');
     t.diagnostic(`before the reload: ${await reg()}`);
-    // the page's own register() swallows its error
-    t.diagnostic(`register: ${await browser.executeAsync((done) => navigator.serviceWorker.register('sw.js', { updateViaCache: 'none' }).then(() => done('ok'), (e) => done(e.name + ': ' + e.message)))}`);
     await browser.url(URL_);
     await loaded();
     const cached = () => browser.executeAsync((done) => caches.keys().then((ks) => Promise.all(ks.map((k) => caches.open(k).then((c) => c.keys()).then((r) => `${k}: ${r.length}`)))).then((l) => done(l.join(', ') || 'no caches'), (e) => done('error ' + e.message)));
