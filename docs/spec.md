@@ -7,8 +7,8 @@ The one spec for the app: what it does now, what is planned, and the decisions b
 ## Contents
 
 - [Principles](#principles)
-- [Built](#built): replay and browser analysis, opening names, custom starts and flip, free board and explorer, edit position, play vs human, My games, play vs Stockfish, full Stockfish download, lines (MultiPV), endgame tablebase (in game analysis too), Lichess cloud evaluation, multi-threaded Stockfish, asm.js Stockfish (no WebAssembly SIMD), Lichess opening explorer, responsive layout
-- [Roadmap](#roadmap): square layouts and breakpoints, Lichess data and multi-threaded Stockfish, player names, Chess960, typed commentary, Maia3, dead positions with chasolver, background music, peer-to-peer online play, app walk-through
+- [Built](#built): replay and browser analysis, opening names, custom starts and flip, free board and explorer, edit position, play vs human, My games, play vs Stockfish, full Stockfish download, lines (MultiPV), endgame tablebase (in game analysis too), Lichess cloud evaluation, multi-threaded Stockfish, asm.js Stockfish (no WebAssembly SIMD), Lichess opening explorer, responsive layout, dead positions with chasolver
+- [Roadmap](#roadmap): square layouts and breakpoints, Lichess data and multi-threaded Stockfish, player names, Chess960, typed commentary, Maia3, background music, peer-to-peer online play, app walk-through
 - [Known gaps](#known-gaps)
 - [Decisions log](#decisions-log)
 
@@ -252,6 +252,52 @@ Built 2026-10-26 (designed the same day), replacing the fixed video frames (1920
 - **Touch and drag**: the board's touch layer opts out of the page-wide drag-scroll (`data-no-drag-scroll`), so a mouse drag on the board moves a piece in the one-column page instead of scrolling it.
 - **Tests**: `tests/layout-core.test.cjs` (boxes, the column rule, export scale) and the live layout sweep (`tests/live/site.test.cjs`: nine sizes from 320×568 to 2560×1080, both browsers, no text overflowing its box, the board's and panels' floors).
 
+### Dead positions with chasolver
+
+Designed and built 2026-11-02 (plan: `docs/plans/2026-11-02-dead-positions.md`).
+
+A position is dead when no legal sequence of moves mates either side (FIDE 5.2.2): the game ends there as a draw, at once. And a player whose flag falls loses only if the opponent could still mate by some legal sequence; otherwise it's a draw (6.9). Today `PlayCore` proves only too little material (`canMate`) and pawns locked with kings and same-coloured bishops (`lockedDead`). A forced line into a dead position, or a lock with knights or rooks, plays on, and the flag rule looks at material only. The endgame tablebase can't help: its "draw" means drawn with best play (KR v KR is one, yet either side can blunder into mate), and a TB win only proves a position isn't dead.
+
+[chasolver](https://github.com/miguel-ambrona/chasolver) (Miguel Ambrona, MIT, a Rust crate, v3.0.0 of 2026-06-22; site https://chasolver.org) is the successor to his Chess Unwinnability Analyzer (CHA). Given a position and an intended winner, it finds a helpmate or proves none exists, and it has been run on every timeout of Lichess's standard rated games. It does the proving here.
+
+**Measured** (2026-11-02): built for `wasm32-unknown-unknown` without changes (Rust 1.99.1) as a bare C-ABI wrapper crate. The page writes a FEN into a 256-byte buffer, and `solve(len, winner, fast)` returns unwinnable, winnable or undecided. It has no dependency besides the `chess` crate chasolver already uses, and is built with no imports, no wasm-bindgen, `lto`, `panic = "abort"` and `strip`. It is 1.05 MB (104 KB gzipped, mostly `chess`'s move tables) and instantiates in ~5 ms. In Node on the laptop it agreed with every classification in the crate's own test files, both sides of each position (137,900 checks, none wrong or undecided):
+
+| Set | Full search: median / p99 / max | Fast check: max | Memory |
+|---|---|---|---|
+| `tests/lichess.txt`, 65,536 positions from Lichess games | 0.034 ms / 0.68 ms / 48 ms | 4 ms | 16 MB |
+| `tests/positions.txt`, 3,414 hard community positions | 0.12 ms / 260 ms / 2.7 s | 2.6 s | 242 MB |
+
+A search on every move of a real game is cheap, but rare constructed positions take seconds and grow the module's memory, which never shrinks. `is_unwinnable_fast` never called a winnable side unwinnable, but proved only 2% of the Lichess positions' sides, so it isn't used.
+
+**Decided by the user:**
+
+- **In a game** (Play vs human, Play vs Stockfish): when chasolver proves that neither side can mate by any legal sequence, even with both cooperating, the game ends at once as a draw by dead position.
+- **Flag falls follow FIDE 6.9:** the flag fall is a draw when chasolver proves the opponent can't mate, and a loss otherwise.
+- **Loaded games and the free board point out dead positions too**, in all four of these ways (mockups 2026-11-02):
+  1. **Analysis panel block**, under the engine lines like the Tablebase block: **Dead position · ½–½**, then "Neither side can mate by any series of legal moves (FIDE 5.2.2)".
+  2. **Eval bar**: at even, its tag reading **DEAD** in place of the eval (as `TB 0.00` does). It takes precedence over a tablebase answer for the same position.
+  3. **Moves list** (replay only): the first move after which the position is dead gets a small **DEAD** pill after its chip.
+  4. **One side only**: the same block says "**White can no longer win** · No series of legal moves lets White mate. Black still can." (or Black).
+
+**Built with these calls (mine, unless the user decides otherwise):**
+
+- **Never during the playing video or its export**, as the tablebase isn't: points 1, 2 and 4 show while the replay is paused and on the free board. The Moves pill is part of the paused page's list.
+- **Not as hints in a game** (the anti-goal): during a game nothing shows until it ends. The game's end text says it: "Draw: dead position, neither side can mate", which replaces the locked-pawns wording. `resultText` and the PGN's `Termination` stay `normal`.
+- **Undecided counts as not proven.** Nothing ends, shows or is marked on a guess. `canMate` and `lockedDead` stay as the synchronous first check (instant, and they cover the time before the module loads, or offline before it is kept). chasolver backs them up for what they can't prove.
+- **Runs in a Worker** (`app/dead-worker.js`), so a slow position never freezes the board. Each question is a FEN plus the side; each answer is `unwinnable`, `winnable` or `undecided`. A page-side client (`app/dead.jsx` hook, with pure helpers in `app/dead-core.js`) caches the answers by position key (board, side to move, castling and en passant; the move counters don't matter). A search past 5 s ends with the Worker terminated and the answer `undecided`. After an answer that grew the module's memory past 64 MB, the Worker is restarted.
+- **In a game**: after each move both sides of the new position are asked. When both answers are `unwinnable` and the game is still on, `PlayCore.declareDead(b)` ends it (result ½–½, reason `dead`, clocks stopped as they stand). The game isn't held up while the answer comes. A dead position stays dead after any legal move, so if a slow answer arrives after more moves have been made (the Stockfish reply, a quick premove), the game ends then on the current position, which is dead too.
+- **Flag**: `PlayCore.flag(b, now, oppUnwinnable)` takes the cached answer for the opponent in the current position. `true` makes it a draw, and `false` or unknown falls back to `canMate` as today. The answer is almost always in by then, since both sides are asked right after each move.
+- **The replay**: when a game is loaded, its positions are asked in order in the Worker, both sides each, until the first one where both are `unwinnable`. That move gets the pill, and later positions are dead too, so they aren't asked. The position on the board while paused (including the viewer's own moves) is asked as it shows, for points 1, 2 and 4. On the free board outside a game, the position on the board is asked the same way.
+- **Loading**: the module loads on a game's first move, a game's load in the replay or the free board's first position, never at page load. It's 104 KB gzipped (the Stockfish engine is 1.8 MB), so this is no heavier than the engine. `sw.js` keeps it like the rest of the page.
+- **Build and pin**: the wrapper crate lives at `tools/chasolver-wasm/` (`Cargo.toml` pinning `chasolver = "=3.0.0"`, `Cargo.lock` committed, and the profile above). The built `vendor/chasolver.wasm` is committed and pinned by SHA-256 in LAYOUT.md with its build command and Rust version, and the site serves it next to the page (`VENDOR` in `build.cjs`). Render's build stays Rust-free; a test checks the committed file's hash against LAYOUT.md. The CSP needs nothing new (same origin); a Worker from the same origin falls under `worker-src`/`script-src 'self'`. The licence (MIT) goes in README with the vendored files.
+- **chasolver's FEN**: `deadFen` (`app/dead.jsx`) keeps only the castling rights whose king and rook are still at home, since chasolver refuses a FEN whose rights don't fit the pieces (an edited start's might not). Its answers on a start position go through the same cache, so a game that starts dead ends as soon as the answer is in.
+- **Caching**: the worker's undecided answers (gave up, ran past 5 s, a refused FEN) are cached for the visit, so a slow position isn't searched again; a worker that couldn't start or load its module isn't, so a later ask tries again.
+- **Tests**: Node unit tests load the real wasm and check a handful of positions from chasolver's test files (dead, one side unwinnable, winnable, a forced line into a dead position), `PlayCore.declareDead`, `flag` with and without the answer, `DeadCore`'s cache keys, and the first-dead-move scan. A live test covers a game ending dead in a position only chasolver proves (one picked from its test files: a lock with knights or rooks, or a capture forced into a dead position), the DEAD tag, block and pill on a loaded PGN, and a one-sided block on the free board.
+
+Live test: `desktop: dead positions end a game, and show on a loaded game and the free board` (Chromium and Firefox), using `2b1k3/3N4/8/1p1p1p1p/1P1P1P1P/8/8/2B1K3 b - - 0 1`: after 1… Bxd7 the bishops are on both colours behind a full lock, which `canMate` and `lockedDead` don't prove.
+
+**Open**: speed on a phone (**verify** on the Android phone; the Lichess set's p99 is under 1 ms on the laptop).
+
 ## Roadmap
 
 Planned, roughly in this order; each item gets its own PR(s) on a `claude/<topic>` branch. Items marked *needs design* have open questions to settle with the user before a plan.
@@ -354,46 +400,6 @@ The user types their own comment on a move. Open: where (replay, free board, a g
 
 Maia predicts human moves at a chosen rating, unlike Stockfish's best move. Open: what for (an opponent in Play vs Maia, "what a human would play" beside Stockfish, or both); whether it runs in the browser (weights, runtime, size, licence) or would need a server (which the principles rule out without the user's say); which ratings.
 
-### Dead positions with chasolver (designed 2026-11-02)
-
-A position is dead when no legal sequence of moves mates either side (FIDE 5.2.2): the game ends there as a draw, at once. And a player whose flag falls loses only if the opponent could still mate by some legal sequence; otherwise it's a draw (6.9). Today `PlayCore` proves only too little material (`canMate`) and pawns locked with kings and same-coloured bishops (`lockedDead`). A forced line into a dead position, or a lock with knights or rooks, plays on, and the flag rule looks at material only. The endgame tablebase can't help: its "draw" means drawn with best play (KR v KR is one, yet either side can blunder into mate), and a TB win only proves a position isn't dead.
-
-[chasolver](https://github.com/miguel-ambrona/chasolver) (Miguel Ambrona, MIT, a Rust crate, v3.0.0 of 2026-06-22; site https://chasolver.org) is the successor to his Chess Unwinnability Analyzer (CHA). Given a position and an intended winner, it finds a helpmate or proves none exists, and it has been run on every timeout of Lichess's standard rated games. It does the proving here.
-
-**Measured** (2026-11-02): built for `wasm32-unknown-unknown` without changes (Rust 1.99.1) as a bare C-ABI wrapper crate. The page writes a FEN into a 256-byte buffer, and `solve(len, winner, fast)` returns unwinnable, winnable or undecided. It has no dependency besides the `chess` crate chasolver already uses, and is built with no imports, no wasm-bindgen, `lto`, `panic = "abort"` and `strip`. It is 1.05 MB (104 KB gzipped, mostly `chess`'s move tables) and instantiates in ~5 ms. In Node on the laptop it agreed with every classification in the crate's own test files, both sides of each position (137,900 checks, none wrong or undecided):
-
-| Set | Full search: median / p99 / max | Fast check: max | Memory |
-|---|---|---|---|
-| `tests/lichess.txt`, 65,536 positions from Lichess games | 0.034 ms / 0.68 ms / 48 ms | 4 ms | 16 MB |
-| `tests/positions.txt`, 3,414 hard community positions | 0.12 ms / 260 ms / 2.7 s | 2.6 s | 242 MB |
-
-A search on every move of a real game is cheap, but rare constructed positions take seconds and grow the module's memory, which never shrinks. `is_unwinnable_fast` never called a winnable side unwinnable, but proved only 2% of the Lichess positions' sides, so it isn't used.
-
-**Decided by the user:**
-
-- **In a game** (Play vs human, Play vs Stockfish): when chasolver proves that neither side can mate by any legal sequence, even with both cooperating, the game ends at once as a draw by dead position.
-- **Flag falls follow FIDE 6.9:** the flag fall is a draw when chasolver proves the opponent can't mate, and a loss otherwise.
-- **Loaded games and the free board point out dead positions too**, in all four of these ways (mockups 2026-11-02):
-  1. **Analysis panel block**, under the engine lines like the Tablebase block: **Dead position · ½–½**, then "Neither side can mate by any series of legal moves (FIDE 5.2.2)".
-  2. **Eval bar**: at even, its tag reading **DEAD** in place of the eval (as `TB 0.00` does). It takes precedence over a tablebase answer for the same position.
-  3. **Moves list** (replay only): the first move after which the position is dead gets a small **DEAD** pill after its chip.
-  4. **One side only**: the same block says "**White can no longer win** · No series of legal moves lets White mate. Black still can." (or Black).
-
-**Proposed (my calls):**
-
-- **Never during the playing video or its export**, as the tablebase isn't: points 1, 2 and 4 show while the replay is paused and on the free board. The Moves pill is part of the paused page's list.
-- **Not as hints in a game** (the anti-goal): during a game nothing shows until it ends. The game's end text says it: "Draw: dead position, neither side can mate", which replaces the locked-pawns wording. `resultText` and the PGN's `Termination` stay `normal`.
-- **Undecided counts as not proven.** Nothing ends, shows or is marked on a guess. `canMate` and `lockedDead` stay as the synchronous first check (instant, and they cover the time before the module loads, or offline before it is kept). chasolver backs them up for what they can't prove.
-- **Runs in a Worker** (`app/dead-worker.js`), so a slow position never freezes the board. Each question is a FEN plus the side; each answer is `unwinnable`, `winnable` or `undecided`. A page-side client (`app/dead.jsx` hook, with pure helpers in `app/dead-core.js`) caches the answers by position key (board, side to move, castling and en passant; the move counters don't matter). A search past 5 s ends with the Worker terminated and the answer `undecided`. After an answer that grew the module's memory past 64 MB, the Worker is restarted.
-- **In a game**: after each move both sides of the new position are asked. When both answers are `unwinnable` and the game is still on, `PlayCore.declareDead(b)` ends it (result ½–½, reason `dead`, clocks stopped as they stand). The game isn't held up while the answer comes. A dead position stays dead after any legal move, so if a slow answer arrives after more moves have been made (the Stockfish reply, a quick premove), the game ends then on the current position, which is dead too.
-- **Flag**: `PlayCore.flag(b, now, oppUnwinnable)` takes the cached answer for the opponent in the current position. `true` makes it a draw, and `false` or unknown falls back to `canMate` as today. The answer is almost always in by then, since both sides are asked right after each move.
-- **The replay**: when a game is loaded, its positions are asked in order in the Worker, both sides each, until the first one where both are `unwinnable`. That move gets the pill, and later positions are dead too, so they aren't asked. The position on the board while paused (including the viewer's own moves) is asked as it shows, for points 1, 2 and 4. On the free board outside a game, the position on the board is asked the same way.
-- **Loading**: the module loads on a game's first move, a game's load in the replay or the free board's first position, never at page load. It's 104 KB gzipped (the Stockfish engine is 1.8 MB), so this is no heavier than the engine. `sw.js` keeps it like the rest of the page.
-- **Build and pin**: the wrapper crate lives at `tools/chasolver-wasm/` (`Cargo.toml` pinning `chasolver = "=3.0.0"`, `Cargo.lock` committed, and the profile above). The built `vendor/chasolver.wasm` is committed and pinned by SHA-256 in LAYOUT.md with its build command and Rust version, and the site serves it next to the page (`VENDOR` in `build.cjs`). Render's build stays Rust-free; a test checks the committed file's hash against LAYOUT.md. The CSP needs nothing new (same origin); a Worker from the same origin falls under `worker-src`/`script-src 'self'`. The licence (MIT) goes in README with the vendored files.
-- **Tests**: Node unit tests load the real wasm and check a handful of positions from chasolver's test files (dead, one side unwinnable, winnable, a forced line into a dead position), `PlayCore.declareDead`, `flag` with and without the answer, `DeadCore`'s cache keys, and the first-dead-move scan. A live test covers a game ending dead in a position only chasolver proves (one picked from its test files: a lock with knights or rooks, or a capture forced into a dead position), the DEAD tag, block and pill on a loaded PGN, and a one-sided block on the free board.
-
-**Open**: speed on a phone (**verify** on the Android phone after building; the Lichess set's p99 is under 1 ms on the laptop).
-
 ### Background music
 
 Music that plays under the page, chosen from a few bundled tracks or the viewer's own file. Added 2026-10-23.
@@ -453,7 +459,7 @@ Deferred by the per-plan reviews; each was true when recorded and may since have
 
 **Play vs human** (2026-10-19)
 - A draw can only be claimed in the position on the board, not by announcing the move that would make the repetition or the fiftieth move.
-- Dead positions are found only behind locked pawns (an en-passant capture on offer counts as a pawn break), with kings, pawns and bishops all on one colour of square (`PlayCore.lockedDead`: every pawn blocked, no capture possible, neither king nor any bishop able to reach an enemy pawn it could take; a king a bishop can reach always has a square of the other colour to step to, and the kings never meet). Knights, rooks, queens, bishops on both colours, a pawn break either king could make, or a position dead for other reasons (a forced line) play on; finding those needs a helpmate search (CHA-style).
+- Dead positions need chasolver's worker: before its module loads (the first move of a game), offline before it was ever kept, or for a position it gives up on (5 s), only `PlayCore.canMate` and `lockedDead` end a game, and a flag fall against mating material is a loss.
 - A flag fall in a dead position the check can't prove (see above) still loses: the flag rule looks at material only. Positions it proves dead have already ended the game.
 
 **My games** (2026-10-20)
