@@ -346,3 +346,16 @@ test('fenAfter gives the six-field FEN: castling, en passant square, half-move c
   // counting on from a set-up position's clock and move number, Black to move first
   assert.equal(play('4k3/8/8/8/8/8/8/R3K3 b Q - 7 30', ['Kd7', 'Ra7+']), '8/R2k4/8/8/8/8/8/4K3 b - - 9 31');
 });
+
+// the Analysis panel's best line is the engine's from the position after the move, as Lichess shows it; the line the
+// engine preferred to a move not rated best stays the move's own
+test('each move gets the line from the position after it: the next best line, or the last move pv_line', () => {
+  const A = analysis({ name: 'Stockfish 19' });
+  A.moves[0] = { ...A.moves[0], classification: 'mistake', eval_loss: 80, best_move_uci: 'd2d4', best_line: ['d4', 'd5', 'c4'] };
+  A.moves[1] = { ...A.moves[1], best_line: ['e5', 'Nf3'], pv_line: ['Nf3', 'Nc6'] };
+  const M = CC.buildGame({ pgn: PGN, analysis: A });
+  assert.deepEqual(M.plies[0].best.line, ['d4', 'd5', 'c4']);
+  assert.deepEqual(M.plies[0].next, ['e5', 'Nf3']);
+  assert.deepEqual(M.plies[1].next, ['Nf3', 'Nc6']);
+  assert.equal(M.plies[1].best, undefined);
+});

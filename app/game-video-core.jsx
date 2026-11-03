@@ -747,17 +747,18 @@ function Analysis({ M, T, S, a, vline, onLine, onPreview, onReplyHover, paused, 
   const { cp } = evalNow(M, T, S);
   const col = cls === 'none' ? C.ink : clsColor(cls);
   const big = headline();
-  // Queen's line from before this move (its scores are left out: often off, and they squeezed the move's labels onto more lines)
+  // Queen's line from the position after this move (its scores are left out: often off, and they squeezed the move's labels onto more lines)
   const Qp = P.queen || {};
-  // P.best: the engine preferred another move (a mistake, or an equally good move rated best with 0 cp lost)
-  const sfLegal = P.best ? playLineCached(M, c, P.best.line.slice(0, 8)) : [];
-  const agreeLegal = cls === 'best' && P.line && P.line.length ? playLineCached(M, c, P.line.slice(0, 8)) : [];
+  // the best line from the position on the board, as the eval's; and, where the move wasn't rated best, the line the
+  // engine preferred to it (P.best is also an equally good move rated best with 0 cp lost: "as good as" says that one)
+  const nextLegal = P.next ? playLineCached(M, c + 1, P.next.slice(0, 8)) : [];
+  const betterLegal = P.best && cls !== 'best' ? playLineCached(M, c, P.best.line.slice(0, 8)) : [];
   // name the engine (the analysis may come from another one), and say where Queen stands once it has looked
   const engName = P.tbBefore ? 'The tablebase' : (M.engine || '').split(' · ')[0] || 'The engine';
   const qPick = Qp.before && Qp.before.best ? Qp.before : null;
   const agreeText = `${engName} agrees with the move played.` + (qPick ? (qPick.best === P.uci ? ' So does Queen.' : ` Queen preferred ${qPick.bestSan || qPick.best}.`) : '');
-  const qLine = Qp.before && Qp.before.line ? Qp.before.line.split(/\s+/).filter((x) => x && !/^\d+\.+$/.test(x) && !/^\d+\.\.\.$/.test(x)).map((x) => x.replace(/^\d+\.+/, '')).filter(Boolean).slice(0, 6) : [];
-  const qLegal = qLine.length ? playLineCached(M, c, qLine) : [];
+  const qLine = Qp.after && Qp.after.line ? Qp.after.line.split(/\s+/).filter((x) => x && !/^\d+\.+$/.test(x) && !/^\d+\.\.\.$/.test(x)).map((x) => x.replace(/^\d+\.+/, '')).filter(Boolean).slice(0, 6) : [];
+  const qLegal = qLine.length ? playLineCached(M, c + 1, qLine) : [];
   return (
     <AnalysisPanel box={box} a={a} paused={paused} depth={depth} deep={M.hasEval ? deep : null}>
       <div style={{ opacity: k, transform: `translateY(${(1 - k) * 8}px)` }}>
@@ -772,16 +773,17 @@ function Analysis({ M, T, S, a, vline, onLine, onPreview, onReplyHover, paused, 
         </div>
       </div>
       <div style={{ marginTop: anGap(16), paddingTop: anGap(14), borderTop: `1px solid ${C.line}`, font: `500 ${tx(18)}px ${MONO}`, color: C.dim, display: 'flex', flexDirection: 'column', gap: anGap(8), opacity: k }}>
-        {P.best && P.best.line.length ? (
-          <LineChips name="Best line" nameColor={C.ink} accent={C.best} moves={P.best.line.slice(0, 8)} ply0={M.ply0} c={c} legal={sfLegal.length}
-            sel={vline && vline.src === 'sf' ? vline.upto : null} onPick={(j) => onLine('sf', sfLegal, j)} onHover={(j) => onPreview('sf', sfLegal, j)} />
-        ) : cls === 'best' && agreeLegal.length ? (
-          <LineChips name="Best line" nameColor={C.ink} accent={C.best} moves={P.line.slice(0, 8)} ply0={M.ply0} c={c} legal={agreeLegal.length}
-            sel={vline && vline.src === 'sf' ? vline.upto : null} onPick={(j) => onLine('sf', agreeLegal, j)} onHover={(j) => onPreview('sf', agreeLegal, j)} />
-        ) : cls === 'best' ? <span>{agreeText}</span> : <span />}
+        {betterLegal.length > 0 && (
+          <LineChips name="Better was" tip="better line" nameColor={C.ink} accent={C.best} moves={P.best.line.slice(0, 8)} ply0={M.ply0} c={c} legal={betterLegal.length}
+            sel={vline && vline.src === 'sf' ? vline.upto : null} onPick={(j) => onLine('sf', betterLegal, j)} onHover={(j) => onPreview('sf', betterLegal, j)} />
+        )}
+        {nextLegal.length ? (
+          <LineChips name="Best line" nameColor={C.ink} accent={C.best} moves={P.next.slice(0, 8)} ply0={M.ply0} c={c + 1} legal={nextLegal.length}
+            sel={vline && vline.src === 'next' ? vline.upto : null} onPick={(j) => onLine('next', nextLegal, j, c + 1)} onHover={(j) => onPreview('next', nextLegal, j, c + 1)} />
+        ) : cls === 'best' ? <span>{agreeText}</span> : !betterLegal.length && <span />}
         {qLine.length > 0 && (
-          <LineChips name="Queen line" nameColor={C.queen} accent={C.queen} moves={qLine} ply0={M.ply0} c={c} legal={qLegal.length}
-            sel={vline && vline.src === 'queen' ? vline.upto : null} onPick={(j) => onLine('queen', qLegal, j)} onHover={(j) => onPreview('queen', qLegal, j)} />
+          <LineChips name="Queen line" nameColor={C.queen} accent={C.queen} moves={qLine} ply0={M.ply0} c={c + 1} legal={qLegal.length}
+            sel={vline && vline.src === 'queen' ? vline.upto : null} onPick={(j) => onLine('queen', qLegal, j, c + 1)} onHover={(j) => onPreview('queen', qLegal, j, c + 1)} />
         )}
         {P.advice && <span style={{ color: C.inaccuracy }}>{P.advice}</span>}
         {rule && <div style={{ paddingTop: tx(8), borderTop: `1px solid ${C.line}` }}><RuleBlock w={rule} /></div>}
@@ -791,7 +793,7 @@ function Analysis({ M, T, S, a, vline, onLine, onPreview, onReplyHover, paused, 
             <span style={{ color: lineAccent(vline.src) }}>
               {vline.src === 'you'
                 ? (vline.upto < 0 ? 'Your moves: drag a piece to play' : `Your moves: ${vline.moves.slice(0, vline.upto + 1).map((m, j) => (j === 0 || (M.ply0 + vline.at + j) % 2 === 0 ? lineLabel(M, vline.at, j, m.san) : m.san)).join(' ')}`)
-                : `On the board: ${vline.src === 'queen' ? 'Queen line' : 'best line'} to ${lineLabel(M, vline.at, vline.upto, vline.moves[vline.upto].san)} · drag a piece to branch off`}
+                : `On the board: ${vline.src === 'queen' ? 'Queen line' : vline.src === 'sf' ? 'better line' : 'best line'} to ${lineLabel(M, vline.at, vline.upto, vline.moves[vline.upto].san)} · drag a piece to branch off`}
             </span> · ← → step · Esc returns to the game
           </span>
         )}
@@ -1039,9 +1041,10 @@ function GameVideo({ M, tw, d, probe, queen, nav, scheme, sf, orient }) {
   // the line under the mouse in the Analysis panel, shown on the board until it leaves (or the line is picked)
   const [pv, setPv] = React.useState(null);
   React.useEffect(() => { setPv(null); }, [playing, cNow]);
-  const onPreview = (src, moves, j) => setPv(j != null && j < moves.length ? { c: cNow, at: cNow, src, moves, upto: j } : null);
+  // at: the ply the line's first move stands in for (cNow: instead of the move on the board; cNow + 1: after it)
+  const onPreview = (src, moves, j, at = cNow) => setPv(j != null && j < moves.length ? { c: cNow, at, src, moves, upto: j } : null);
   const onReplyHover = (steps) => setPv(steps && steps.length && vline ? { ...vline, moves: [...vline.moves.slice(0, vline.upto + 1), ...steps], upto: vline.upto + steps.length } : null);
-  const onLine = (src, moves, j) => { setPv(null); if (j < moves.length) { tl.setPlaying(false); input.clear(); setVline({ c: cNow, at: cNow, src, moves, upto: j }); } };
+  const onLine = (src, moves, j, at = cNow) => { setPv(null); if (j < moves.length) { tl.setPlaying(false); input.clear(); setVline({ c: cNow, at, src, moves, upto: j }); } };
   // a line steps back to its first move (the viewer's own line back to its starting position), then closes
   const stepLine = (d) => setVline((v) => {
     if (!v) return v;
