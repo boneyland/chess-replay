@@ -79,8 +79,26 @@ function useFlowHeight(frame, ref) {
   });
 }
 // The board's own 768 px space, scaled to L.board: the board, its touch layer, arrows and badges position from 0,0 in it
-function BoardSpace({ children }) {
-  return <div style={{ position: 'absolute', left: L.board.x, top: L.board.y, width: BW, height: BW, transform: `scale(${L.board.size / BW})`, transformOrigin: '0 0' }}>{children}</div>;
+// onStep(±1), where there are moves to step through: the wheel over the board steps them (BoardCore.wheel). The listener
+// isn't passive, so the page doesn't scroll under the board; a pinch (ctrl + wheel) or a sideways scroll is left alone
+function BoardSpace({ children, onStep }) {
+  const el = React.useRef(null), step = React.useRef(onStep), on = !!onStep;
+  step.current = onStep;
+  React.useEffect(() => {
+    const node = el.current;
+    if (!on || !node) return;
+    let w = window.BoardCore.wheelStart();
+    const onWheel = (e) => {
+      if (e.ctrlKey || !e.deltaY || Math.abs(e.deltaX) > Math.abs(e.deltaY)) return;
+      e.preventDefault();
+      const r = window.BoardCore.wheel(w, e.deltaY, e.deltaMode, e.timeStamp);
+      w = r.w;
+      if (r.d && step.current) step.current(r.d);
+    };
+    node.addEventListener('wheel', onWheel, { passive: false });
+    return () => node.removeEventListener('wheel', onWheel);
+  }, [on]);
+  return <div ref={el} style={{ position: 'absolute', left: L.board.x, top: L.board.y, width: BW, height: BW, transform: `scale(${L.board.size / BW})`, transformOrigin: '0 0' }}>{children}</div>;
 }
 
 // The side at the bottom ('b' turns the board round). view() maps a board column and row (0 = a, 0 = rank 8) to where it
@@ -1178,7 +1196,9 @@ function GameVideo({ M, tw, d, probe, queen, nav, scheme, sf, orient }) {
   // (before the first paint, so the title card never flashes)
   React.useLayoutEffect(() => { if (tl.setStart) tl.setStart(settled(-1)); }, []);
   const navRef = React.useRef(null);
-  navRef.current = { c: lastPly(T, S), goTo, vline, stepLine, setVline, promo: input.promo, cancelPromo: input.cancelPromo, leaveIfEmpty };
+  // ← →, and the wheel over the board: a shown line's moves, else the game's
+  const stepBy = (d) => { const n = navRef.current; if (n.vline) n.stepLine(d); else n.goTo(n.c + d); };
+  navRef.current = { c: lastPly(T, S), goTo, step: stepBy, vline, stepLine, setVline, promo: input.promo, cancelPromo: input.cancelPromo, leaveIfEmpty };
   if (nav) {
     const cc = navRef.current.c;
     nav.current = vline ? {
@@ -1204,9 +1224,7 @@ function GameVideo({ M, tw, d, probe, queen, nav, scheme, sf, orient }) {
       if (e.code === 'Escape' && n.vline) { e.preventDefault(); n.setVline(null); return; }
       if (e.code !== 'ArrowLeft' && e.code !== 'ArrowRight' && e.code !== 'End') return;
       e.preventDefault(); // claims the key before the stage's own scrub handler
-      if (n.vline && e.code !== 'End') { n.stepLine(e.code === 'ArrowRight' ? 1 : -1); return; }
-      const { c, goTo: go } = n;
-      go(e.code === 'End' ? Infinity : e.code === 'ArrowRight' ? c + 1 : c - 1);
+      if (e.code === 'End') n.goTo(Infinity); else n.step(e.code === 'ArrowRight' ? 1 : -1);
     };
     window.addEventListener('keydown', onKey);
     return () => window.removeEventListener('keydown', onKey);
@@ -1232,7 +1250,7 @@ function GameVideo({ M, tw, d, probe, queen, nav, scheme, sf, orient }) {
         <div ref={flowRef} data-push={f > 0 && tw.exporting ? `${sc} ${cx} ${cy}` : undefined} style={{ position: 'absolute', inset: 0, transformOrigin: '0 0', ...flowStyle(), ...(f > 0 && !tw.exporting && { transform: `translate(${cx}px,${cy}px) scale(${sc}) translate(${-cx}px,${-cy}px)` }) }}>
           <EvalBar M={M} T={T} S={S} a={enter(1)} tb={tbBar(tb)} dead={deadBar(dead)} />
           <PlayerBar M={M} T={T} S={S} side="b" a={enter(1)} pieces={pieces} />
-          <BoardSpace>
+          <BoardSpace onStep={tw.exporting ? null : stepBy}>
             <Board M={M} T={T} S={S} a={enter(0)} arrows={tw.bestArrows} pieces={pieces} queen={queen} vline={pv || vline} hide={input.drag && input.drag.moved ? input.drag.from : null} lines={tw.bestArrows && own ? lineArrows(own.after) : null} />
             <BoardDraw draw={draw} hidden={playing || !!pv}>
               <BoardTouch pos={touchPos} sel={input.sel} targets={input.targets} drag={input.drag} promo={input.promo} {...input.handlers} />
