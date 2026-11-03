@@ -41,14 +41,15 @@ function useDead(pos, known) {
   return done ? hit : st.k === k ? st.v : hit;
 }
 
-// The ply after which a loaded game's position is first dead (later ones are too), or null; asked once per game
+// The ply after which a game's position is first dead (later ones are too), or null; asked once per list of plies.
+// posOf: a ply's position (a loaded game's plies carry FENs; the free board's carry its steps' positions)
 const FIRST_DEAD = new WeakMap();
-function useFirstDead(M) {
+function useFirstDead(M, posOf = plyPos) {
   const [, redraw] = React.useState(0);
   React.useEffect(() => {
     if (!M.plies.length || FIRST_DEAD.has(M.plies)) return;
     const ctl = new AbortController();
-    window.DeadCore.firstDead(M.plies.map((p) => deadFen(plyPos(p))), deadClient(), { signal: ctl.signal })
+    window.DeadCore.firstDead(M.plies.map((p) => deadFen(posOf(p))), deadClient(), { signal: ctl.signal })
       .then((i) => { if (!ctl.signal.aborted) { FIRST_DEAD.set(M.plies, i); redraw((x) => x + 1); } });
     return () => ctl.abort();
   }, [M.plies]);

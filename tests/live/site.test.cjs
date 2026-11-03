@@ -1581,6 +1581,16 @@ for (const name of BROWSERS) for (const site of SITES) {
       await p.waitForTimeout(2500);
       assert.equal(await p.locator('.dead-block, .dead-pill').count(), 0, 'nothing while the video plays');
       await p.getByRole('button', { name: /^Pause/ }).click();
+      // the free board: the same lock with the sides swapped, and the pill after the move that leaves it dead
+      await setUpFen(p, '2b1k3/8/8/1p1p1p1p/1P1P1P1P/8/3n4/2B1K3 w - - 0 1');
+      const fb = await touch(), fc = square(fb, 'c1', false), fd = square(fb, 'd2', false);
+      await p.mouse.move(fc.x, fc.y);
+      await p.mouse.down();
+      await p.mouse.move(fd.x, fd.y, { steps: 8 });
+      await p.mouse.up();
+      await assert.doesNotReject(p.locator('.dead-pill').waitFor({ timeout: 15000 }));
+      assert.equal(await p.locator('.dead-pill').evaluate((el) => el.previousElementSibling.textContent), 'Bxd2', 'the free board marks the move too');
+      await p.screenshot({ path: path.join(OUT, host + '-dead-free-pill.png') });
       // the free board: a lone king against a king and rook
       await setUpFen(p, '8/8/8/4k3/8/8/r7/4K3 w - - 0 1');
       await assert.doesNotReject(p.locator('.dead-block').filter({ hasText: /White can no longer win/i }).waitFor({ timeout: 15000 }));
