@@ -707,12 +707,14 @@ function Commentary({ M, T, S, a, book, line }) {
 
 // tb: the endgame tablebase's answer for the position on the board (useTablebase); onTb plays one of its moves
 // dead: chasolver's answers for the position on the board (useDead), for the dead-position block above the tablebase's
-function Analysis({ M, T, S, a, vline, onLine, onPreview, onReplyHover, paused, sf, own, onReply, deep, tb, onTb, dead }) {
+// fifty: PlayCore.fiftyRule's note for the position on the board, shown where no dead-position block is
+function Analysis({ M, T, S, a, vline, onLine, onPreview, onReplyHover, paused, sf, own, onReply, deep, tb, onTb, dead, fifty }) {
   const c = lastPly(T, S);
   // Stockfish runs as asm.js here (stockfish.jsx, which a page without the engine doesn't load)
   const sfAsm = typeof SF_SIMD !== 'undefined' && !SF_SIMD;
   // the Tablebase block goes under the lines; the panel scrolls to it where it doesn't fit
-  const deadEl = deadWords(dead) && <div style={{ marginTop: tx(12), paddingTop: tx(12), borderTop: `1px solid ${C.line}` }}><DeadBlock d={dead} /></div>;
+  const rule = deadWords(dead) || fifty;
+  const deadEl = rule && <div style={{ marginTop: tx(12), paddingTop: tx(12), borderTop: `1px solid ${C.line}` }}><RuleBlock w={rule} /></div>;
   const box = (tb || deadEl) && !L.analysis.flow ? { ...L.analysis, scroll: true } : L.analysis;
   const tbEl = (tb || deadEl) && <React.Fragment>{deadEl}{tb && <div style={{ marginTop: tx(12), paddingTop: tx(12), borderTop: `1px solid ${C.line}` }}><TablebaseBlock t={tb} onPlay={onTb} /></div>}</React.Fragment>;
   // Go deeper's search of this move, once it has passed the analysis's (deep: useMoveEval's)
@@ -782,7 +784,7 @@ function Analysis({ M, T, S, a, vline, onLine, onPreview, onReplyHover, paused, 
             sel={vline && vline.src === 'queen' ? vline.upto : null} onPick={(j) => onLine('queen', qLegal, j)} onHover={(j) => onPreview('queen', qLegal, j)} />
         )}
         {P.advice && <span style={{ color: C.inaccuracy }}>{P.advice}</span>}
-        {deadWords(dead) && <div style={{ paddingTop: tx(8), borderTop: `1px solid ${C.line}` }}><DeadBlock d={dead} /></div>}
+        {rule && <div style={{ paddingTop: tx(8), borderTop: `1px solid ${C.line}` }}><RuleBlock w={rule} /></div>}
         {tb && <div style={{ paddingTop: tx(8), borderTop: `1px solid ${C.line}` }}><TablebaseBlock t={tb} onPlay={onTb} /></div>}
         {vline && (
           <span style={{ font: `500 ${tx(15)}px ${MONO}`, color: C.dim }}>
@@ -1065,6 +1067,8 @@ function GameVideo({ M, tw, d, probe, queen, nav, scheme, sf, orient }) {
   // unasked from there on (a line branches from the position after ply at − 1)
   const deadAt = useFirstDead(M), pastDead = deadAt != null && (vline ? vline.at - 1 : cNow) >= deadAt;
   const dead = useDead(playing ? null : touchPos, pastDead);
+  // the fifty-move rule for the position on the board, while paused
+  const fifty = playing ? null : window.PlayCore.fiftyRule(shownFen(), touchPos);
   // the result after the last move: the PGN's, with the final position's own end where it gives that result
   const end = M.plies.length ? window.PlayCore.ending({ pos: gamePos(M.plies.length - 1), dead: deadAt != null, pgn: { result: M.result, termination: M.headers && M.headers.Termination } }) : null;
   const onTb = (uci) => { const step = window.ChessCore.stepFromUci(touchPos, uci); if (step) { tl.setPlaying(false); input.clear(); playOwn(step); } };
@@ -1165,7 +1169,7 @@ function GameVideo({ M, tw, d, probe, queen, nav, scheme, sf, orient }) {
           {L.header && <Header M={M} a={enter(2)} />}
           <MoveList M={M} T={T} S={S} a={enter(3)} paused={!playing} onPick={goTo} deadAt={deadAt} end={end} />
           <Commentary M={M} T={T} S={S} a={enter(4)} book={sf ? sf.book : null} line={lineKey ? { book: lineBook } : null} />
-          <Analysis M={M} T={T} S={S} a={enter(5)} vline={vline} onLine={onLine} onPreview={onPreview} onReplyHover={onReplyHover} paused={!playing} sf={sf} own={own} onReply={onReply} deep={gameEval} tb={tb} onTb={onTb} dead={dead} />
+          <Analysis M={M} T={T} S={S} a={enter(5)} vline={vline} onLine={onLine} onPreview={onPreview} onReplyHover={onReplyHover} paused={!playing} sf={sf} own={own} onReply={onReply} deep={gameEval} tb={tb} onTb={onTb} dead={dead} fifty={fifty} />
           {L.plot && <EvalPlot M={M} T={T} S={S} a={enter(6)} paused={!playing} onPick={goTo} />}
         </div>
         <div style={{ position: 'absolute', inset: 0, pointerEvents: 'none', boxShadow: `inset 0 0 220px rgba(228,85,63,${0.55 * flash})` }} />
