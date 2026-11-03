@@ -455,11 +455,20 @@ function BoardTouch({ pos, sel, targets, drag, promo, onDown, onMove, onUp, onCa
 
 // Move chips for a line; legal moves can be clicked to show the line on the board up to that move
 // name: null for none (the caller labels the line); tip: what the moves' tooltips call the line (else the name)
-// onHover(j), then onHover(null) as the mouse leaves: the board previews the line up to that move
-function LineChips({ name, nameColor, accent, moves, ply0, c, legal, sel, onPick, tip, onHover }) {
+// a line's row (.line-row): lit while the mouse is over it (not a finger, so a tapped line doesn't stay lit), and
+// onLeave as the mouse leaves it. data-hover rather than CSS :hover, which headless Firefox never reports
+const lineRow = (onLeave) => ({
+  className: 'line-row',
+  onPointerEnter: (e) => { if (e.pointerType === 'mouse') e.currentTarget.dataset.hover = '1'; },
+  onPointerLeave: (e) => { if (e.pointerType !== 'mouse') return; delete e.currentTarget.dataset.hover; if (onLeave) onLeave(); },
+});
+
+// onHover(j) as the mouse enters a move, and onHover(null) only as it leaves the whole line, so sliding between
+// moves never flashes the game's position. bare: the caller's row (lineRow) does both
+function LineChips({ name, nameColor, accent, moves, ply0, c, legal, sel, onPick, tip, onHover, bare }) {
   const what = tip || String(name).toLowerCase();
   return (
-    <div style={{ display: 'flex', flexWrap: 'wrap', alignItems: 'center', columnGap: tx(6), rowGap: tx(6) }}>
+    <div {...(bare ? {} : lineRow(onHover && (() => onHover(null))))} style={{ display: 'flex', flexWrap: 'wrap', alignItems: 'center', columnGap: tx(6), rowGap: tx(6) }}>
       {name != null && <span style={{ color: nameColor, marginRight: tx(8) }}>{name}</span>}
       {moves.map((m, j) => {
         const ply = ply0 + c + j, white = ply % 2 === 0, ok = j < legal, on = sel === j;
@@ -468,7 +477,7 @@ function LineChips({ name, nameColor, accent, moves, ply0, c, legal, sel, onPick
             {(white || j === 0) && <span style={{ color: C.dim, marginLeft: j ? tx(6) : 0, font: `500 ${tx(15)}px ${MONO}` }}>{window.ChessCore.moveNo(ply)}</span>}
             <span className={ok ? 'mv' : undefined} role={ok ? 'button' : undefined} title={ok ? `Show ${what} on the board up to ${m}` : 'Not a legal move in this line'}
               onClick={ok ? (e) => { e.stopPropagation(); onPick(j); } : undefined}
-              onPointerEnter={ok && onHover ? (e) => { if (e.pointerType === 'mouse') onHover(j); } : undefined} onPointerLeave={ok && onHover ? (e) => { if (e.pointerType === 'mouse') onHover(null); } : undefined} tabIndex={ok ? 0 : undefined}
+              onPointerEnter={ok && onHover ? (e) => { if (e.pointerType === 'mouse') onHover(j); } : undefined} tabIndex={ok ? 0 : undefined}
               onKeyDown={ok ? (e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); e.stopPropagation(); onPick(j); } } : undefined}
               style={{ cursor: ok ? 'pointer' : 'default', opacity: ok ? 1 : 0.4, padding: `${tx(2)}px ${tx(8)}px`, borderRadius: 2, font: `${j === 0 || on ? 700 : 600} ${tx(16)}px ${MONO}`, background: white ? '#f1ebe1' : '#2a2320', color: white ? '#15100d' : '#efe8de', boxShadow: on ? `0 0 0 3px ${C.last}` : 'none', border: j === 0 ? `2px solid ${accent}` : `1px solid ${white ? 'rgba(60,40,20,0.22)' : 'rgba(255,236,214,0.22)'}` }}>{m}</span>
           </span>
