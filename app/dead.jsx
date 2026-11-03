@@ -24,9 +24,12 @@ const plyPos = (p) => ({ ...window.ChessCore.posFromFen(p.fen), castle: p.castle
 
 const DEAD_BOTH = { w: 'unwinnable', b: 'unwinnable' };
 // chasolver's answers for the position (null asks nothing): { w, b }, each 'unwinnable', 'winnable', 'undecided' or
-// undefined while it's asked; known: the position is already known to be dead (it follows one), so nothing is asked
+// undefined while it's asked; known: the position is already known to be dead (it follows one), so nothing is asked.
+// A position without a legal move is never asked: checkmate gives null, and stalemate { w, b, stalemate: the side to
+// move }, as the game ends there by stalemate (FIDE 5.2.1) before any question of a dead position
 function useDead(pos, known) {
-  const fen = pos && !known ? deadFen(pos) : null, k = fen ? window.DeadCore.key(fen) : null;
+  const ended = pos && !window.ChessCore.hasLegal(pos) ? (window.ChessCore.inCheck(pos.b, pos.turn) ? 'checkmate' : 'stalemate') : null;
+  const fen = pos && !known && !ended ? deadFen(pos) : null, k = fen ? window.DeadCore.key(fen) : null;
   const [st, setSt] = React.useState({ k: null, v: null });
   const c = fen ? deadClient() : null;
   const hit = c ? { w: c.cached(fen, 'w'), b: c.cached(fen, 'b') } : null;
@@ -37,18 +40,20 @@ function useDead(pos, known) {
     c.both(fen, { signal: ctl.signal }).then((v) => { if (!ctl.signal.aborted) setSt({ k, v }); });
     return () => ctl.abort();
   }, [k, done]);
+  if (ended) return ended === 'stalemate' ? { ...DEAD_BOTH, stalemate: pos.turn } : null;
   if (!fen) return pos && known ? DEAD_BOTH : null;
   return done ? hit : st.k === k ? st.v : hit;
 }
 
-// The ply after which a loaded game's position is first dead (later ones are too), or null; asked once per game
+// The ply after which a game's position is first dead (later ones are too), or null; asked once per list of plies.
+// posOf: a ply's position (a loaded game's plies carry FENs; the free board's carry its steps' positions)
 const FIRST_DEAD = new WeakMap();
-function useFirstDead(M) {
+function useFirstDead(M, posOf = plyPos) {
   const [, redraw] = React.useState(0);
   React.useEffect(() => {
     if (!M.plies.length || FIRST_DEAD.has(M.plies)) return;
     const ctl = new AbortController();
-    window.DeadCore.firstDead(M.plies.map((p) => deadFen(plyPos(p))), deadClient(), { signal: ctl.signal })
+    window.DeadCore.firstDead(M.plies.map((p) => deadFen(posOf(p))), deadClient(), { signal: ctl.signal })
       .then((i) => { if (!ctl.signal.aborted) { FIRST_DEAD.set(M.plies, i); redraw((x) => x + 1); } });
     return () => ctl.abort();
   }, [M.plies]);
@@ -57,13 +62,14 @@ function useFirstDead(M) {
 }
 
 const isDead = (d) => !!(d && d.w === 'unwinnable' && d.b === 'unwinnable');
-// what the eval bar shows for a dead position, in place of the eval or the tablebase's answer
-const deadBar = (d) => (isDead(d) ? { cp: 0, txt: 'DEAD' } : null);
+// what the eval bar shows for a dead position or a stalemate, in place of the eval or the tablebase's answer
+const deadBar = (d) => (isDead(d) ? { cp: 0, txt: d.stalemate ? '½–½' : 'DEAD' } : null);
 
 const SIDE = { w: 'White', b: 'Black' };
 // the Analysis panel's words for the answers: the heading and the note under it, or null with nothing proven
 function deadWords(d) {
   if (!d) return null;
+  if (d.stalemate) return { head: 'Stalemate · ½–½', note: `${SIDE[d.stalemate]} has no legal move and is not in check (FIDE 5.2.1)` };
   if (isDead(d)) return { head: 'Dead position · ½–½', note: 'Neither side can mate by any series of legal moves (FIDE 5.2.2)' };
   const lost = d.w === 'unwinnable' && d.b === 'winnable' ? 'w' : d.b === 'unwinnable' && d.w === 'winnable' ? 'b' : null;
   if (!lost) return null;

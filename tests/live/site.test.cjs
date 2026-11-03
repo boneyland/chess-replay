@@ -1558,6 +1558,8 @@ for (const name of BROWSERS) for (const site of SITES) {
       await p.mouse.up();
       await assert.doesNotReject(p.getByText('Draw: dead position, neither side can mate').waitFor({ timeout: 15000 }));
       assert.equal(await p.locator('.dead-block').count(), 0, 'no block in a game');
+      assert.match(await p.locator('.move-result').innerText(), /½–½\s*Dead position/i, 'the result after the last move');
+      assert.equal(await p.locator('.dead-pill').count(), 0, 'the result takes the pill\'s place');
       await p.screenshot({ path: path.join(OUT, host + '-dead-game.png') });
       // the same game loaded as a PGN: the pill on 1... Bxd7, then DEAD and the block once stepped there
       await p.getByRole('button', { name: 'Menu', exact: true }).click();
@@ -1570,17 +1572,40 @@ for (const name of BROWSERS) for (const site of SITES) {
       await assert.doesNotReject(p.locator('.dead-pill').waitFor({ timeout: 15000 }));
       assert.equal(await p.locator('.dead-pill').count(), 1);
       assert.equal(await p.locator('.dead-pill').evaluate((el) => el.previousElementSibling.textContent), 'Bxd7', 'after the move that left it dead');
+      assert.match(await p.locator('.move-result').innerText(), /½–½\s*Dead position/i, 'a * game that ends dead');
       await p.locator('[data-ply="0"]').click();
       await assert.doesNotReject(p.locator('.dead-block').filter({ hasText: /Dead position · ½–½/i }).waitFor({ timeout: 15000 }));
       assert.match(await p.locator('.dead-block').innerText(), /Neither side can mate by any series of legal moves \(FIDE 5\.2\.2\)/);
       assert.match(await p.locator('body').innerText(), /\bDEAD\b/);
       await p.screenshot({ path: path.join(OUT, host + '-dead-replay.png') });
-      // playing: no block, no pill, no DEAD on the bar
+      // playing: no block, no pill, no DEAD on the bar, and the result only once the last move is played
       await p.keyboard.press('Home');
       await p.getByRole('button', { name: 'Play (space)' }).click();
       await p.waitForTimeout(2500);
       assert.equal(await p.locator('.dead-block, .dead-pill').count(), 0, 'nothing while the video plays');
+      assert.equal(await p.locator('.move-result').evaluate((el) => getComputedStyle(el).opacity), '0', 'the result waits for the last move');
       await p.getByRole('button', { name: /^Pause/ }).click();
+      // the free board: the same lock with the sides swapped, the pill after the move that leaves it dead, and the result
+      // after the last
+      await setUpFen(p, '2b1k3/8/8/1p1p1p1p/1P1P1P1P/8/3n4/2B1K3 w - - 0 1');
+      const fb = await touch();
+      for (const [f, to] of [['c1', 'd2'], ['e8', 'e7']]) {
+        const x = square(fb, f, false), y = square(fb, to, false);
+        await p.mouse.move(x.x, x.y);
+        await p.mouse.down();
+        await p.mouse.move(y.x, y.y, { steps: 8 });
+        await p.mouse.up();
+        await settled(p);
+      }
+      await assert.doesNotReject(p.locator('.dead-pill').waitFor({ timeout: 15000 }));
+      assert.equal(await p.locator('.dead-pill').evaluate((el) => el.previousElementSibling.textContent), 'Bxd2', 'the free board marks the move too');
+      assert.match(await p.locator('.move-result').innerText(), /½–½\s*Dead position/i, 'and writes the result after the last move');
+      await p.screenshot({ path: path.join(OUT, host + '-dead-free-pill.png') });
+      // a stalemate that is also dead says stalemate, as the game ends there first (FIDE 5.2.1)
+      await setUpFen(p, 'R7/8/8/8/1p6/1P2p3/p1K1P3/k7 b - - 0 1');
+      await assert.doesNotReject(p.locator('.dead-block').filter({ hasText: /Stalemate · ½–½/i }).waitFor({ timeout: 15000 }));
+      assert.match(await p.locator('.dead-block').innerText(), /Black has no legal move and is not in check \(FIDE 5\.2\.1\)/);
+      assert.doesNotMatch(await p.locator('body').innerText(), /\bDEAD\b/, 'not called dead');
       // the free board: a lone king against a king and rook
       await setUpFen(p, '8/8/8/4k3/8/8/r7/4K3 w - - 0 1');
       await assert.doesNotReject(p.locator('.dead-block').filter({ hasText: /White can no longer win/i }).waitFor({ timeout: 15000 }));
@@ -2257,7 +2282,9 @@ for (const name of BROWSERS) for (const site of SITES) {
       await assert.doesNotReject(label.filter({ hasText: /1\. e4/ }).waitFor({ timeout: 5000 }));
       await p.getByRole('button', { name: 'Resign as Black' }).click();
       await p.getByRole('button', { name: 'Resign', exact: true }).click();
-      await assert.doesNotReject(p.getByText('Black resigned').waitFor({ timeout: 3000 }));
+      // the Game panel's result, and the same after the last move in Moves
+      await assert.doesNotReject(p.getByText('Black resigned').first().waitFor({ timeout: 3000 }));
+      assert.match(await p.locator('.move-result').innerText(), /1–0\s*Black resigned/);
       await p.screenshot({ path: path.join(OUT, host + '-play-resigned.png') });
       // a finished game is left without asking; then a new one with a move asks
       await p.getByRole('button', { name: 'Menu', exact: true }).click();
@@ -2297,7 +2324,7 @@ for (const name of BROWSERS) for (const site of SITES) {
       // the result box fits on the phone: the score with Play again beside it, Analyse below
       await pp.getByRole('button', { name: 'Resign as Black' }).click();
       await pp.getByRole('button', { name: 'Resign', exact: true }).click();
-      await assert.doesNotReject(pp.getByText('Black resigned').waitFor({ timeout: 3000 }));
+      await assert.doesNotReject(pp.getByText('Black resigned').first().waitFor({ timeout: 3000 }));
       const fits = await pp.evaluate(() => { const b = [...document.querySelectorAll('button')].find((x) => x.textContent === 'Analyse on the free board'); const box = b.closest('[style*="overflow"]') || b.parentElement.parentElement; const r = b.getBoundingClientRect(), q = box.getBoundingClientRect(); return r.bottom <= q.bottom + 1; });
       assert.equal(fits, true, 'Analyse on the free board is inside its box');
       await pp.screenshot({ path: path.join(OUT, host + '-play-resigned-phone.png') });
@@ -2437,7 +2464,7 @@ for (const name of BROWSERS) for (const site of SITES) {
       // after the end, every flagged move with the better one
       await p.getByRole('button', { name: 'Resign', exact: true }).click();
       await p.getByRole('button', { name: 'Resign', exact: true }).click();
-      await assert.doesNotReject(p.getByText('White resigned').waitFor({ timeout: 3000 }));
+      await assert.doesNotReject(p.getByText('White resigned').first().waitFor({ timeout: 3000 }));
       assert.match(await panel('Play vs Stockfish'), /1 flagged move[\s\S]*Blunder: 1\. Qc4[\s\S]*That drops the queen\. Better was Q/);
       await p.screenshot({ path: path.join(OUT, host + '-sf-critique-end.png') });
       assert.deepEqual(g.errors, []);

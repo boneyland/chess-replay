@@ -427,7 +427,11 @@ function FreeBoard({ board, onChange, tw, sf, nav, orient, book }) {
     return () => window.removeEventListener('keydown', onKey);
   }, []);
   // MoveList draws a game at time T: one second a move, with T just short of the next, so the move shown is current and later ones dim
-  const MV = React.useMemo(() => ({ ply0: board.start.ply0, plies: steps.map((s) => ({ san: s.san, cls: 'none' })) }), [steps, board.start.ply0]);
+  const MV = React.useMemo(() => ({ ply0: board.start.ply0, plies: steps.map((s) => ({ san: s.san, cls: 'none', pos: s.pos })) }), [steps, board.start.ply0]);
+  // the move after which the position is first dead, marked with a pill on the Moves list
+  const deadAt = useFirstDead(MV, (p) => p.pos);
+  // the result after the last move: a game's, else the last position's own end (checkmate, stalemate, a dead position)
+  const end = G ? (G.result ? P.ending({ r: G.result }) : null) : steps.length ? P.ending({ pos: steps[last].pos, dead: deadAt != null }) : null;
   const S = React.useMemo(() => ({ N: steps.length, tp: steps.map((_, i) => i) }), [steps.length]);
   const named = boardOpening(board, book);
   const from = board.fen === window.ChessCore.START_FEN ? 'from the starting position' : 'from a set-up position';
@@ -443,7 +447,7 @@ function FreeBoard({ board, onChange, tw, sf, nav, orient, book }) {
       </BoardSpace>
       <FreeBar pos={pos} side="w" a={1} clock={clockOf('w')} name={G ? playerName(G, 'w') : null} />
       {L.header && <Header M={HM} a={1} />}
-      <MoveList M={MV} T={upto + 0.999} S={S} a={1} paused onPick={live ? () => {} : go} />
+      <MoveList M={MV} T={upto + 0.999} S={S} a={1} paused onPick={live ? () => {} : go} deadAt={deadAt} end={end} />
       {G ? <GameInfo board={board} /> : tb ? <TablebaseExplorer t={tb} posKey={boardKey} onPlay={onBook} /> : xl ? <LichessExplorer x={xl} tw={tw} posKey={boardKey} onPlay={onBook} onHover={setHov} white={pos.turn === 'w'} fallback={<OpeningExplorer board={board} book={book} onPlay={onBook} onHover={setHov} />} /> : <OpeningExplorer board={board} book={book} onPlay={onBook} onHover={setHov} />}
       {G ? <Panel box={L.analysis} a={1} style={NO_SELECT} title="Game"><GameStatus board={board} onChange={onChange} down={opponent.down} /></Panel>
         : <AnalysisPanel box={L.analysis} a={1} paused depth={down ? null : searchDepth(ev.after)} deep={ev}>
