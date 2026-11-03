@@ -360,6 +360,9 @@ body:has(.stage.stage-short) .twk-panel { bottom: calc(44px + var(--safe-b)); ma
 .twk-btn:disabled { opacity: 0.6; cursor: progress; }
 .expl-row:hover, .expl-row:focus-visible { background: color-mix(in srgb, var(--accent) 12%, transparent); }
 .mv.expl-row:hover { outline: none; }
+/* an analysis line under the mouse (lineRow in game-video-core.jsx): the shadow carries the tint past the moves without moving them */
+.line-row { border-radius: 4px; }
+.line-row[data-hover] { background: color-mix(in srgb, var(--accent) 9%, transparent); box-shadow: 0 0 0 4px color-mix(in srgb, var(--accent) 9%, transparent); }
 .mv:hover { outline: 1px solid color-mix(in srgb, var(--accent) 60%, transparent); }
 .mv:focus-visible { outline: 2px solid var(--accent); outline-offset: 1px; }
 .dock-queen { border-color: color-mix(in srgb, var(--queen) 55%, transparent); color: var(--queen); }
