@@ -486,3 +486,14 @@ test('the Moves list\'s last word: the game\'s result, else the position\'s end,
   assert.deepEqual(P.ending({ pos: start, pgn: { result: '1/2-1/2', termination: 'Game drawn by agreement' } }), { score: '½–½', why: 'Draw agreed' });
   assert.deepEqual(P.ending({ pos: start, pgn: { result: '1/2-1/2' } }), { score: '½–½', why: 'Draw' });
 });
+
+test('fiftyRule: a note from the FEN\'s half-move clock once a draw can be claimed', () => {
+  const at = (fen) => P.fiftyRule(fen, CC.parseFen(fen).pos);
+  assert.equal(at('8/1k6/p3p2p/PpK1Pp1P/2p2P2/2P5/2P5/8 w - - 99 70'), null, 'not yet at 99');
+  const w = at('8/1k6/p3p2p/PpK1Pp1P/2p2P2/2P5/2P5/8 w - - 107 70');
+  assert.equal(w.head, 'Fifty-move rule');
+  assert.match(w.note, /^53 moves without a capture or pawn move: the side to move can claim a draw/);
+  assert.equal(at('4k3/8/8/8/8/8/4P3/R3K3 w - - 150 100').head, '75-move rule · ½–½');
+  assert.equal(at('7k/5Q2/6K1/8/8/8/8/8 b - - 120 90'), null, 'stalemate ends the game first');
+  assert.equal(at('7k/6Q1/6K1/8/8/8/8/8 b - - 120 90'), null, 'so does checkmate');
+});

@@ -78,8 +78,11 @@ function deadWords(d) {
 }
 
 // The Analysis panel's block for a dead position, or a side that can no longer win; nothing otherwise
-function DeadBlock({ d }) {
-  const w = deadWords(d);
+const DeadBlock = ({ d }) => <RuleBlock w={deadWords(d)} />;
+
+// The Analysis panel's block for a rule that draws (or may draw) the position on the board: deadWords' { head, note },
+// or PlayCore.fiftyRule's; nothing for null
+function RuleBlock({ w }) {
   if (!w) return null;
   return (
     <div className="dead-block" style={{ ...NO_SELECT, display: 'flex', flexDirection: 'column', gap: tx(4) }}>

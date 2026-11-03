@@ -344,6 +344,17 @@
     const { half, seen } = drawCounts(b);
     return seen >= 3 ? 'repetition' : half >= 100 ? 'fifty' : null;
   }
+  // The fifty-move rule in a loaded game or on the free board, from a position's full FEN (its half-move clock) and the
+  // position: { head, note } once the side to move can claim a draw (100 plies without a capture or pawn move: Stockfish
+  // scores it a draw too) or the game is drawn by itself (150); null before, or when the position is checkmate or
+  // stalemate, which ends the game first
+  function fiftyRule(fen, pos) {
+    const half = +String(fen).split(' ')[4];
+    if (!(half >= 100) || !CC().hasLegal(pos)) return null;
+    const moves = `${Math.floor(half / 2)} moves without a capture or pawn move`;
+    if (half >= 150) return { head: '75-move rule · ½–½', note: `${moves}: the game is drawn by itself (FIDE 9.6.2)` };
+    return { head: 'Fifty-move rule', note: `${moves}: the side to move can claim a draw (FIDE 9.3). The engine scores it a draw unless a capture or pawn move does better` };
+  }
   // The draw claimed; the board as it was when there's none to claim
   function claimDraw(b, now) {
     const reason = claimable(b);
@@ -453,6 +464,6 @@
 
   window.PlayCore = {
     canMate, lockedDead, positionKey, outcome, TIME_CONTROLS, parseTc, start, inProgress, move, canTakeback, takeback, thinkMs, MIN_RATED_DEPTH, SHALLOW_DEPTH, BIG_LOSS_CP, rateMove, addCritique, critiqueText,
-    resign, agreeDraw, claimable, claimDraw, flag, recheck, setProver, pause, runClock, timeLeft, resultText, ending, resume, pgn,
+    resign, agreeDraw, claimable, claimDraw, fiftyRule, flag, recheck, setProver, pause, runClock, timeLeft, resultText, ending, resume, pgn,
   };
 })();

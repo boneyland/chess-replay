@@ -430,6 +430,8 @@ function FreeBoard({ board, onChange, tw, sf, nav, orient, book }) {
   const MV = React.useMemo(() => ({ ply0: board.start.ply0, plies: steps.map((s) => ({ san: s.san, cls: 'none', pos: s.pos })) }), [steps, board.start.ply0]);
   // the move after which the position is first dead, marked with a pill on the Moves list
   const deadAt = useFirstDead(MV, (p) => p.pos);
+  // a dead position's block, else the fifty-move rule's for the position on the board
+  const rule = deadWords(dead) || P.fiftyRule(boardFen(), pos);
   // the result after the last move: a game's, else the last position's own end (checkmate, stalemate, a dead position)
   const end = G ? (G.result ? P.ending({ r: G.result }) : null) : steps.length ? P.ending({ pos: steps[last].pos, dead: deadAt != null }) : null;
   const S = React.useMemo(() => ({ N: steps.length, tp: steps.map((_, i) => i) }), [steps.length]);
@@ -454,11 +456,11 @@ function FreeBoard({ board, onChange, tw, sf, nav, orient, book }) {
         {upto < 0
           ? <React.Fragment>
             <StartAnalysis board={board} ev={ev} status={sf.status} why={sf.why} onLine={onReply} onHover={setPv} />
-            {deadWords(dead) && <div style={{ marginTop: tx(12), paddingTop: tx(12), borderTop: `1px solid ${C.line}` }}><DeadBlock d={dead} /></div>}
+            {rule && <div style={{ marginTop: tx(12), paddingTop: tx(12), borderTop: `1px solid ${C.line}` }}><RuleBlock w={rule} /></div>}
           </React.Fragment>
           : <React.Fragment>
             <OwnMoveAnalysis M={MV} vline={{ at: 0, moves: steps, upto, src: 'you' }} own={own} status={sf.status} why={sf.why} onReply={onReply} onHover={setPv} />
-            {deadWords(dead) && <div style={{ marginTop: tx(12), paddingTop: tx(12), borderTop: `1px solid ${C.line}` }}><DeadBlock d={dead} /></div>}
+            {rule && <div style={{ marginTop: tx(12), paddingTop: tx(12), borderTop: `1px solid ${C.line}` }}><RuleBlock w={rule} /></div>}
             <FitOrHide style={{ ...NO_SELECT, display: 'block', marginTop: tx(8), font: `500 ${tx(15)}px ${MONO}`, color: C.dim }}>← → step · <KeyCap>Home</KeyCap> the start · <KeyCap>End</KeyCap> the last move</FitOrHide>
           </React.Fragment>}
       </AnalysisPanel>}
