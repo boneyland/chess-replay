@@ -1434,6 +1434,9 @@ for (const name of BROWSERS) for (const site of SITES) {
       await p.goto(base, { waitUntil: 'load' });
       await loadedOn(p);
       await fromImage();
+      // the model's credit and licence where the copy is handed over
+      assert.equal(await dialog.getByRole('link', { name: 'PolyForm Noncommercial 1.0.0' }).getAttribute('href'), 'https://polyformproject.org/licenses/noncommercial/1.0.0/');
+      assert.equal(await dialog.getByRole('link', { name: /ChessQueries/ }).getAttribute('href'), 'https://github.com/JSeytre/chessqueries');
       await dialog.getByRole('button', { name: 'Download board reader · 56 MB' }).click();
       await assert.doesNotReject(dialog.getByRole('button', { name: 'Choose image' }).waitFor({ timeout: 120000 }));
       // not a picture: said so, still choosing; pasted text: nothing
@@ -1443,13 +1446,12 @@ for (const name of BROWSERS) for (const site of SITES) {
       await dialog.getByRole('button', { name: 'Cancel' }).click();
       await dialog.waitFor({ state: 'detached', timeout: 5000 });
       await fromImage();
+      // pasted text, then the Lichess screenshot pasted: the text left the dialog choosing, where the picture is taken
       await paste(null, '2r3k1/pp3pp1/4p2p/3pP3/3P1P2/P1rB4/1P4PP/R4RK1 w - - 0 1');
-      await p.waitForTimeout(300);
-      assert.equal(await cropBox.count(), 0, 'text pasted: no picture');
-      assert.equal(await dialog.getByRole('button', { name: 'Choose image' }).isVisible(), true, 'still choosing');
-      // the Lichess screenshot, read whole: exactly, nothing to check
-      await choose(fixture('vision-lichess.png', 'image/png'));
+      await paste(fixture('vision-lichess.png', 'image/png'));
+      // the screenshot read whole: exactly, nothing to check
       await read();
+      assert.equal(await picWidth(), 720, 'the pasted picture');
       assert.equal(await field.inputValue(), LICHESS + ' w - - 0 1');
       assert.equal(await unsureLine.count(), 0, 'no squares to check');
       await p.screenshot({ path: path.join(OUT, host + '-vision-read.png') });
@@ -1460,7 +1462,7 @@ for (const name of BROWSERS) for (const site of SITES) {
       await p.getByRole('button', { name: 'Back to crop' }).click();
       await read();
       assert.equal(await field.inputValue(), LICHESS + ' w - - 0 1', 'read again');
-      // a picture pasted at Back to crop replaces the one read (the diagram is 612 px square, the screenshot 720)
+      // a picture pasted at Back to crop replaces the one read (the diagram is 612 px square)
       await p.getByRole('button', { name: 'Back to crop' }).click();
       await cropBox.waitFor({ timeout: 5000 });
       await paste(fixture('vision-diagram.png', 'image/png'));
