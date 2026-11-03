@@ -119,6 +119,10 @@ fs.copyFileSync(path.join(app, 'og-image.png'), path.join(dir, 'out', 'site', 'o
 for (const f of VENDOR) fs.copyFileSync(path.join(dir, 'vendor', f), path.join(dir, 'out', 'site', f));
 // the dead-position prover's Worker, which runs chasolver.wasm (a Worker is started from a file of the page's own origin)
 fs.copyFileSync(path.join(app, 'dead-worker.js'), path.join(dir, 'out', 'site', 'dead-worker.js'));
+// the board reader's model and runtime (vision/, 55 MB), served next to the page for the viewer who asks to keep them; the licence
+// texts stay in the repo
+fs.mkdirSync(path.join(dir, 'out', 'site', 'vision'), { recursive: true });
+for (const f of fs.readdirSync(path.join(dir, 'vision'))) if (!/LICENSE$|^NOTICE$/.test(f)) fs.copyFileSync(path.join(dir, 'vision', f), path.join(dir, 'out', 'site', 'vision', f));
 for (const f of SOUND_FILES) { fs.mkdirSync(path.dirname(path.join(dir, 'out', 'site', f)), { recursive: true }); fs.copyFileSync(path.join(SOUNDS, f.slice('sounds/'.length)), path.join(dir, 'out', 'site', f)); }
 // Add to Home Screen opens the page without the browser's bars (iPhone Safari has no other way to lose them).
 // The icons are the tab icon above drawn as PNGs; the maskable and Apple ones are full-bleed for the launcher to round.

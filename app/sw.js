@@ -9,6 +9,9 @@ const PAGE = 'chess-game-video.html';
 const CACHE = 'chess-replay-' + VERSION;
 // hosts whose files are kept as they're used (the fonts' stylesheet names font files by the browser that asks)
 const KEEP_HOSTS = ['cdnjs.cloudflare.com', 'cdn.jsdelivr.net', 'fonts.googleapis.com', 'fonts.gstatic.com'];
+// The board reader's model and runtime (vision/, 55 MB) are kept only by viewers who ask for them, in a cache of their own
+// that no deploy replaces (kept-files.js fills it under these same URLs)
+const VISION_CACHE = 'chess-vision-1';
 // a page that hasn't answered by then comes from the copy (a connection that is up but not getting through)
 const PAGE_TIMEOUT_MS = 6000;
 
@@ -49,11 +52,19 @@ self.addEventListener('fetch', (e) => {
   const req = e.request, url = new URL(req.url);
   if (req.method !== 'GET' && req.method !== 'HEAD') return;
   const here = url.origin === self.location.origin;
+  if (here && url.pathname.startsWith(new URL('vision/', self.location.href).pathname)) return e.respondWith(vision(req).then(isolated));
   if (req.mode === 'navigate' && here) return e.respondWith(page(req).then(isolated));
   if (here) return e.respondWith(cacheFirst(req).then(isolated));
   if (KEEP_HOSTS.includes(url.hostname) && req.method === 'GET') return e.respondWith(cacheFirst(req));
   // anything else (Hugging Face, Lichess's tablebase: live data, never kept) goes to the network as usual
 });
+
+// A vision/ file comes from the cache the viewer filled, else from the network, and is never put in a cache here: it is
+// 56 MB, wanted only by those who asked, and kept apart from the per-deploy copy so a deploy doesn't download it again
+async function vision(req) {
+  const hit = await (await caches.open(VISION_CACHE)).match(req.url, { ignoreVary: true });
+  return hit || fetch(req);
+}
 
 // the page from the network, kept for next time; offline, too slow or a server error (a deploy, an outage), the kept one.
 // A 404 is the network's answer: a path that isn't the page
