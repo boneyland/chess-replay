@@ -17,7 +17,7 @@ function load() {
       addAll: async () => {},
     }),
     keys: async () => Object.keys(stores),
-    delete: async () => true,
+    delete: async (name) => delete stores[name],
   };
   const self = { location: { origin: 'https://site.test', href: 'https://site.test/sw.js' }, addEventListener: (t, f) => { handlers[t] = f; }, skipWaiting: async () => {}, clients: { claim: async () => {} } };
   const fakeFetch = async (req) => { fetched.push(req.url); return new Response('from network', { status: 200 }); };
@@ -28,7 +28,8 @@ function load() {
     handlers.fetch({ request: req, respondWith: (p) => { answer = p; } });
     return answer === undefined ? undefined : await answer;
   };
-  return { stores, store, puts, fetched, fetchEvent };
+  const activate = async () => { let done; handlers.activate({ waitUntil: (p) => { done = p; } }); await done; };
+  return { stores, store, puts, fetched, fetchEvent, activate };
 }
 
 const WASM = 'https://site.test/vision/ort.wasm.min.mjs';
@@ -71,4 +72,11 @@ test('a HEAD for a kept vision/ file gets no body, the kept headers and the isol
   assert.equal(r.headers.get('Cross-Origin-Embedder-Policy'), 'require-corp');
   assert.equal(r.headers.get('Cross-Origin-Opener-Policy'), 'same-origin');
   assert.deepEqual(sw.fetched, []);
+});
+
+test('activate deletes a board reader kept under an older name, and keeps the current one and Full Stockfish', async () => {
+  const sw = load();
+  for (const n of ['chess-vision-0', 'chess-vision-1', 'stockfish-full-19', 'chess-replay-old']) sw.store(n);
+  await sw.activate();
+  assert.deepEqual(Object.keys(sw.stores).sort(), ['chess-vision-1', 'stockfish-full-19']);
 });

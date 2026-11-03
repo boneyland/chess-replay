@@ -63,6 +63,7 @@ Built into the page or served with it:
 - [Mediabunny](https://github.com/Vanilagy/mediabunny) 1.61.0 by Vanilagy (MPL-2.0), for the MP4 export
 - [chasolver](https://github.com/miguel-ambrona/chasolver) 3.0.0 by Miguel Ambrona (MIT, `vendor/chasolver.LICENSE`), with the [chess](https://crates.io/crates/chess) crate (MIT), built to WebAssembly here (`tools/chasolver-wasm/`), which proves dead positions
 - ChessQ Lite V4 from [ChessQueries](https://github.com/JSeytre/chessqueries) by Joël Seytre (arXiv 2608.30762), the int8 ONNX export Lichess publishes in [its source](https://github.com/lichess-org/lila) ([PolyForm Noncommercial 1.0.0](https://polyformproject.org/licenses/noncommercial/1.0.0/), `vision/LICENSE` and `vision/NOTICE`), which reads a position from a picture
+  - built on Meta AI's [DINOv2](https://github.com/facebookresearch/dinov2) encoder (Apache-2.0, `vision/dinov2.LICENSE`)
 - [onnxruntime-web](https://github.com/microsoft/onnxruntime) 1.30.0 by Microsoft (MIT, `vision/ort.LICENSE`), which runs it
 
 Loaded from CDNs when the page runs:

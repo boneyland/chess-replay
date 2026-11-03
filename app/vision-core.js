@@ -2,7 +2,6 @@
 // it is unsure of, the 180-degree turn for a picture read upside down, and the crop and drag-box maths. The reader
 // itself (ONNX Runtime and the model, run in a Worker on the device) is elsewhere; nothing here touches the network.
 (function () {
-  const CC = () => window.ChessCore;
   const EC = () => window.EditCore;
   const CLASSES = '.PNBRQKpnbrqk'; // the model's 13 classes, in output order
   const FILES = [ // fetched from vision/ next to the page (the base is the caller's); onnxruntime-web 1.30.0 dist files

@@ -497,7 +497,7 @@ function DialogBox({ label, onClose, children }) {
     e.stopPropagation();
     if (e.key === 'Escape') { e.preventDefault(); onClose(); } else if (e.key === 'Tab') {
       // a hidden file input and disabled buttons take no focus, so they are skipped; a focusable box (the crop box) is a stop
-      const stops = [...e.currentTarget.querySelectorAll('input, textarea, button, [tabindex="0"]')].filter((el) => !el.disabled && el.getClientRects().length), i = stops.indexOf(document.activeElement);
+      const stops = [...e.currentTarget.querySelectorAll('input, textarea, button, a[href], [tabindex="0"]')].filter((el) => !el.disabled && el.getClientRects().length), i = stops.indexOf(document.activeElement);
       e.preventDefault();
       if (stops.length) stops[(i + (e.shiftKey ? -1 : 1) + stops.length) % stops.length].focus();
     }

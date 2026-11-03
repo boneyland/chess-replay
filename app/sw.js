@@ -43,7 +43,8 @@ self.addEventListener('install', (e) => {
 
 self.addEventListener('activate', (e) => {
   e.waitUntil((async () => {
-    for (const k of await caches.keys()) if (k.startsWith('chess-replay-') && k !== CACHE) await caches.delete(k);
+    // older deploys' copies, and a board reader kept under an older name (a model or runtime update bumps VISION_CACHE)
+    for (const k of await caches.keys()) if ((k.startsWith('chess-replay-') && k !== CACHE) || (k.startsWith('chess-vision-') && k !== VISION_CACHE)) await caches.delete(k);
     await self.clients.claim();
   })());
 });

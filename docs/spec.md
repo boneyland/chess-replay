@@ -527,6 +527,7 @@ Deferred by the per-plan reviews; each was true when recorded and may since have
 **Position from image** (2026-11-03)
 - `tests/fixtures/vision-diagram.png` (a book-style diagram drawn here) reads its c4 bishop as a pawn in both browsers, framed or cropped, though the 2026-11-03 tests found real diagrams exact once cropped; and its read rarely marks a square to check (only cropped, in Chromium at 1440×900). The live test asserts no read of it, and doesn't cover the outlines: an edit dropping one was checked by hand in Chromium, a typed FEN dropping one (the same rule, `sureOf` in `GameApp`) not in a browser.
 - Reading speed on a phone is unmeasured.
+- A page the service worker doesn't control (Shift+reload, the first visit before `clients.claim`, service workers off) fetches the 56 MB from the network again on a read, though `present()` finds the copy kept: only `sw.js` answers `vision/` from `chess-vision-1`.
 - Render's `Content-Type` for `vision/*.mjs` is unchecked: the Worker imports the runtime's `.mjs` files from the network when they aren't answered from `chess-vision-1` (no service worker in control), and a module import refuses a non-JavaScript type under nosniff (**verify** on the PR preview). `tests/live/serve.cjs` types them `text/javascript`.
 - After the dialog closes, focus goes back to Menu, also after Back to crop › Cancel, where going back to Back to crop would be nicer.
 
