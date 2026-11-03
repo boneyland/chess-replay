@@ -22,9 +22,9 @@ function load() {
   const self = { location: { origin: 'https://site.test', href: 'https://site.test/sw.js' }, addEventListener: (t, f) => { handlers[t] = f; }, skipWaiting: async () => {}, clients: { claim: async () => {} } };
   const fakeFetch = async (req) => { fetched.push(req.url); return new Response('from network', { status: 200 }); };
   vm.runInNewContext(src, { self, caches, fetch: fakeFetch, Response, Headers, URL, Promise, setTimeout, console });
-  const fetchEvent = async (url) => {
+  const fetchEvent = async (url, method = 'GET') => {
     let answer;
-    const req = { url, method: 'GET', mode: 'cors' };
+    const req = { url, method, mode: 'cors' };
     handlers.fetch({ request: req, respondWith: (p) => { answer = p; } });
     return answer === undefined ? undefined : await answer;
   };
@@ -60,4 +60,15 @@ test('another file next to the page still goes through cacheFirst, into the per-
   assert.equal(sw.puts.length, 1);
   assert.match(sw.puts[0][0], /^chess-replay-/);
   assert.equal(sw.puts[0][1], u);
+});
+
+test('a HEAD for a kept vision/ file gets no body, the kept headers and the isolation headers', async () => {
+  const sw = load();
+  sw.store('chess-vision-1').set(WASM, new Response('kept', { status: 200, headers: { 'Content-Length': '4' } }));
+  const r = await sw.fetchEvent(WASM, 'HEAD');
+  assert.equal(r.body, null);
+  assert.equal(r.headers.get('Content-Length'), '4');
+  assert.equal(r.headers.get('Cross-Origin-Embedder-Policy'), 'require-corp');
+  assert.equal(r.headers.get('Cross-Origin-Opener-Policy'), 'same-origin');
+  assert.deepEqual(sw.fetched, []);
 });

@@ -62,8 +62,7 @@ self.addEventListener('fetch', (e) => {
 // A vision/ file comes from the cache the viewer filled, else from the network, and is never put in a cache here: it is
 // 56 MB, wanted only by those who asked, and kept apart from the per-deploy copy so a deploy doesn't download it again
 async function vision(req) {
-  const hit = await (await caches.open(VISION_CACHE)).match(req.url, { ignoreVary: true });
-  return hit || fetch(req);
+  return (await kept(req, VISION_CACHE)) || fetch(req);
 }
 
 // the page from the network, kept for next time; offline, too slow or a server error (a deploy, an outage), the kept one.
@@ -94,8 +93,8 @@ function isolated(r) {
 }
 
 // a kept GET answers a HEAD too (Stockfish checks its file with one), without its body (Firefox refuses one with a body)
-async function kept(req) {
-  const hit = await (await caches.open(CACHE)).match(req.url, { ignoreVary: true });
+async function kept(req, name = CACHE) {
+  const hit = await (await caches.open(name)).match(req.url, { ignoreVary: true });
   return hit && req.method === 'HEAD' ? new Response(null, { status: hit.status, statusText: hit.statusText, headers: hit.headers }) : hit;
 }
 
