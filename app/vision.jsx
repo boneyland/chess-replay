@@ -100,11 +100,16 @@ function VisionDialog({ again, onRead, onClose }) {
     window.addEventListener('offline', on);
     return () => { window.removeEventListener('online', on); window.removeEventListener('offline', on); };
   }, []);
-  // each state's first control takes the focus (the crop box itself in crop, so Enter reads and Esc cancels from there)
-  React.useEffect(() => {
-    const el = wrap.current && wrap.current.querySelector('[data-autofocus]');
+  // each state's first control takes the focus (the crop box itself in crop, so Enter reads and Esc cancels from there),
+  // else the first button that can: the focus never falls to the page behind, whose keys would step the board
+  const focusFirst = () => {
+    const w = wrap.current;
+    if (!w) return;
+    const ok = (el) => !el.disabled && el.getClientRects().length;
+    const el = [...w.querySelectorAll('[data-autofocus]')].find(ok) || [...w.querySelectorAll('button')].find(ok);
     if (el) el.focus();
-  }, [state, askRemove, size.w > 0]);
+  };
+  React.useEffect(focusFirst, [state, askRemove, size.w > 0, dl.on, online]);
 
   const download = async () => {
     const c = new AbortController();
@@ -125,10 +130,13 @@ function VisionDialog({ again, onRead, onClose }) {
     }
   };
   const cancelDownload = () => { if (ctl.current) ctl.current.abort(); };
+  // a removal that fails says why, and the dialog follows what is kept now
   const remove = async () => {
     setAskRemove(false);
-    await V.kept.remove().catch(() => {});
-    if (live.current.alive) { setErr(''); setState('need'); }
+    let why = '';
+    try { await V.kept.remove(); } catch (e) { why = 'The board reader could not be removed: ' + ((e && e.message) || e); }
+    const has = why ? await V.kept.present() : false;
+    if (live.current.alive) { setErr(why); setState(has ? 'pick' : 'need'); }
   };
 
   // A picked or pasted file decoded (its EXIF orientation applied); the picture before it goes, if it was the dialog's
@@ -171,7 +179,7 @@ function VisionDialog({ again, onRead, onClose }) {
     fit();
     window.addEventListener('resize', fit);
     return () => window.removeEventListener('resize', fit);
-  }, [state, pic]);
+  }, [state, pic, err]);
 
   // The box's part of the picture, at most 2048 px on its longest side, to the reader; a PNG of it for Edit position.
   // The crop bitmap is the reader's once read is called (it transfers or closes it)
@@ -181,8 +189,7 @@ function VisionDialog({ again, onRead, onClose }) {
     setReading(true);
     live.current.reading = true;
     // the focus stays in the dialog (on the box) while Read board is disabled, so Esc still cancels
-    const cb = wrap.current && wrap.current.querySelector('[data-autofocus]');
-    if (cb) cb.focus();
+    focusFirst();
     let url = null, crop = null;
     try {
       const r = VC.cropRect(box, pic.bitmap.width, pic.bitmap.height);
@@ -217,7 +224,7 @@ function VisionDialog({ again, onRead, onClose }) {
   const cancelBtn = <button type="button" className="twk-btn secondary" onClick={onClose}>Cancel</button>;
   const msg = err && <div className="fen-msg" role="alert">{err}</div>;
   let body;
-  if (state === 'checking') body = <div className="fen-btns">{cancelBtn}</div>;
+  if (state === 'checking') body = <div className="fen-btns"><button type="button" className="twk-btn secondary" data-autofocus onClick={onClose}>Cancel</button></div>;
   else if (state === 'need') {
     body = <>
       <div className="fen-note">{VISION_ABOUT}</div>
