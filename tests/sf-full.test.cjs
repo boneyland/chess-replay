@@ -27,6 +27,7 @@ Object.defineProperty(navigator, 'storage', { configurable: true, value: {
   persist: async () => { storage.persisted++; return true; },
 } });
 
+loadUnit('kept-files.js');
 loadUnit('sf-full.js');
 const F = window.SFFull;
 const REAL = F.FILES.map((f) => ({ ...f })), REAL_THREADS = F.BUILDS.threads.map((f) => ({ ...f }));

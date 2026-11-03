@@ -22,6 +22,7 @@ const units = [
   ['dead-core.js', read(path.join(app, 'dead-core.js'))],
   ['games-core.js', read(path.join(app, 'games-core.js'))],
   ['sf-engine.js', read(path.join(app, 'sf-engine.js'))],
+  ['kept-files.js', read(path.join(app, 'kept-files.js'))],
   ['sf-full.js', read(path.join(app, 'sf-full.js'))],
   ['queen-core.js', read(path.join(app, 'queen-core.js'))],
   ['sfx-core.js', read(path.join(app, 'sfx-core.js'))],

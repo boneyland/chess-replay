@@ -18,96 +18,35 @@
   const FILES = BUILDS.single;
   const CACHE = 'stockfish-full-19';
   const total = (build = 'single') => BUILDS[build].reduce((s, f) => s + f.size, 0), TOTAL = total();
-  // the browser's room for the copy: the files, plus a margin for the cache's own records
-  const ROOM_FACTOR = 1.1;
 
-  const supported = () => typeof caches !== 'undefined' && typeof crypto !== 'undefined' && !!crypto.subtle && typeof Worker !== 'undefined';
-  const sha256 = async (bytes) => [...new Uint8Array(await crypto.subtle.digest('SHA-256', bytes))].map((b) => b.toString(16).padStart(2, '0')).join('');
+  // The generic part (download, check, keep) is KeptFiles', one per build over the same cache
+  const KEPT = {};
+  for (const b of Object.keys(BUILDS)) KEPT[b] = window.KeptFiles.make({ cache: CACHE, base: BASE, files: BUILDS[b], host: 'unpkg.com', what: 'engine' });
+  // one stall limit for both builds
+  const limits = {};
+  Object.defineProperty(limits, 'stallMs', { enumerable: true, get: () => KEPT.single.limits.stallMs, set: (v) => { for (const b in KEPT) KEPT[b].limits.stallMs = v; } });
+  const supported = () => KEPT.single.supported() && typeof Worker !== 'undefined';
   const urlOf = (f) => BASE + f.name;
 
   // Both files of a build kept (checked when downloaded)
-  async function present(build = 'single') {
-    if (!supported()) return false;
-    try {
-      const cache = await caches.open(CACHE);
-      for (const f of BUILDS[build]) if (!(await cache.match(urlOf(f)))) return false;
-      return true;
-    } catch (e) { return false; }
-  }
+  const present = async (build = 'single') => supported() && KEPT[build].present();
 
-  // One file into memory as it arrives, no bigger than its pinned size; onBytes(n) for each chunk. A connection that
-  // sends nothing for limits.stallMs (before the answer or between chunks) is given up, else the download waits forever
-  const limits = { stallMs: 30000 };
-  async function fetchFile(f, signal, onBytes) {
-    const ctl = new AbortController(), stop = () => ctl.abort();
-    let stalled = false, timer = null;
-    const wait = () => { clearTimeout(timer); timer = setTimeout(() => { stalled = true; stop(); }, limits.stallMs); };
-    if (signal) { if (signal.aborted) stop(); else signal.addEventListener('abort', stop); }
-    const out = new Uint8Array(f.size);
-    let at = 0;
-    try {
-      wait();
-      const r = await fetch(urlOf(f), { mode: 'cors', cache: 'no-store', signal: ctl.signal });
-      if (!r.ok) throw new Error(`unpkg.com answered ${r.status} for ${f.name}`);
-      const reader = r.body.getReader();
-      for (;;) {
-        wait();
-        const { done, value } = await reader.read();
-        if (done) break;
-        if (at + value.length > f.size) { reader.cancel().catch(() => {}); throw new Error(f.name + ' is bigger than expected'); }
-        out.set(value, at);
-        at += value.length;
-        onBytes(value.length);
-      }
-    } catch (e) {
-      if (stalled) throw new Error(`unpkg.com stopped sending ${f.name}`);
-      throw e;
-    } finally {
-      clearTimeout(timer);
-      if (signal) signal.removeEventListener('abort', stop);
-    }
-    if (at !== f.size) throw new Error(f.name + ' arrived incomplete');
-    if ((await sha256(out)) !== f.sha256) throw new Error(f.name + ' does not match its pinned checksum');
-    return out;
-  }
-
-  // Downloads and keeps both files; nothing is kept unless both arrive whole and match. onProgress(bytes, total bytes).
-  // Asks the browser to keep the copy when storage runs low (Chrome decides by itself, Firefox asks the viewer).
+  // Downloads and keeps both files of a build; nothing is kept unless both arrive whole and match. onProgress(bytes, total bytes).
   // Keeping one build drops the other: only one of them runs on a page, and the other's 99 MB would count against the
   // storage check with no way to remove it.
-  async function download({ build = 'single', onProgress = () => {}, signal } = {}) {
-    const FILES = BUILDS[build];
+  async function download({ build = 'single', onProgress, signal } = {}) {
     if (!supported()) throw new Error('This browser can’t keep the engine');
-    const cache0 = await caches.open(CACHE);
-    for (const b of Object.keys(BUILDS)) if (b !== build) await drop(cache0, BUILDS[b]);
-    if (navigator.storage && navigator.storage.estimate) {
-      try {
-        const { quota, usage } = await navigator.storage.estimate();
-        if (quota != null && quota - (usage || 0) < total(build) * ROOM_FACTOR) throw new Error('Not enough storage space in this browser');
-      } catch (e) { if (/storage space/.test(e.message)) throw e; }
-    }
-    let got = 0;
-    onProgress(0, total(build));
-    const bodies = [];
-    for (const f of FILES) bodies.push(await fetchFile(f, signal, (n) => { got += n; onProgress(got, total(build)); }));
-    const cache = await caches.open(CACHE);
-    try {
-      for (let i = 0; i < FILES.length; i++) await cache.put(urlOf(FILES[i]), new Response(bodies[i], { headers: { 'content-type': FILES[i].type } }));
-    } catch (e) {
-      await drop(cache, FILES);
-      throw new Error(/quota/i.test(e.name + e.message) ? 'Not enough storage space in this browser' : 'The browser would not keep the engine');
-    }
-    if (navigator.storage && navigator.storage.persist) navigator.storage.persist().catch(() => {});
+    for (const b of Object.keys(BUILDS)) if (b !== build) await KEPT[b].drop();
+    return KEPT[build].download({ onProgress, signal });
   }
 
   // The kept copy → a makeWorker for SFEngine.create. It was checked when downloaded, so it is trusted now: only its sizes
   // are compared (a missing or cut-short copy is dropped), and its Blobs are passed on without reading the 99 MB into the
   // page. Once per page and build: an engine started again (a dead one, a new hash size) reuses the Blob URLs
   let started = {}, blobs = [];
-  const start = (build = 'single') => started[build] || (started[build] = load(BUILDS[build]).catch((e) => { delete started[build]; throw e; }));
-  // a build's files out of the cache, the other build's left alone
-  const drop = async (cache, files) => { for (const f of files) await cache.delete(urlOf(f)).catch(() => {}); };
-  async function load(FILES) {
+  const start = (build = 'single') => started[build] || (started[build] = load(build).catch((e) => { delete started[build]; throw e; }));
+  async function load(build) {
+    const FILES = BUILDS[build], kept = KEPT[build];
     const cache = await caches.open(CACHE);
     const urls = [];
     for (const f of FILES) {
@@ -115,7 +54,7 @@
       const blob = r && await r.blob();
       if (!blob || blob.size !== f.size) {
         urls.forEach((u) => URL.revokeObjectURL(u));
-        await drop(cache, FILES);
+        await kept.drop(cache);
         throw new Error('The downloaded engine is missing');
       }
       urls.push(URL.createObjectURL(blob.type === f.type ? blob : new Blob([blob], { type: f.type })));
