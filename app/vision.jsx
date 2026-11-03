@@ -2,8 +2,9 @@
 // Play/Explore › Position from image (and the Play dialogs' Start from › From image): the board reader's download when it isn't
 // kept (need), a picture chosen or pasted (pick), a box pulled over it to the squares (crop), and the read handed on to
 // Edit position (onRead). The picture never leaves the device: it is decoded here and read by Vision's Worker.
-// again = { bitmap, box }: Back to crop, opening at the box with the picture GameApp kept. The bitmap the dialog decoded
-// itself is closed here unless onRead hands it on; again's bitmap is GameApp's and never closed here.
+// again = { bitmap, box, grey, found }: Back to crop, opening at the box with the picture (and its greyscale copy and
+// the squares found in it) GameApp kept. The bitmap the dialog decoded itself is closed here unless onRead hands it
+// on; again's bitmap is GameApp's and never closed here.
 
 const VISION_ABOUT = 'Reads a position from a screenshot, a diagram or a photo, on this device: the picture isn’t sent anywhere.';
 const VISION_HELP = 'A photo: read it as it is. A diagram or screenshot: pull the edges in to the squares.';
@@ -92,7 +93,8 @@ function VisionDialog({ again, onRead, onClose }) {
   // state: 'checking', 'need', 'pick' or 'crop'
   const [state, setState] = React.useState(again ? 'crop' : 'checking');
   // pic: { bitmap, grey, found }, the picture, its greyscale copy and the squares found in it (VisionGrid)
-  const [pic, setPic] = React.useState(() => (again ? { bitmap: again.bitmap, ...visionGrid(again.bitmap) } : null));
+  // (Back to crop hands them back as they were: nothing found again)
+  const [pic, setPic] = React.useState(again ? { bitmap: again.bitmap, grey: again.grey, found: again.found } : null);
   const [box, setBox] = React.useState(again ? again.box : VC.WHOLE);
   const [dl, setDl] = React.useState({ on: false, got: 0 }), [err, setErr] = React.useState('');
   const [askRemove, setAskRemove] = React.useState(false), [reading, setReading] = React.useState(false);
@@ -245,7 +247,7 @@ function VisionDialog({ again, onRead, onClose }) {
       const G = window.VisionGrid, turn = !!pic.grey && G.isGrid(pic.grey, box) && G.shouldTurn(pic.grey, box, b);
       if (live.current.own === pic.bitmap) live.current.own = null; // handed on: GameApp keeps it for Back to crop
       setReading(false);
-      onRead({ setup: turn ? VC.turn(VC.setupFrom(b)) : VC.setupFrom(b), unsure: turn ? VC.turnSquares(VC.unsure(conf)) : VC.unsure(conf), url, bitmap: pic.bitmap, box });
+      onRead({ setup: turn ? VC.turn(VC.setupFrom(b)) : VC.setupFrom(b), unsure: turn ? VC.turnSquares(VC.unsure(conf)) : VC.unsure(conf), url, bitmap: pic.bitmap, box, grey: pic.grey, found: pic.found });
     } catch (e) {
       live.current.reading = false;
       if (crop) crop.close();
@@ -308,7 +310,7 @@ function VisionDialog({ again, onRead, onClose }) {
         {size.w > 0 && <CropBox bitmap={pic.bitmap} box={box} onBox={setBox} w={size.w} h={size.h} onKeyDown={onCropKey}
           label="The picture: drag the box’s edges or corners to the board’s squares, or drag inside it to move it. Enter reads the board." />}
       </div>
-      <div className="fen-note">{pic.found ? VISION_FOUND : VISION_HELP}</div>
+      <div className="fen-note">{pic.found && ['x0', 'y0', 'x1', 'y1'].every((k) => box[k] === pic.found[k]) ? VISION_FOUND : VISION_HELP}</div>
       {msg}
       <div className="fen-btns">
         {cancelBtn}
