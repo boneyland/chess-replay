@@ -27,6 +27,8 @@ function visionGrid(bitmap) {
     return { grey: null, found: null };
   }
 }
+// the upload arrow of the drop tile and the drop area
+const VisionUpIcon = () => <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 15.5V5m-4.5 4.5L12 5l4.5 4.5M5 19h14" /></svg>;
 const VISION_BAD_FILE = 'That file isn’t an image this browser can open.';
 const visionMB = (bytes) => Math.round(bytes / 1e6);
 // the crop box's handles: which edges each pulls, where it sits on the box (fractions of its width and height), its cursor
@@ -202,6 +204,29 @@ function VisionDialog({ again, onRead, onClose }) {
     document.addEventListener('paste', onPaste);
     return () => document.removeEventListener('paste', onPaste);
   }, [canTake, reading]);
+  // Files held over the window are this dialog's while it is open (GameApp leaves them): over the tiles or the picture
+  // (zone) they light it up as one drop area, and dropped there the first image is taken; elsewhere they can't drop
+  const zone = React.useRef(null), takeRef = React.useRef(take);
+  takeRef.current = take;
+  const [hot, setHot] = React.useState(false);
+  React.useEffect(() => watchFileDrag({
+    over: (e) => {
+      const on = !!zone.current && zone.current.contains(e.target);
+      e.dataTransfer.dropEffect = on ? 'copy' : 'none';
+      setHot(on);
+    },
+    off: () => setHot(false),
+    drop: (e) => {
+      if (!zone.current || !zone.current.contains(e.target)) return;
+      const list = droppedFiles(e);
+      takeRef.current(list.find((f) => /^image\//.test(f.type)) || list[0]);
+    },
+  }), []);
+  const dropHere = hot && canTake && !reading && <div className="vision-drop" aria-hidden="true">
+    <VisionUpIcon />
+    <b>Drop the image to read the board</b>
+    <span>PNG, JPEG, WebP…</span>
+  </div>;
 
   // the picture's size on screen: the dialog's width, and the window's height less the rest of the dialog
   React.useLayoutEffect(() => {
@@ -262,6 +287,7 @@ function VisionDialog({ again, onRead, onClose }) {
   const MB = visionMB(V.kept.total());
   const supported = V.supported();
   const canPaste = !!(navigator.clipboard && navigator.clipboard.read);
+  const coarse = !!(window.matchMedia && window.matchMedia('(pointer: coarse)').matches); // a touch screen: nothing to drag from
   const cancelBtn = <button type="button" className="twk-btn secondary" onClick={onClose}>Cancel</button>;
   const msg = err && <div className="fen-msg" role="alert">{err}</div>;
   let body;
@@ -284,8 +310,23 @@ function VisionDialog({ again, onRead, onClose }) {
     </>;
   } else if (state === 'pick') {
     body = <>
-      <div className="fen-note">{VISION_ABOUT} Choose a picture, or paste one here.</div>
+      <div className="fen-note">{VISION_ABOUT}</div>
       <input ref={file} type="file" accept="image/*" hidden onChange={(e) => { const el = e.target; take(el.files && el.files[0]).finally(() => { el.value = ''; }); }} />
+      <div ref={zone} className="vision-zone">
+        <div className="vision-tiles" style={dropHere ? { visibility: 'hidden' } : null}>
+          <button type="button" className="vision-tile vision-tile-drop" aria-label="Choose image, or drop one here" data-autofocus onClick={() => file.current && file.current.click()}>
+            <VisionUpIcon />
+            <span>{coarse ? <u>Choose an image</u> : <>Drop an image or <u>choose one</u></>}</span>
+            <small>PNG, JPEG, WebP…</small>
+          </button>
+          <button type="button" className="vision-tile" onClick={canPaste ? pasteImage : () => setErr(VISION_NO_CLIPBOARD)}>
+            <svg viewBox="0 0 24 24" aria-hidden="true"><rect x="6" y="4.5" width="12" height="16" rx="2" /><path d="M9.5 3h5v3h-5z" /></svg>
+            <span>Paste image</span>
+            {!coarse && <small>or press {/Mac|iPhone|iPad/.test(navigator.platform) ? '⌘V' : 'Ctrl+V'}</small>}
+          </button>
+        </div>
+        {dropHere}
+      </div>
       {msg}
       {askRemove ? <>
         <div className="twk-note" role="alert">Remove the board reader? You’d need to download {MB} MB again to use it.</div>
@@ -293,20 +334,15 @@ function VisionDialog({ again, onRead, onClose }) {
           <button type="button" className="twk-btn danger" onClick={remove}>Remove</button>
           <button type="button" className="twk-btn secondary" data-autofocus onClick={() => setAskRemove(false)}>Keep</button>
         </div>
-      </> : <>
-        <div className="fen-btns" style={{ justifyContent: 'flex-start' }}>
-          <button type="button" className="twk-btn secondary" onClick={() => setAskRemove(true)}>Remove the board reader · {MB} MB</button>
-        </div>
-        <div className="fen-btns">
-          {cancelBtn}
-          {canPaste && <button type="button" className="twk-btn secondary" onClick={pasteImage}>Paste image</button>}
-          <button type="button" className="twk-btn" data-autofocus onClick={() => file.current && file.current.click()}>Choose image</button>
-        </div>
-      </>}
+      </> : <div className="fen-btns" style={{ justifyContent: 'space-between', flexWrap: 'wrap' }}>
+        <button type="button" className="twk-btn secondary vision-remove" onClick={() => setAskRemove(true)}>Remove the board reader · {MB} MB</button>
+        {cancelBtn}
+      </div>}
     </>;
   } else {
     body = <>
-      <div ref={stage} style={{ width: '100%' }}>
+      <div ref={(el) => { stage.current = el; zone.current = el; }} style={{ position: 'relative', width: '100%' }}>
+        {dropHere}
         {size.w > 0 && <CropBox bitmap={pic.bitmap} box={box} onBox={setBox} w={size.w} h={size.h} onKeyDown={onCropKey}
           label="The picture: drag the box’s edges or corners to the board’s squares, or drag inside it to move it. Enter reads the board." />}
       </div>
@@ -319,7 +355,7 @@ function VisionDialog({ again, onRead, onClose }) {
     </>;
   }
   return (
-    <DialogBox label="Position from image" onClose={onClose}>
+    <DialogBox label="Position from image" className="vision-box" onClose={onClose}>
       <div ref={wrap} style={{ display: 'contents' }}>{body}</div>
     </DialogBox>
   );

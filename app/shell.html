@@ -198,6 +198,32 @@ body:has(.stage-one) .twk-panel { bottom: calc(51px + var(--safe-b)); max-height
 .fen-btns { display: flex; justify-content: flex-end; gap: 8px; }
 .fen-btns .twk-btn { min-height: 34px; padding: 4px 16px; }
 /* Keyboard shortcuts: groups of keys and what they do, scrolling inside the dialog */
+/* Position from image: a wider dialog with larger text; its pick step's tiles, and the drop area over them (or the
+   picture) while an image is held over them */
+.fen-box.vision-box { width: min(760px, 100%); max-height: calc(100dvh - 32px); overflow-y: auto; gap: 16px; padding: 22px 26px 24px; }
+.vision-box .fen-title { font-size: 0.875rem; }
+.vision-box .fen-note, .vision-box .twk-note { font-size: 0.9375rem; line-height: 1.5; }
+.vision-box .fen-msg { font-size: 0.875rem; }
+.vision-box .fen-btns .twk-btn { min-height: 40px; padding: 6px 20px; font-size: 0.9375rem; }
+.vision-box .fen-btns .vision-remove { min-height: 34px; padding: 4px 12px; font-size: 0.8125rem; }
+.vision-zone { position: relative; }
+.vision-tiles { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
+.vision-tile { display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 10px; min-height: 160px; padding: 16px; border-radius: 6px;
+  border: 1px solid var(--line); background: var(--raise); color: var(--ink); font: 500 1.0625rem/1.35 var(--sans); text-align: center; cursor: pointer; }
+@media (hover: hover) { .vision-tile:hover { background: var(--btn-hover); border-color: var(--line-strong); } }
+.vision-tile-drop { border: 2px dashed var(--line-strong); background: transparent; }
+.vision-tile u { color: var(--accent); text-underline-offset: 3px; }
+.vision-tile small { font: 0.8125rem var(--sans); color: var(--dim); }
+.vision-tile svg, .vision-drop svg { width: 32px; height: 32px; fill: none; stroke: currentColor; stroke-width: 1.6; stroke-linecap: round; stroke-linejoin: round; }
+.vision-drop { position: absolute; inset: 0; z-index: 1; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 8px; padding: 16px;
+  border: 2px dashed var(--accent); border-radius: 6px; background: color-mix(in srgb, var(--panel) 90%, transparent); text-align: center; }
+.vision-drop svg { width: 40px; height: 40px; color: var(--accent); }
+.vision-drop b { font: 600 1.125rem var(--sans); color: var(--ink); }
+.vision-drop span { font: 0.875rem var(--sans); color: var(--dim); }
+@media (max-width: 520px) {
+  .fen-box.vision-box { padding: 16px 16px 18px; gap: 12px; }
+  .vision-tile { min-height: 128px; font-size: 1rem; }
+}
 .fen-box:has(.keys-body) { width: min(640px, 100%); max-height: calc(100dvh - 32px); }
 .keys-body { display: flex; flex-direction: column; gap: 14px; overflow-y: auto; min-height: 0; }
 .keys-title { margin: 0 0 6px; font: 600 0.625rem var(--mono); letter-spacing: 0.14em; text-transform: uppercase; color: var(--accent); }
