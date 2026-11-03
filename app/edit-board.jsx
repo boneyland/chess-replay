@@ -180,6 +180,9 @@ function EditBoard({ setup, onChange, onDone, onCancel, fenText, onFenText, fenM
   const unsure = image ? image.unsure || [] : [];
   const oneCol = !!L.tray; // the tray under the board is the portrait frame's layout
   const pic = (style) => <img src={image.url} alt="The picture read" draggable={false} style={{ objectFit: 'contain', display: 'block', ...style }} />;
+  // beside the board, the picture's box is reserved before it decodes (no jump) and is what gives way when the panel's
+  // contents outgrow it (the unsure line, problems, a FEN message), so Cancel and Done stay in the panel
+  const side = image && !oneCol ? Math.round(P.h * 0.35) : 0, fill = side ? { display: 'flex', flexDirection: 'column' } : null;
   const label = (t) => <div style={{ font: `600 ${tx(13)}px ${MONO}`, letterSpacing: '0.1em', textTransform: 'uppercase', color: C.dim, marginBottom: tx(6) }}>{t}</div>;
   return (
     <div ref={flowRef} style={{ position: 'absolute', inset: 0, background: C.bg, overflow: 'hidden', ...flowStyle() }}>
@@ -200,9 +203,13 @@ function EditBoard({ setup, onChange, onDone, onCancel, fenText, onFenText, fenM
       {image && oneCol && showPic && <div style={{ position: 'absolute', left: 0, top: 0, width: BW, height: BW, background: C.bg, pointerEvents: 'none' }}>{pic({ width: '100%', height: '100%' })}</div>}
       </BoardSpace>
       {L.tray && <Tray size={Math.min(112, Math.floor((L.tray.w - 20) / 6), Math.floor((L.tray.h - 4) / 2))} held={held} trayHandlers={trayHandlers} style={L.tray.flow ? { order: L.tray.order, flex: 'none', height: L.tray.h } : { position: 'absolute', left: L.tray.x, top: L.tray.y, width: L.tray.w }} />}
-      <Panel box={P} a={1} title="Edit position">
-        <div style={{ display: 'flex', flexDirection: 'column', gap: tx(16) }}>
-          {image && !oneCol && pic({ width: '100%', maxHeight: Math.round(P.h * 0.35) })}
+      <Panel box={P} a={1} title="Edit position" style={fill}>
+        <div style={{ display: 'flex', flexDirection: 'column', gap: tx(16), ...(side && { flex: '1 1 auto', minHeight: 0 }) }}>
+          {side > 0 && (
+            <div style={{ position: 'relative', flex: '0 1 auto', height: side, minHeight: Math.min(side, tx(96)) }}>
+              {pic({ position: 'absolute', left: 0, top: 0, width: '100%', height: '100%' })}
+            </div>
+          )}
           {image && (
             <div style={{ display: 'flex', flexDirection: 'column', gap: tx(8) }}>
               <div style={{ display: 'flex', alignItems: 'center', gap: tx(10), flexWrap: 'wrap' }}>
