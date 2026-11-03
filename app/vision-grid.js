@@ -155,7 +155,8 @@
   // left out), and the corners of the edge files' squares (inside coordinates). File labels aren't read.
   function labelSide(im, box) {
     const X0 = box.x0 * im.w, Y0 = box.y0 * im.h, X1 = box.x1 * im.w, Y1 = box.y1 * im.h, s = (X1 - X0) / 8, t = (Y1 - Y0) / 8;
-    // a strip's pixel columns that are almost all far from the strip's median (a frame, the picture's edge) are skipped
+    // a strip's pixel columns that are almost all far from the strip's median (a frame, the picture's edge) are skipped;
+    // a run of them at least 0.2 of a square wide is a frame band the labels may be printed in, looked at on its own
     const frame = (xa, xb) => {
       const skip = {}, a = Math.max(0, Math.round(xa)), b = Math.min(im.w, Math.round(xb)), all = [];
       for (let y = Math.round(Y0); y < Math.round(Y1); y++) for (let x = a; x < b; x++) all.push(im.g[y * im.w + x]);
@@ -165,18 +166,30 @@
         for (let y = Math.max(0, Math.round(Y0)); y < Math.min(im.h, Math.round(Y1)); y++, n++) if (Math.abs(im.g[y * im.w + x] - m) > 60) far++;
         if (n && far > 0.9 * n) skip[x] = true;
       }
-      return skip;
+      const bands = [];
+      for (let x = a; x < b; x++) {
+        if (!skip[x]) continue;
+        let e = x;
+        while (e + 1 < b && skip[e + 1]) e++;
+        if (e + 1 - x >= 0.2 * s) bands.push([x, e + 1]);
+        x = e;
+      }
+      return { skip, bands };
     };
     const cols = [];
     // outside: a rank's label is one glyph, narrow, clear of the rank's top and bottom, its middle near the rank's, and
     // the 8 sit one above the other (lines of text run wide, or fill the rank)
-    for (const [xa, xb] of [[X0 - 0.7 * s, X0 - 0.05 * s], [X1 + 0.05 * s, X1 + 0.7 * s]]) {
-      const skip = frame(xa, xb);
+    const outside = (xa, xb, skip) => {
       const cells = [...Array(8)].map((_, k) => ink(im, xa, Y0 + k * t, xb, Y0 + (k + 1) * t, skip));
       const glyph = (c) => c.n >= 3 && c.x1 - c.x0 <= 0.45 * s && c.y1 - c.y0 <= 0.6 * t && c.y0 >= 0.1 * c.h && c.y1 <= 0.9 * c.h
         && Math.abs((c.y0 + c.y1) / 2 - c.h / 2) <= 0.25 * c.h;
       const mid = median(cells.map((c) => (c.x0 + c.x1) / 2));
       cols.push(cells.every((c) => glyph(c) && Math.abs((c.x0 + c.x1) / 2 - mid) <= 0.15 * s) ? cells.map((c) => c.n) : null);
+    };
+    for (const [xa, xb] of [[X0 - 0.7 * s, X0 - 0.05 * s], [X1 + 0.05 * s, X1 + 0.7 * s]]) {
+      const { skip, bands } = frame(xa, xb);
+      outside(xa, xb, skip);
+      for (const [ba, bb] of bands) outside(ba, bb, null);
     }
     // inside: a patch in a corner of each edge-file square; blobs of ink touching the patch's inner edges (a piece
     // reaching into the corner) don't count
@@ -220,11 +233,14 @@
   }
 
   // the side the model put at the bottom: its read (b, a8…h1) against what the picture shows (occ, as seen), taken as
-  // read and turned 180°; the one that matches by at least 2 squares more, else null (a placement the same either way)
+  // read and turned 180°. The way that wins must win clearly, at least 4 squares fewer wrong and at most a third as
+  // many, else null (a placement nearly the same either way): two misjudged squares, an arrowhead or an invented
+  // piece, then never flip the answer
   function modelSide(occ, b) {
-    let w = 0, bl = 0;
-    for (let i = 0; i < 64; i++) { if (occ[i] === !!b[i]) w++; if (occ[i] === !!b[63 - i]) bl++; }
-    return w - bl >= 2 ? 'w' : bl - w >= 2 ? 'b' : null;
+    let w = 0, bl = 0; // squares wrong each way
+    for (let i = 0; i < 64; i++) { if (occ[i] !== !!b[i]) w++; if (occ[i] !== !!b[63 - i]) bl++; }
+    const clear = (win, lose) => lose - win >= 4 && 3 * win <= lose;
+    return clear(w, bl) ? 'w' : clear(bl, w) ? 'b' : null;
   }
 
   // whether a read (b) is to be turned: the labels and the model both answer, and differ. Through window.VisionGrid,

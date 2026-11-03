@@ -1436,6 +1436,8 @@ for (const name of BROWSERS) for (const site of SITES) {
       const FOUND = 'The box is on the board’s squares; drag its edges if it’s off.', HELP = 'A photo: read it as it is. A diagram or screenshot: pull the edges in to the squares.';
       const placement = async () => (await field.inputValue()).split(' ')[0];
       const turnFen = (f) => f.split('/').map((r) => [...r].reverse().join('')).reverse().join('/');
+      // how many of the 64 squares two placements agree on
+      const same = (f, g) => { const sq = (x) => x.replace(/\d/g, (d) => '.'.repeat(+d)).replace(/\//g, ''), a = sq(f), b = sq(g); return [...a].filter((c, i) => c === b[i]).length; };
       const picWidth = () => p.locator('img[alt="The picture read"]').evaluate((i) => (i.complete ? i.naturalWidth : new Promise((ok) => { i.onload = () => ok(i.naturalWidth); })));
       const fromImage = async () => {
         await p.getByRole('button', { name: 'Menu', exact: true }).click();
@@ -1515,6 +1517,33 @@ for (const name of BROWSERS) for (const site of SITES) {
       await boxAt({ x0: 0, y0: 0, x1: 1, y1: 1 }, 'no board');
       await dialog.getByRole('button', { name: 'Cancel' }).click();
       await dialog.waitFor({ state: 'detached', timeout: 5000 });
+      // a red-framed diagram like the one the model once read from Black's side (light labels in the frame, an arrow):
+      // the box opens on its squares, and the read is the right way up
+      await fromImage();
+      await choose(fixture('vision-red-frame.png', 'image/png'));
+      await cropBox.waitFor({ timeout: 5000 });
+      await assert.doesNotReject(dialog.getByText(FOUND).waitFor({ timeout: 5000 }));
+      await boxAt(cases['red-frame'].box, 'the red-framed diagram');
+      // a corner pulled in: the found line goes; read, then Back to crop opens at the box as pulled, with the line as pulled
+      const corner = await cropBox.locator('rect[style*="move"]').boundingBox();
+      await p.mouse.move(corner.x + corner.width, corner.y + corner.height);
+      await p.mouse.down();
+      await p.mouse.move(corner.x + corner.width - 12, corner.y + corner.height - 12, { steps: 4 });
+      await p.mouse.up();
+      await assert.doesNotReject(dialog.getByText(HELP).waitFor({ timeout: 5000 }));
+      const pulled = await cropBox.locator('rect[style*="move"]').boundingBox();
+      await read();
+      const redRead = await placement(), RED = cases['red-frame'].fen;
+      assert.ok(same(redRead, RED) > same(redRead, turnFen(RED)), `the red-framed diagram read the right way up: ${redRead}`);
+      await p.getByRole('button', { name: 'Back to crop' }).click();
+      await cropBox.waitFor({ timeout: 5000 });
+      await assert.doesNotReject(dialog.getByText(HELP).waitFor({ timeout: 5000 }));
+      const again = await cropBox.locator('rect[style*="move"]').boundingBox();
+      assert.ok(Math.abs(again.width - pulled.width) <= 1 && Math.abs(again.height - pulled.height) <= 1, 'the box as pulled');
+      await dialog.getByRole('button', { name: 'Cancel' }).click();
+      await dialog.waitFor({ state: 'detached', timeout: 5000 });
+      await p.getByRole('button', { name: 'Cancel' }).click();
+      await assert.doesNotReject(field.waitFor({ state: 'detached', timeout: 5000 }));
       // the greyscale copy failing (a canvas that can't be read back): the picture is still taken, the box around all of it
       await p.evaluate(() => { const C = OffscreenCanvasRenderingContext2D.prototype; window.__getImageData = C.getImageData; C.getImageData = () => { throw new Error('no readback'); }; });
       await fromImage();
@@ -1534,8 +1563,6 @@ for (const name of BROWSERS) for (const site of SITES) {
       await p.screenshot({ path: path.join(OUT, host + '-vision-crop.png') });
       await read();
       const asRead = await placement(), BLACK = cases['framed-black'].fen;
-      // how many of the 64 squares two placements agree on
-      const same = (f, g) => { const sq = (x) => x.replace(/\d/g, (d) => '.'.repeat(+d)).replace(/\//g, ''), a = sq(f), b = sq(g); return [...a].filter((c, i) => c === b[i]).length; };
       assert.ok(same(asRead, BLACK) > same(asRead, turnFen(BLACK)), `read from Black's side: ${asRead}`);
       await p.evaluate(() => { const G = window.VisionGrid, real = G.modelSide; window.__realModelSide = real; G.modelSide = (o, b) => ({ w: 'b', b: 'w' })[real(o, b)] || null; });
       await p.getByRole('button', { name: 'Back to crop' }).click();

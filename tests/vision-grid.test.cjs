@@ -48,6 +48,18 @@ test('modelSide', () => {
   const sym = board('3k4/8/8/8/8/8/8/4K3'); // d8 and e1 swap places under 180°
   assert.equal(VG.modelSide(sym.map(Boolean), sym), null);
 });
+// which way the model read it takes a clear win: at least 4 squares more, and at most a third as many wrong, so two
+// misjudged squares (an arrowhead, an invented piece) can't flip the answer
+test('modelSide: a near tie is no answer, and two wrong squares never flip it', () => {
+  const near = board('4k3/8/8/8/8/8/8/2KN4'); // the turned read matches all but 2 squares
+  assert.equal(VG.modelSide(near.map(Boolean), near), null);
+  const kk = board('4k3/8/8/8/8/8/8/2K5'), occ = kk.map(Boolean);
+  occ[3] = true; occ[59] = true; // two squares wrongly seen as occupied, both helping the turned read
+  assert.notEqual(VG.modelSide(occ, kk), 'b');
+  const full = board(cases.lichess.fen), seen = full.map(Boolean);
+  seen[20] = !seen[20]; seen[40] = !seen[40];
+  assert.equal(VG.modelSide(seen, full), 'w');
+});
 test('shouldTurn', () => {
   const fb = board(cases['framed-black'].fen), im = readPgm('framed-black'), box = cases['framed-black'].box;
   assert.equal(VG.shouldTurn(im, box, fb), false); // the model read it the right way round
@@ -69,4 +81,9 @@ test('isGrid: a box on checkered squares, not one on a photo or a page', () => {
   for (const name of ['framed-white', 'nolabels', 'lichess', 'text-beside']) assert.equal(VG.isGrid(readPgm(name), cases[name].box), true, name);
   assert.equal(VG.isGrid(readPgm('photo'), { x0: 0.11, y0: 0.23, x1: 0.85, y1: 0.92 }), false, 'a loose box on the tilted board');
   assert.equal(VG.isGrid(readPgm('noboard'), { x0: 0, y0: 0, x1: 1, y1: 1 }), false, 'no board');
+});
+test('shouldTurn: the red-framed diagram with labels in its frame band, read from either side', () => {
+  const b = board(cases['red-frame'].fen), im = readPgm('red-frame'), box = cases['red-frame'].box;
+  assert.equal(VG.shouldTurn(im, box, b), false);
+  assert.equal(VG.shouldTurn(im, box, b.slice().reverse()), true);
 });

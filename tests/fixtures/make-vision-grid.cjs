@@ -10,6 +10,7 @@ const DIR = __dirname, OUT = path.join(DIR, 'vision-grid'), SIDE = 1024;
 const LICHESS = '2r3k1/pp3pp1/4p2p/3pP3/3P1P2/P1rB4/1P4PP/R4RK1';
 const DIAGRAM = 'r1bqkb1r/pppp1ppp/2n2n2/4p2Q/2B1P3/8/PPPP1PPP/RNB1K1NR';
 const ENDGAME = '8/5k2/3p4/1p1P1p2/1P3P2/6K1/8/8';
+const FRAMED = 'R7/7q/8/8/1p6/1P2p3/p3P3/k1K1N3';
 const GLYPH = { K: '♔', Q: '♕', R: '♖', B: '♗', N: '♘', P: '♙', k: '♚', q: '♛', r: '♜', b: '♝', n: '♞', p: '♟' };
 const SERIF = "'DejaVu Serif', 'Liberation Serif', serif", SANS = "'DejaVu Sans', 'Liberation Sans', sans-serif"; // single quotes: they go in style attributes
 
@@ -20,7 +21,7 @@ function squares(fen) {
 }
 
 // one board as absolutely placed HTML, its grid (the squares) in a .grid element
-function board({ fen, side = 'w', sq = 56, light = '#f0f0f0', dark = '#a0a0a0', frame = 0, labels = null, font = SERIF, lines = false, marks = '', piece = 0.78 }) {
+function board({ fen, side = 'w', sq = 56, light = '#f0f0f0', dark = '#a0a0a0', frame = 0, frameColour = '#222', labels = null, font = SERIF, lines = false, marks = '', piece = 0.78 }) {
   const b = squares(fen), n = 8 * sq;
   let cells = '';
   for (let r = 0; r < 8; r++) for (let c = 0; c < 8; c++) {
@@ -36,6 +37,14 @@ function board({ fen, side = 'w', sq = 56, light = '#f0f0f0', dark = '#a0a0a0', 
       + (p ? `<span style="position:absolute;inset:0;display:flex;align-items:center;justify-content:center;font:${Math.round(sq * piece)}px ${SANS};line-height:1;color:#000;font-variant-emoji:text">${GLYPH[p]}&#xFE0E;</span>` : '') + '</div>';
   }
   let outside = '';
+  // labels printed in a wide frame, light on its colour, as some sites' diagrams have them
+  if (labels === 'band') {
+    for (let k = 0; k < 8; k++) {
+      const rank = side === 'w' ? 8 - k : k + 1, file = 'ABCDEFGH'[side === 'w' ? k : 7 - k];
+      outside += `<div style="position:absolute;z-index:1;left:${-frame}px;top:${k * sq}px;width:${frame}px;height:${sq}px;display:flex;align-items:center;justify-content:center;font:${Math.round(frame * 0.5)}px ${SANS};color:#eee">${rank}</div>`;
+      outside += `<div style="position:absolute;z-index:1;top:${n}px;left:${k * sq}px;width:${sq}px;height:${frame}px;display:flex;align-items:center;justify-content:center;font:${Math.round(frame * 0.5)}px ${SANS};color:#eee">${file}</div>`;
+    }
+  }
   if (labels === 'outside') {
     for (let k = 0; k < 8; k++) {
       const rank = side === 'w' ? 8 - k : k + 1, file = 'abcdefgh'[side === 'w' ? k : 7 - k];
@@ -43,7 +52,7 @@ function board({ fen, side = 'w', sq = 56, light = '#f0f0f0', dark = '#a0a0a0', 
       outside += `<div style="position:absolute;top:${n + frame + sq * 0.12}px;left:${k * sq}px;width:${sq}px;height:${sq * 0.4}px;display:flex;align-items:center;justify-content:center;font:${Math.round(sq * 0.36)}px ${font}">${file}</div>`;
     }
   }
-  const fr = frame ? `<div style="position:absolute;left:${-frame}px;top:${-frame}px;width:${n + 2 * frame}px;height:${n + 2 * frame}px;background:#222"></div>` : '';
+  const fr = frame ? `<div style="position:absolute;left:${-frame}px;top:${-frame}px;width:${n + 2 * frame}px;height:${n + 2 * frame}px;background:${frameColour}"></div>` : '';
   return `<div style="position:relative;width:${n}px;height:${n}px">${fr}${outside}<div class="grid" style="position:absolute;left:0;top:0;width:${n}px;height:${n}px">${cells}${marks}</div></div>`;
 }
 
@@ -70,6 +79,10 @@ const CASES = {
   'small-on-page': { side: 'w', fen: LICHESS, html: `<!doctype html><html><body style="margin:0;background:#fff"><div id="pic" style="position:relative;width:1600px;height:2200px;background:#fff;padding:0">${TEXT}<div style="margin:60px 0 60px 500px;width:300px">${board({ fen: LICHESS, sq: 36, frame: 4, labels: 'outside' })}</div>${TEXT}${TEXT}</div></body></html>` },
   // body text set 0.3 of a square beside an unlabelled diagram, both sides: not rank labels
   'text-beside': { side: null, fen: LICHESS, html: page(`<div style="display:flex;align-items:flex-start"><p style="width:260px;margin:0 23px 0 0;font:15px ${SERIF};line-height:1.45">${'Black has just played the rook to c3, and the bishop on d3 is pinned against nothing in particular. '.repeat(5)}</p>${board({ fen: LICHESS, frame: 6 })}<p style="width:260px;margin:0 0 0 23px;font:15px ${SERIF};line-height:1.45">${'White should consider the pawn break f5, opening the long diagonal for a later attack on the king. '.repeat(5)}</p></div>`, 20) },
+  // a red-framed diagram with light labels in its frame band and a move arrow, the kind the model once read from
+  // Black's side until cropped (drawn here after a web diagram that can't be copied into the repo)
+  'red-frame': { side: 'w', fen: FRAMED, png: 'vision-red-frame.png', html: page(board({ fen: FRAMED, sq: 33, light: '#f3dcc0', dark: '#c4673e', frame: 12, frameColour: '#7d1414', labels: 'band',
+    marks: '<svg style="position:absolute;left:0;top:0" width="264" height="264"><line x1="148" y1="248" x2="94" y2="221" stroke="#3a9a3a" stroke-width="3"/><polygon points="88,218 100,216 96,226" fill="#3a9a3a"/></svg>' }), 14) },
   // inside labels with pieces filling their squares, rooks in the corners beside the labels
   'inside-big': { side: 'w', fen: DIAGRAM, html: page(board({ fen: DIAGRAM, sq: 64, light: '#ebecd0', dark: '#739552', labels: 'inside', font: SANS, piece: 1.02 }), 0) },
   'two-boards': { side: null, fen: null, html: page(`<div style="display:flex;gap:60px">${board({ fen: LICHESS, sq: 40 })}${board({ fen: DIAGRAM, sq: 40 })}</div>`, 40) },

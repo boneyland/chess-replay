@@ -146,7 +146,7 @@ function GameApp() {
   // goes back to it), image the picture it was read from ({ url, unsure, bitmap, box }, or null)
   const [editing, setEditing] = React.useState(null);
   // Position from image's dialog while it is open: { play, again }, play the Play dialog's choices it came from (or null),
-  // again the picture and box for Back to crop (or null)
+  // again the picture, box, greyscale copy and found squares for Back to crop (or null)
   const [vision, setVision] = React.useState(null);
   const [fenNote, setFenNote] = React.useState(null); // { fen, ok } after Copy FEN; a copy that failed stays up to select
 
@@ -325,7 +325,7 @@ function GameApp() {
     const V = window.VisionCore, setup = V.turn(e.setup);
     return { ...e, setup, text: window.EditCore.toFen(setup), msg: '', image: e.image && { ...e.image, unsure: V.turnSquares(e.image.unsure) } };
   });
-  const backToCrop = () => { if (editing && editing.image) setVision({ play: editing.play, again: { bitmap: editing.image.bitmap, box: editing.image.box } }); };
+  const backToCrop = () => { if (editing && editing.image) { const { bitmap, box, grey, found } = editing.image; setVision({ play: editing.play, again: { bitmap, box, grey, found } }); } };
   // The picture's object URL and bitmap are GameApp's while the editor shows it: one the editor no longer holds (Done,
   // Cancel, a new editor, another read) is let go here, whichever way it went, but never one the next state still holds
   // (Back to crop's read may keep the bitmap and replace the URL)
@@ -342,8 +342,8 @@ function GameApp() {
   const fromImage = () => { setNewMenu(false); setMenu(false); setPanel(false); guard(() => setVision({ play: null, again: null })); };
   // Read board: from Back to crop it replaces the editor's board, edits and marks with the new read; else the editor opens
   // on it (in the Play dialog's mode when that is where it came from, so Done starts the game)
-  const visionRead = ({ setup, unsure, url, bitmap, box }) => {
-    const v = vision, image = { url, unsure, bitmap, box };
+  const visionRead = ({ setup, unsure, url, bitmap, box, grey, found }) => {
+    const v = vision, image = { url, unsure, bitmap, box, grey, found };
     setVision(null);
     if (v && v.again && editing) setEditing((e) => e && { ...e, setup, text: window.EditCore.toFen(setup), msg: '', image });
     else openEditor(v && v.play, { setup, image });
