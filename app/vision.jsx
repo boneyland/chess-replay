@@ -228,7 +228,7 @@ function VisionDialog({ again, onRead, onClose }) {
   else if (state === 'need') {
     body = <>
       <div className="fen-note">{VISION_ABOUT}</div>
-      <div className="fen-note">The model is <a href="https://github.com/JSeytre/chessqueries" target="_blank" rel="noopener">ChessQ Lite by Joël Seytre (ChessQueries)</a>, under <a href="https://polyformproject.org/licenses/noncommercial/1.0.0/" target="_blank" rel="noopener">PolyForm Noncommercial 1.0.0</a>. Required Notice: Copyright (c) 2026 Joël Seytre.</div>
+      <div className="fen-note">The model is <a href="https://github.com/JSeytre/chessqueries" target="_blank" rel="noopener">ChessQ Lite by Joël Seytre (ChessQueries)</a>, under <a href="https://polyformproject.org/licenses/noncommercial/1.0.0/" target="_blank" rel="noopener">PolyForm Noncommercial 1.0.0</a>. Required Notice: Copyright (c) 2026 Joël Seytre. It is built on Meta AI’s <a href="https://github.com/facebookresearch/dinov2" target="_blank" rel="noopener">DINOv2</a> (Copyright (c) Meta Platforms, Inc. and affiliates), under the <a href="https://www.apache.org/licenses/LICENSE-2.0" target="_blank" rel="noopener">Apache License 2.0</a>.</div>
       {!supported ? <div className="twk-note twk-err">This browser can’t run the board reader.</div>
         : !online && !dl.on && <div className="fen-note" role="status">The board reader downloads once; you’re offline.</div>}
       {dl.on ? <>
