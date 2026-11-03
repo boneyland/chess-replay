@@ -496,7 +496,7 @@ function PgnDialog({ onLoad, onClose }) {
 
 // A small dialog over a scrim: Esc or a press on the scrim closes it, Enter on `enter` runs onEnter,
 // and Tab goes round its controls; keys stop here, so the board's keys never see them
-function DialogBox({ label, onClose, children }) {
+function DialogBox({ label, className, onClose, children }) {
   const box = React.useRef(null);
   React.useEffect(() => { const first = box.current && box.current.querySelector('[data-autofocus]'); if (first) first.focus(); }, []);
   const onKey = (e) => {
@@ -510,7 +510,7 @@ function DialogBox({ label, onClose, children }) {
   };
   return (
     <div className="fen-scrim" onPointerDown={(e) => { if (e.target === e.currentTarget) onClose(); }}>
-      <div ref={box} className="fen-box" role="dialog" aria-modal="true" aria-label={label} onKeyDown={onKey} onMouseDown={(e) => { if (!e.target.closest('input, textarea, button')) e.preventDefault(); }}>
+      <div ref={box} className={className ? 'fen-box ' + className : 'fen-box'} role="dialog" aria-modal="true" aria-label={label} onKeyDown={onKey} onMouseDown={(e) => { if (!e.target.closest('input, textarea, button')) e.preventDefault(); }}>
         <div className="fen-title">{label}</div>
         {children}
       </div>

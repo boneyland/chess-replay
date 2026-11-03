@@ -28,6 +28,31 @@ function readStored() {
 const PLAYBACK = '{"mode":"loop"}';
 // a picked or dropped file is read whole into the page, so a huge one (a dropped video, a PGN database) is refused first
 const MAX_FILE_BYTES = 50e6;
+// Files dragged over the window (the PGN overlay; Position from image's drop zone): over(e) on each dragover, off() once the
+// files leave the window, are dropped or the drag ends, drop(e) on a drop. No timer: Firefox fires dragover only while the
+// pointer moves, so a file held still would time out. Leaving is counted (dragenter up, dragleave down: the next element's
+// enter comes before the last one's leave); a mouse move with no dragover just before it means a drag that ended unseen.
+// skip(): another listener takes the drag. Returns the cleanup
+function watchFileDrag({ over, off, drop, skip = () => false }) {
+  const hasFiles = (e) => e.dataTransfer && Array.from(e.dataTransfer.types || []).includes('Files');
+  let n = 0, on = false, last = 0;
+  const stop = () => { n = 0; if (on) { on = false; off(); } };
+  const L = {
+    dragenter: (e) => { if (!hasFiles(e) || skip()) return; e.preventDefault(); n++; },
+    dragover: (e) => { if (!hasFiles(e) || skip()) return; e.preventDefault(); n = Math.max(n, 1); on = true; last = Date.now(); over(e); },
+    dragleave: (e) => { if (!hasFiles(e) || skip()) return; n = Math.max(0, n - 1); if (!n) stop(); },
+    drop: (e) => { if (!hasFiles(e) || skip()) return; e.preventDefault(); stop(); drop(e); },
+    dragend: stop,
+    mousemove: () => { if (on && Date.now() - last > 300) stop(); },
+  };
+  for (const k in L) window.addEventListener(k, L[k]);
+  return () => { for (const k in L) window.removeEventListener(k, L[k]); };
+}
+// a drop's files (some browsers fill only items)
+const droppedFiles = (e) => {
+  const list = Array.from(e.dataTransfer.files || []);
+  return list.length ? list : Array.from(e.dataTransfer.items || []).filter((it) => it.kind === 'file').map((it) => it.getAsFile()).filter(Boolean);
+};
 // My games (GamesCore), read afresh for each change, so games kept by another tab stay
 const GAMES = 'chess-video.games.v1';
 const readGames = () => { try { return window.GamesCore.read(localStorage.getItem(GAMES)); } catch (e) { return []; } };
@@ -452,27 +477,22 @@ function GameApp() {
     } else next = { ...(board ? {} : files), ...batch, sample: false };
     commit(next);
   };
-  // Drag-and-drop: dragover repeats every few ms while a file is over the page, so the overlay hides itself
-  // shortly after those stop (dropped elsewhere or cancelled)
-  const dragTimer = React.useRef(null);
+  // Drag-and-drop: the overlay shows while files are held over the page (watchFileDrag); Position from image takes
+  // the drags while it is open
   const loadRef = React.useRef(loadFiles);
   loadRef.current = loadFiles; // the listeners below are registered once and always load with the current files
-  React.useEffect(() => {
-    const hasFiles = (e) => e.dataTransfer && Array.from(e.dataTransfer.types || []).includes('Files');
-    const hideSoon = (ms) => { clearTimeout(dragTimer.current); dragTimer.current = setTimeout(() => setDrag(false), ms); };
-    const over = (e) => { if (!hasFiles(e)) return; e.preventDefault(); e.dataTransfer.dropEffect = 'copy'; setDrag(true); hideSoon(400); };
-    const leave = (e) => { if (!e.relatedTarget) hideSoon(80); };
-    const drop = (e) => {
-      if (!hasFiles(e)) return;
-      e.preventDefault(); clearTimeout(dragTimer.current); setDrag(false);
-      let list = Array.from(e.dataTransfer.files || []);
-      if (!list.length) list = Array.from(e.dataTransfer.items || []).filter((it) => it.kind === 'file').map((it) => it.getAsFile()).filter(Boolean);
+  const visionOpen = React.useRef(false);
+  visionOpen.current = !!vision;
+  React.useEffect(() => watchFileDrag({
+    skip: () => visionOpen.current,
+    over: (e) => { e.dataTransfer.dropEffect = 'copy'; setDrag(true); },
+    off: () => setDrag(false),
+    drop: (e) => {
+      const list = droppedFiles(e);
       if (list.length) guardRef.current(() => loadRef.current(list)); else setErr('The drop arrived without a file. Use “Load game” to pick the files instead.');
-    };
-    const end = () => { clearTimeout(dragTimer.current); setDrag(false); };
-    window.addEventListener('dragover', over); window.addEventListener('dragleave', leave); window.addEventListener('drop', drop); window.addEventListener('dragend', end);
-    return () => { window.removeEventListener('dragover', over); window.removeEventListener('dragleave', leave); window.removeEventListener('drop', drop); window.removeEventListener('dragend', end); clearTimeout(dragTimer.current); };
-  }, []);
+    },
+  }), []);
+  React.useEffect(() => { if (vision) setDrag(false); }, [vision]);
 
   // txt is a string or a Blob
   const saveFile = (name, txt, type) => {

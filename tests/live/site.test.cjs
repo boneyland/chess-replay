@@ -450,6 +450,18 @@ for (const name of BROWSERS) for (const site of SITES) {
       const box = await page.locator('.drop').boundingBox();
       assert.deepEqual(box, { x: 0, y: 0, width: 1440, height: 900 });
       assert.equal(await page.locator('.drop').evaluate((e) => getComputedStyle(e).position), 'fixed');
+      // held still (Firefox sends no dragover then) it stays; it goes once the file leaves the window, or on a mouse
+      // move after a drag that ended unseen
+      await page.waitForTimeout(1000);
+      assert.equal(await page.locator('.drop').count(), 1, 'the overlay stays while the file is held still');
+      await page.dispatchEvent('body', 'dragleave', { dataTransfer: files });
+      await assert.doesNotReject(page.locator('.drop').waitFor({ state: 'detached', timeout: 2000 }));
+      await page.dispatchEvent('body', 'dragover', { dataTransfer: files });
+      await page.locator('.drop').waitFor({ timeout: 2000 });
+      await page.waitForTimeout(400);
+      await page.mouse.move(700, 400);
+      await page.mouse.move(710, 410);
+      await assert.doesNotReject(page.locator('.drop').waitFor({ state: 'detached', timeout: 2000 }));
     });
     await t.test('desktop: the dock toggles full screen, and hides the item where the browser can’t', async () => {
       await page.getByRole('button', { name: 'Full screen', exact: true }).click();
@@ -1524,8 +1536,26 @@ for (const name of BROWSERS) for (const site of SITES) {
       await p.getByRole('button', { name: 'Cancel' }).click();
       await assert.doesNotReject(field.waitFor({ state: 'detached', timeout: 5000 }));
       // a picture with no board: the box around all of it, and the help line as before
+      // dropped this time: held over the tiles they turn into one drop area, which stays while the file is held still
+      // and goes off the tiles; elsewhere in the window nothing drops
       await fromImage();
-      await choose(fixture('vision-noboard.png', 'image/png'));
+      const dt = await p.evaluateHandle(({ b64 }) => {
+        const d = new DataTransfer();
+        d.items.add(new File([Uint8Array.from(atob(b64), (c) => c.charCodeAt(0))], 'vision-noboard.png', { type: 'image/png' }));
+        return d;
+      }, { b64: fixture('vision-noboard.png', 'image/png').buffer.toString('base64') });
+      const tile = dialog.getByRole('button', { name: 'Choose image' });
+      await tile.waitFor({ timeout: 5000 });
+      await tile.dispatchEvent('dragenter', { dataTransfer: dt });
+      await tile.dispatchEvent('dragover', { dataTransfer: dt });
+      await dialog.locator('.vision-drop').waitFor({ timeout: 2000 });
+      await p.waitForTimeout(1000);
+      assert.equal(await dialog.locator('.vision-drop').isVisible(), true, 'the drop area stays while held still');
+      await dialog.locator('.fen-title').dispatchEvent('dragover', { dataTransfer: dt });
+      await assert.doesNotReject(dialog.locator('.vision-drop').waitFor({ state: 'detached', timeout: 2000 }));
+      assert.equal(await p.locator('.drop').count(), 0, 'no PGN overlay over the dialog');
+      await tile.dispatchEvent('dragover', { dataTransfer: dt });
+      await dialog.locator('.vision-drop').dispatchEvent('drop', { dataTransfer: dt });
       await cropBox.waitFor({ timeout: 5000 });
       await assert.doesNotReject(dialog.getByText(HELP).waitFor({ timeout: 5000 }));
       await boxAt({ x0: 0, y0: 0, x1: 1, y1: 1 }, 'no board');
