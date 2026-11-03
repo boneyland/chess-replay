@@ -17,12 +17,15 @@ const units = [
   ['openings-core.js', read(path.join(app, 'openings-core.js'))],
   ['board-core.js', read(path.join(app, 'board-core.js'))],
   ['edit-core.js', read(path.join(app, 'edit-core.js'))],
+  ['vision-core.js', read(path.join(app, 'vision-core.js'))],
   ['layout-core.js', read(path.join(app, 'layout-core.js'))],
   ['play-core.js', read(path.join(app, 'play-core.js'))],
   ['dead-core.js', read(path.join(app, 'dead-core.js'))],
   ['games-core.js', read(path.join(app, 'games-core.js'))],
   ['sf-engine.js', read(path.join(app, 'sf-engine.js'))],
+  ['kept-files.js', read(path.join(app, 'kept-files.js'))],
   ['sf-full.js', read(path.join(app, 'sf-full.js'))],
+  ['vision.js', read(path.join(app, 'vision.js'))],
   ['queen-core.js', read(path.join(app, 'queen-core.js'))],
   ['sfx-core.js', read(path.join(app, 'sfx-core.js'))],
   ['drag-scroll.js', read(path.join(app, 'drag-scroll.js'))],
@@ -33,7 +36,7 @@ const units = [
   ['sample-analysis.js', read(path.join(app, 'sample-analysis.js'))],
   ['engine.jsx', jsx(read(path.join(app, 'engine.jsx')), 'engine.jsx')],
   ['tweaks.jsx', jsx(read(path.join(app, 'tweaks.jsx')), 'tweaks.jsx')],
-  ['game-video.jsx', jsx(read(path.join(app, 'game-video-core.jsx')) + '\n' + read(path.join(app, 'queen.jsx')) + '\n' + read(path.join(app, 'stockfish.jsx')) + '\n' + read(path.join(app, 'tablebase.jsx')) + '\n' + read(path.join(app, 'dead.jsx')) + '\n' + read(path.join(app, 'explorer.jsx')) + '\n' + read(path.join(app, 'free-board.jsx')) + '\n' + read(path.join(app, 'edit-board.jsx')) + '\n' + read(path.join(app, 'sfx.jsx')) + '\n' + read(path.join(app, 'export.jsx')) + '\n' + read(path.join(app, 'game-app.jsx')), 'game-video.jsx')],
+  ['game-video.jsx', jsx(read(path.join(app, 'game-video-core.jsx')) + '\n' + read(path.join(app, 'queen.jsx')) + '\n' + read(path.join(app, 'stockfish.jsx')) + '\n' + read(path.join(app, 'tablebase.jsx')) + '\n' + read(path.join(app, 'dead.jsx')) + '\n' + read(path.join(app, 'explorer.jsx')) + '\n' + read(path.join(app, 'free-board.jsx')) + '\n' + read(path.join(app, 'edit-board.jsx')) + '\n' + read(path.join(app, 'sfx.jsx')) + '\n' + read(path.join(app, 'export.jsx')) + '\n' + read(path.join(app, 'vision.jsx')) + '\n' + read(path.join(app, 'game-app.jsx')), 'game-video.jsx')],
 ];
 const scripts = units.map(([name, code]) => {
   if (/<\/script/i.test(code)) throw new Error(name + ' contains </script');
@@ -118,6 +121,12 @@ fs.copyFileSync(path.join(app, 'og-image.png'), path.join(dir, 'out', 'site', 'o
 for (const f of VENDOR) fs.copyFileSync(path.join(dir, 'vendor', f), path.join(dir, 'out', 'site', f));
 // the dead-position prover's Worker, which runs chasolver.wasm (a Worker is started from a file of the page's own origin)
 fs.copyFileSync(path.join(app, 'dead-worker.js'), path.join(dir, 'out', 'site', 'dead-worker.js'));
+// the board reader's Worker (small, kept with the page; the model and runtime it loads are in vision/, kept only on request)
+fs.copyFileSync(path.join(app, 'vision-worker.js'), path.join(dir, 'out', 'site', 'vision-worker.js'));
+// the board reader's model and runtime (vision/, 55 MB), served next to the page for the viewer who asks to keep them; the licence
+// texts stay in the repo
+fs.mkdirSync(path.join(dir, 'out', 'site', 'vision'), { recursive: true });
+for (const f of fs.readdirSync(path.join(dir, 'vision'))) if (!/LICENSE$|^NOTICE$/.test(f)) fs.copyFileSync(path.join(dir, 'vision', f), path.join(dir, 'out', 'site', 'vision', f));
 for (const f of SOUND_FILES) { fs.mkdirSync(path.dirname(path.join(dir, 'out', 'site', f)), { recursive: true }); fs.copyFileSync(path.join(SOUNDS, f.slice('sounds/'.length)), path.join(dir, 'out', 'site', f)); }
 // Add to Home Screen opens the page without the browser's bars (iPhone Safari has no other way to lose them).
 // The icons are the tab icon above drawn as PNGs; the maskable and Apple ones are full-bleed for the launcher to round.
@@ -137,7 +146,7 @@ fs.writeFileSync(path.join(dir, 'out', 'site', 'manifest.webmanifest'), JSON.str
 // The service worker (app/sw.js) and what it keeps: the files next to the page, and the CDN files the page names (React
 // and the fonts' stylesheet in shell.html, the export's libraries in export.jsx). Its VERSION changes with any of
 // them, so a deploy that changes one replaces the kept copies; the page itself is fetched afresh on every visit.
-const SW_LOCAL = ['chess-game-video.html', 'manifest.webmanifest', ...fs.readdirSync(ICONS), ...VENDOR, 'dead-worker.js', ...SOUND_FILES];
+const SW_LOCAL = ['chess-game-video.html', 'manifest.webmanifest', ...fs.readdirSync(ICONS), ...VENDOR, 'dead-worker.js', 'vision-worker.js', ...SOUND_FILES];
 const swSrc = read(path.join(app, 'sw.js'));
 const swHash = require('crypto').createHash('sha256').update(swSrc).update(JSON.stringify(SW_REMOTE));
 for (const f of SW_LOCAL.slice(1)) swHash.update(fs.readFileSync(path.join(dir, 'out', 'site', f)));

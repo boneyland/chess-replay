@@ -1393,6 +1393,143 @@ for (const name of BROWSERS) for (const site of SITES) {
       assert.deepEqual(ep.errors, []);
       await ep.ctx.close();
     });
+    // Position from image (the board reader in a Worker, its 56 MB downloaded from the site on the click): a Lichess
+    // screenshot reads exactly, turned and read again; a pasted picture replaces the one at Back to crop; the same
+    // screenshot turned a quarter in the file with EXIF Orientation 6 reads the same; a file that isn't a picture and
+    // pasted text are refused; offline, the download waits; Start from › From image starts a game; Remove deletes the copy
+    await t.test('desktop: Position from image: download, read a screenshot, fix in Edit position', { timeout: 300000 }, async () => {
+      const ep = await open(browser, { width: 1440, height: 900 });
+      // the editor's FEN field: Copy FEN's note has a box named FEN too, which stays up where the clipboard is refused (Firefox)
+      const p = ep.page, dialog = p.getByRole('dialog', { name: 'Position from image' }), field = p.locator('input[aria-label="FEN"]');
+      const LICHESS = '2r3k1/pp3pp1/4p2p/3pP3/3P1P2/P1rB4/1P4PP/R4RK1';
+      const fixture = (name, mimeType) => ({ name, mimeType, buffer: fs.readFileSync(path.join(__dirname, '..', 'fixtures', name)) });
+      // the flatpak Chromium hands the page an empty file for a path, so the chooser gets the bytes
+      const choose = async (file) => {
+        const [fc] = await Promise.all([p.waitForEvent('filechooser'), dialog.getByRole('button', { name: 'Choose image' }).click()]);
+        await fc.setFiles(file);
+      };
+      // a paste into the page: a file on the clipboard, or text. Firefox copies only the strings into a constructed paste
+      // event's clipboardData, so there the event is handed the DataTransfer itself
+      const paste = (file, text) => p.evaluate(({ b64, name, type, text }) => {
+        const dt = new DataTransfer();
+        if (text != null) dt.setData('text/plain', text);
+        else dt.items.add(new File([Uint8Array.from(atob(b64), (c) => c.charCodeAt(0))], name, { type }));
+        const e = new ClipboardEvent('paste', { clipboardData: dt, bubbles: true, cancelable: true });
+        if (e.clipboardData.items.length !== dt.items.length) Object.defineProperty(e, 'clipboardData', { value: dt });
+        (document.activeElement || document).dispatchEvent(e);
+      }, file ? { b64: file.buffer.toString('base64'), name: file.name, type: file.mimeType, text: null } : { text });
+      const cropBox = dialog.getByRole('group');
+      const read = async () => {
+        await cropBox.waitFor({ timeout: 5000 });
+        await dialog.getByRole('button', { name: 'Read board' }).click();
+        await dialog.waitFor({ state: 'detached', timeout: 60000 });
+        await field.waitFor({ timeout: 5000 });
+      };
+      const unsureLine = p.getByText(/squares? to check \(outlined\)/);
+      const picWidth = () => p.locator('img[alt="The picture read"]').evaluate((i) => (i.complete ? i.naturalWidth : new Promise((ok) => { i.onload = () => ok(i.naturalWidth); })));
+      const fromImage = async () => {
+        await p.getByRole('button', { name: 'Menu', exact: true }).click();
+        await p.getByRole('button', { name: 'Position from image' }).click();
+        await assert.doesNotReject(dialog.waitFor({ timeout: 5000 }));
+      };
+      await p.goto(base, { waitUntil: 'load' });
+      await loadedOn(p);
+      await fromImage();
+      // the model's credit and licence where the copy is handed over
+      assert.equal(await dialog.getByRole('link', { name: 'PolyForm Noncommercial 1.0.0' }).getAttribute('href'), 'https://polyformproject.org/licenses/noncommercial/1.0.0/');
+      assert.equal(await dialog.getByRole('link', { name: /ChessQueries/ }).getAttribute('href'), 'https://github.com/JSeytre/chessqueries');
+      await dialog.getByRole('button', { name: 'Download board reader · 56 MB' }).click();
+      await assert.doesNotReject(dialog.getByRole('button', { name: 'Choose image' }).waitFor({ timeout: 120000 }));
+      // not a picture: said so, still choosing; pasted text: nothing
+      await choose({ name: 'game.pgn', mimeType: 'application/x-chess-pgn', buffer: Buffer.from('1. e4 e5 *\n') });
+      await assert.doesNotReject(dialog.getByRole('alert').filter({ hasText: 'That file isn’t an image this browser can open.' }).waitFor({ timeout: 5000 }));
+      // (opened again: Firefox over WebDriver BiDi opens no second chooser for the same file field)
+      await dialog.getByRole('button', { name: 'Cancel' }).click();
+      await dialog.waitFor({ state: 'detached', timeout: 5000 });
+      await fromImage();
+      // (the dialog takes a paste once it has found the kept copy and offers Choose image)
+      await dialog.getByRole('button', { name: 'Choose image' }).waitFor({ timeout: 5000 });
+      // pasted text, then the Lichess screenshot pasted: the text left the dialog choosing, where the picture is taken
+      await paste(null, '2r3k1/pp3pp1/4p2p/3pP3/3P1P2/P1rB4/1P4PP/R4RK1 w - - 0 1');
+      await paste(fixture('vision-lichess.png', 'image/png'));
+      // the screenshot read whole: exactly, nothing to check
+      await read();
+      assert.equal(await picWidth(), 720, 'the pasted picture');
+      assert.equal(await field.inputValue(), LICHESS + ' w - - 0 1');
+      assert.equal(await unsureLine.count(), 0, 'no squares to check');
+      await p.screenshot({ path: path.join(OUT, host + '-vision-read.png') });
+      // Turn board 180°, then Back to crop › Read board: the read again, not the turn
+      await p.getByRole('button', { name: 'Turn board 180°' }).click();
+      const turned = LICHESS.split('/').map((r) => [...r].reverse().join('')).reverse().join('/');
+      assert.equal((await field.inputValue()).split(' ')[0], turned, 'the board turned');
+      await p.getByRole('button', { name: 'Back to crop' }).click();
+      await read();
+      assert.equal(await field.inputValue(), LICHESS + ' w - - 0 1', 'read again');
+      // a picture pasted at Back to crop replaces the one read (the diagram is 612 px square)
+      await p.getByRole('button', { name: 'Back to crop' }).click();
+      await cropBox.waitFor({ timeout: 5000 });
+      await paste(fixture('vision-diagram.png', 'image/png'));
+      await read();
+      assert.equal(await picWidth(), 612, 'the pasted picture');
+      assert.notEqual((await field.inputValue()).split(' ')[0], LICHESS, 'the pasted picture read');
+      await p.getByRole('button', { name: 'Back to crop' }).click();
+      await cropBox.waitFor({ timeout: 5000 });
+      await paste(fixture('vision-lichess.png', 'image/png'));
+      await read();
+      assert.equal(await picWidth(), 720);
+      assert.equal(await field.inputValue(), LICHESS + ' w - - 0 1');
+      // Done: the free board at the position read
+      await p.getByRole('button', { name: 'Done' }).click();
+      await assert.doesNotReject(field.waitFor({ state: 'detached', timeout: 5000 }));
+      await p.getByRole('button', { name: 'Menu', exact: true }).click();
+      await p.getByRole('button', { name: 'Copy FEN' }).click();
+      await assert.doesNotReject(p.waitForFunction((f) => { const e = document.querySelector('.fen-note-fen'); return e && e.value === f; }, LICHESS + ' w - - 0 1', { timeout: 5000 }));
+      await p.keyboard.press('Escape');
+      // the screenshot stored a quarter turned, upright by its EXIF orientation: the same read (the reader kept: no download)
+      await fromImage();
+      await choose(fixture('vision-exif6.jpg', 'image/jpeg'));
+      await read();
+      assert.equal(await field.inputValue(), LICHESS + ' w - - 0 1', 'EXIF orientation applied');
+      await p.getByRole('button', { name: 'Cancel' }).click();
+      await assert.doesNotReject(field.waitFor({ state: 'detached', timeout: 5000 }));
+      // Play vs human › Start from › From image › Choose image…: the editor's button starts the game, at the position read
+      const play = p.getByRole('dialog', { name: 'Play vs human' });
+      await p.getByRole('button', { name: 'Menu', exact: true }).click();
+      await p.getByRole('button', { name: 'Play vs human' }).click();
+      await play.getByRole('radiogroup', { name: 'Start from' }).getByRole('radio', { name: 'From image' }).click();
+      await play.getByRole('radiogroup', { name: 'Time control' }).getByRole('radio', { name: '5+3' }).click();
+      await play.getByRole('button', { name: 'Choose image…' }).click();
+      await assert.doesNotReject(dialog.waitFor({ timeout: 5000 }));
+      await choose(fixture('vision-lichess.png', 'image/png'));
+      await read();
+      await p.getByRole('button', { name: 'Start game' }).click();
+      await assert.doesNotReject(field.waitFor({ state: 'detached', timeout: 5000 }));
+      await assert.doesNotReject(p.locator('.game-clock').first().waitFor({ timeout: 5000 }));
+      assert.deepEqual(await p.locator('.game-clock').allInnerTexts(), ['5:00', '5:00']);
+      assert.equal((await boardBox(p)).n, LICHESS.replace(/[\d/]/g, '').length, 'the game starts from the position read');
+      // Remove the board reader (from the game not yet begun, which doesn't ask first): asked first, then the copy is
+      // gone and the download offered again
+      await fromImage();
+      await dialog.getByRole('button', { name: 'Remove the board reader · 56 MB' }).click();
+      await dialog.getByRole('button', { name: 'Remove', exact: true }).click();
+      await assert.doesNotReject(dialog.getByRole('button', { name: 'Download board reader · 56 MB' }).waitFor({ timeout: 10000 }));
+      assert.equal(await p.evaluate((c) => caches.keys().then((k) => k.includes(c)), 'chess-vision-1'), false, 'the copy is gone');
+      assert.deepEqual(ep.errors, []);
+      await ep.ctx.close();
+      // offline in a context without the copy: the note, and Download waits
+      const off = await open(browser, { width: 1440, height: 900 });
+      await off.ctx.addInitScript(() => Object.defineProperty(Navigator.prototype, 'onLine', { get: () => false, configurable: true }));
+      const q = off.page;
+      await q.goto(base, { waitUntil: 'load' });
+      await loadedOn(q);
+      await q.getByRole('button', { name: 'Menu', exact: true }).click();
+      await q.getByRole('button', { name: 'Position from image' }).click();
+      const qd = q.getByRole('dialog', { name: 'Position from image' });
+      await assert.doesNotReject(qd.getByText('The board reader downloads once; you’re offline.').waitFor({ timeout: 5000 }));
+      assert.equal(await qd.getByRole('button', { name: 'Download board reader · 56 MB' }).isDisabled(), true);
+      assert.deepEqual(off.errors, []);
+      await off.ctx.close();
+    });
     // Dead positions (chasolver in a Worker): bishops of both colours behind a full pawn lock, which only chasolver proves
     // (canMate and lockedDead don't). A game ends there; a loaded game marks the move and shows DEAD while paused, never
     // while playing; the free board says when one side can no longer win

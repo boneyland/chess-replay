@@ -130,7 +130,24 @@ function useEditInput({ setup, onChange }) {
   return { held, drag, boardEl, handlers, trayHandlers, dropHeld: () => setHeld(null), cursor, carrying, onKeyDown };
 }
 
-function EditBoard({ setup, onChange, onDone, onCancel, fenText, onFenText, fenMsg, doneLabel = 'Done', orient, nav, overlay }) {
+// The button that lays the picture over the board for as long as it is held (pointer down, or Space with it focused)
+function HoldButton({ onHold }) {
+  const on = () => onHold(true), off = () => onHold(false);
+  // unmounted while held (the layout going to two columns), it lets go, or the picture would cover the board when it's back
+  React.useEffect(() => () => onHold(false), []);
+  return (
+    <button type="button" onPointerDown={(e) => { e.stopPropagation(); on(); }} onPointerUp={off} onPointerCancel={off} onPointerLeave={off} onBlur={off}
+      onKeyDown={(e) => { if (e.key === ' ') { e.preventDefault(); on(); } }} onKeyUp={(e) => { if (e.key === ' ') off(); }}
+      onContextMenu={(e) => e.preventDefault()}
+      style={{ ...NO_SELECT, alignSelf: 'flex-start', touchAction: 'none', whiteSpace: 'nowrap', font: `600 ${tx(15)}px ${MONO}`, letterSpacing: '0.1em', textTransform: 'uppercase', padding: `${tx(5)}px ${tx(12)}px`, borderRadius: 4, cursor: 'pointer', border: `1.5px solid ${C.ink}`, background: 'transparent', color: C.ink }}>
+      Hold to show picture
+    </button>
+  );
+}
+
+// Edit position opened from a picture (image = { url, unsure }): the picture, the squares the reader was unsure of
+// (outlined; GameApp drops one once it is edited) and the buttons to turn the board round or go back to the crop
+function EditBoard({ setup, onChange, onDone, onCancel, fenText, onFenText, fenMsg, doneLabel = 'Done', orient, nav, overlay, image, onTurn, onBackToCrop }) {
   const frame = useFrame();
   setLayout(frame, 'edit'); // before the children render, which read the layout
   // a paused one-column page is as tall as its panels; the stage scrolls it
@@ -159,6 +176,13 @@ function EditBoard({ setup, onChange, onDone, onCancel, fenText, onFenText, fenM
   // the keyboard's square shows while the board has the focus from the keyboard
   const [kbFocus, setKbFocus] = React.useState(false);
   const ring = (i, color, inset) => { const [x, y] = idxXY(i); return <div style={{ position: 'absolute', left: x * SQ, top: y * SQ, width: SQ, height: SQ, boxShadow: `inset 0 0 0 ${inset}px ${color}`, pointerEvents: 'none' }} />; };
+  const [showPic, setShowPic] = React.useState(false);
+  const unsure = image ? image.unsure || [] : [];
+  const oneCol = !!L.tray; // the tray under the board is the portrait frame's layout
+  const pic = (style) => <img src={image.url} alt="The picture read" draggable={false} style={{ objectFit: 'contain', display: 'block', ...style }} />;
+  // beside the board, the picture's box is reserved before it decodes (no jump) and is what gives way when the panel's
+  // contents outgrow it (the unsure line, problems, a FEN message), so Cancel and Done stay in the panel
+  const side = image && !oneCol ? Math.round(P.h * 0.35) : 0, fill = side ? { display: 'flex', flexDirection: 'column' } : null;
   const label = (t) => <div style={{ font: `600 ${tx(13)}px ${MONO}`, letterSpacing: '0.1em', textTransform: 'uppercase', color: C.dim, marginBottom: tx(6) }}>{t}</div>;
   return (
     <div ref={flowRef} style={{ position: 'absolute', inset: 0, background: C.bg, overflow: 'hidden', ...flowStyle() }}>
@@ -169,16 +193,33 @@ function EditBoard({ setup, onChange, onDone, onCancel, fenText, onFenText, fenM
         onFocus={(e) => setKbFocus(e.currentTarget.matches(':focus-visible'))} onBlur={() => setKbFocus(false)}
         title={held ? 'Tap squares to place the piece' : 'Drag a piece to move it, or off the board to take it away'}
         style={{ ...NO_SELECT, position: 'absolute', left: 0, top: 0, width: BW, height: BW, cursor: held ? 'copy' : drag && drag.moved ? 'grabbing' : 'grab', touchAction: 'none', outline: 'none' }}>
+        {unsure.map((i) => <React.Fragment key={i}>{ring(i, C.blunder, 3)}</React.Fragment>)}
         {input.carrying != null && ring(input.carrying, BOARD.last, 6)}
         {kbFocus && ring(input.cursor, C.ink, 5)}
         <span id="edit-board-keys" style={SR_ONLY}>{EDIT_KEYS}</span>
         <span aria-live="polite" style={SR_ONLY}>{kbFocus ? squareSay(setup.b, input.cursor) + (input.carrying != null ? `, carrying ${trayLabel(setup.b[input.carrying]).toLowerCase()}` : '') : ''}</span>
       </div>
       {drag && drag.moved && <DragGhost el={input.boardEl.current} piece={drag.piece} x={drag.x} y={drag.y} />}
+      {image && oneCol && showPic && <div style={{ position: 'absolute', left: 0, top: 0, width: BW, height: BW, background: C.bg, pointerEvents: 'none' }}>{pic({ width: '100%', height: '100%' })}</div>}
       </BoardSpace>
       {L.tray && <Tray size={Math.min(112, Math.floor((L.tray.w - 20) / 6), Math.floor((L.tray.h - 4) / 2))} held={held} trayHandlers={trayHandlers} style={L.tray.flow ? { order: L.tray.order, flex: 'none', height: L.tray.h } : { position: 'absolute', left: L.tray.x, top: L.tray.y, width: L.tray.w }} />}
-      <Panel box={P} a={1} title="Edit position">
-        <div style={{ display: 'flex', flexDirection: 'column', gap: tx(16) }}>
+      <Panel box={P} a={1} title="Edit position" style={fill}>
+        <div style={{ display: 'flex', flexDirection: 'column', gap: tx(16), ...(side && { flex: '1 1 auto', minHeight: 0 }) }}>
+          {side > 0 && (
+            <div style={{ position: 'relative', flex: '0 1 auto', height: side, minHeight: Math.min(side, tx(96)) }}>
+              {pic({ position: 'absolute', left: 0, top: 0, width: '100%', height: '100%' })}
+            </div>
+          )}
+          {image && (
+            <div style={{ display: 'flex', flexDirection: 'column', gap: tx(8) }}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: tx(10), flexWrap: 'wrap' }}>
+                {oneCol && <HoldButton onHold={setShowPic} />}
+                <FrameButton color={C.ink} onClick={() => onTurn && onTurn()}>Turn board 180°</FrameButton>
+                <FrameButton color={C.ink} onClick={() => onBackToCrop && onBackToCrop()}>Back to crop</FrameButton>
+              </div>
+              {unsure.length > 0 && <div style={{ font: `500 ${tx(15)}px ${MONO}`, color: C.blunder }}>{unsure.length === 1 ? '1 square to check (outlined)' : `${unsure.length} squares to check (outlined)`}</div>}
+            </div>
+          )}
           <div>
             <input type="text" aria-label="FEN" aria-describedby="edit-fen-msg" spellCheck={false} autoComplete="off" autoCapitalize="off" autoCorrect="off"
               value={fenText} onChange={(e) => onFenText(e.target.value)} style={editField()} />

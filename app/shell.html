@@ -54,7 +54,7 @@ button:focus-visible, select:focus-visible, input:focus-visible, [role="slider"]
   padding-left: max(16px, var(--safe-l)); padding-right: max(16px, var(--safe-r));
 }
 /* the page is laid out at this area's size; it scrolls up and down only for a paused one-column page (Stage sets overflow-y) */
-.stage-area { flex: 1; min-height: 0; width: 100%; overflow-x: hidden; overflow-x: clip; }
+.stage-area { flex: 1; min-height: 0; width: 100%; overflow-x: hidden; overflow-x: clip; scrollbar-color: var(--line-strong) transparent; }
 .stage-frame { overflow: hidden; overflow: clip; }
 .stage-error { position: absolute; inset: 0; display: grid; place-items: center; color: var(--danger); font: 500 0.9375rem var(--mono); }
 
@@ -342,7 +342,7 @@ body:has(.stage.stage-short) .twk-panel { bottom: calc(44px + var(--safe-b)); ma
 .q-panel .twk-hd b { color: var(--queen); }
 .q-hd { display: flex; align-items: center; gap: 8px; }
 .q-exp { padding: 1px 6px; border-radius: 2px; border: 1px solid color-mix(in srgb, var(--queen) 55%, transparent); color: var(--queen); font: 600 0.5625rem var(--mono); letter-spacing: 0.1em; text-transform: uppercase; }
-.twk-note a { color: var(--accent); }
+.twk-note a, .fen-note a { color: var(--accent); }
 .twk-info { flex: none; width: 15px; height: 15px; margin-left: 6px; padding: 0; vertical-align: 1px; border: 1px solid var(--line); border-radius: 50%; background: transparent; color: var(--dim); font: italic 600 0.625rem/13px Georgia, serif; cursor: help; }
 .twk-info:hover, .twk-info[aria-expanded="true"] { color: var(--ink); border-color: var(--dim); }
 .twk-btn-row { display: flex; align-items: center; gap: 4px; }

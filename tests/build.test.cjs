@@ -228,3 +228,34 @@ test('the site serves the dead-position worker and chasolver.wasm, and sw.js kee
   assert.match(sw, /"dead-worker\.js"/);
   assert.match(sw, /"chasolver\.wasm"/);
 });
+
+// the board reader's Worker is a small file of the page's own, kept with it (only the vision/ files it loads are not)
+test('the site serves the board reader\'s worker, and sw.js keeps it', () => {
+  const site = path.join(ROOT, 'out', 'site');
+  assert.ok(fs.existsSync(path.join(site, 'vision-worker.js')));
+  const LOCAL = JSON.parse(fs.readFileSync(path.join(site, 'sw.js'), 'utf8').match(/^const LOCAL = (\[.*?\]);/m)[1]);
+  assert.ok(LOCAL.includes('vision-worker.js'));
+});
+
+// The board reader's model and runtime are 55 MB: they are served next to the page but only the viewer who asks keeps
+// them, so the per-deploy copy (sw.js's LOCAL) must not list them
+test('the built site serves the board reader\'s files from vision/, byte for byte at their pins, and sw.js does not keep them', () => {
+  execFileSync(process.execPath, [path.join(ROOT, 'build.cjs')], { cwd: ROOT });
+  const site = path.join(ROOT, 'out', 'site');
+  const pins = {
+    'chessq-lite-v4-int8.onnx': '89d75e343c5d98f235855a67588efb469a4e7cff1e003ee6b6ee0de67732ae1f',
+    'ort.wasm.min.mjs': '219e6a1fc8a9938268d18efca3c91d310bd2f4a59bbd13744df5b2b7fc6cee3b',
+    'ort-wasm-simd-threaded.mjs': 'e13f7f94fc51b4ca72b12faeb1ee95f4ace6dfbc8939bc718aabdc0a27c4299b',
+    'ort-wasm-simd-threaded.wasm': '3398c10d07d229bd91b364548e130e0e51a8e5704b88c7c083ebbeb78842dee2',
+  };
+  const crypto = require('crypto');
+  for (const [f, sha] of Object.entries(pins)) {
+    const built = fs.readFileSync(path.join(site, 'vision', f));
+    assert.equal(crypto.createHash('sha256').update(built).digest('hex'), sha, f);
+    assert.ok(built.equals(fs.readFileSync(path.join(ROOT, 'vision', f))), f + ' identical to vision/');
+  }
+  // the licence texts stay in the repo, not on the site
+  assert.deepEqual(fs.readdirSync(path.join(site, 'vision')).sort(), Object.keys(pins).sort());
+  const LOCAL = JSON.parse(fs.readFileSync(path.join(site, 'sw.js'), 'utf8').match(/^const LOCAL = (\[.*?\]);/m)[1]);
+  assert.ok(!LOCAL.some((f) => f.startsWith('vision/')));
+});
