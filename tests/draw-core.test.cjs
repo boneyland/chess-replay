@@ -9,9 +9,10 @@ test('the modifier held picks the brush', () => {
   assert.equal(D.brush({ shiftKey: true }), 'red');
   assert.equal(D.brush({ altKey: true }), 'blue');
   assert.equal(D.brush({ metaKey: true }), 'blue');
-  assert.equal(D.brush({ ctrlKey: true }), 'yellow');
+  assert.equal(D.brush({ ctrlKey: true }), 'red');
+  assert.equal(D.brush({ ctrlKey: true, shiftKey: true }), 'red');
   assert.equal(D.brush({ shiftKey: true, altKey: true }), 'yellow');
-  assert.equal(D.brush({ ctrlKey: true, shiftKey: true }), 'yellow');
+  assert.equal(D.brush({ ctrlKey: true, altKey: true }), 'yellow');
   for (const b of D.BRUSHES) assert.match(D.COLORS[b], /^#[0-9a-f]{6}$/);
 });
 

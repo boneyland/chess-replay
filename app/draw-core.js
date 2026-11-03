@@ -6,12 +6,11 @@
   const BRUSHES = ['green', 'red', 'blue', 'yellow'];
   // Lichess's brush colours, darker than the engine's and Queen's arrows so the viewer's own read as theirs
   const COLORS = { green: '#15781b', red: '#882020', blue: '#003088', yellow: '#e68f00' };
-  // the modifier held as the button goes down picks the colour: none green, Shift red, Alt (or ⌘) blue, Ctrl yellow;
-  // Shift with Alt is yellow too, as on Lichess
+  // the modifier held as the button goes down picks the colour, as on Lichess: none green, Shift or Ctrl red (Ctrl for
+  // Firefox, which opens its own menu on Shift+right-click), Alt (or ⌘) blue, one of each yellow
   const brush = (e) => {
-    const a = !!e.shiftKey, b = !!(e.altKey || e.metaKey);
-    if (e.ctrlKey || (a && b)) return 'yellow';
-    return a ? 'red' : b ? 'blue' : 'green';
+    const a = !!(e.shiftKey || e.ctrlKey), b = !!(e.altKey || e.metaKey);
+    return a && b ? 'yellow' : a ? 'red' : b ? 'blue' : 'green';
   };
   // a drag that ends on the square it began on is a circle
   const shape = (from, to, br) => ({ from, to: to == null || to === from ? null : to, brush: br });
