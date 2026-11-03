@@ -255,7 +255,8 @@ body:has(.stage-one) .twk-panel { bottom: calc(51px + var(--safe-b)); max-height
 @media (max-width: 480px) { .games-row { flex-wrap: wrap; gap: 8px; } .games-text { flex-basis: 100%; } .games-btns { margin-left: auto; } }
 
 .drop { position: fixed; inset: 0; z-index: 60; display: grid; place-items: center; background: var(--scrim); pointer-events: none; }
-.drop-box { padding: 40px 60px; margin: 0 16px; border: 2px dashed var(--accent); border-radius: 6px; text-align: center; font: 500 1.25rem/1.6 var(--mono); color: var(--ink); }
+.drop-box { padding: 40px 60px; margin: 0 16px; border: 2px dashed var(--accent); border-radius: 6px; text-align: center; font: 500 1.25rem/1.6 var(--mono); color: var(--ink);
+  -webkit-backdrop-filter: blur(10px); backdrop-filter: blur(10px); }
 .export { position: fixed; inset: 0; z-index: 90; display: grid; place-items: center; background: var(--scrim); }
 .export-box { width: min(420px, calc(100% - 32px)); box-sizing: border-box; display: flex; flex-direction: column; gap: 10px; padding: 20px; border-radius: 6px; background: var(--panel); border: 1px solid var(--line); box-shadow: 0 10px 30px var(--shadow), var(--halo); }
 .export-title { font: 600 1rem var(--sans); color: var(--ink); }
