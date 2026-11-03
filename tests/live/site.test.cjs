@@ -2564,9 +2564,9 @@ for (const name of BROWSERS) for (const site of SITES) {
       const b = await p.evaluate(() => { const r = [...document.querySelectorAll('div')].find((d) => d.style.touchAction === 'none').getBoundingClientRect(); return { x0: r.left, y0: r.top, sq: r.width / 8 }; });
       // Stockfish searches the position while the player thinks: the move is rated against that search, which finds the
       // mate (Qe8#) at once, so wait for its bestmove, however long the engine takes to start (a move made before it had
-      // started went unrated after a fixed 5 s in WebKit on GitHub, 2026-11-01)
+      // started went unrated after a fixed 5 s in WebKit on GitHub, 2026-11-01; 30 s ran out there on 2026-11-03)
       const t0 = await p.evaluate(() => performance.now());
-      await assert.doesNotReject(p.waitForFunction((t0) => window.__sfOut.some(([t, m]) => t > t0 && m.startsWith('bestmove')), t0, { timeout: 30000 }), 'the search before the move ends');
+      await assert.doesNotReject(p.waitForFunction((t0) => window.__sfOut.some(([t, m]) => t > t0 && m.startsWith('bestmove')), t0, { timeout: 60000 }), 'the search before the move ends');
       const f = square(b, 'e2'), tt = square(b, 'c4');
       await p.mouse.move(f.x, f.y);
       await p.mouse.down();

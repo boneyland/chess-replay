@@ -39,11 +39,14 @@ jobs:
       fail-fast: false
       matrix:
         browser: [chromium, firefox, webkit]
-        part: [main, engine]
+        part: [main, engine, heavy]
     env:
       LIVE_URLS: local
       LIVE_BROWSERS: ${{ matrix.browser }}
       ENGINE_TESTS: '^desktop: (a threaded engine that never|Full whose threaded engine|the full engine downloads)'
+      # the slowest subtests (each opens its own page), a part of their own: in WebKit the rest ran about 29 minutes, and a
+      # slow runner went past the 30-minute limit (2026-11-03)
+      HEAVY_TESTS: '^(desktop: Position from image: download|desktop: a variable frame rate MP4|layout: nothing cut off|desktop: Play vs human turns the board|desktop: My games keeps|phone: an export is|desktop: an export is|desktop: the export.s own drawing)'
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
       - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
@@ -58,8 +61,10 @@ jobs:
         run: npx playwright install --with-deps webkit
       - if: matrix.part == 'engine'
         run: echo "LIVE_ONLY=$ENGINE_TESTS" >> "$GITHUB_ENV"
+      - if: matrix.part == 'heavy'
+        run: echo "LIVE_ONLY=$HEAVY_TESTS" >> "$GITHUB_ENV"
       - if: matrix.part == 'main'
-        run: echo "LIVE_SKIP=$ENGINE_TESTS" >> "$GITHUB_ENV"
+        run: echo "LIVE_SKIP=$ENGINE_TESTS|$HEAVY_TESTS" >> "$GITHUB_ENV"
       - run: node --test --test-reporter=spec --test-reporter-destination=stdout --test-reporter=@reporters/github --test-reporter-destination=stdout tests/live/site.test.cjs
       - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
         if: always()
