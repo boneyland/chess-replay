@@ -496,9 +496,10 @@ function DialogBox({ label, onClose, children }) {
   const onKey = (e) => {
     e.stopPropagation();
     if (e.key === 'Escape') { e.preventDefault(); onClose(); } else if (e.key === 'Tab') {
-      const stops = [...e.currentTarget.querySelectorAll('input, textarea, button')], i = stops.indexOf(document.activeElement);
+      // a hidden file input and disabled buttons take no focus, so they are skipped
+      const stops = [...e.currentTarget.querySelectorAll('input, textarea, button')].filter((el) => !el.disabled && el.getClientRects().length), i = stops.indexOf(document.activeElement);
       e.preventDefault();
-      stops[(i + (e.shiftKey ? -1 : 1) + stops.length) % stops.length].focus();
+      if (stops.length) stops[(i + (e.shiftKey ? -1 : 1) + stops.length) % stops.length].focus();
     }
   };
   return (
