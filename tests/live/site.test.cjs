@@ -2059,8 +2059,13 @@ for (const name of BROWSERS) for (const site of SITES) {
     // gives the bishop away, throws the win away: a blunder
     await t.test('desktop: analysing a KBN v K game takes the tablebase and rates the drawing move a blunder', async () => {
       const ta = await open(browser, { width: 1440, height: 900 });
-      const p = ta.page, sent = [];
-      ta.ctx.on('request', (r) => { if (r.url().startsWith('https://tablebase.lichess.ovh/')) sent.push(r.url()); });
+      const p = ta.page, sent = [], answered = [];
+      // a request the page gives up on (no answer in 10 s, LichessCore's TIMEOUT_MS) isn't cached and is rightly asked
+      // again (once by the Analysis panel, then by the run: 6 requests, seen on GitHub's runners), so only the answered
+      // ones count
+      const tbHost = (r) => r.url().startsWith('https://tablebase.lichess.ovh/');
+      ta.ctx.on('request', (r) => { if (tbHost(r)) sent.push(r.url()); });
+      ta.ctx.on('requestfinished', (r) => { if (tbHost(r)) answered.push(r.url()); });
       await p.addInitScript(() => { try { localStorage.setItem('chess-video.tweaks.v1', JSON.stringify({ sfTime: 20 })); } catch (e) {} });
       await p.goto(base, { waitUntil: 'load' });
       await loadedOn(p);
@@ -2075,8 +2080,12 @@ for (const name of BROWSERS) for (const site of SITES) {
       // a few seconds, more when one hangs and is replaced); a 20 s search would take it past 36 s
       await p.waitForFunction(() => !/Analysing \d|Starting Stockfish|Analyse with Stockfish/i.test(document.body.innerText), null, { timeout: 30000 });
       assert.ok(Date.now() - t0 < 30000, 'no 20 s search');
-      assert.equal(sent.filter((u) => u.includes('/standard?')).length, 5, 'each position asked once');
-      assert.equal(sent.length, 5, 'nothing else asked');
+      // the last answer's event can reach this process just after the page has read it
+      for (const t1 = Date.now(); answered.length < 5 && Date.now() - t1 < 2000;) await p.waitForTimeout(50);
+      assert.equal(answered.filter((u) => u.includes('/standard?')).length, 5, 'each position answered once: ' + answered.join(' '));
+      assert.equal(new Set(answered).size, 5, 'each position answered once: ' + answered.join(' '));
+      assert.equal(answered.length, 5, 'nothing else asked');
+      assert.ok(sent.length - answered.length <= 1, 'one request given up on at most: ' + sent.join(' '));
       // on 2. Bc4+ the title row says "Tablebase" in place of a depth
       await p.locator('[data-ply="2"]').click();
       await assert.doesNotReject(p.locator('.plabel').filter({ hasText: /2\. Bc4\+/ }).waitFor({ timeout: 5000 }));
