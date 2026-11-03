@@ -2,7 +2,7 @@
 
 ![The sample chess game playing: move rating, best line, commentary and eval graph](media/preview.webp)
 
-A browser app for replaying and playing chess games, at https://chess-replay.onrender.com/. Everything runs in the browser, Stockfish included, and keeps working offline once loaded (React, html2canvas and the fonts come from CDNs on the first visit and are then kept). Going online is limited to Ask Queen, Lichess (the endgame tablebase, on by default; the cloud evaluation and the opening explorer, off by default; see [Lichess data](#lichess-data)), and the full Stockfish when you ask for it.
+A browser app for replaying and playing chess games, at https://chess-replay.onrender.com/. Everything runs in the browser, Stockfish included, and keeps working offline once loaded (React, html2canvas and the fonts come from CDNs on the first visit and are then kept). Going online is limited to Ask Queen, Lichess (the endgame tablebase, on by default; the cloud evaluation and the opening explorer, off by default; see [Lichess data](#lichess-data)), and the full Stockfish and the board reader when you ask for them.
 
 ## Features
 
@@ -12,6 +12,7 @@ A browser app for replaying and playing chess games, at https://chess-replay.onr
 - **Lichess opening explorer** (off by default): the games played from each position, with counts and results, from Lichess or its masters database; needs a Lichess sign-in (see [Lichess data](#lichess-data))
 - **Endgame tablebase**: with 7 pieces or fewer, the result with best play and every move ranked by it, from Lichess's tablebase; a game's analysis takes those positions from it too, rating each move by whether it keeps the win or the draw (needs a connection; Settings › Online turns it off)
 - **Play/Explore**: a board from the starting position or a position set up by hand (or from a FEN) in Edit position, where Stockfish rates every move
+- **Position from image**: a screenshot, a diagram or a photo of a board read into Edit position by a board reader that runs in the browser (56 MB, downloaded once when you ask and kept), with the picture beside the board and the squares it is unsure of outlined; the picture isn't sent anywhere
 - **Play vs human**: a game for two at one screen, from the starting position or a pasted one. The board turns to the side to move, moves can be taken back, and the game ends on mate, a draw by the rules or by agreement, or resignation, with optional clocks. Stockfish stays off until it ends
 - **Play vs Stockfish**: a game against Stockfish at full strength, as White, Black or a random side, with Take back and optional clocks. Nothing hints at a move; Stockfish quietly flags inaccuracies, mistakes and blunders, and the better move shows once the game is over
 - **My games**: every game is kept in the browser from its first move; the 50 most recent are listed, to resume one in progress or replay a finished one like a loaded game (analysis, PGN and video export included)
@@ -61,6 +62,8 @@ Built into the page or served with it:
 - [libwebp](https://chromium.googlesource.com/webm/libwebp) (BSD-3-Clause), built to WebAssembly by [Squoosh](https://github.com/GoogleChromeLabs/squoosh) and packaged by [jSquash](https://github.com/jamsinclair/jSquash) (Apache-2.0), for the WebP export
 - [Mediabunny](https://github.com/Vanilagy/mediabunny) 1.61.0 by Vanilagy (MPL-2.0), for the MP4 export
 - [chasolver](https://github.com/miguel-ambrona/chasolver) 3.0.0 by Miguel Ambrona (MIT, `vendor/chasolver.LICENSE`), with the [chess](https://crates.io/crates/chess) crate (MIT), built to WebAssembly here (`tools/chasolver-wasm/`), which proves dead positions
+- ChessQ Lite V4 from [ChessQueries](https://github.com/JSeytre/chessqueries) by Joël Seytre (arXiv 2608.30762), the int8 ONNX export Lichess publishes in [its source](https://github.com/lichess-org/lila) ([PolyForm Noncommercial 1.0.0](https://polyformproject.org/licenses/noncommercial/1.0.0/), `vision/LICENSE` and `vision/NOTICE`), which reads a position from a picture
+- [onnxruntime-web](https://github.com/microsoft/onnxruntime) 1.30.0 by Microsoft (MIT, `vision/ort.LICENSE`), which runs it
 
 Loaded from CDNs when the page runs:
 - [React](https://react.dev/) 18.3.1 (MIT)
@@ -71,4 +74,4 @@ Used to build it: [@babel/standalone](https://babeljs.io/docs/babel-standalone) 
 
 ## Licence
 
-GPL-3.0-or-later (`LICENSE`), the same as the bundled Stockfish. The Enigmahack sound files keep their own licence, the AGPL-3.0-or-later, which GPL-3.0 section 13 allows them to be combined with. The lisp sound files (`vendor/sounds/lisp/`) are not covered by the GPL: they stay under CC BY-NC-SA 4.0, a separate work shipped alongside, and may not be used commercially. The WebP encoder keeps libwebp's BSD-3-Clause and the Squoosh glue's Apache-2.0 licences, both compatible with the GPL-3.0, and chasolver its MIT licence.
+GPL-3.0-or-later (`LICENSE`), the same as the bundled Stockfish. The Enigmahack sound files keep their own licence, the AGPL-3.0-or-later, which GPL-3.0 section 13 allows them to be combined with. The lisp sound files (`vendor/sounds/lisp/`) are not covered by the GPL: they stay under CC BY-NC-SA 4.0, a separate work shipped alongside, and may not be used commercially. The board reader's model (`vision/chessq-lite-v4-int8.onnx`) is not covered by the GPL either: it stays under PolyForm Noncommercial 1.0.0 (`vision/LICENSE`), a separate work shipped alongside, and may not be used commercially. The WebP encoder keeps libwebp's BSD-3-Clause and the Squoosh glue's Apache-2.0 licences, both compatible with the GPL-3.0, chasolver its MIT licence and onnxruntime-web its MIT licence.
