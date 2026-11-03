@@ -1426,6 +1426,16 @@ for (const name of BROWSERS) for (const site of SITES) {
         await field.waitFor({ timeout: 5000 });
       };
       const unsureLine = p.getByText(/squares? to check \(outlined\)/);
+      // where the crop box opens: within 3 px of a box in fractions of the picture (VisionGrid's test pictures' cases)
+      const cases = require('../fixtures/vision-grid/cases.json');
+      const boxAt = async (want, what) => {
+        const c = await cropBox.locator('canvas').boundingBox(), r = await cropBox.locator('rect[style*="move"]').boundingBox();
+        const got = { x0: r.x - c.x, y0: r.y - c.y, x1: r.x + r.width - c.x, y1: r.y + r.height - c.y };
+        for (const k of ['x0', 'y0', 'x1', 'y1']) assert.ok(Math.abs(got[k] - want[k] * (k[0] === 'x' ? c.width : c.height)) <= 3, `${what}: the box's ${k}`);
+      };
+      const FOUND = 'The box is on the board’s squares; drag its edges if it’s off.', HELP = 'A photo: read it as it is. A diagram or screenshot: pull the edges in to the squares.';
+      const placement = async () => (await field.inputValue()).split(' ')[0];
+      const turnFen = (f) => f.split('/').map((r) => [...r].reverse().join('')).reverse().join('/');
       const picWidth = () => p.locator('img[alt="The picture read"]').evaluate((i) => (i.complete ? i.naturalWidth : new Promise((ok) => { i.onload = () => ok(i.naturalWidth); })));
       const fromImage = async () => {
         await p.getByRole('button', { name: 'Menu', exact: true }).click();
@@ -1452,6 +1462,10 @@ for (const name of BROWSERS) for (const site of SITES) {
       // pasted text, then the Lichess screenshot pasted: the text left the dialog choosing, where the picture is taken
       await paste(null, '2r3k1/pp3pp1/4p2p/3pP3/3P1P2/P1rB4/1P4PP/R4RK1 w - - 0 1');
       await paste(fixture('vision-lichess.png', 'image/png'));
+      // the box opens on the screenshot's squares (all of it), and the help line says so
+      await cropBox.waitFor({ timeout: 5000 });
+      await assert.doesNotReject(dialog.getByText(FOUND).waitFor({ timeout: 5000 }));
+      await boxAt(cases.lichess.box, 'the Lichess screenshot');
       // the screenshot read whole: exactly, nothing to check
       await read();
       assert.equal(await picWidth(), 720, 'the pasted picture');
@@ -1465,12 +1479,13 @@ for (const name of BROWSERS) for (const site of SITES) {
       await p.getByRole('button', { name: 'Back to crop' }).click();
       await read();
       assert.equal(await field.inputValue(), LICHESS + ' w - - 0 1', 'read again');
-      // a picture pasted at Back to crop replaces the one read (the diagram is 612 px square)
+      // a picture pasted at Back to crop replaces the one read (the diagram is 612 px square, its squares 512 px, where
+      // the box opens)
       await p.getByRole('button', { name: 'Back to crop' }).click();
       await cropBox.waitFor({ timeout: 5000 });
       await paste(fixture('vision-diagram.png', 'image/png'));
       await read();
-      assert.equal(await picWidth(), 612, 'the pasted picture');
+      assert.equal(await picWidth(), 512, 'the pasted picture, cropped to its squares');
       assert.notEqual((await field.inputValue()).split(' ')[0], LICHESS, 'the pasted picture read');
       await p.getByRole('button', { name: 'Back to crop' }).click();
       await cropBox.waitFor({ timeout: 5000 });
@@ -1490,6 +1505,43 @@ for (const name of BROWSERS) for (const site of SITES) {
       await choose(fixture('vision-exif6.jpg', 'image/jpeg'));
       await read();
       assert.equal(await field.inputValue(), LICHESS + ' w - - 0 1', 'EXIF orientation applied');
+      await p.getByRole('button', { name: 'Cancel' }).click();
+      await assert.doesNotReject(field.waitFor({ state: 'detached', timeout: 5000 }));
+      // a picture with no board: the box around all of it, and the help line as before
+      await fromImage();
+      await choose(fixture('vision-noboard.png', 'image/png'));
+      await cropBox.waitFor({ timeout: 5000 });
+      await assert.doesNotReject(dialog.getByText(HELP).waitFor({ timeout: 5000 }));
+      await boxAt({ x0: 0, y0: 0, x1: 1, y1: 1 }, 'no board');
+      await dialog.getByRole('button', { name: 'Cancel' }).click();
+      await dialog.waitFor({ state: 'detached', timeout: 5000 });
+      // the greyscale copy failing (a canvas that can't be read back): the picture is still taken, the box around all of it
+      await p.evaluate(() => { const C = OffscreenCanvasRenderingContext2D.prototype; window.__getImageData = C.getImageData; C.getImageData = () => { throw new Error('no readback'); }; });
+      await fromImage();
+      await choose(fixture('vision-black-labels.png', 'image/png'));
+      await cropBox.waitFor({ timeout: 5000 });
+      await assert.doesNotReject(dialog.getByText(HELP).waitFor({ timeout: 5000 }));
+      await boxAt({ x0: 0, y0: 0, x1: 1, y1: 1 }, 'no greyscale copy');
+      await p.evaluate(() => { OffscreenCanvasRenderingContext2D.prototype.getImageData = window.__getImageData; });
+      await dialog.getByRole('button', { name: 'Cancel' }).click();
+      await dialog.waitFor({ state: 'detached', timeout: 5000 });
+      // a framed diagram from Black's side: the box opens on its squares, past the frame and labels, and the read
+      // follows the labels; with the model's side made to come out the wrong way round, the read is turned to match them
+      await fromImage();
+      await choose(fixture('vision-black-labels.png', 'image/png'));
+      await cropBox.waitFor({ timeout: 5000 });
+      await boxAt(cases['framed-black'].box, 'the framed diagram');
+      await p.screenshot({ path: path.join(OUT, host + '-vision-crop.png') });
+      await read();
+      const asRead = await placement(), BLACK = cases['framed-black'].fen;
+      // how many of the 64 squares two placements agree on
+      const same = (f, g) => { const sq = (x) => x.replace(/\d/g, (d) => '.'.repeat(+d)).replace(/\//g, ''), a = sq(f), b = sq(g); return [...a].filter((c, i) => c === b[i]).length; };
+      assert.ok(same(asRead, BLACK) > same(asRead, turnFen(BLACK)), `read from Black's side: ${asRead}`);
+      await p.evaluate(() => { const G = window.VisionGrid, real = G.modelSide; window.__realModelSide = real; G.modelSide = (o, b) => ({ w: 'b', b: 'w' })[real(o, b)] || null; });
+      await p.getByRole('button', { name: 'Back to crop' }).click();
+      await read();
+      assert.equal(await placement(), turnFen(asRead), 'turned to follow the labels');
+      await p.evaluate(() => { window.VisionGrid.modelSide = window.__realModelSide; });
       await p.getByRole('button', { name: 'Cancel' }).click();
       await assert.doesNotReject(field.waitFor({ state: 'detached', timeout: 5000 }));
       // Play vs human › Start from › From image › Choose image…: the editor's button starts the game, at the position read

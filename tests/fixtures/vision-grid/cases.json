@@ -1,0 +1,142 @@
+{
+ "lichess": {
+  "box": {
+   "x0": 0,
+   "y0": 0,
+   "x1": 1,
+   "y1": 1
+  },
+  "side": "w",
+  "fen": "2r3k1/pp3pp1/4p2p/3pP3/3P1P2/P1rB4/1P4PP/R4RK1"
+ },
+ "diagram": {
+  "box": {
+   "x0": 0.08169934640522876,
+   "y0": 0.08169934640522876,
+   "x1": 0.9183006535947712,
+   "y1": 0.9183006535947712
+  },
+  "side": "w",
+  "fen": "r1bqkb1r/pppp1ppp/2n2n2/4p2Q/2B1P3/8/PPPP1PPP/RNB1K1NR"
+ },
+ "framed-white": {
+  "box": {
+   "x0": 0.09124087591240876,
+   "y0": 0.09124087591240876,
+   "x1": 0.9087591240875912,
+   "y1": 0.9087591240875912
+  },
+  "side": "w",
+  "fen": "2r3k1/pp3pp1/4p2p/3pP3/3P1P2/P1rB4/1P4PP/R4RK1"
+ },
+ "framed-black": {
+  "box": {
+   "x0": 0.09124087591240876,
+   "y0": 0.09124087591240876,
+   "x1": 0.9087591240875912,
+   "y1": 0.9087591240875912
+  },
+  "side": "b",
+  "fen": "2r3k1/pp3pp1/4p2p/3pP3/3P1P2/P1rB4/1P4PP/R4RK1"
+ },
+ "inside-white": {
+  "box": {
+   "x0": 0,
+   "y0": 0,
+   "x1": 1,
+   "y1": 1
+  },
+  "side": "w",
+  "fen": "r1bqkb1r/pppp1ppp/2n2n2/4p2Q/2B1P3/8/PPPP1PPP/RNB1K1NR"
+ },
+ "inside-black": {
+  "box": {
+   "x0": 0,
+   "y0": 0,
+   "x1": 1,
+   "y1": 1
+  },
+  "side": "b",
+  "fen": "r1bqkb1r/pppp1ppp/2n2n2/4p2Q/2B1P3/8/PPPP1PPP/RNB1K1NR"
+ },
+ "nolabels": {
+  "box": {
+   "x0": 0.038461538461538464,
+   "y0": 0.038461538461538464,
+   "x1": 0.9615384615384616,
+   "y1": 0.9615384615384616
+  },
+  "side": null,
+  "fen": "8/5k2/3p4/1p1P1p2/1P3P2/6K1/8/8"
+ },
+ "highlights": {
+  "box": {
+   "x0": 0.038461538461538464,
+   "y0": 0.038461538461538464,
+   "x1": 0.9615384615384616,
+   "y1": 0.9615384615384616
+  },
+  "side": null,
+  "fen": "8/5k2/3p4/1p1P1p2/1P3P2/6K1/8/8"
+ },
+ "small-on-page": {
+  "box": {
+   "x0": 0.3125,
+   "y0": 0.08863636363636364,
+   "x1": 0.4925,
+   "y1": 0.21954545454545454
+  },
+  "side": "w",
+  "fen": "2r3k1/pp3pp1/4p2p/3pP3/3P1P2/P1rB4/1P4PP/R4RK1"
+ },
+ "text-beside": {
+  "box": {
+   "x0": 0.2874762808349146,
+   "y0": 0.040983606557377046,
+   "x1": 0.7125237191650854,
+   "y1": 0.9590163934426229
+  },
+  "side": null,
+  "fen": "2r3k1/pp3pp1/4p2p/3pP3/3P1P2/P1rB4/1P4PP/R4RK1"
+ },
+ "inside-big": {
+  "box": {
+   "x0": 0,
+   "y0": 0,
+   "x1": 1,
+   "y1": 1
+  },
+  "side": "w",
+  "fen": "r1bqkb1r/pppp1ppp/2n2n2/4p2Q/2B1P3/8/PPPP1PPP/RNB1K1NR"
+ },
+ "two-boards": {
+  "box": null,
+  "side": null,
+  "fen": null
+ },
+ "sideways": {
+  "box": {
+   "x0": 0.11904761904761904,
+   "y0": 0.11904761904761904,
+   "x1": 0.8809523809523809,
+   "y1": 0.8809523809523809
+  },
+  "side": null,
+  "fen": null
+ },
+ "onecolour": {
+  "box": null,
+  "side": null,
+  "fen": "2r3k1/pp3pp1/4p2p/3pP3/3P1P2/P1rB4/1P4PP/R4RK1"
+ },
+ "noboard": {
+  "box": null,
+  "side": null,
+  "fen": null
+ },
+ "photo": {
+  "box": null,
+  "side": null,
+  "fen": "8/5k2/3p4/1p1P1p2/1P3P2/6K1/8/8"
+ }
+}
