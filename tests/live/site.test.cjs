@@ -1396,10 +1396,11 @@ for (const name of BROWSERS) for (const site of SITES) {
     // Position from image (the board reader in a Worker, its 56 MB downloaded from the site on the click): a Lichess
     // screenshot reads exactly, turned and read again; a pasted picture replaces the one at Back to crop; the same
     // screenshot turned a quarter in the file with EXIF Orientation 6 reads the same; a file that isn't a picture and
-    // pasted text are refused; offline, the download waits; From image… starts a game; Remove deletes the copy
+    // pasted text are refused; offline, the download waits; Start from › From image starts a game; Remove deletes the copy
     await t.test('desktop: Position from image: download, read a screenshot, fix in Edit position', { timeout: 300000 }, async () => {
       const ep = await open(browser, { width: 1440, height: 900 });
-      const p = ep.page, dialog = p.getByRole('dialog', { name: 'Position from image' }), field = p.getByRole('textbox', { name: 'FEN' });
+      // the editor's FEN field: Copy FEN's note has a box named FEN too, which stays up where the clipboard is refused (Firefox)
+      const p = ep.page, dialog = p.getByRole('dialog', { name: 'Position from image' }), field = p.locator('input[aria-label="FEN"]');
       const LICHESS = '2r3k1/pp3pp1/4p2p/3pP3/3P1P2/P1rB4/1P4PP/R4RK1';
       const fixture = (name, mimeType) => ({ name, mimeType, buffer: fs.readFileSync(path.join(__dirname, '..', 'fixtures', name)) });
       // the flatpak Chromium hands the page an empty file for a path, so the chooser gets the bytes
@@ -1489,13 +1490,13 @@ for (const name of BROWSERS) for (const site of SITES) {
       assert.equal(await field.inputValue(), LICHESS + ' w - - 0 1', 'EXIF orientation applied');
       await p.getByRole('button', { name: 'Cancel' }).click();
       await assert.doesNotReject(field.waitFor({ state: 'detached', timeout: 5000 }));
-      // Play vs human › Set-up position › From image…: the editor's button starts the game, at the position read
+      // Play vs human › Start from › From image › Choose image…: the editor's button starts the game, at the position read
       const play = p.getByRole('dialog', { name: 'Play vs human' });
       await p.getByRole('button', { name: 'Menu', exact: true }).click();
       await p.getByRole('button', { name: 'Play vs human' }).click();
-      await play.getByRole('radiogroup', { name: 'Start from' }).getByRole('radio', { name: 'Set-up position' }).click();
+      await play.getByRole('radiogroup', { name: 'Start from' }).getByRole('radio', { name: 'From image' }).click();
       await play.getByRole('radiogroup', { name: 'Time control' }).getByRole('radio', { name: '5+3' }).click();
-      await play.getByRole('button', { name: 'From image…' }).click();
+      await play.getByRole('button', { name: 'Choose image…' }).click();
       await assert.doesNotReject(dialog.waitFor({ timeout: 5000 }));
       await choose(fixture('vision-lichess.png', 'image/png'));
       await read();

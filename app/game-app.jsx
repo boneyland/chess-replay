@@ -352,7 +352,7 @@ function GameApp() {
   const visionClose = () => {
     const v = vision;
     setVision(null);
-    if (v && !v.again && v.play) { setPlayInit({ from: 'setup', tc: v.play.tc, you: v.play.you }); setPlayOpen(v.play.mode); }
+    if (v && !v.again && v.play) { setPlayInit({ from: 'image', tc: v.play.tc, you: v.play.you }); setPlayOpen(v.play.mode); }
   };
   const editDone = () => {
     const fen = window.EditCore.toFen(editing.setup), play = editing.play;
@@ -362,10 +362,10 @@ function GameApp() {
   // Cancel goes back to what showed before: a game left for the editor resumes, its clock running from now, and the Play
   // dialog that opened it comes back as it was
   const editCancel = () => {
-    const { resume: r, play } = editing || {};
+    const { resume: r, play, image } = editing || {};
     setEditing(null);
     if (r) commitBoard(window.PlayCore.runClock(r, Date.now()));
-    if (play) { setPlayInit({ from: 'setup', tc: play.tc, you: play.you }); setPlayOpen(play.mode); }
+    if (play) { setPlayInit({ from: image ? 'image' : 'setup', tc: play.tc, you: play.you }); setPlayOpen(play.mode); }
   };
   const pastePgn = () => { setNewMenu(false); setMenu(false); setPanel(false); guard(() => setPgnOpen(true)); };
   // the position on the board, whichever view it's in; where the clipboard is refused the note shows it to select
@@ -398,7 +398,7 @@ function GameApp() {
   const playStart = (choice) => { const mode = playOpen; setPlayOpen(null); startGame(mode, choice); };
   // Set-up position with no position set up: the editor first, keeping the dialog's choices
   const playSetUp = ({ tc, you }) => { const mode = playOpen; setPlayOpen(null); openEditor({ mode, tc, you }); };
-  // From image… (Set-up position): the picture's dialog, keeping the Play dialog's choices for the editor it opens
+  // Start from › From image: the picture's dialog, keeping the Play dialog's choices for the editor it opens
   const playFromImage = ({ tc, you }) => { const mode = playOpen; setPlayOpen(null); setVision({ play: { mode, tc, you }, again: null }); };
   const closePlay = React.useCallback(() => setPlayOpen(null), []);
   const myGames = () => { setNewMenu(false); setMenu(false); setPanel(false); setGamesOpen(readGames()); };

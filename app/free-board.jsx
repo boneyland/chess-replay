@@ -530,17 +530,20 @@ function DialogChoice({ label, value, options, onChange }) {
 // the game starts). onStart({ fen, tc, you })
 // Start from: the starting position, or a set-up one: the board's, or with none set up, one set up in the editor first
 // (onSetUp, with the dialog's choices). initial: the choices to open with (back from the editor), else the defaults
-// onFromImage (or null where the board reader can't run): Set-up position's From image…, reading the position from a picture
+// onFromImage (or null where the board reader can't run): Start from's third choice, From image, whose button reads the
+// position from a picture (with the dialog's choices)
 function PlayDialog({ mode = 'human', setUpFen, clock, side, initial, onStart, onSetUp, onFromImage, onClose }) {
   const sfGame = mode === 'stockfish';
   const [from, setFrom] = React.useState(initial ? initial.from : setUpFen ? 'setup' : 'start');
   const [tc, setTc] = React.useState(initial ? initial.tc : window.PlayCore.TIME_CONTROLS.includes(clock) ? clock : null);
   const [you, setYou] = React.useState(initial ? initial.you : ['w', 'b', 'random'].includes(side) ? side : 'w');
-  const editFirst = from === 'setup' && !setUpFen;
-  const start = () => (editFirst ? onSetUp({ tc, you: sfGame ? you : null }) : onStart({ fen: from === 'setup' ? setUpFen : window.ChessCore.START_FEN, tc, you: sfGame ? you : null }));
+  const editFirst = from === 'setup' && !setUpFen, image = from === 'image' && !!onFromImage;
+  const choices = { tc, you: sfGame ? you : null };
+  const start = () => (image ? onFromImage(choices) : editFirst ? onSetUp(choices) : onStart({ fen: from === 'setup' ? setUpFen : window.ChessCore.START_FEN, ...choices }));
+  const froms = [{ label: 'Starting position', value: 'start' }, { label: 'Set-up position', value: 'setup' }].concat(onFromImage ? [{ label: 'From image', value: 'image' }] : []);
   return (
     <DialogBox label={sfGame ? 'Play vs Stockfish' : 'Play vs human'} onClose={onClose}>
-      <DialogChoice label="Start from" value={from} options={[{ label: 'Starting position', value: 'start' }, { label: 'Set-up position', value: 'setup' }]} onChange={setFrom} />
+      <DialogChoice label="Start from" value={from} options={froms} onChange={setFrom} />
       {sfGame && <DialogChoice label="You play" value={you} options={[{ label: 'White', value: 'w' }, { label: 'Black', value: 'b' }, { label: 'Random', value: 'random' }]} onChange={setYou} />}
       <DialogChoice label="Time control" value={tc} options={[{ label: 'Off', value: null }].concat(window.PlayCore.TIME_CONTROLS.map((x) => ({ label: x, value: x })))} onChange={setTc} />
       <div className="fen-note">{sfGame
@@ -548,8 +551,7 @@ function PlayDialog({ mode = 'human', setUpFen, clock, side, initial, onStart, o
         : 'Two players at this screen. The board turns after each move, so the side to move plays from the bottom; Take back is a button by Resign. Stockfish stays off until the game ends.'}</div>
       <div className="fen-btns">
         <button type="button" className="twk-btn secondary" onClick={onClose}>Cancel</button>
-        {from === 'setup' && onFromImage && <button type="button" className="twk-btn secondary" onClick={() => onFromImage({ tc, you: sfGame ? you : null })}>From image…</button>}
-        <button type="button" className="twk-btn" data-autofocus onClick={start}>{editFirst ? 'Set up position…' : 'Start game'}</button>
+        <button type="button" className="twk-btn" data-autofocus onClick={start}>{image ? 'Choose image…' : editFirst ? 'Set up position…' : 'Start game'}</button>
       </div>
     </DialogBox>
   );
