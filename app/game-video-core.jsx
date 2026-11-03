@@ -453,6 +453,63 @@ function BoardTouch({ pos, sel, targets, drag, promo, onDown, onMove, onUp, onCa
   );
 }
 
+// The viewer's circles and arrows (DrawCore): a right click on a square rings it, a right-button drag draws an arrow, a
+// left click clears them all, and they go when the position (key) changes
+function useBoardDraw(key) {
+  const [shapes, setShapes] = React.useState([]);
+  const [cur, setCur] = React.useState(null); // { from, to, brush } while the right button is down; to null off the board
+  React.useEffect(() => { setShapes([]); setCur(null); }, [key]);
+  return { shapes, setShapes, cur, setCur };
+}
+// Draws the viewer's shapes over the board and takes the right button before BoardTouch (its child) sees it; the
+// left button clears them and goes on to BoardTouch. hidden: a preview or the video is on the board
+function BoardDraw({ draw, hidden, children }) {
+  const D = window.DrawCore, { shapes, setShapes, cur, setCur } = draw;
+  const sqAt = (e) => {
+    const r = e.currentTarget.getBoundingClientRect(), x = (e.clientX - r.left) / r.width, y = (e.clientY - r.top) / r.height;
+    if (x < 0 || x >= 1 || y < 0 || y >= 1) return null;
+    const [vx, vy] = view(Math.floor(x * 8), Math.floor(y * 8));
+    return D.sqName(vy * 8 + vx);
+  };
+  const onDown = (e) => {
+    if (e.button === 2) {
+      e.stopPropagation();
+      try { e.currentTarget.setPointerCapture(e.pointerId); } catch (err) {}
+      const s = sqAt(e);
+      if (s) setCur({ from: s, to: s, brush: D.brush(e) });
+    } else if (e.button === 0 && shapes.length) setShapes([]);
+  };
+  const onMove = (e) => {
+    if (!cur) return;
+    e.stopPropagation();
+    const s = sqAt(e);
+    if (s !== cur.to) setCur((c) => c && { ...c, to: s });
+  };
+  // the arrow ends where the button comes up (pointerup comes once every button is up); off the board it's dropped
+  const onUp = (e) => {
+    if (!cur) return;
+    e.stopPropagation();
+    const s = sqAt(e);
+    setCur(null);
+    if (s) setShapes((t) => D.toggle(t, D.shape(cur.from, s, cur.brush)));
+  };
+  const shape = (s, a, key) => (s.to
+    ? <Arrow key={key} from={s.from} to={s.to} color={D.COLORS[s.brush]} a={a} grow={1} />
+    : <circle key={key} cx={sqC(s.from)[0]} cy={sqC(s.from)[1]} r={SQ / 2 - 5} fill="none" stroke={D.COLORS[s.brush]} strokeWidth={7} opacity={0.85 * a} />);
+  const drawn = hidden ? [] : cur && cur.to ? [...shapes.map((s) => [s, 1]), [D.shape(cur.from, cur.to, cur.brush), 0.6]] : shapes.map((s) => [s, 1]);
+  return (
+    <div onPointerDownCapture={onDown} onPointerMoveCapture={onMove} onPointerUpCapture={onUp} onPointerCancelCapture={() => setCur(null)}
+      onContextMenu={(e) => e.preventDefault()} style={{ position: 'absolute', left: 0, top: 0, width: BW, height: BW }}>
+      {children}
+      {drawn.length > 0 && (
+        <svg data-drawings width={BW} height={BW} style={{ position: 'absolute', left: 0, top: 0, zIndex: 3, pointerEvents: 'none' }}>
+          {drawn.map(([s, a], k) => shape(s, a, k))}
+        </svg>
+      )}
+    </div>
+  );
+}
+
 // Move chips for a line; legal moves can be clicked to show the line on the board up to that move
 // name: null for none (the caller labels the line); tip: what the moves' tooltips call the line (else the name)
 // a line's row (.line-row): lit while the mouse is over it (not a finger, so a tapped line doesn't stay lit), and
@@ -1071,6 +1128,8 @@ function GameVideo({ M, tw, d, probe, queen, nav, scheme, sf, orient }) {
     pos: touchPos, onPick: explore, onMiss: leaveIfEmpty,
     onMove: (step) => playOwn(step),
   });
+  // the viewer's circles and arrows, until the position on the board changes
+  const draw = useBoardDraw(touchPos.b.join() + touchPos.turn);
   const playOwn = (step) => setVline((v) => { const b = v || newLine(); const prefix = b.moves.slice(0, b.upto + 1); return { ...b, src: 'you', moves: [...prefix, step], upto: prefix.length }; });
   // the endgame tablebase for the position on the board, while paused (never in the video or its export)
   const shownFen = () => window.ChessCore.fenAfter(M.start.fen, (vline ? M.plies.slice(0, vline.at).concat(vline.moves.slice(0, vline.upto + 1)) : M.plies.slice(0, cNow + 1)).map((p) => p.san), touchPos);
@@ -1175,7 +1234,9 @@ function GameVideo({ M, tw, d, probe, queen, nav, scheme, sf, orient }) {
           <PlayerBar M={M} T={T} S={S} side="b" a={enter(1)} pieces={pieces} />
           <BoardSpace>
             <Board M={M} T={T} S={S} a={enter(0)} arrows={tw.bestArrows} pieces={pieces} queen={queen} vline={pv || vline} hide={input.drag && input.drag.moved ? input.drag.from : null} lines={tw.bestArrows && own ? lineArrows(own.after) : null} />
-            <BoardTouch pos={touchPos} sel={input.sel} targets={input.targets} drag={input.drag} promo={input.promo} {...input.handlers} />
+            <BoardDraw draw={draw} hidden={playing || !!pv}>
+              <BoardTouch pos={touchPos} sel={input.sel} targets={input.targets} drag={input.drag} promo={input.promo} {...input.handlers} />
+            </BoardDraw>
           </BoardSpace>
           <PlayerBar M={M} T={T} S={S} side="w" a={enter(1)} pieces={pieces} />
           {L.header && <Header M={M} a={enter(2)} />}
