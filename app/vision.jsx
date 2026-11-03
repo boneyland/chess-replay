@@ -8,6 +8,7 @@
 
 const VISION_ABOUT = 'Reads a position from a screenshot, a diagram or a photo, on this device: the picture isn’t sent anywhere.';
 const VISION_HELP = 'A photo: read it as it is. A diagram or screenshot: pull the edges in to the squares.';
+const VISION_NO_CLIPBOARD = 'The browser didn’t let the page read the clipboard. Press Ctrl+V (⌘V on a Mac) here instead.';
 const VISION_FOUND = 'The box is on the board’s squares; drag its edges if it’s off.';
 
 // the picture's greyscale copy for VisionGrid (its longest side at most VisionGrid.SIDE, never enlarged) and the
@@ -151,6 +152,20 @@ function VisionDialog({ again, onRead, onClose }) {
     }
   };
   const cancelDownload = () => { if (ctl.current) ctl.current.abort(); };
+  // Paste image: the first image on the clipboard, read when asked (the browser may ask first); Ctrl+V / ⌘V works too
+  const pasteImage = async () => {
+    setErr('');
+    let items;
+    try { items = await navigator.clipboard.read(); } catch (e) { if (live.current.alive) setErr(VISION_NO_CLIPBOARD); return; }
+    for (const it of items) {
+      const type = it.types.find((t) => /^image\//.test(t));
+      if (!type) continue;
+      let blob;
+      try { blob = await it.getType(type); } catch (e) { if (live.current.alive) setErr(VISION_NO_CLIPBOARD); return; }
+      return take(blob);
+    }
+    if (live.current.alive) setErr('There’s no image on the clipboard.');
+  };
   // a removal that fails says why, and the dialog follows what is kept now
   const remove = async () => {
     setAskRemove(false);
@@ -246,6 +261,7 @@ function VisionDialog({ again, onRead, onClose }) {
 
   const MB = visionMB(V.kept.total());
   const supported = V.supported();
+  const canPaste = !!(navigator.clipboard && navigator.clipboard.read);
   const cancelBtn = <button type="button" className="twk-btn secondary" onClick={onClose}>Cancel</button>;
   const msg = err && <div className="fen-msg" role="alert">{err}</div>;
   let body;
@@ -283,6 +299,7 @@ function VisionDialog({ again, onRead, onClose }) {
         </div>
         <div className="fen-btns">
           {cancelBtn}
+          {canPaste && <button type="button" className="twk-btn secondary" onClick={pasteImage}>Paste image</button>}
           <button type="button" className="twk-btn" data-autofocus onClick={() => file.current && file.current.click()}>Choose image</button>
         </div>
       </>}

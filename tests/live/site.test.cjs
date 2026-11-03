@@ -1461,6 +1461,20 @@ for (const name of BROWSERS) for (const site of SITES) {
       await fromImage();
       // (the dialog takes a paste once it has found the kept copy and offers Choose image)
       await dialog.getByRole('button', { name: 'Choose image' }).waitFor({ timeout: 5000 });
+      // Paste image reads the clipboard: nothing but text there says so; the screenshot there is taken. (Firefox asks with
+      // its own Paste prompt, which Playwright can't press, so there the button is only checked for)
+      const pasteBtn = dialog.getByRole('button', { name: 'Paste image' });
+      assert.equal(await pasteBtn.isVisible(), true, 'Paste image offered');
+      if (browser.browserType().name() === 'chromium') {
+        await ep.ctx.grantPermissions(['clipboard-read', 'clipboard-write'], { origin: new URL(base).origin });
+        await p.evaluate(() => navigator.clipboard.writeText('not a picture'));
+        await pasteBtn.click();
+        await assert.doesNotReject(dialog.getByRole('alert').filter({ hasText: 'There’s no image on the clipboard.' }).waitFor({ timeout: 5000 }));
+        await p.evaluate((b64) => navigator.clipboard.write([new ClipboardItem({ 'image/png': new Blob([Uint8Array.from(atob(b64), (c) => c.charCodeAt(0))], { type: 'image/png' }) })]),
+          fs.readFileSync(path.join(__dirname, '..', 'fixtures', 'vision-lichess.png')).toString('base64'));
+        await pasteBtn.click();
+        await assert.doesNotReject(cropBox.waitFor({ timeout: 5000 }));
+      }
       // pasted text, then the Lichess screenshot pasted: the text left the dialog choosing, where the picture is taken
       await paste(null, '2r3k1/pp3pp1/4p2p/3pP3/3P1P2/P1rB4/1P4PP/R4RK1 w - - 0 1');
       await paste(fixture('vision-lichess.png', 'image/png'));
