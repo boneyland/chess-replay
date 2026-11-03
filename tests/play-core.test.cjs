@@ -458,3 +458,31 @@ test('recheck ends a game whose position the prover has since called dead', (t) 
 test('a dead position\'s text', () => {
   assert.deepEqual(P.resultText({ result: '1/2-1/2', reason: 'dead' }), { score: '½–½', why: 'Draw: dead position, neither side can mate' });
 });
+
+test('the Moves list\'s last word: the game\'s result, else the position\'s end, else the PGN\'s', () => {
+  const pos = (fen) => CC.parseFen(fen).pos;
+  assert.deepEqual(P.ending({ r: { result: '1-0', reason: 'resign', side: 'b' } }), { score: '1–0', why: 'Black resigned' });
+  assert.deepEqual(P.ending({ r: { result: '0-1', reason: 'time', side: 'w' } }), { score: '0–1', why: 'White’s flag fell' });
+  assert.deepEqual(P.ending({ r: { result: '1/2-1/2', reason: 'dead' } }), { score: '½–½', why: 'Dead position' });
+  const mate = pos('7k/5Q2/6K1/8/8/8/8/8 b - - 0 1'), mated = pos('5Q1k/8/6K1/8/8/8/8/8 b - - 0 1');
+  assert.deepEqual(P.ending({ pos: mated }), { score: '1–0', why: 'Checkmate' });
+  assert.deepEqual(P.ending({ pos: mate }), { score: '½–½', why: 'Stalemate' });
+  // stalemate and dead at once: stalemate ends the game first
+  const both = pos('R7/8/8/8/1p6/1P2p3/p1K1P3/k7 b - - 0 2');
+  assert.deepEqual(P.ending({ pos: both, dead: true }), { score: '½–½', why: 'Stalemate' });
+  assert.deepEqual(P.ending({ pos: pos('8/8/4k3/8/8/4K3/8/8 w - - 0 1') }), { score: '½–½', why: 'Insufficient material' });
+  const going = pos('2b1k3/8/8/1p1p1p1p/1P1P1P1P/8/3B4/4K3 b - - 0 1');
+  assert.deepEqual(P.ending({ pos: going, dead: true }), { score: '½–½', why: 'Dead position' });
+  assert.equal(P.ending({ pos: going }), null, 'not proven dead: the game goes on');
+  assert.equal(P.ending({ pos: CC.parseFen(CC.START_FEN).pos }), null);
+  // a loaded game: the position's end where it gives the PGN's result, else the Termination, else who won
+  assert.deepEqual(P.ending({ pos: mated, pgn: { result: '1-0' } }), { score: '1–0', why: 'Checkmate' });
+  assert.deepEqual(P.ending({ pos: mated, pgn: { result: '*' } }), { score: '1–0', why: 'Checkmate' });
+  const start = CC.parseFen(CC.START_FEN).pos;
+  assert.equal(P.ending({ pos: start, pgn: { result: '*' } }), null);
+  assert.deepEqual(P.ending({ pos: start, pgn: { result: '1-0' } }), { score: '1–0', why: 'White wins' });
+  assert.deepEqual(P.ending({ pos: start, pgn: { result: '0-1', termination: 'Black won by resignation' } }), { score: '0–1', why: 'White resigned' });
+  assert.deepEqual(P.ending({ pos: start, pgn: { result: '1-0', termination: 'Time forfeit' } }), { score: '1–0', why: 'Black’s flag fell' });
+  assert.deepEqual(P.ending({ pos: start, pgn: { result: '1/2-1/2', termination: 'Game drawn by agreement' } }), { score: '½–½', why: 'Draw agreed' });
+  assert.deepEqual(P.ending({ pos: start, pgn: { result: '1/2-1/2' } }), { score: '½–½', why: 'Draw' });
+});

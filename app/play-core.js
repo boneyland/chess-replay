@@ -364,6 +364,32 @@
     return { score, why };
   }
 
+  // The Moves list's last word, { score, why } in short, or null while the game goes on. Given a game's result (r), that;
+  // else the final position's own end (pos, its last position; dead: chasolver found it dead): checkmate, stalemate, then
+  // a dead position, as FIDE's rules end a game at the first. With pgn (a loaded game's Result and Termination), the
+  // position's end where it gives that result, else the Termination's words, else who won
+  function ending({ r, pos, dead, pgn }) {
+    const SHORT = {
+      checkmate: 'Checkmate', stalemate: 'Stalemate', repetition: 'Threefold repetition', fifty: 'Fifty-move rule', fivefold: 'Fivefold repetition',
+      seventyfive: '75-move rule', material: 'Insufficient material', dead: 'Dead position', agreement: 'Draw agreed',
+    };
+    const words = (x) => ({ score: resultText(x).score, why: x.reason === 'resign' ? `${NAME[x.side]} resigned` : x.reason === 'time' ? `${NAME[x.side]}’s flag fell` : SHORT[x.reason] });
+    if (r) return words(r);
+    let own = null;
+    if (pos) {
+      if (!CC().hasLegal(pos)) own = CC().inCheck(pos.b, pos.turn) ? { result: pos.turn === 'w' ? '0-1' : '1-0', reason: 'checkmate' } : { result: '1/2-1/2', reason: 'stalemate' };
+      else if (!canMate(pos, 'w') && !canMate(pos, 'b')) own = { result: '1/2-1/2', reason: 'material' };
+      else if (dead || lockedDead(pos)) own = { result: '1/2-1/2', reason: 'dead' };
+    }
+    const res = pgn && pgn.result;
+    if (!res || res === '*' || (own && own.result === res)) return own && words(own);
+    const t = String(pgn.termination || ''), loser = res === '1-0' ? 'b' : 'w';
+    const why = res === '1/2-1/2'
+      ? (/agree/i.test(t) ? 'Draw agreed' : /repetition/i.test(t) ? 'Repetition' : /time|flag/i.test(t) ? 'Time forfeit' : 'Draw')
+      : (/resign/i.test(t) ? `${NAME[loser]} resigned` : /time|flag/i.test(t) ? `${NAME[loser]}’s flag fell` : /abandon/i.test(t) ? `${NAME[loser]} left` : `${NAME[other(loser)]} wins`);
+    return { score: resultText({ result: res }).score, why };
+  }
+
   // The game as it is left at `now` (for My games): the side to move charged up to then and its clock stopped, or its flag
   // fallen; the board as it was when no clock runs
   function pause(b, now) {
@@ -427,6 +453,6 @@
 
   window.PlayCore = {
     canMate, lockedDead, positionKey, outcome, TIME_CONTROLS, parseTc, start, inProgress, move, canTakeback, takeback, thinkMs, MIN_RATED_DEPTH, SHALLOW_DEPTH, BIG_LOSS_CP, rateMove, addCritique, critiqueText,
-    resign, agreeDraw, claimable, claimDraw, flag, recheck, setProver, pause, runClock, timeLeft, resultText, resume, pgn,
+    resign, agreeDraw, claimable, claimDraw, flag, recheck, setProver, pause, runClock, timeLeft, resultText, ending, resume, pgn,
   };
 })();

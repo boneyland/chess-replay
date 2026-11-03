@@ -575,8 +575,10 @@ function Header({ M, a }) {
   );
 }
 
-// deadAt: the ply after which the position is dead (useFirstDead), marked with a pill on the paused list
-function MoveList({ M, T, S, a, paused, onPick, deadAt }) {
+// deadAt: the ply after which the position is dead (useFirstDead), marked with a pill on the paused list; end: the
+// game's result after the last move ({ score, why }, PlayCore.ending), shown while paused or once the last move is played,
+// and taking the pill's place there
+function MoveList({ M, T, S, a, paused, onPick, deadAt, end }) {
   const c = lastPly(T, S);
   // the moves wrap in lines, as the Analysis panel's lines do: a light chip for White's move, a dark one for Black's,
   // the move number before White's (and before the first, when the game starts on Black's). A line is a chip (CHIP)
@@ -637,7 +639,15 @@ function MoveList({ M, T, S, a, paused, onPick, deadAt }) {
         <span className="mv" role="button" data-ply={i} tabIndex={i === focusPly ? 0 : -1} title={`Go to ${label(M, i)}`} onClick={(e) => { e.stopPropagation(); onPick(i); }}
           onKeyDown={(e) => moveKey(e, i)}
           style={{ opacity: ahead ? 0.5 : 1, height: CHIP, boxSizing: 'border-box', display: 'flex', alignItems: 'center', padding: `0 ${tx(8)}px`, borderRadius: 2, cursor: 'pointer', font: `${cur ? 700 : 600} ${tx(16)}px ${MONO}`, background: white ? '#f1ebe1' : '#2a2320', color: white ? '#15100d' : '#efe8de', border: edge, boxShadow: cur ? `0 0 0 3px ${C.last}` : 'none' }}>{P.san}{P.mark || ''}</span>
-        {paused && i === deadAt && <DeadPill />}
+        {paused && i === deadAt && !(end && i === S.N - 1) && <DeadPill />}
+      </span>
+    );
+  }
+  if (end && S.N) {
+    moves.push(
+      <span key="end" className="move-result" style={{ ...NO_SELECT, display: 'flex', alignItems: 'baseline', gap: tx(6), marginLeft: tx(6), opacity: paused ? 1 : cl01((T - S.tp[S.N - 1]) / 0.15) }}>
+        <span style={{ color: C.ink, font: `700 ${tx(16)}px ${MONO}` }}>{end.score}</span>
+        <span style={{ color: C.dim, font: `500 ${tx(13)}px ${MONO}` }}>{end.why}</span>
       </span>
     );
   }
@@ -1055,6 +1065,8 @@ function GameVideo({ M, tw, d, probe, queen, nav, scheme, sf, orient }) {
   // unasked from there on (a line branches from the position after ply at − 1)
   const deadAt = useFirstDead(M), pastDead = deadAt != null && (vline ? vline.at - 1 : cNow) >= deadAt;
   const dead = useDead(playing ? null : touchPos, pastDead);
+  // the result after the last move: the PGN's, with the final position's own end where it gives that result
+  const end = M.plies.length ? window.PlayCore.ending({ pos: gamePos(M.plies.length - 1), dead: deadAt != null, pgn: { result: M.result, termination: M.headers && M.headers.Termination } }) : null;
   const onTb = (uci) => { const step = window.ChessCore.stepFromUci(touchPos, uci); if (step) { tl.setPlaying(false); input.clear(); playOwn(step); } };
   React.useEffect(() => { if (!vline) input.clear(); }, [vline]);
   // Stockfish on the viewer's line: the positions before and after the move on the board, as move lists from the start
@@ -1151,7 +1163,7 @@ function GameVideo({ M, tw, d, probe, queen, nav, scheme, sf, orient }) {
           </BoardSpace>
           <PlayerBar M={M} T={T} S={S} side="w" a={enter(1)} pieces={pieces} />
           {L.header && <Header M={M} a={enter(2)} />}
-          <MoveList M={M} T={T} S={S} a={enter(3)} paused={!playing} onPick={goTo} deadAt={deadAt} />
+          <MoveList M={M} T={T} S={S} a={enter(3)} paused={!playing} onPick={goTo} deadAt={deadAt} end={end} />
           <Commentary M={M} T={T} S={S} a={enter(4)} book={sf ? sf.book : null} line={lineKey ? { book: lineBook } : null} />
           <Analysis M={M} T={T} S={S} a={enter(5)} vline={vline} onLine={onLine} onPreview={onPreview} onReplyHover={onReplyHover} paused={!playing} sf={sf} own={own} onReply={onReply} deep={gameEval} tb={tb} onTb={onTb} dead={dead} />
           {L.plot && <EvalPlot M={M} T={T} S={S} a={enter(6)} paused={!playing} onPick={goTo} />}
