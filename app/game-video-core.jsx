@@ -6,14 +6,14 @@ const { winChance, plyCp } = window.ChessCore;
 // Frame palettes; light-theme text colours are at least 4.5:1 on the panel. Board squares and the eval bar's white/black halves are the sides' colours and stay put.
 const PALETTES = {
   dark: {
-    bg: '#13100f', panel: '#1b1715', line: 'rgba(255,236,214,0.09)', ctlLine: 'rgba(255,236,214,0.4)', ink: '#efe8de', dim: '#8e8276',
+    bg: '#13100f', panel: '#1b1715', line: 'rgba(255,236,214,0.09)', ctlLine: 'rgba(255,236,214,0.4)', ink: '#efe8de', dim: '#9a8e82',
     light: '#f0d9b5', dark: '#b58863', last: '#e3b55b',
     best: '#62c483', inaccuracy: '#e6c14d', mistake: '#ec9442', blunder: '#e4553f', none: '#efe8de',
     good: '#5aa9e6', brilliant: '#3cc7bd', interesting: '#c98be0', queen: '#e0609f',
     off: '#2a2320', scrim: '19,16,15', haloBoard: '0 0 3px rgba(255,236,214,0.5), 0 0 16px rgba(255,236,214,0.26), 0 0 44px rgba(255,236,214,0.18), ', halo: '0 0 3px rgba(255,236,214,0.3), 0 0 14px rgba(255,236,214,0.14), 0 0 36px rgba(255,236,214,0.1), ', rim: 'drop-shadow(0 0 1px rgba(239,232,222,0.95)) drop-shadow(0 0 1px rgba(239,232,222,0.6))',
   },
   light: {
-    bg: '#f2ece3', panel: '#fbf7f1', line: 'rgba(60,40,20,0.13)', ctlLine: 'rgba(60,40,20,0.5)', ink: '#2a211b', dim: '#76695c',
+    bg: '#f2ece3', panel: '#fbf7f1', line: 'rgba(60,40,20,0.13)', ctlLine: 'rgba(60,40,20,0.5)', ink: '#2a211b', dim: '#6b5f53',
     light: '#f0d9b5', dark: '#b58863', last: '#8a5e15',
     best: '#237a46', inaccuracy: '#8a6a0a', mistake: '#b05616', blunder: '#c63b29', none: '#2a211b',
     good: '#2a6fae', brilliant: '#1a7a73', interesting: '#8f4fab', queen: '#c03f7c',
