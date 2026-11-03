@@ -342,6 +342,8 @@ function FreeBoard({ board, onChange, tw, sf, nav, orient, book }) {
   // a finished game takes no moves (Analyse on the free board does), nor the board while Stockfish is to move
   const still = G && (!live || (sfGame && gameTurn(board) !== G.you)), NO_INPUT = { onDown: () => {}, onMove: () => {}, onUp: () => {}, onCancel: () => {} };
   const boardKey = board.fen + '|' + B.ucis(board).join(' ');
+  // the viewer's circles and arrows, until another position
+  const draw = useBoardDraw(boardKey);
   // the explorer row under the pointer: its move is drawn as an arrow on the board
   const [hov, setHov] = React.useState(null);
   // the Analysis line under the mouse, as the steps it would play: shown on the board until the mouse leaves
@@ -445,7 +447,9 @@ function FreeBoard({ board, onChange, tw, sf, nav, orient, book }) {
       <FreeBar pos={pos} side="b" a={1} clock={clockOf('b')} name={G ? playerName(G, 'b') : null} />
       <BoardSpace onStep={live || !steps.length ? null : (d) => { const k = keyRef.current; if (k.upto + d >= -1 && k.upto + d <= k.last) k.go(k.upto + d); }}>
         <LineBoard a={1} sq={boardSquares()} v={pv && pv.length ? { upto: upto + pv.length, moves: [...steps.slice(0, upto + 1), ...pv], base: board.start.pos, src: 'you' } : { upto, moves: steps, base: board.start.pos, src: 'you' }} hide={input.drag && input.drag.moved ? input.drag.from : null} arrows={hovArrows(!G && tw.bestArrows !== false ? lineArrows(ev.after) : null, hov)} />
-        <BoardTouch pos={pos} sel={input.sel} targets={input.targets} drag={input.drag} promo={input.promo} {...(still ? NO_INPUT : input.handlers)} />
+        <BoardDraw draw={draw} hidden={!!(pv && pv.length)}>
+          <BoardTouch pos={pos} sel={input.sel} targets={input.targets} drag={input.drag} promo={input.promo} {...(still ? NO_INPUT : input.handlers)} />
+        </BoardDraw>
       </BoardSpace>
       <FreeBar pos={pos} side="w" a={1} clock={clockOf('w')} name={G ? playerName(G, 'w') : null} />
       {L.header && <Header M={HM} a={1} />}

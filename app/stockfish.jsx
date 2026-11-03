@@ -512,11 +512,11 @@ function EngineLines({ lines, pos, ply0, c, onPick, onHover, cloud }) {
       {lines.map((l) => {
         const st = engineSteps(pos, l.pv, 6), ev = fmtSf(l.cp);
         return (
-          <div key={l.k} style={{ display: 'flex', alignItems: 'flex-start', gap: tx(6) }}>
+          <div key={l.k} {...lineRow(onHover && (() => onHover(null)))} style={{ display: 'flex', alignItems: 'flex-start', gap: tx(6) }}>
             <span style={{ flex: '0 0 auto', width: tx(100), whiteSpace: 'nowrap', lineHeight: `${tx(30)}px`, color: l.k === 1 ? C.ink : C.dim }}>{ev}{l.depth < top && <span style={{ font: `500 ${tx(13)}px ${MONO}`, color: C.dim }}> d{l.depth}</span>}</span>
             <div style={{ flex: '1 1 0', minWidth: 0 }}>
               <LineChips name={null} tip={`${cloud ? 'Lichess cloud' : 'Stockfish'}'s line ${l.k} (${ev})`} accent={l.k === 1 ? C.best : C.line}
-                moves={st.map((m) => m.san)} ply0={ply0} c={c} legal={st.length} sel={null} onPick={(j) => onPick(st.slice(0, j + 1))} onHover={onHover && ((j) => onHover(j == null ? null : st.slice(0, j + 1)))} />
+                moves={st.map((m) => m.san)} ply0={ply0} c={c} legal={st.length} sel={null} onPick={(j) => onPick(st.slice(0, j + 1))} onHover={onHover && ((j) => onHover(j == null ? null : st.slice(0, j + 1)))} bare />
             </div>
           </div>
         );
