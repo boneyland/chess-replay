@@ -641,6 +641,7 @@ const SHORTCUTS = [
     ['End', 'Pause and jump to the last move'],
     ['Home  0', 'Back to the start'],
     ['Shift + ← →', 'Seek 1 s'],
+    [',  .', 'Pause and step one frame back or forward (at the export frame rate)'],
     ['Esc', 'Leave a previewed line, or cancel a promotion'],
     ['F', 'Flip the board'],
   ] },

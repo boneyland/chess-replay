@@ -22,7 +22,8 @@ const useFrame = () => React.useContext(FrameContext);
 
 // still: a board without a timeline (the free board): no playing, no seeking keys, and a transport bar of moves only
 // top: an optional line above the frame (the page's Offline tag); the page lays out at the size of the room left
-function Stage({ menu, top, onLayout, duration, background, playback, nav, still, forceVideo, text = 1, clock, children }) {
+// fps: the export's frame rate, the step of the , and . keys
+function Stage({ menu, top, onLayout, duration, background, playback, nav, still, forceVideo, text = 1, clock, fps = 8, children }) {
   const playTimes = playback && playback.mode === 'times' ? playback.count : null;
   const loop = !playback || playback.mode === 'loop';
   // The page opens paused on the composition's start frame (setStart); the first Play from that untouched frame
@@ -114,8 +115,13 @@ function Stage({ menu, top, onLayout, duration, background, playback, nav, still
     return () => { cancelAnimationFrame(raf); lastTsRef.current = null; };
   }, [playing, duration, loop, playTimes]);
 
-  // Keyboard: space = play/pause, shift+arrows = seek 1 s (plain arrows are claimed by the views, which step moves), 0/Home = start
+  // Keyboard: space = play/pause, shift+arrows = seek 1 s (plain arrows are claimed by the views, which step moves), 0/Home = start,
+  // , and . = pause and step one export frame (the times an export from 0:00 draws; from between two, to the one on that side)
   React.useEffect(() => {
+    const frameStep = (d) => {
+      setPlaying(false);
+      setTime((t) => clamp((d > 0 ? Math.floor(t * fps + 1e-6) + 1 : Math.ceil(t * fps - 1e-6) - 1) / fps, 0, duration));
+    };
     if (still) return;
     const onKey = (e) => {
       const tag = e.target && e.target.tagName;
@@ -126,10 +132,11 @@ function Stage({ menu, top, onLayout, duration, background, playback, nav, still
       else if (e.code === 'ArrowLeft' && e.shiftKey) setTime((t) => clamp(t - 1, 0, duration));
       else if (e.code === 'ArrowRight' && e.shiftKey) setTime((t) => clamp(t + 1, 0, duration));
       else if (e.key === '0' || e.code === 'Home') setTime(0);
+      else if ((e.key === ',' || e.key === '.') && !e.ctrlKey && !e.metaKey && !e.altKey) { e.preventDefault(); frameStep(e.key === '.' ? 1 : -1); }
     };
     window.addEventListener('keydown', onKey);
     return () => window.removeEventListener('keydown', onKey);
-  }, [duration, still]);
+  }, [duration, still, fps]);
 
   // Page controls outside the stage (Queen panel, video export) pause and seek through this event;
   // `sync` renders the new frame before dispatchEvent returns, so the export can draw it straight away
@@ -293,13 +300,13 @@ function CompositionClock({ derived, children }) {
   return <CompositionContext.Provider value={value}>{children}</CompositionContext.Provider>;
 }
 
-function CompositionStage({ menu, top, onLayout, scenes, playback, bg, nav, still, forceVideo, text, clock, children }) {
+function CompositionStage({ menu, top, onLayout, scenes, playback, bg, nav, still, forceVideo, text, clock, fps, children }) {
   const parsed = React.useMemo(() => parseScenes(scenes), [scenes]);
   const derived = React.useMemo(() => (parsed ? deriveCues(parsed) : null), [parsed]);
   const pb = React.useMemo(() => { try { return JSON.parse(playback); } catch (e) { return null; } }, [playback]);
   if (!derived) return <div className="stage-error">This game produced an invalid scene list.</div>;
   return (
-    <Stage menu={menu} top={top} onLayout={onLayout} duration={derived.total} background={bg} playback={pb} nav={nav} still={still} forceVideo={forceVideo} text={text} clock={clock}>
+    <Stage menu={menu} top={top} onLayout={onLayout} duration={derived.total} background={bg} playback={pb} nav={nav} still={still} forceVideo={forceVideo} text={text} clock={clock} fps={fps}>
       <CompositionClock derived={derived}>{children}</CompositionClock>
     </Stage>
   );

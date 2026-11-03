@@ -413,6 +413,28 @@ for (const name of BROWSERS) for (const site of SITES) {
       await assert.doesNotReject(page.locator('.plabel').filter({ hasText: /^1…/ }).waitFor({ timeout: 3000 }));
     });
 
+    // , and . step one export frame (8 fps by default, 0.125 s), from between two frames to the one on that side
+    await t.test('desktop: , and . step one frame at the export frame rate', async () => {
+      const head = page.getByRole('slider', { name: 'Playhead' }), time = page.locator('.ptime').first();
+      await head.focus();
+      await page.keyboard.press('Home');
+      await page.keyboard.press('.');
+      await page.keyboard.press('.');
+      assert.equal(await time.textContent(), '0:00.25');
+      await page.keyboard.press(',');
+      assert.equal(await time.textContent(), '0:00.12');
+      await page.keyboard.press(',');
+      await page.keyboard.press(',');
+      assert.equal(await time.textContent(), '0:00.00', 'held at the start');
+      await page.keyboard.press('Space');
+      await page.waitForFunction(() => document.querySelector('.ptime').textContent > '0:00.30', null, { timeout: 5000 });
+      await page.keyboard.press('.');
+      assert.equal(await page.getByRole('button', { name: 'Pause (space)' }).count(), 0, '. paused playback');
+      const t1 = await time.textContent(), s = +t1.split(':')[1];
+      assert.ok(Math.abs(s * 8 - Math.round(s * 8)) < 0.1, `${t1} is on a frame`);
+      await page.keyboard.press('Home');
+    });
+
     // the Moves panel scrolls like the opening explorer: a mouse drag scrolls it, selects nothing and picks no move
     await t.test('desktop: the Moves panel scrolls with the wheel and a mouse drag', async () => {
       const list = page.locator('.moves-list'), top = () => list.evaluate((el) => el.scrollTop);
