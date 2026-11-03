@@ -211,25 +211,38 @@ const ce = console.error; console.error = (...a) => { __errs.push(a.map(String).
   });
 
   // the menu has a Full screen item where Safari reports element full screen, and it works: iOS 26.5's Safari reports
-  // it (the first run here), though older iPhone Safari had none
-  await t.test('the menu opens, and its Full screen item follows what Safari reports', { timeout: 30000 }, async () => {
+  // it (the first run here), though older iPhone Safari had none. On a freshly loaded page (the tap-tap test leaves its
+  // own), and each tap is tried again while what it should do hasn't happened: GitHub's Simulator is slow at times, and
+  // this test failed at a different step each time with one tap and a few seconds' wait (2026-11-03: the menu not
+  // open; no Exit full screen item; not full screen)
+  await t.test('the menu opens, and its Full screen item follows what Safari reports', { timeout: 150000 }, async () => {
+    await browser.url(URL_);
+    await loaded();
+    await new Promise((r) => setTimeout(r, 1500));
+    const shown = (n) => js((name) => [...document.querySelectorAll('button')].some((b) => (b.getAttribute('aria-label') || b.innerText).trim() === name && b.getClientRects().length), n);
+    const isFull = () => js(() => !!(document.fullscreenElement || document.webkitFullscreenElement));
+    // taps name (when it's shown) until done() holds, 8 s after each tap, three taps at most
+    const tapUntil = async (name, done, msg) => {
+      for (let i = 0; i < 3; i++) {
+        if (await done()) return;
+        if (await button(name)) await tapButton(name);
+        if (await browser.waitUntil(done, { timeout: 8000, interval: 250 }).then(() => true, () => false)) return;
+      }
+      throw new Error(msg);
+    };
     const fs_ = await js(() => !!(document.fullscreenEnabled || document.webkitFullscreenEnabled));
     t.diagnostic(`element full screen reported: ${fs_}`);
-    await tapButton('Menu');
-    await until(() => [...document.querySelectorAll('button')].some((b) => (b.getAttribute('aria-label') || b.innerText).trim() === 'Ask Queen' && b.getClientRects().length), 3000, 'the menu did not open');
+    await tapUntil('Menu', () => shown('Ask Queen'), 'the menu did not open');
     await shot('menu');
     if (!fs_) { assert.equal(await button('Full screen'), null, 'a Full screen item'); await tapButton('Menu'); return; }
-    await tapButton('Full screen');
-    await until(() => !!(document.fullscreenElement || document.webkitFullscreenElement), 5000, 'Full screen did not go full screen');
+    await tapUntil('Full screen', isFull, 'Full screen did not go full screen');
     const v = await js(() => ({ w: innerWidth, h: innerHeight, top: getComputedStyle(document.documentElement).paddingTop }));
     t.diagnostic(`full screen: ${v.w}×${v.h}, root padding ${v.top}`);
     await shot('full-screen');
     // the menu can stay open over the full-screen page (run 6), where a tap on Menu would close it
-    if (!(await button('Exit full screen'))) await tapButton('Menu');
-    await until(() => [...document.querySelectorAll('button')].some((b) => (b.getAttribute('aria-label') || b.innerText).trim() === 'Exit full screen' && b.getClientRects().length), 3000, 'no Exit full screen item');
+    await tapUntil('Menu', () => shown('Exit full screen'), 'no Exit full screen item');
     screen('full-screen');
-    await tapButton('Exit full screen');
-    await until(() => !(document.fullscreenElement || document.webkitFullscreenElement), 5000, 'Exit full screen did not leave it');
+    await tapUntil('Exit full screen', async () => !(await isFull()), 'Exit full screen did not leave it');
   });
 
   // the browser's codecs, which the MP4 export uses: Linux WebKit has no H.264 encoder and writes WebM instead
