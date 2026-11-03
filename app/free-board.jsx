@@ -530,7 +530,8 @@ function DialogChoice({ label, value, options, onChange }) {
 // the game starts). onStart({ fen, tc, you })
 // Start from: the starting position, or a set-up one: the board's, or with none set up, one set up in the editor first
 // (onSetUp, with the dialog's choices). initial: the choices to open with (back from the editor), else the defaults
-function PlayDialog({ mode = 'human', setUpFen, clock, side, initial, onStart, onSetUp, onClose }) {
+// onFromImage (or null where the board reader can't run): Set-up position's From image…, reading the position from a picture
+function PlayDialog({ mode = 'human', setUpFen, clock, side, initial, onStart, onSetUp, onFromImage, onClose }) {
   const sfGame = mode === 'stockfish';
   const [from, setFrom] = React.useState(initial ? initial.from : setUpFen ? 'setup' : 'start');
   const [tc, setTc] = React.useState(initial ? initial.tc : window.PlayCore.TIME_CONTROLS.includes(clock) ? clock : null);
@@ -547,6 +548,7 @@ function PlayDialog({ mode = 'human', setUpFen, clock, side, initial, onStart, o
         : 'Two players at this screen. The board turns after each move, so the side to move plays from the bottom; Take back is a button by Resign. Stockfish stays off until the game ends.'}</div>
       <div className="fen-btns">
         <button type="button" className="twk-btn secondary" onClick={onClose}>Cancel</button>
+        {from === 'setup' && onFromImage && <button type="button" className="twk-btn secondary" onClick={() => onFromImage({ tc, you: sfGame ? you : null })}>From image…</button>}
         <button type="button" className="twk-btn" data-autofocus onClick={start}>{editFirst ? 'Set up position…' : 'Start game'}</button>
       </div>
     </DialogBox>

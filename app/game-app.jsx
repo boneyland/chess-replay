@@ -141,9 +141,13 @@ function GameApp() {
   const [newMenu, setNewMenu] = React.useState(false);
   const [pgnOpen, setPgnOpen] = React.useState(false);
   const [resetOpen, setResetOpen] = React.useState(false);
-  // Edit position: { setup, text, msg, resume } while the editor shows in place of the board or the loaded game; text is
-  // the FEN field's, msg why it doesn't parse, resume the paused game in progress left to open it (Cancel goes back to it)
+  // Edit position: { setup, text, msg, resume, play, image } while the editor shows in place of the board or the loaded
+  // game; text is the FEN field's, msg why it doesn't parse, resume the paused game in progress left to open it (Cancel
+  // goes back to it), image the picture it was read from ({ url, unsure, bitmap, box }, or null)
   const [editing, setEditing] = React.useState(null);
+  // Position from image's dialog while it is open: { play, again }, play the Play dialog's choices it came from (or null),
+  // again the picture and box for Back to crop (or null)
+  const [vision, setVision] = React.useState(null);
   const [fenNote, setFenNote] = React.useState(null); // { fen, ok } after Copy FEN; a copy that failed stays up to select
 
   // the Play dialog's mode while it is open: 'human' or 'stockfish'
@@ -291,18 +295,65 @@ function GameApp() {
   // the editor opens on the position on the board (empty when there is none); a game in progress is paused for it (and
   // kept, when it has moves, by guard's Leave). play: the Play dialog's { mode, tc, you } when its Set-up position opened
   // the editor, whose Done starts that game
-  const openEditor = (play) => {
+  // read: Position from image's { setup, image }, the editor opening on it with the picture
+  const openEditor = (play, read) => {
     // the board as it is now: Stockfish may have replied, or a flag fallen, while the Leave dialog was up
     const E = window.EditCore, P = window.PlayCore, b = boardRef.current, fen = nav.current && nav.current.fen && nav.current.fen();
     const s = (fen && E.fromFen(fen).setup) || E.empty();
     const resume = editing ? editing.resume : b && P.inProgress(b) ? P.pause(b, Date.now()) : null;
     if (resume && !editing) commitBoard(resume);
-    setQueenOpen(false); setEditing({ setup: s, text: E.toFen(s), msg: '', resume, play: play || null });
+    const setup = read ? read.setup : s;
+    setQueenOpen(false); setEditing({ setup, text: E.toFen(setup), msg: '', resume, play: play || null, image: read ? read.image : null });
   };
   const editPosition = () => { setNewMenu(false); setMenu(false); setPanel(false); guard(() => openEditor()); };
-  const editTo = (setup) => setEditing((e) => e && { ...e, setup, text: window.EditCore.toFen(setup), msg: '' });
+  // a square the reader was unsure of stops being outlined once its piece changes, however it was edited
+  const sureOf = (e, setup) => {
+    const im = e.image;
+    if (!im || !im.unsure.some((i) => e.setup.b[i] !== setup.b[i])) return im;
+    return { ...im, unsure: im.unsure.filter((i) => e.setup.b[i] === setup.b[i]) };
+  };
+  const editTo = (setup) => setEditing((e) => e && { ...e, setup, text: window.EditCore.toFen(setup), msg: '', image: sureOf(e, setup) });
   // a typed FEN sets up the board as soon as it is well-formed, legal or not; until then the board stays as it was
-  const editText = (text) => setEditing((e) => { if (!e) return e; const r = window.EditCore.fromFen(text); return r.setup ? { ...e, setup: r.setup, text, msg: '' } : { ...e, text, msg: r.error }; });
+  const editText = (text) => setEditing((e) => {
+    if (!e) return e;
+    const r = window.EditCore.fromFen(text);
+    return r.setup ? { ...e, setup: r.setup, text, msg: '', image: sureOf(e, r.setup) } : { ...e, text, msg: r.error };
+  });
+  // Turn board 180° turns the board as it stands, edits included, and the outlines still showing with it
+  const editTurn = () => setEditing((e) => {
+    if (!e) return e;
+    const V = window.VisionCore, setup = V.turn(e.setup);
+    return { ...e, setup, text: window.EditCore.toFen(setup), msg: '', image: e.image && { ...e.image, unsure: V.turnSquares(e.image.unsure) } };
+  });
+  const backToCrop = () => { if (editing && editing.image) setVision({ play: editing.play, again: { bitmap: editing.image.bitmap, box: editing.image.box } }); };
+  // The picture's object URL and bitmap are GameApp's while the editor shows it: one the editor no longer holds (Done,
+  // Cancel, a new editor, another read) is let go here, whichever way it went, but never one the next state still holds
+  // (Back to crop's read may keep the bitmap and replace the URL)
+  const heldPic = React.useRef(null), editPic = editing && editing.image;
+  React.useEffect(() => {
+    const was = heldPic.current;
+    heldPic.current = editPic || null;
+    if (!was) return;
+    if (!editPic || editPic.url !== was.url) URL.revokeObjectURL(was.url);
+    if (!editPic || editPic.bitmap !== was.bitmap) was.bitmap.close();
+  }, [editPic]);
+  // Play/Explore › Position from image asks first from a game in progress, as Edit position does
+  const visionOk = React.useMemo(() => !!window.Vision && window.Vision.supported(), []);
+  const fromImage = () => { setNewMenu(false); setMenu(false); setPanel(false); guard(() => setVision({ play: null, again: null })); };
+  // Read board: from Back to crop it replaces the editor's board, edits and marks with the new read; else the editor opens
+  // on it (in the Play dialog's mode when that is where it came from, so Done starts the game)
+  const visionRead = ({ setup, unsure, url, bitmap, box }) => {
+    const v = vision, image = { url, unsure, bitmap, box };
+    setVision(null);
+    if (v && v.again && editing) setEditing((e) => e && { ...e, setup, text: window.EditCore.toFen(setup), msg: '', image });
+    else openEditor(v && v.play, { setup, image });
+  };
+  // Cancel goes back to what showed before: the editor as it was (Back to crop), else the Play dialog as it was
+  const visionClose = () => {
+    const v = vision;
+    setVision(null);
+    if (v && !v.again && v.play) { setPlayInit({ from: 'setup', tc: v.play.tc, you: v.play.you }); setPlayOpen(v.play.mode); }
+  };
   const editDone = () => {
     const fen = window.EditCore.toFen(editing.setup), play = editing.play;
     if (play) startGame(play.mode, { fen, tc: play.tc, you: play.you });
@@ -347,6 +398,8 @@ function GameApp() {
   const playStart = (choice) => { const mode = playOpen; setPlayOpen(null); startGame(mode, choice); };
   // Set-up position with no position set up: the editor first, keeping the dialog's choices
   const playSetUp = ({ tc, you }) => { const mode = playOpen; setPlayOpen(null); openEditor({ mode, tc, you }); };
+  // From image… (Set-up position): the picture's dialog, keeping the Play dialog's choices for the editor it opens
+  const playFromImage = ({ tc, you }) => { const mode = playOpen; setPlayOpen(null); setVision({ play: { mode, tc, you }, again: null }); };
   const closePlay = React.useCallback(() => setPlayOpen(null), []);
   const myGames = () => { setNewMenu(false); setMenu(false); setPanel(false); setGamesOpen(readGames()); };
   const closeGames = React.useCallback(() => setGamesOpen(null), []);
@@ -371,7 +424,7 @@ function GameApp() {
     window.dispatchEvent(new CustomEvent('chess-video:seek', { detail: { time } }));
   }, [files]);
   // a dialog closed (Esc, Cancel, Set up, Start game): focus goes back to what opened it, Menu
-  const newBtn = React.useRef(null), menuBtn = React.useRef(null), fenWasOpen = React.useRef(false), dialogOpen = pgnOpen || !!playOpen || !!gamesOpen || keysOpen;
+  const newBtn = React.useRef(null), menuBtn = React.useRef(null), fenWasOpen = React.useRef(false), dialogOpen = pgnOpen || !!playOpen || !!gamesOpen || keysOpen || !!vision;
   React.useEffect(() => {
     if (fenWasOpen.current && !dialogOpen) { const b = phone ? menuBtn.current : newBtn.current; if (b) b.focus(); }
     fenWasOpen.current = dialogOpen;
@@ -561,7 +614,8 @@ function GameApp() {
   const status = boardStatus || `${M.white.short} – ${M.black.short} · ${M.plies.length} plies` + (M.evalSource === 'analysis' ? ' · analysis evals' : M.evalSource === 'pgn' ? ' · PGN evals' : '') + (M.hasNotes ? ' · notes' : '') + (files.sample ? ' (sample)' : '') + ' · ' + fmtLen(TM.total);
   const shownErr = err || built.error;
 
-  const newGroups = [{ label: 'Explore', items: [{ label: 'Starting position', run: newBoard }, { label: 'Edit position', run: editPosition }, { label: 'Paste PGN', run: pastePgn }, { label: 'Copy FEN', run: copyFen }, { label: 'Copy PGN', run: copyPgn }] },
+  const newGroups = [{ label: 'Explore', items: [{ label: 'Starting position', run: newBoard }, { label: 'Edit position', run: editPosition },
+    ...(visionOk ? [{ label: 'Position from image', run: fromImage }] : []), { label: 'Paste PGN', run: pastePgn }, { label: 'Copy FEN', run: copyFen }, { label: 'Copy PGN', run: copyPgn }] },
     { label: 'Play', items: [{ label: 'Play vs human', run: playHuman }, { label: 'Play vs Stockfish', run: playSf }, { label: 'My games', run: myGames }] },
     // Ask Queen sits here on the wide layouts; the folded menu keeps it in its last row. The folded menu's shortcuts item is hidden on a touch screen
     { label: 'More', items: [{ label: 'Keyboard shortcuts', run: openKeys }, ...(!phone && !board ? [{ label: 'Ask Queen', cls: 'dock-queen', run: () => { setNewMenu(false); askQueen(); } }] : [])] }];
@@ -625,7 +679,8 @@ function GameApp() {
       <EngineMenuContext.Provider value={board && board.game ? null : engineMenu}>
       <CompositionStage clock={clockRef} nav={nav} forceVideo={video.busy} text={LayoutCore.textScale(t.textSize)} top={!net.online && <span className="net-chip" role="status" title={OFFLINE_NOTE}>Offline</span>} menu={<React.Fragment>{!(phone && short) && <SoundButton on={t.sound !== false} onChange={(v) => setTweak('sound', v)} />}{phone ? menuEl : deskDock}</React.Fragment>} onLayout={onLayout} scenes={scenes} playback={PLAYBACK} bg={C.bg} still={!!board || !!editing}>
         {editing
-          ? <EditBoard setup={editing.setup} onChange={editTo} onDone={editDone} onCancel={editCancel} fenText={editing.text} onFenText={editText} fenMsg={editing.msg} doneLabel={editing.play ? 'Start game' : 'Done'} orient={t.flip ? 'b' : 'w'} nav={nav} overlay={panel || newMenu || menu || queenOpen} />
+          ? <EditBoard setup={editing.setup} onChange={editTo} onDone={editDone} onCancel={editCancel} fenText={editing.text} onFenText={editText} fenMsg={editing.msg} doneLabel={editing.play ? 'Start game' : 'Done'} orient={t.flip ? 'b' : 'w'} nav={nav} overlay={panel || newMenu || menu || queenOpen}
+            image={editing.image} onTurn={editTurn} onBackToCrop={backToCrop} />
           : board
           ? <FreeBoard board={board} onChange={commitBoard} tw={t} sf={sf} nav={nav} orient={t.flip ? 'b' : 'w'} book={book && !board.game ? window.Openings.book() : null} />
           : <GameVideo M={MV} tw={video.busy ? { ...t, exporting: true } : t} d={TM.d} probe={probe} queen={queenArrow} nav={nav} scheme={scheme} sf={sf} orient={t.flip ? 'b' : 'w'} />}
@@ -660,7 +715,8 @@ function GameApp() {
           </div>
         </DialogBox>
       )}
-      {playOpen && <PlayDialog key={playOpen} mode={playOpen} setUpFen={board && board.fen !== window.ChessCore.START_FEN ? board.fen : null} clock={t.playClock} side={t.playSide} initial={playInit} onStart={playStart} onSetUp={playSetUp} onClose={closePlay} />}
+      {playOpen && <PlayDialog key={playOpen} mode={playOpen} setUpFen={board && board.fen !== window.ChessCore.START_FEN ? board.fen : null} clock={t.playClock} side={t.playSide} initial={playInit} onStart={playStart} onSetUp={playSetUp} onFromImage={visionOk ? playFromImage : null} onClose={closePlay} />}
+      {vision && <VisionDialog again={vision.again} onRead={visionRead} onClose={visionClose} />}
       {keysOpen && <ShortcutsDialog onClose={closeKeys} />}
       {gamesOpen && <MyGamesDialog games={gamesOpen} current={board && window.PlayCore.inProgress(board) ? board.game.id : null} onReplay={replayGame} onResume={resumeGame} onDelete={deleteGame} onClose={closeGames} />}
       {leave && <LeaveDialog onStay={() => setLeave(null)} onLeave={() => { const run = leave.run; setLeave(null); keepLeft(board); run(); }} />}

@@ -133,6 +133,8 @@ function useEditInput({ setup, onChange }) {
 // The button that lays the picture over the board for as long as it is held (pointer down, or Space with it focused)
 function HoldButton({ onHold }) {
   const on = () => onHold(true), off = () => onHold(false);
+  // unmounted while held (the layout going to two columns), it lets go, or the picture would cover the board when it's back
+  React.useEffect(() => () => onHold(false), []);
   return (
     <button type="button" onPointerDown={(e) => { e.stopPropagation(); on(); }} onPointerUp={off} onPointerCancel={off} onPointerLeave={off} onBlur={off}
       onKeyDown={(e) => { if (e.key === ' ') { e.preventDefault(); on(); } }} onKeyUp={(e) => { if (e.key === ' ') off(); }}
