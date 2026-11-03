@@ -20,7 +20,7 @@ function squares(fen) {
 }
 
 // one board as absolutely placed HTML, its grid (the squares) in a .grid element
-function board({ fen, side = 'w', sq = 56, light = '#f0f0f0', dark = '#a0a0a0', frame = 0, labels = null, font = SERIF, lines = false, marks = '' }) {
+function board({ fen, side = 'w', sq = 56, light = '#f0f0f0', dark = '#a0a0a0', frame = 0, labels = null, font = SERIF, lines = false, marks = '', piece = 0.78 }) {
   const b = squares(fen), n = 8 * sq;
   let cells = '';
   for (let r = 0; r < 8; r++) for (let c = 0; c < 8; c++) {
@@ -33,7 +33,7 @@ function board({ fen, side = 'w', sq = 56, light = '#f0f0f0', dark = '#a0a0a0', 
       if (r === 7) lab += `<span style="position:absolute;right:3px;bottom:0;font:bold ${Math.round(sq * 0.2)}px ${font};color:${col}">${file}</span>`;
     }
     cells += `<div style="position:absolute;left:${c * sq}px;top:${r * sq}px;width:${sq}px;height:${sq}px;background:${bg};${lines ? 'box-shadow:inset 0 0 0 1px #555;' : ''}">${lab}`
-      + (p ? `<span style="position:absolute;inset:0;display:flex;align-items:center;justify-content:center;font:${Math.round(sq * 0.78)}px ${SANS};line-height:1;color:#000;font-variant-emoji:text">${GLYPH[p]}&#xFE0E;</span>` : '') + '</div>';
+      + (p ? `<span style="position:absolute;inset:0;display:flex;align-items:center;justify-content:center;font:${Math.round(sq * piece)}px ${SANS};line-height:1;color:#000;font-variant-emoji:text">${GLYPH[p]}&#xFE0E;</span>` : '') + '</div>';
   }
   let outside = '';
   if (labels === 'outside') {
@@ -68,6 +68,10 @@ const CASES = {
   nolabels: { side: null, fen: ENDGAME, html: page(board({ fen: ENDGAME, sq: 60, light: '#f0d9b5', dark: '#b58863' }), 20) },
   highlights: { side: null, fen: ENDGAME, html: page(board({ fen: ENDGAME, sq: 60, light: '#f0d9b5', dark: '#b58863', marks: HL }), 20) },
   'small-on-page': { side: 'w', fen: LICHESS, html: `<!doctype html><html><body style="margin:0;background:#fff"><div id="pic" style="position:relative;width:1600px;height:2200px;background:#fff;padding:0">${TEXT}<div style="margin:60px 0 60px 500px;width:300px">${board({ fen: LICHESS, sq: 36, frame: 4, labels: 'outside' })}</div>${TEXT}${TEXT}</div></body></html>` },
+  // body text set 0.3 of a square beside an unlabelled diagram, both sides: not rank labels
+  'text-beside': { side: null, fen: LICHESS, html: page(`<div style="display:flex;align-items:flex-start"><p style="width:260px;margin:0 23px 0 0;font:15px ${SERIF};line-height:1.45">${'Black has just played the rook to c3, and the bishop on d3 is pinned against nothing in particular. '.repeat(5)}</p>${board({ fen: LICHESS, frame: 6 })}<p style="width:260px;margin:0 0 0 23px;font:15px ${SERIF};line-height:1.45">${'White should consider the pawn break f5, opening the long diagonal for a later attack on the king. '.repeat(5)}</p></div>`, 20) },
+  // inside labels with pieces filling their squares, rooks in the corners beside the labels
+  'inside-big': { side: 'w', fen: DIAGRAM, html: page(board({ fen: DIAGRAM, sq: 64, light: '#ebecd0', dark: '#739552', labels: 'inside', font: SANS, piece: 1.02 }), 0) },
   'two-boards': { side: null, fen: null, html: page(`<div style="display:flex;gap:60px">${board({ fen: LICHESS, sq: 40 })}${board({ fen: DIAGRAM, sq: 40 })}</div>`, 40) },
   sideways: { side: null, fen: null, html: page(`<div style="transform:rotate(90deg)">${board({ fen: LICHESS, frame: 6, labels: 'outside' })}</div>`, 70) },
   onecolour: { side: null, fen: LICHESS, box: null, html: page(board({ fen: LICHESS, lines: true, light: '#e4e4e4' }), 30) },

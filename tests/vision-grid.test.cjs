@@ -23,7 +23,7 @@ for (const name of Object.keys(cases)) test(`findBoard: ${name}`, () => {
   if (want === null) assert.equal(got, null); else { assert.ok(got, 'no grid found'); near(got, want, im); }
 });
 
-for (const name of Object.keys(cases)) if (cases[name].box) test(`labelSide: ${name}`, () => {
+for (const name of Object.keys(cases)) if (cases[name].box && name !== 'inside-big') test(`labelSide: ${name}`, () => {
   assert.equal(VG.labelSide(readPgm(name), cases[name].box), cases[name].side);
 });
 
@@ -56,4 +56,17 @@ test('shouldTurn', () => {
   const iw = board(cases['inside-white'].fen);
   assert.equal(VG.shouldTurn(readPgm('inside-white'), cases['inside-white'].box, iw), false);
   assert.equal(VG.shouldTurn(readPgm('inside-white'), cases['inside-white'].box, iw.slice().reverse()), true);
+});
+
+test('labelSide: pieces filling the corner squares never give the wrong side', () => {
+  assert.notEqual(VG.labelSide(readPgm('inside-big'), cases['inside-big'].box), 'b');
+});
+test('labelSide: text beside a diagram is not labels, wherever the box is pulled', () => {
+  const im = readPgm('text-beside'), b = cases['text-beside'].box;
+  for (const dx of [-0.01, 0, 0.01]) assert.equal(VG.labelSide(im, { x0: b.x0 + dx, y0: b.y0, x1: b.x1 + dx, y1: b.y1 }), null, `dx ${dx}`);
+});
+test('isGrid: a box on checkered squares, not one on a photo or a page', () => {
+  for (const name of ['framed-white', 'nolabels', 'lichess', 'text-beside']) assert.equal(VG.isGrid(readPgm(name), cases[name].box), true, name);
+  assert.equal(VG.isGrid(readPgm('photo'), { x0: 0.11, y0: 0.23, x1: 0.85, y1: 0.92 }), false, 'a loose box on the tilted board');
+  assert.equal(VG.isGrid(readPgm('noboard'), { x0: 0, y0: 0, x1: 1, y1: 1 }), false, 'no board');
 });

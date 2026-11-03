@@ -72,10 +72,10 @@
 
   // the 64 squares' brightness (the median of four small patches in each square's corners, away from a centred
   // piece) must alternate in a checkerboard, with a clear step between light and dark
-  function checkered(sum, x0, y0, s) {
-    const p = Math.max(1, Math.round(0.15 * s)), inset = Math.max(1, Math.round(0.08 * s)), v = [];
+  function checkered(sum, x0, y0, s, t = s) {
+    const p = Math.max(1, Math.round(0.15 * Math.min(s, t))), inset = Math.max(1, Math.round(0.08 * Math.min(s, t))), v = [];
     for (let r = 0; r < 8; r++) for (let c = 0; c < 8; c++) {
-      const L = Math.round(x0 + c * s), T = Math.round(y0 + r * s), R = Math.round(x0 + (c + 1) * s), B = Math.round(y0 + (r + 1) * s);
+      const L = Math.round(x0 + c * s), T = Math.round(y0 + r * t), R = Math.round(x0 + (c + 1) * s), B = Math.round(y0 + (r + 1) * t);
       const m = [[L + inset, T + inset], [R - inset - p, T + inset], [L + inset, B - inset - p], [R - inset - p, B - inset - p]]
         .map(([x, y]) => sum(x, y, x + p, y + p) / (p * p)).sort((a, b) => a - b);
       v.push((m[1] + m[2]) / 2);
@@ -116,21 +116,43 @@
     return { x0: box.x0 / w, y0: box.y0 / h, x1: box.x1 / w, y1: box.y1 / h };
   }
 
-  // the ink in a cell: pixels far (over 60 levels) from the cell's own median, the glyph's background
-  function ink({ g, w, h }, x0, y0, x1, y1, skip) {
+  // the ink in a cell: its pixels far (over 60 levels) from the cell's own median, the glyph's background; n of them,
+  // and their extent (x0, y0, x1, y1, in pixels, the cell's own corner at 0, 0). With inner (edges of the cell,
+  // 'l', 't', 'r', 'b'), a blob of ink that touches one of them is left out: a piece reaching into a corner patch
+  function ink({ g, w, h }, x0, y0, x1, y1, skip, inner) {
     x0 = Math.max(0, Math.round(x0)); y0 = Math.max(0, Math.round(y0)); x1 = Math.min(w, Math.round(x1)); y1 = Math.min(h, Math.round(y1));
+    const cw = Math.max(0, x1 - x0), ch = Math.max(0, y1 - y0), out = { n: 0, x0: Infinity, y0: Infinity, x1: -Infinity, y1: -Infinity, w: cw, h: ch };
     const v = [];
     for (let y = y0; y < y1; y++) for (let x = x0; x < x1; x++) if (!skip || !skip[x]) v.push(g[y * w + x]);
-    if (v.length < 4) return 0;
-    const m = median(v);
-    return v.filter((b) => Math.abs(b - m) > 60).length;
+    if (v.length < 4) return out;
+    const m = median(v), on = new Uint8Array(cw * ch);
+    for (let y = 0; y < ch; y++) for (let x = 0; x < cw; x++) on[y * cw + x] = (!skip || !skip[x + x0]) && Math.abs(g[(y + y0) * w + x + x0] - m) > 60 ? 1 : 0;
+    const take = (x, y) => { out.n++; out.x0 = Math.min(out.x0, x); out.x1 = Math.max(out.x1, x + 1); out.y0 = Math.min(out.y0, y); out.y1 = Math.max(out.y1, y + 1); };
+    if (!inner) { for (let i = 0; i < on.length; i++) if (on[i]) take(i % cw, (i / cw) | 0); return out; }
+    const seen = new Uint8Array(cw * ch);
+    for (let i = 0; i < on.length; i++) {
+      if (!on[i] || seen[i]) continue;
+      const blob = [i];
+      seen[i] = 1;
+      let touches = false;
+      for (let j = 0; j < blob.length; j++) {
+        const x = blob[j] % cw, y = (blob[j] / cw) | 0;
+        if ((inner.includes('l') && x === 0) || (inner.includes('r') && x === cw - 1) || (inner.includes('t') && y === 0) || (inner.includes('b') && y === ch - 1)) touches = true;
+        for (const [dx, dy] of [[1, 0], [-1, 0], [0, 1], [0, -1]]) {
+          const nx = x + dx, ny = y + dy, k = ny * cw + nx;
+          if (nx >= 0 && ny >= 0 && nx < cw && ny < ch && on[k] && !seen[k]) { seen[k] = 1; blob.push(k); }
+        }
+      }
+      if (!touches) for (const k of blob) take(k % cw, (k / cw) | 0);
+    }
+    return out;
   }
 
   // Which side the rank labels put at the bottom: 'w' when "1" is there, 'b' when "8" is, null when no label column
-  // is clear. A label column is 8 cells, one a rank, each with some ink and none with far more than the others (a
-  // piece or text would); an "8" carries clearly more ink than a "1", so its two ends tell. Columns looked at: just
-  // outside the box on the left and right (a frame's solid band left out), and the corners of the edge files' squares
-  // (inside coordinates). File labels aren't read.
+  // is clear. A label column is 8 cells, one a rank, each holding one glyph: some ink, none with far more than the
+  // others, and shaped like a label, not a run of text or a piece reaching in. An "8" carries clearly more ink than a
+  // "1", so its two ends tell. Columns looked at: just outside the box on the left and right (a frame's solid band
+  // left out), and the corners of the edge files' squares (inside coordinates). File labels aren't read.
   function labelSide(im, box) {
     const X0 = box.x0 * im.w, Y0 = box.y0 * im.h, X1 = box.x1 * im.w, Y1 = box.y1 * im.h, s = (X1 - X0) / 8, t = (Y1 - Y0) / 8;
     // a strip's pixel columns that are almost all far from the strip's median (a frame, the picture's edge) are skipped
@@ -146,21 +168,31 @@
       return skip;
     };
     const cols = [];
+    // outside: a rank's label is one glyph, narrow, clear of the rank's top and bottom, its middle near the rank's, and
+    // the 8 sit one above the other (lines of text run wide, or fill the rank)
     for (const [xa, xb] of [[X0 - 0.7 * s, X0 - 0.05 * s], [X1 + 0.05 * s, X1 + 0.7 * s]]) {
       const skip = frame(xa, xb);
-      cols.push([...Array(8)].map((_, k) => ink(im, xa, Y0 + k * t, xb, Y0 + (k + 1) * t, skip)));
+      const cells = [...Array(8)].map((_, k) => ink(im, xa, Y0 + k * t, xb, Y0 + (k + 1) * t, skip));
+      const glyph = (c) => c.n >= 3 && c.x1 - c.x0 <= 0.45 * s && c.y1 - c.y0 <= 0.6 * t && c.y0 >= 0.1 * c.h && c.y1 <= 0.9 * c.h
+        && Math.abs((c.y0 + c.y1) / 2 - c.h / 2) <= 0.25 * c.h;
+      const mid = median(cells.map((c) => (c.x0 + c.x1) / 2));
+      cols.push(cells.every((c) => glyph(c) && Math.abs((c.x0 + c.x1) / 2 - mid) <= 0.15 * s) ? cells.map((c) => c.n) : null);
     }
+    // inside: a patch in a corner of each edge-file square; blobs of ink touching the patch's inner edges (a piece
+    // reaching into the corner) don't count
     const c = 0.32;
-    for (const [xa, xb] of [[X0 + 0.02 * s, X0 + c * s], [X1 - c * s, X1 - 0.02 * s]]) {
+    for (const [xa, xb, left] of [[X0 + 0.02 * s, X0 + c * s, true], [X1 - c * s, X1 - 0.02 * s, false]]) {
       for (const top of [true, false]) {
+        const inner = (left ? 'r' : 'l') + (top ? 'b' : 't');
         cols.push([...Array(8)].map((_, k) => {
           const ya = top ? Y0 + k * t + 0.02 * t : Y0 + (k + 1) * t - c * t;
-          return ink(im, xa, ya, xb, ya + (c - 0.02) * t);
+          return ink(im, xa, ya, xb, ya + (c - 0.02) * t, null, inner).n;
         }));
       }
     }
     let side = null, best = 0;
     for (const col of cols) {
+      if (!col) continue;
       const m = median(col);
       if (Math.min(...col) < 3 || Math.max(...col) > 3 * m) continue;
       // the "8" end carries at least 1.35 times the "1" end's ink
@@ -204,5 +236,11 @@
     return !!model && model !== label;
   }
 
-  window.VisionGrid = { SIDE, grey, findBoard, labelSide, occupied, modelSide, shouldTurn };
+  // whether a box (fractions; found, or pulled by hand) is on checkered squares: orientation is worked out only then
+  function isGrid(im, box) {
+    const x0 = box.x0 * im.w, y0 = box.y0 * im.h, s = (box.x1 - box.x0) * im.w / 8, t = (box.y1 - box.y0) * im.h / 8;
+    return s >= 4 && t >= 4 && !!checkered(integral(im), x0, y0, s, t);
+  }
+
+  window.VisionGrid = { SIDE, grey, findBoard, labelSide, occupied, modelSide, shouldTurn, isGrid };
 })();

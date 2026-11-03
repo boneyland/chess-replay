@@ -1515,6 +1515,16 @@ for (const name of BROWSERS) for (const site of SITES) {
       await boxAt({ x0: 0, y0: 0, x1: 1, y1: 1 }, 'no board');
       await dialog.getByRole('button', { name: 'Cancel' }).click();
       await dialog.waitFor({ state: 'detached', timeout: 5000 });
+      // the greyscale copy failing (a canvas that can't be read back): the picture is still taken, the box around all of it
+      await p.evaluate(() => { const C = OffscreenCanvasRenderingContext2D.prototype; window.__getImageData = C.getImageData; C.getImageData = () => { throw new Error('no readback'); }; });
+      await fromImage();
+      await choose(fixture('vision-black-labels.png', 'image/png'));
+      await cropBox.waitFor({ timeout: 5000 });
+      await assert.doesNotReject(dialog.getByText(HELP).waitFor({ timeout: 5000 }));
+      await boxAt({ x0: 0, y0: 0, x1: 1, y1: 1 }, 'no greyscale copy');
+      await p.evaluate(() => { OffscreenCanvasRenderingContext2D.prototype.getImageData = window.__getImageData; });
+      await dialog.getByRole('button', { name: 'Cancel' }).click();
+      await dialog.waitFor({ state: 'detached', timeout: 5000 });
       // a framed diagram from Black's side: the box opens on its squares, past the frame and labels, and the read
       // follows the labels; with the model's side made to come out the wrong way round, the read is turned to match them
       await fromImage();

@@ -89,6 +89,26 @@
   "side": "w",
   "fen": "2r3k1/pp3pp1/4p2p/3pP3/3P1P2/P1rB4/1P4PP/R4RK1"
  },
+ "text-beside": {
+  "box": {
+   "x0": 0.2874762808349146,
+   "y0": 0.040983606557377046,
+   "x1": 0.7125237191650854,
+   "y1": 0.9590163934426229
+  },
+  "side": null,
+  "fen": "2r3k1/pp3pp1/4p2p/3pP3/3P1P2/P1rB4/1P4PP/R4RK1"
+ },
+ "inside-big": {
+  "box": {
+   "x0": 0,
+   "y0": 0,
+   "x1": 1,
+   "y1": 1
+  },
+  "side": "w",
+  "fen": "r1bqkb1r/pppp1ppp/2n2n2/4p2Q/2B1P3/8/PPPP1PPP/RNB1K1NR"
+ },
  "two-boards": {
   "box": null,
   "side": null,

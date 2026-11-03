@@ -10,15 +10,20 @@ const VISION_HELP = 'A photo: read it as it is. A diagram or screenshot: pull th
 const VISION_FOUND = 'The box is on the board’s squares; drag its edges if it’s off.';
 
 // the picture's greyscale copy for VisionGrid (its longest side at most VisionGrid.SIDE, never enlarged) and the
-// board's squares found in it (a box, or null)
+// board's squares found in it (a box, or null); neither where the copy can't be made (a canvas that can't be read
+// back), and the dialog goes on as without them
 function visionGrid(bitmap) {
-  const G = window.VisionGrid, k = Math.min(1, G.SIDE / Math.max(bitmap.width, bitmap.height));
-  const w = Math.max(1, Math.round(bitmap.width * k)), h = Math.max(1, Math.round(bitmap.height * k));
-  const g = new OffscreenCanvas(w, h).getContext('2d', { willReadFrequently: true });
-  g.imageSmoothingQuality = 'high';
-  g.drawImage(bitmap, 0, 0, w, h);
-  const grey = G.grey(g.getImageData(0, 0, w, h).data, w, h);
-  return { grey, found: G.findBoard(grey) };
+  try {
+    const G = window.VisionGrid, k = Math.min(1, G.SIDE / Math.max(bitmap.width, bitmap.height));
+    const w = Math.max(1, Math.round(bitmap.width * k)), h = Math.max(1, Math.round(bitmap.height * k));
+    const g = new OffscreenCanvas(w, h).getContext('2d', { willReadFrequently: true });
+    g.imageSmoothingQuality = 'high';
+    g.drawImage(bitmap, 0, 0, w, h);
+    const grey = G.grey(g.getImageData(0, 0, w, h).data, w, h);
+    return { grey, found: G.findBoard(grey) };
+  } catch (e) {
+    return { grey: null, found: null };
+  }
 }
 const VISION_BAD_FILE = 'That file isn’t an image this browser can open.';
 const visionMB = (bytes) => Math.round(bytes / 1e6);
@@ -220,9 +225,9 @@ function VisionDialog({ again, onRead, onClose }) {
       if (!live.current.alive) return;
       url = URL.createObjectURL(blob);
       const { b, conf } = VC.read(logits);
-      // the rank labels decide which way up the read is, where the box is on a grid (found, or pulled in by hand)
-      const grid = pic.found || ['x0', 'y0', 'x1', 'y1'].some((k) => box[k] !== VC.WHOLE[k]);
-      const turn = grid && window.VisionGrid.shouldTurn(pic.grey, box, b);
+      // the rank labels decide which way up the read is, where the box is on checkered squares (found, or pulled in by
+      // hand: not a box loosely round a photo)
+      const G = window.VisionGrid, turn = !!pic.grey && G.isGrid(pic.grey, box) && G.shouldTurn(pic.grey, box, b);
       if (live.current.own === pic.bitmap) live.current.own = null; // handed on: GameApp keeps it for Back to crop
       setReading(false);
       onRead({ setup: turn ? VC.turn(VC.setupFrom(b)) : VC.setupFrom(b), unsure: turn ? VC.turnSquares(VC.unsure(conf)) : VC.unsure(conf), url, bitmap: pic.bitmap, box });
