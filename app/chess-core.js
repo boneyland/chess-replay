@@ -346,11 +346,12 @@
       ply.cls = ply.mark ? MARK_CLASS[ply.mark] : eng === 'best' ? 'best' : 'none';
       if (am && am.eval_loss) ply.loss = Math.round(am.eval_loss);
       if (am && am.best_move_uci && am.best_move_uci !== ply.uci) ply.best = { uci: am.best_move_uci, line: am.best_line || [] };
-      // the move played was the engine's choice: keep its line, which starts with that move
-      else if (am && am.best_line && am.best_line.length) ply.line = am.best_line;
       else if (!useA && pp.variation && pp.variation.length) {
         try { const bm = sanToMove(before, pp.variation[0]); ply.best = { uci: idxSq(bm.from) + idxSq(bm.to) + (bm.promo || ''), line: pp.variation }; } catch (e) {}
       }
+      // the engine's line from the position after the move, as Lichess shows it: the next move's best line (one search a
+      // position, so the same search), or after the last move its short pv_line
+      if (am) { const an = A.moves[i + 1], next = an ? an.best_line : am.pv_line; if (next && next.length) ply.next = next; }
       if (am && am.mate_advice) ply.advice = am.mate_advice;
       // the search of the position after the move, as it actually ran
       if (ply.tb) ply.search = { tablebase: true };
