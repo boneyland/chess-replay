@@ -66,3 +66,30 @@ test('pgn from a FEN with Black to move carries the FEN and starts on Black\'s m
   const M = CC.buildGame({ pgn });
   assert.equal(M.ply0, 79); assert.deepEqual(M.plies.map((p) => p.san), ['Kd7', 'e4']);
 });
+
+// feeds wheel deltas [dy, ms] (pixels) and returns the steps taken
+const wheelRun = (events, mode = 0) => {
+  let w = B.wheelStart();
+  return events.map(([dy, t]) => { const r = B.wheel(w, dy, mode, t); w = r.w; return r.d; });
+};
+test('a wheel turn after a pause steps one move: down the next, up the previous', () => {
+  assert.deepEqual(wheelRun([[100, 0], [-100, 1000], [3, 2000]]), [1, -1, 1]);
+  assert.deepEqual(wheelRun([[3, 0], [-3, 1000]], 1), [1, -1], 'line mode');
+  assert.deepEqual(wheelRun([[0, 0]]), [0], 'no vertical delta');
+});
+test('a fast wheel steps at most once per gap', () => {
+  const t = [0, 30, 60, 100, 130, 200];
+  assert.deepEqual(wheelRun(t.map((ms) => [100, ms])), [1, 0, 0, 1, 0, 1]);
+});
+test("a trackpad's stream of small deltas adds up to a step every WHEEL.px", () => {
+  // 10 px every 16 ms for a second: about one step per 60 px once past the gap, never one an event
+  const d = wheelRun(Array.from({ length: 60 }, (_, i) => [10, i * 16]));
+  const n = d.filter((x) => x === 1).length;
+  assert.equal(d[0], 1);
+  assert.ok(n >= 5 && n <= 12, `${n} steps`);
+  assert.ok(d.every((x) => x >= 0));
+});
+test('a turn the other way mid-stream starts the count again', () => {
+  const d = wheelRun([[10, 0], [40, 100], [-40, 116], [-40, 132]]);
+  assert.deepEqual(d, [1, 0, 0, -1]);
+});

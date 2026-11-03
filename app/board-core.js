@@ -55,5 +55,21 @@
     }
   }
 
-  window.BoardCore = { fromFen, restore, save, play, go, pos, ucis, label, today, pgnOf, pgn };
+  // The mouse wheel over a board as move steps, as on Lichess (down the next move, up the previous): the first turn after
+  // a pause steps at once; a stream of them (a trackpad, a fast wheel) adds its deltas, in pixels (lines and pages
+  // scaled), to a step every WHEEL.px, and drops them for WHEEL.gap ms after a step, so it walks the moves rather than
+  // skipping many; a turn the other way starts again. w is { acc, last, at } (wheelStart()); returns { w, d } (d ±1 or 0)
+  const WHEEL = { px: 60, gap: 90, idle: 250 };
+  const wheelStart = () => ({ acc: 0, last: -Infinity, at: -Infinity });
+  function wheel(w, dy, mode, now) {
+    const px = dy * (mode === 1 ? 40 : mode === 2 ? 800 : 1);
+    if (!px) return { w, d: 0 };
+    const fresh = now - w.last > WHEEL.idle;
+    if (!fresh && now - w.at < WHEEL.gap) return { w: { ...w, acc: 0, last: now }, d: 0 };
+    const acc = (fresh || Math.sign(px) !== Math.sign(w.acc) ? 0 : w.acc) + px;
+    if (!fresh && Math.abs(acc) < WHEEL.px) return { w: { ...w, acc, last: now }, d: 0 };
+    return { w: { acc: 0, last: now, at: now }, d: Math.sign(acc) };
+  }
+
+  window.BoardCore = { fromFen, restore, save, play, go, pos, ucis, label, today, pgnOf, pgn, WHEEL, wheelStart, wheel };
 })();
