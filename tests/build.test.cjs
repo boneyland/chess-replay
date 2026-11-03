@@ -229,6 +229,14 @@ test('the site serves the dead-position worker and chasolver.wasm, and sw.js kee
   assert.match(sw, /"chasolver\.wasm"/);
 });
 
+// the board reader's Worker is a small file of the page's own, kept with it (only the vision/ files it loads are not)
+test('the site serves the board reader\'s worker, and sw.js keeps it', () => {
+  const site = path.join(ROOT, 'out', 'site');
+  assert.ok(fs.existsSync(path.join(site, 'vision-worker.js')));
+  const LOCAL = JSON.parse(fs.readFileSync(path.join(site, 'sw.js'), 'utf8').match(/^const LOCAL = (\[.*?\]);/m)[1]);
+  assert.ok(LOCAL.includes('vision-worker.js'));
+});
+
 // The board reader's model and runtime are 55 MB: they are served next to the page but only the viewer who asks keeps
 // them, so the per-deploy copy (sw.js's LOCAL) must not list them
 test('the built site serves the board reader\'s files from vision/, byte for byte at their pins, and sw.js does not keep them', () => {

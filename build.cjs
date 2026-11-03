@@ -25,6 +25,7 @@ const units = [
   ['sf-engine.js', read(path.join(app, 'sf-engine.js'))],
   ['kept-files.js', read(path.join(app, 'kept-files.js'))],
   ['sf-full.js', read(path.join(app, 'sf-full.js'))],
+  ['vision.js', read(path.join(app, 'vision.js'))],
   ['queen-core.js', read(path.join(app, 'queen-core.js'))],
   ['sfx-core.js', read(path.join(app, 'sfx-core.js'))],
   ['drag-scroll.js', read(path.join(app, 'drag-scroll.js'))],
@@ -120,6 +121,8 @@ fs.copyFileSync(path.join(app, 'og-image.png'), path.join(dir, 'out', 'site', 'o
 for (const f of VENDOR) fs.copyFileSync(path.join(dir, 'vendor', f), path.join(dir, 'out', 'site', f));
 // the dead-position prover's Worker, which runs chasolver.wasm (a Worker is started from a file of the page's own origin)
 fs.copyFileSync(path.join(app, 'dead-worker.js'), path.join(dir, 'out', 'site', 'dead-worker.js'));
+// the board reader's Worker (small, kept with the page; the model and runtime it loads are in vision/, kept only on request)
+fs.copyFileSync(path.join(app, 'vision-worker.js'), path.join(dir, 'out', 'site', 'vision-worker.js'));
 // the board reader's model and runtime (vision/, 55 MB), served next to the page for the viewer who asks to keep them; the licence
 // texts stay in the repo
 fs.mkdirSync(path.join(dir, 'out', 'site', 'vision'), { recursive: true });
@@ -143,7 +146,7 @@ fs.writeFileSync(path.join(dir, 'out', 'site', 'manifest.webmanifest'), JSON.str
 // The service worker (app/sw.js) and what it keeps: the files next to the page, and the CDN files the page names (React
 // and the fonts' stylesheet in shell.html, the export's libraries in export.jsx). Its VERSION changes with any of
 // them, so a deploy that changes one replaces the kept copies; the page itself is fetched afresh on every visit.
-const SW_LOCAL = ['chess-game-video.html', 'manifest.webmanifest', ...fs.readdirSync(ICONS), ...VENDOR, 'dead-worker.js', ...SOUND_FILES];
+const SW_LOCAL = ['chess-game-video.html', 'manifest.webmanifest', ...fs.readdirSync(ICONS), ...VENDOR, 'dead-worker.js', 'vision-worker.js', ...SOUND_FILES];
 const swSrc = read(path.join(app, 'sw.js'));
 const swHash = require('crypto').createHash('sha256').update(swSrc).update(JSON.stringify(SW_REMOTE));
 for (const f of SW_LOCAL.slice(1)) swHash.update(fs.readFileSync(path.join(dir, 'out', 'site', f)));
