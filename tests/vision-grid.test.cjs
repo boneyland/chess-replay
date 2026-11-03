@@ -22,3 +22,7 @@ for (const name of Object.keys(cases)) test(`findBoard: ${name}`, () => {
   if (name === 'two-boards') { if (got) assert.ok(got.x1 - got.x0 < 0.55, 'spans both boards'); return; }
   if (want === null) assert.equal(got, null); else { assert.ok(got, 'no grid found'); near(got, want, im); }
 });
+
+for (const name of Object.keys(cases)) if (cases[name].box) test(`labelSide: ${name}`, () => {
+  assert.equal(VG.labelSide(readPgm(name), cases[name].box), cases[name].side);
+});

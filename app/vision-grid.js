@@ -116,5 +116,62 @@
     return { x0: box.x0 / w, y0: box.y0 / h, x1: box.x1 / w, y1: box.y1 / h };
   }
 
-  window.VisionGrid = { SIDE, grey, findBoard };
+  // the ink in a cell: pixels far (over 60 levels) from the cell's own median, the glyph's background
+  function ink({ g, w, h }, x0, y0, x1, y1, skip) {
+    x0 = Math.max(0, Math.round(x0)); y0 = Math.max(0, Math.round(y0)); x1 = Math.min(w, Math.round(x1)); y1 = Math.min(h, Math.round(y1));
+    const v = [];
+    for (let y = y0; y < y1; y++) for (let x = x0; x < x1; x++) if (!skip || !skip[x]) v.push(g[y * w + x]);
+    if (v.length < 4) return 0;
+    const m = median(v);
+    return v.filter((b) => Math.abs(b - m) > 60).length;
+  }
+
+  // Which side the rank labels put at the bottom: 'w' when "1" is there, 'b' when "8" is, null when no label column
+  // is clear. A label column is 8 cells, one a rank, each with some ink and none with far more than the others (a
+  // piece or text would); an "8" carries clearly more ink than a "1", so its two ends tell. Columns looked at: just
+  // outside the box on the left and right (a frame's solid band left out), and the corners of the edge files' squares
+  // (inside coordinates). File labels aren't read.
+  function labelSide(im, box) {
+    const X0 = box.x0 * im.w, Y0 = box.y0 * im.h, X1 = box.x1 * im.w, Y1 = box.y1 * im.h, s = (X1 - X0) / 8, t = (Y1 - Y0) / 8;
+    // a strip's pixel columns that are almost all far from the strip's median (a frame, the picture's edge) are skipped
+    const frame = (xa, xb) => {
+      const skip = {}, a = Math.max(0, Math.round(xa)), b = Math.min(im.w, Math.round(xb)), all = [];
+      for (let y = Math.round(Y0); y < Math.round(Y1); y++) for (let x = a; x < b; x++) all.push(im.g[y * im.w + x]);
+      const m = median(all);
+      for (let x = a; x < b; x++) {
+        let far = 0, n = 0;
+        for (let y = Math.max(0, Math.round(Y0)); y < Math.min(im.h, Math.round(Y1)); y++, n++) if (Math.abs(im.g[y * im.w + x] - m) > 60) far++;
+        if (n && far > 0.9 * n) skip[x] = true;
+      }
+      return skip;
+    };
+    const cols = [];
+    for (const [xa, xb] of [[X0 - 0.7 * s, X0 - 0.05 * s], [X1 + 0.05 * s, X1 + 0.7 * s]]) {
+      const skip = frame(xa, xb);
+      cols.push([...Array(8)].map((_, k) => ink(im, xa, Y0 + k * t, xb, Y0 + (k + 1) * t, skip)));
+    }
+    const c = 0.32;
+    for (const [xa, xb] of [[X0 + 0.02 * s, X0 + c * s], [X1 - c * s, X1 - 0.02 * s]]) {
+      for (const top of [true, false]) {
+        cols.push([...Array(8)].map((_, k) => {
+          const ya = top ? Y0 + k * t + 0.02 * t : Y0 + (k + 1) * t - c * t;
+          return ink(im, xa, ya, xb, ya + (c - 0.02) * t);
+        }));
+      }
+    }
+    let side = null, best = 0;
+    for (const col of cols) {
+      const m = median(col);
+      if (Math.min(...col) < 3 || Math.max(...col) > 3 * m) continue;
+      // the "8" end carries at least 1.35 times the "1" end's ink
+      const r = Math.log(col[0] / col[7]);
+      if (Math.abs(r) < Math.log(1.35)) continue;
+      const here = r > 0 ? 'w' : 'b';
+      if (side && side !== here) return null;
+      if (Math.abs(r) > best) { side = here; best = Math.abs(r); }
+    }
+    return side;
+  }
+
+  window.VisionGrid = { SIDE, grey, findBoard, labelSide };
 })();
