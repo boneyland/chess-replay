@@ -1447,6 +1447,8 @@ for (const name of BROWSERS) for (const site of SITES) {
       await dialog.getByRole('button', { name: 'Cancel' }).click();
       await dialog.waitFor({ state: 'detached', timeout: 5000 });
       await fromImage();
+      // (the dialog takes a paste once it has found the kept copy and offers Choose image)
+      await dialog.getByRole('button', { name: 'Choose image' }).waitFor({ timeout: 5000 });
       // pasted text, then the Lichess screenshot pasted: the text left the dialog choosing, where the picture is taken
       await paste(null, '2r3k1/pp3pp1/4p2p/3pP3/3P1P2/P1rB4/1P4PP/R4RK1 w - - 0 1');
       await paste(fixture('vision-lichess.png', 'image/png'));
