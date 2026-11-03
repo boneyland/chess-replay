@@ -32,7 +32,7 @@ window.GAME = {
     40: 'Qb7?! lets the white queen into a5. c4 was best.',
     44: 'Qc6 — Stockfish preferred trading queens with Bxa5. White is pressing.',
     46: 'Bb6?! White is now two pawns better on the engine.',
-    54: '+3.08 — Carlsen’s best moment of the game.',
+    54: '+2.97 — Carlsen’s best moment of the game.',
     55: 'Qxb5?? grabs a second pawn and throws the advantage away. Be3 was best.',
     56: 'c4! The passed pawn and the b6-bishop wake up at once.',
     58: 'Bxf2+ — a bishop sacrifice that strips the white king.',
