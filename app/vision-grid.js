@@ -173,5 +173,36 @@
     return side;
   }
 
-  window.VisionGrid = { SIDE, grey, findBoard, labelSide };
+  // the squares the picture shows something on, in picture order (index 0 the top-left square as seen): a square
+  // whose middle half (the corners left out, where inside labels sit) isn't near-flat colour
+  function occupied({ g, w, h }, box) {
+    const X0 = box.x0 * w, Y0 = box.y0 * h, s = (box.x1 - box.x0) * w / 8, t = (box.y1 - box.y0) * h / 8, out = [];
+    for (let r = 0; r < 8; r++) for (let c = 0; c < 8; c++) {
+      let n = 0, sum = 0, sq = 0;
+      for (let y = Math.round(Y0 + (r + 0.25) * t); y < Math.round(Y0 + (r + 0.75) * t); y++) {
+        for (let x = Math.round(X0 + (c + 0.25) * s); x < Math.round(X0 + (c + 0.75) * s); x++) { const v = g[y * w + x]; n++; sum += v; sq += v * v; }
+      }
+      out.push(n > 0 && Math.sqrt(Math.max(0, sq / n - (sum / n) ** 2)) > 14);
+    }
+    return out;
+  }
+
+  // the side the model put at the bottom: its read (b, a8…h1) against what the picture shows (occ, as seen), taken as
+  // read and turned 180°; the one that matches by at least 2 squares more, else null (a placement the same either way)
+  function modelSide(occ, b) {
+    let w = 0, bl = 0;
+    for (let i = 0; i < 64; i++) { if (occ[i] === !!b[i]) w++; if (occ[i] === !!b[63 - i]) bl++; }
+    return w - bl >= 2 ? 'w' : bl - w >= 2 ? 'b' : null;
+  }
+
+  // whether a read (b) is to be turned: the labels and the model both answer, and differ. Through window.VisionGrid,
+  // so a test can stand in for modelSide
+  function shouldTurn(im, box, b) {
+    const G = window.VisionGrid, label = G.labelSide(im, box);
+    if (!label) return false;
+    const model = G.modelSide(G.occupied(im, box), b);
+    return !!model && model !== label;
+  }
+
+  window.VisionGrid = { SIDE, grey, findBoard, labelSide, occupied, modelSide, shouldTurn };
 })();

@@ -26,3 +26,34 @@ for (const name of Object.keys(cases)) test(`findBoard: ${name}`, () => {
 for (const name of Object.keys(cases)) if (cases[name].box) test(`labelSide: ${name}`, () => {
   assert.equal(VG.labelSide(readPgm(name), cases[name].box), cases[name].side);
 });
+
+const board = (fen) => window.ChessCore.posFromFen(fen).b;
+test('occupied: the drawn placement, as seen', () => {
+  for (const name of ['framed-white', 'framed-black', 'inside-white', 'inside-black', 'nolabels', 'lichess', 'diagram']) {
+    const b = board(cases[name].fen), seen = cases[name].side === 'b' ? b.slice().reverse() : b;
+    assert.deepEqual(VG.occupied(readPgm(name), cases[name].box), seen.map(Boolean), name);
+  }
+});
+test('occupied: an arrow over empty squares costs a few, and the side still comes out', () => {
+  const b = board(cases.highlights.fen), occ = VG.occupied(readPgm('highlights'), cases.highlights.box);
+  assert.ok(occ.filter((o, i) => o !== !!b[i]).length <= 4);
+  assert.equal(VG.modelSide(occ, b), 'w');
+});
+test('modelSide', () => {
+  const b = board('4k3/8/8/8/8/8/8/R3K3'), occ = b.map(Boolean);
+  assert.equal(VG.modelSide(occ, b), 'w');
+  assert.equal(VG.modelSide(occ.slice().reverse(), b), 'b');
+  const kk = board('4k3/8/8/8/8/8/8/2K5'); // two kings, not symmetric under 180°
+  assert.equal(VG.modelSide(kk.map(Boolean), kk), 'w');
+  const sym = board('3k4/8/8/8/8/8/8/4K3'); // d8 and e1 swap places under 180°
+  assert.equal(VG.modelSide(sym.map(Boolean), sym), null);
+});
+test('shouldTurn', () => {
+  const fb = board(cases['framed-black'].fen), im = readPgm('framed-black'), box = cases['framed-black'].box;
+  assert.equal(VG.shouldTurn(im, box, fb), false); // the model read it the right way round
+  assert.equal(VG.shouldTurn(im, box, fb.slice().reverse()), true); // read from White's side: turn it
+  assert.equal(VG.shouldTurn(readPgm('nolabels'), cases.nolabels.box, board(cases.nolabels.fen).reverse()), false);
+  const iw = board(cases['inside-white'].fen);
+  assert.equal(VG.shouldTurn(readPgm('inside-white'), cases['inside-white'].box, iw), false);
+  assert.equal(VG.shouldTurn(readPgm('inside-white'), cases['inside-white'].box, iw.slice().reverse()), true);
+});
