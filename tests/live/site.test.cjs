@@ -677,8 +677,9 @@ for (const name of BROWSERS) for (const site of SITES) {
       }
       assert.deepEqual(fails, []);
     });
-    // a piece selected on the free board stays selected while the window crosses from two columns to one and back
-    await t.test('layout: a selection survives a resize across the column switch', async () => {
+    // a piece selected on the free board stays selected while the window crosses from two columns to one and back;
+    // a click on it again lets it go
+    await t.test('layout: a selection survives a resize across the column switch, and a second click lets it go', async () => {
       const rs = await open(browser, { width: 1100, height: 800 });
       const p = rs.page;
       await p.goto(base, { waitUntil: 'load' });
@@ -688,8 +689,8 @@ for (const name of BROWSERS) for (const site of SITES) {
       await p.getByRole('button', { name: 'Play (space)' }).waitFor({ state: 'detached', timeout: 5000 });
       const e2 = square(await boardBox(p), 'e2');
       await p.mouse.click(e2.x, e2.y);
-      // the selection: the touch layer's square with the thick border
-      const selected = () => p.evaluate(() => [...document.querySelectorAll('[data-no-drag-scroll] > div')].some((d) => getComputedStyle(d).borderTopWidth === '5px'));
+      // the selection: the board's square in the last move's tint
+      const selected = () => p.evaluate(() => !!document.querySelector('[data-sel]'));
       const cols = () => p.evaluate(() => (document.querySelector('.stage').classList.contains('stage-one') ? 1 : 2));
       assert.equal(await selected(), true, 'e2 selected');
       assert.equal(await cols(), 2);
@@ -698,6 +699,11 @@ for (const name of BROWSERS) for (const site of SITES) {
         await p.waitForFunction((c) => document.querySelector('.stage').classList.contains('stage-one') === (c === 1), want, { timeout: 5000 });
         assert.equal(await selected(), true, `still selected at ${width} px`);
       }
+      const at = square(await boardBox(p), 'e2');
+      await p.mouse.click(at.x, at.y);
+      assert.equal(await selected(), false, 'a second click on e2 lets it go');
+      await p.mouse.click(at.x, at.y);
+      assert.equal(await selected(), true, 'and a third selects it again');
       assert.deepEqual(rs.errors, []);
       await rs.ctx.close();
     });
