@@ -41,11 +41,9 @@
     ['xkcd', 'xkcd', 'Randall Munroe', 'CC BY-NC-SA 2.5', 'https://xkcd.com/about'],
   ].map(([id, name, by, licence, home]) => ({ id, name, by, licence, licenceUrl: LIC[licence], home: home || null }));
   const DEFAULT = SETS[0].id, IDS = SETS.map((s) => s.id);
-  // non-commercial sets (CC BY-NC-SA): drawn on the page but kept out of exported videos, which viewers may post
-  // anywhere, monetised channels included; an export draws the default in their place (as Sfx.exportSet does)
+  // non-commercial sets (CC BY-NC-SA): an export drawn with one carries its terms, which the Export tab says
   const NON_COMMERCIAL = SETS.filter((s) => /NC/.test(s.licence)).map((s) => s.id);
   const valid = (id) => (IDS.includes(id) ? id : DEFAULT);
-  const exportSet = (id) => (NON_COMMERCIAL.includes(valid(id)) ? DEFAULT : valid(id));
   const byId = (id) => SETS.find((s) => s.id === valid(id));
   const url = (id, piece) => (valid(id) === DEFAULT ? window.PIECE_IMG[piece] : `pieces/${id}/${piece}.svg`);
 
@@ -65,5 +63,5 @@
     ));
   };
 
-  window.PieceSets = { PIECES, SETS, DEFAULT, NON_COMMERCIAL, valid, exportSet, byId, url, ready, load };
+  window.PieceSets = { PIECES, SETS, DEFAULT, NON_COMMERCIAL, valid, byId, url, ready, load };
 })();

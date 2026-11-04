@@ -571,8 +571,11 @@ function GameApp() {
   const mp4Vfr = t.mp4Vfr === true;
   const video = useVideoExport({ fps: exportFps, format: exportFormat, webp: { width: webpWidth, quality: webpQuality }, mp4Quality, mp4Vfr: mp4Vfr && !webp, stem: fileStem, save: (name, blob) => saveFile(name, blob, blob.type) });
   busyRef.current = video.busy;
-  const pieces = usePieceSet(t.pieceSet, video.busy);
+  const pieces = usePieceSet(t.pieceSet);
   const pieceSet = window.PieceSets.byId(t.pieceSet);
+  // what an export would carry under a non-commercial licence (CC BY-NC-SA): such a video may not be used commercially
+  const ncParts = [window.PieceSets.NON_COMMERCIAL.includes(pieceSet.id) && `${pieceSet.name} pieces`, !webp && t.sound !== false && window.Sfx.NON_COMMERCIAL.includes(soundSet) && `${soundSet.replace(/^Lichess /, '')} sounds`].filter(Boolean);
+  const ncNote = ncParts.length ? `The ${ncParts.join(' and ')} are under a non-commercial licence (CC BY-NC-SA): a video made with ${ncParts.length > 1 ? 'them' : 'it'} may not be used commercially, on a monetised channel for one, and should credit ${ncParts.length > 1 ? 'them' : 'it'} (Settings › View and Sound name the authors). ` : '';
   // the stretch to export, in plies: from -1 starts on the title card, to N (the ply count) ends after the end card
   const [clip, setClip] = React.useState({ from: -1, to: Infinity });
   React.useEffect(() => { setClip({ from: -1, to: Infinity }); }, [M]);
@@ -807,7 +810,7 @@ function GameApp() {
             <TweakRadio id="tw-scheme" label="Theme" value={t.scheme || 'Auto'} options={['Auto', 'Light', 'Dark']} onChange={(v) => setTweak('scheme', v)} />
             <TweakRadio id="tw-text-size" label="Text size" value={t.textSize || 'Default'} options={Object.keys(LayoutCore.TEXT_SIZES)} onChange={(v) => setTweak('textSize', v)} />
             <TweakSelect id="tw-pieces" label="Pieces" value={pieceSet.name} options={window.PieceSets.SETS.map((s) => s.name)} onChange={(v) => setTweak('pieceSet', window.PieceSets.SETS.find((s) => s.name === v).id)} />
-            <div className="twk-note">{pieceSet.name} by {pieceSet.home ? <a href={pieceSet.home} target="_blank" rel="noopener">{pieceSet.by}</a> : pieceSet.by}, under <a href={pieceSet.licenceUrl} target="_blank" rel="noopener">{pieceSet.licence}</a>{pieceSet.id === window.PieceSets.DEFAULT ? '' : <>, from <a href="https://github.com/lichess-org/lila" target="_blank" rel="noopener">Lichess’s source</a></>}{window.PieceSets.NON_COMMERCIAL.includes(pieceSet.id) ? ' (non-commercial, so video exports use Cburnett in its place)' : ''}.{pieces.failed ? ' Couldn’t load it (offline?): the board keeps the pieces it had.' : ''}</div>
+            <div className="twk-note">{pieceSet.name} by {pieceSet.home ? <a href={pieceSet.home} target="_blank" rel="noopener">{pieceSet.by}</a> : pieceSet.by}, under <a href={pieceSet.licenceUrl} target="_blank" rel="noopener">{pieceSet.licence}</a>{pieceSet.id === window.PieceSets.DEFAULT ? '' : <>, from <a href="https://github.com/lichess-org/lila" target="_blank" rel="noopener">Lichess’s source</a></>}{window.PieceSets.NON_COMMERCIAL.includes(pieceSet.id) ? ' (non-commercial: a video exported with it may not be used commercially)' : ''}.{pieces.failed ? ' Couldn’t load it (offline?): the board keeps the pieces it had.' : ''}</div>
           </TweakSection>
           <TweakSection label="Board">
             {board && board.game ? (
@@ -865,13 +868,13 @@ function GameApp() {
             <TweakSelect id="tw-clip-to" label="To" aria="Export to" value={clipToOpts.find((o) => o.i === clipTo).s} options={clipToOpts.map((o) => o.s)} onChange={(v) => setClip((c) => ({ ...c, to: clipToOpts.find((o) => o.s === v).i }))} />
           </div>
           <TweakButton label={`${webp ? 'Export animated WebP (' : 'Export video (MP4, '}${!webp && mp4Vfr ? 'up to ' : ''}${exportFps} fps${!webp && mp4Vfr ? ', variable' : ''}, ${fmtLen(clipT.end - clipT.start)})`} disabled={video.busy} onClick={exportVideo} />
-          <div className="twk-note">Renders every frame in this tab: about {fmtLen(Math.ceil((clipT.end - clipT.start) * exportFps * 0.04))} for {clipSuffix ? 'these moves' : 'this game'}, longer on a phone. Higher frame rates are smoother but slower. Each move’s clip runs from just before it until the board settles. {window.PieceSets.exportSet(pieceSet.id) !== pieceSet.id ? `Drawn with Cburnett pieces in place of ${pieceSet.name}, whose licence is non-commercial. ` : ''}{webp ? 'No sound, and it loops; a smaller width or quality makes a smaller file, and Lossless a much larger one.' : `Includes move sounds when on${window.Sfx.exportSet(soundSet) !== soundSet ? ` (${window.Sfx.exportSet(soundSet)} in place of ${soundSet}, whose licence is non-commercial)` : ''}; a lower quality makes a smaller file.`}</div>
+          <div className="twk-note">Renders every frame in this tab: about {fmtLen(Math.ceil((clipT.end - clipT.start) * exportFps * 0.04))} for {clipSuffix ? 'these moves' : 'this game'}, longer on a phone. Higher frame rates are smoother but slower. Each move’s clip runs from just before it until the board settles. {ncNote}{webp ? 'No sound, and it loops; a smaller width or quality makes a smaller file, and Lossless a much larger one.' : 'Includes move sounds when on; a lower quality makes a smaller file.'}</div>
         </> },
         { id: 'sound', label: 'Sound', body: <>
           <TweakToggle id="tw-sound" label="Move sounds" value={t.sound !== false} onChange={(v) => setTweak('sound', v)} />
           <TweakSelect id="tw-sset" label="Sound set" value={soundSet} options={window.Sfx.SETS} onChange={(v) => { setTweak('soundSet', v); sfxPlayer.play(v, ['move'], soundVolume); }} />
           <TweakSlider id="tw-vol" label="Volume" value={soundVolume} min={0} max={100} step={5} unit="%" onChange={(v) => { setTweak('soundVolume', v); sfxPlayer.play(soundSet, ['move'], v); }} />
-          <div className="twk-note">The Lichess sets are from <a href="https://github.com/lichess-org/lila" target="_blank" rel="noopener">Lichess’s source</a>, unchanged: lisp by <a href="https://lichess.org/@/EdinburghCollective" target="_blank" rel="noopener">EdinburghCollective</a> under <a href="https://creativecommons.org/licenses/by-nc-sa/4.0/" target="_blank" rel="noopener">CC BY-NC-SA 4.0</a> (non-commercial, so video exports use Lichess sfx in its place), the others by <a href="https://github.com/Enigmahack" target="_blank" rel="noopener">Enigmahack</a> under the AGPL-3.0-or-later. Wood is made in your browser.</div>
+          <div className="twk-note">The Lichess sets are from <a href="https://github.com/lichess-org/lila" target="_blank" rel="noopener">Lichess’s source</a>, unchanged: lisp by <a href="https://lichess.org/@/EdinburghCollective" target="_blank" rel="noopener">EdinburghCollective</a> under <a href="https://creativecommons.org/licenses/by-nc-sa/4.0/" target="_blank" rel="noopener">CC BY-NC-SA 4.0</a> (non-commercial: a video exported with it may not be used commercially), the others by <a href="https://github.com/Enigmahack" target="_blank" rel="noopener">Enigmahack</a> under the AGPL-3.0-or-later. Wood is made in your browser.</div>
         </> },
       ]} />
     </React.Fragment>

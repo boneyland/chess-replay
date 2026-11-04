@@ -64,11 +64,28 @@ test('fetchSound: the bytes, or null for a missing file or no connection', async
   } finally { global.fetch = was; }
 });
 
-test('exportSet: a non-commercial set is swapped for the default in exports, the others kept', () => {
+test('NON_COMMERCIAL: lisp, which the Export tab warns about', () => {
   assert.deepEqual(X.NON_COMMERCIAL, ['Lichess lisp']);
-  assert.equal(X.exportSet('Lichess lisp'), 'Lichess sfx');
-  for (const s of X.SETS.filter((s) => s !== 'Lichess lisp')) assert.equal(X.exportSet(s), s);
-  assert.equal(X.exportSet('Gone'), 'Lichess sfx');
+});
+
+// a stand-in OfflineAudioContext: decodes anything, records what starts when
+class FakeOAC {
+  constructor() { this.started = []; this.destination = {}; }
+  decodeAudioData(b) { return Promise.resolve({ from: b.url }); }
+  createGain() { return { gain: {}, connect() {} }; }
+  createBufferSource() { const ctx = this; return { connect() {}, start(at) { ctx.started.push([this.buffer.from, at]); } }; }
+  startRendering() { return Promise.resolve(this.started); }
+}
+test('renderTrack: an export sounds the chosen set, lisp included; a set that is gone falls back to the default', async () => {
+  const was = window.OfflineAudioContext;
+  window.OfflineAudioContext = FakeOAC;
+  try {
+    const get = (url) => Promise.resolve({ url });
+    const events = [{ at: 0.5, kinds: ['move'] }, { at: 1.5, kinds: ['capture', 'check'] }];
+    assert.deepEqual(await X.renderTrack(get, 'Lichess lisp', events, 70, 2),
+      [['sounds/lisp/Move.mp3', 0.5], ['sounds/lisp/Capture.mp3', 1.5], ['sounds/lisp/Check.mp3', 1.5]]);
+    assert.deepEqual((await X.renderTrack(get, 'Gone', events, 70, 2))[0], ['sounds/sfx/Move.mp3', 0.5]);
+  } finally { window.OfflineAudioContext = was; }
 });
 
 test('synth: every Wood sound is short, audible, never clips, and the same every time', () => {

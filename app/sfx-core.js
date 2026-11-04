@@ -5,10 +5,8 @@
   // the first is the default
   const SETS = ['Lichess sfx', 'Lichess piano', 'Lichess NES', 'Lichess futuristic', 'Lichess lisp', 'Wood'];
   const SET_DIR = { 'Lichess sfx': 'sfx', 'Lichess piano': 'piano', 'Lichess NES': 'nes', 'Lichess futuristic': 'futuristic', 'Lichess lisp': 'lisp' };
-  // non-commercial sets (lisp, CC BY-NC-SA): played on the page but kept out of exported videos, which viewers may post
-  // anywhere, monetised channels included; an export uses the default set in their place
+  // non-commercial sets (lisp, CC BY-NC-SA): an export made with one carries its terms, which the Export tab says
   const NON_COMMERCIAL = ['Lichess lisp'];
-  const exportSet = (set) => (SETS.includes(set) && !NON_COMMERCIAL.includes(set) ? set : SETS[0]);
   const KINDS = ['move', 'capture', 'check', 'victory', 'draw'];
   // a Lichess sound's file, next to the page; null for Wood (made here) or a set that's gone
   const soundUrl = (set, kind) => (SET_DIR[set] ? `sounds/${SET_DIR[set]}/${kind[0].toUpperCase()}${kind.slice(1)}.mp3` : null);
@@ -101,7 +99,7 @@
   async function renderTrack(get, set, events, volume, dur, rate = 48000) {
     const OAC = window.OfflineAudioContext || window.webkitOfflineAudioContext;
     if (!OAC) return null;
-    set = exportSet(set);
+    if (!SETS.includes(set)) set = SETS[0];
     const ctx = new OAC(2, Math.max(1, Math.ceil(dur * rate)), rate), bufs = {};
     for (const k of new Set(events.flatMap((e) => e.kinds))) { try { bufs[k] = await decode(ctx, get, set, k); } catch (e) { bufs[k] = null; } }
     const gain = ctx.createGain();
@@ -172,5 +170,5 @@
     return { play, prepare, unlock };
   }
 
-  window.Sfx = { SETS, SET_DIR, NON_COMMERCIAL, exportSet, KINDS, soundUrl, fetchSound, kinds, endKind, landed, cue, track, synth, renderTrack, createPlayer };
+  window.Sfx = { SETS, SET_DIR, NON_COMMERCIAL, KINDS, soundUrl, fetchSound, kinds, endKind, landed, cue, track, synth, renderTrack, createPlayer };
 })();

@@ -24,13 +24,10 @@ test('valid: a set that is gone (or never was) falls back to the default', () =>
   assert.equal(P.valid(undefined), 'cburnett');
 });
 
-test('exportSet: the non-commercial sets are kept out of video exports, as the lisp sounds are', () => {
+test('NON_COMMERCIAL: the CC BY-NC-SA sets, which the Export tab warns about', () => {
   assert.deepEqual(P.NON_COMMERCIAL, P.SETS.filter((s) => /NC/.test(s.licence)).map((s) => s.id));
   assert.equal(P.NON_COMMERCIAL.length, 13);
-  assert.equal(P.exportSet('staunty'), 'cburnett');
-  assert.equal(P.exportSet('xkcd'), 'cburnett');
-  assert.equal(P.exportSet('merida'), 'merida');
-  assert.equal(P.exportSet('nope'), 'cburnett');
+  assert.ok(P.NON_COMMERCIAL.includes('xkcd') && !P.NON_COMMERCIAL.includes('merida'));
 });
 
 test('url: cburnett from the page, the others from files next to it', () => {

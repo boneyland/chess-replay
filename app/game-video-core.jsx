@@ -124,10 +124,10 @@ const fmtClock = (s) => { s = Math.max(0, s); const m = Math.floor(s / 60), x = 
 let PIECE_SET = 'cburnett';
 const img = (color, type) => window.PieceSets.url(PIECE_SET, color + type.toUpperCase());
 // The set to draw: the viewer's choice once its pictures have loaded (the last set drawn until then, so a switch never
-// flashes another), and in an export the one PieceSets.exportSet allows. failed: the choice couldn't be loaded (offline
-// before it was ever kept); choosing it again, or the next visit, tries again.
-function usePieceSet(chosen, exporting) {
-  const PS = window.PieceSets, want = exporting ? PS.exportSet(chosen) : PS.valid(chosen);
+// flashes another). failed: the choice couldn't be loaded (offline before it was ever kept); choosing it again, or the
+// next visit, tries again.
+function usePieceSet(chosen) {
+  const PS = window.PieceSets, want = PS.valid(chosen);
   const [failed, setFailed] = React.useState(null);
   const [, bump] = React.useReducer((n) => n + 1, 0);
   const last = React.useRef(PS.DEFAULT);
