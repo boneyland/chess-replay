@@ -120,7 +120,27 @@ const fmtEval = (p) => {
   const v = plyCp(p) / 100; return (v > 0.004 ? '+' : v < -0.004 ? '−' : '') + Math.abs(v).toFixed(2);
 };
 const fmtClock = (s) => { s = Math.max(0, s); const m = Math.floor(s / 60), x = Math.floor(s % 60); return s < 20 ? `0:${String(Math.floor(s)).padStart(2, '0')}.${Math.floor((s % 1) * 10)}` : `${m}:${String(x).padStart(2, '0')}`; };
-const img = (color, type) => window.PIECE_IMG[color + type.toUpperCase()];
+// the piece set drawn (PieceSets), which GameApp sets on each render before the views below it draw (usePieceSet)
+let PIECE_SET = 'cburnett';
+const img = (color, type) => window.PieceSets.url(PIECE_SET, color + type.toUpperCase());
+// The set to draw: the viewer's choice once its pictures have loaded (the last set drawn until then, so a switch never
+// flashes another). failed: the choice couldn't be loaded (offline before it was ever kept); choosing it again, or the
+// next visit, tries again.
+function usePieceSet(chosen) {
+  const PS = window.PieceSets, want = PS.valid(chosen);
+  const [failed, setFailed] = React.useState(null);
+  const [, bump] = React.useReducer((n) => n + 1, 0);
+  const last = React.useRef(PS.DEFAULT);
+  React.useEffect(() => {
+    if (PS.ready(want)) return;
+    let live = true;
+    PS.load(want).then((ok) => { if (live) { setFailed(ok ? null : want); bump(); } });
+    return () => { live = false; };
+  }, [want]);
+  if (PS.ready(want)) last.current = want;
+  PIECE_SET = last.current;
+  return { shown: last.current, failed: failed === want ? want : null };
+}
 
 function simulate(M) {
   const board = {}, pieces = [];
