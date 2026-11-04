@@ -146,7 +146,7 @@ function CopyButton({ label, text, onFail }) {
     try { navigator.clipboard.writeText(v).then(() => setDone(true), () => onFail(v)); } catch (e) { onFail(v); }
   };
   return (
-    <button type="button" className={'twk-btn secondary share-copy' + (done ? ' done' : '')} aria-label={label} title={done ? 'Copied' : label} onClick={run}>
+    <button type="button" className={'twk-btn secondary xfer-copy' + (done ? ' done' : '')} aria-label={label} title={done ? 'Copied' : label} onClick={run}>
       <svg width="16" height="16" viewBox="0 0 16 16" fill="none" aria-hidden="true"><path d={done ? TICK : COPY} stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round" /></svg>
     </button>
   );
@@ -803,25 +803,25 @@ function GameApp() {
       {vision && <VisionDialog again={vision.again} onRead={visionRead} onClose={visionClose} />}
       {keysOpen && <ShortcutsDialog onClose={closeKeys} />}
       {shareOpen && (
-        <DialogBox label="Share and export" className="share-box" onClose={closeShare}>
+        <DialogBox label="Share and export" className="xfer-box" onClose={closeShare}>
           <TweakSection label="FEN">
-            <div className="share-row">
-              <input className="share-field" type="text" readOnly value={shareOpen.fen} aria-label="FEN" spellCheck={false} onFocus={(e) => e.target.select()} />
+            <div className="xfer-row">
+              <input className="xfer-field" type="text" readOnly value={shareOpen.fen} aria-label="FEN" spellCheck={false} onFocus={(e) => e.target.select()} />
               <CopyButton label="Copy FEN" text={() => shareOpen.fen} onFail={copyFailed('FEN')} />
             </div>
           </TweakSection>
           <TweakSection label="PGN">
             {board ? (
-              <div className="share-row">
+              <div className="xfer-row">
                 <TweakButton secondary label="Download" onClick={saveBoardPgn} />
                 <CopyButton label="Copy PGN" text={boardPgn} onFail={copyFailed('PGN')} />
               </div>
             ) : <>
-              <div className="share-row">
+              <div className="xfer-row">
                 <TweakButton secondary label="Download annotated" onClick={savePgn} />
                 <CopyButton label="Copy annotated PGN" text={annotatedPgn} onFail={copyFailed('PGN')} />
               </div>
-              <div className="share-row">
+              <div className="xfer-row">
                 <TweakButton secondary label="Download raw" onClick={saveRawPgn} />
                 <CopyButton label="Copy raw PGN" text={rawPgn} onFail={copyFailed('PGN')} />
               </div>
