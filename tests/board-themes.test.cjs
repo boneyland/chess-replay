@@ -55,6 +55,12 @@ test('adjust: the sliders’ values within Lichess’s ranges, the defaults for 
   assert.equal(B.isDefault({ hue: 1 }), false);
 });
 
+test('css: the same change as a CSS filter, none at the defaults', () => {
+  assert.equal(B.css({}), 'none');
+  assert.equal(B.css({ brightness: 80, contrast: 150, hue: 30 }), 'brightness(80%) contrast(150%) hue-rotate(108deg)');
+  assert.equal(B.css({ hue: 33 }), 'brightness(100%) contrast(100%) hue-rotate(118.8deg)');
+});
+
 test('filter: brightness, then contrast, then hue, as CSS’s filter functions in that order', () => {
   const f = (a, ...rgb) => B.filter(a)(...rgb);
   assert.deepEqual(f({}, 240, 217, 181), [240, 217, 181], 'the defaults change nothing');

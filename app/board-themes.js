@@ -44,6 +44,9 @@
   const num = (v, s) => (Number.isFinite(v) ? Math.min(s.max, Math.max(s.min, v)) : s.def);
   const adjust = (a = {}) => ({ brightness: num(a.brightness, SLIDERS.brightness), contrast: num(a.contrast, SLIDERS.contrast), hue: num(a.hue, SLIDERS.hue) });
   const isDefault = (a) => { a = adjust(a); return a.brightness === 100 && a.contrast === 100 && a.hue === 0; };
+  // the same change as a CSS filter, for what has to follow a slider at once: the picker's tiles, and a picture board
+  // until it's drawn through the sliders (render)
+  const css = (a) => { a = adjust(a); return isDefault(a) ? 'none' : `brightness(${a.brightness}%) contrast(${a.contrast}%) hue-rotate(${Math.round(a.hue * 3.6 * 100) / 100}deg)`; };
 
   // The sliders' colour change, in Lichess's order (CSS's brightness(), contrast(), then hue-rotate(), each clamped to
   // 0–1 as a CSS filter step is), in sRGB. filter(a) is a function of r, g, b (0–255) to [r, g, b], for the squares
@@ -89,14 +92,16 @@
 
   // A picture board through the sliders, as a blob: URL of a SIZE px square PNG (the last few kept, so moving a slider
   // back, or a later view, finds it at once; older ones are let go). At the defaults it is lila's file as it is.
-  const SIZE = 1024, KEEP = 4, made = new Map(), pictures = {};
+  const SIZE = 1024, KEEP = 4, made = new Map(), pictures = {}, decoded = {};
   const key = (id, a) => { a = adjust(a); return `${valid(id)}/${a.brightness}/${a.contrast}/${a.hue}`; };
   const rendered = (id, a) => (byId(id).file ? (isDefault(a) ? url(id) : made.get(key(id, a)) || null) : null);
   function picture(id) {
     if (pictures[id]) return pictures[id];
     const im = new Image(); im.src = url(id);
-    return (pictures[id] = im.decode().then(() => im, (e) => { delete pictures[id]; throw e; }));
+    return (pictures[id] = im.decode().then(() => { decoded[id] = true; return im; }, (e) => { delete pictures[id]; throw e; }));
   }
+  // lila's file for the board has been loaded, so an <img> of it draws at once
+  const loaded = (id) => !!decoded[valid(id)];
   async function render(id, a) {
     id = valid(id);
     if (!byId(id).file) return null;
@@ -119,5 +124,5 @@
     return u;
   }
 
-  window.BoardThemes = { THEMES, DEFAULT, SLIDERS, valid, byId, url, thumb, adjust, isDefault, filter, colours, filterPixels, rendered, render };
+  window.BoardThemes = { THEMES, DEFAULT, SLIDERS, valid, byId, url, thumb, adjust, isDefault, css, filter, colours, filterPixels, rendered, loaded, render };
 })();

@@ -924,7 +924,7 @@ function PiecePicker({ value, onChange }) {
 // Settings › View › Board: each board's two squares (lila's thumbnails) through the sliders, as Lichess shows them; its
 // name on hover and to a screen reader. The CSS filter is close to the board's own (BoardThemes.filter), not exact
 function BoardPicker({ value, adj, onChange }) {
-  const BT = window.BoardThemes, filter = BT.isDefault(adj) ? 'none' : `brightness(${adj.brightness}%) contrast(${adj.contrast}%) hue-rotate(${Math.round(adj.hue * 3.6)}deg)`;
+  const BT = window.BoardThemes, filter = BT.css(adj);
   return (
     <TweakRow label="Board">
       <div className="board-picker" role="group" aria-label="Board">

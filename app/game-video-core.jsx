@@ -142,10 +142,11 @@ function usePieceSet(chosen) {
   return { shown: last.current, failed: failed === want ? want : null };
 }
 // the board drawn (BoardThemes): the squares' colours (null under a picture), the coordinates' and the picture (src),
-// set by GameApp as PIECE_SET is (useBoardLook)
-let BOARD_LOOK = { ...window.BoardThemes.colours('brown'), src: null };
-// The board to draw: a flat one at once; a picture once it's drawn through the sliders (the last board until then,
-// a short pause first so dragging a slider doesn't draw every step). failed: the picture couldn't be loaded.
+// with the CSS filter it is shown through (css), set by GameApp as PIECE_SET is (useBoardLook)
+let BOARD_LOOK = { ...window.BoardThemes.colours('brown'), src: null, css: 'none' };
+// The board to draw: a flat one at once; a picture board's file at once through a CSS filter while the sliders move,
+// then, after a short pause, the picture drawn through them (render), which the export paints (it can't paint a
+// filter). Until its file has loaded, the last board. failed: the picture couldn't be loaded.
 function useBoardLook(theme, adj) {
   const BT = window.BoardThemes, id = BT.valid(theme), a = BT.adjust(adj), want = [id, a.brightness, a.contrast, a.hue].join('/');
   const pic = !!BT.byId(id).file;
@@ -155,11 +156,12 @@ function useBoardLook(theme, adj) {
     if (!pic) return;
     let live = true;
     const go = () => BT.render(id, a).then((src) => live && setGot({ want, src }), () => live && setGot({ want, failed: true }));
-    const timer = BT.rendered(id, a) ? (go(), null) : setTimeout(go, 120);
+    const timer = BT.rendered(id, a) || !BT.loaded(id) ? (go(), null) : setTimeout(go, 120);
     return () => { live = false; clearTimeout(timer); };
   }, [want]);
-  if (!pic) last.current = { ...BT.colours(id, a), src: null };
-  else if (got.want === want && got.src) last.current = { ...BT.colours(id, a), src: got.src };
+  if (!pic) last.current = { ...BT.colours(id, a), src: null, css: 'none' };
+  else if (got.want === want && got.src) last.current = { ...BT.colours(id, a), src: got.src, css: 'none' };
+  else if (BT.loaded(id)) last.current = { ...BT.colours(id, a), src: BT.url(id), css: BT.css(a) };
   BOARD_LOOK = last.current;
   return { failed: !!(pic && got.want === want && got.failed) };
 }
@@ -314,7 +316,7 @@ function boardSquares() {
   const B = BOARD_LOOK, sq = [];
   // a picture board lies under the squares, which are then only where the coordinates go (a flipped board's picture
   // stays put, as Lichess's does)
-  if (B.src) sq.push(<img key="pic" src={B.src} alt="" draggable={false} style={{ position: 'absolute', left: 0, top: 0, width: BW, height: BW, display: 'block' }} />);
+  if (B.src) sq.push(<img key="pic" src={B.src} alt="" draggable={false} style={{ position: 'absolute', left: 0, top: 0, width: BW, height: BW, display: 'block', filter: B.css }} />);
   for (let r = 0; r < 8; r++) for (let f = 0; f < 8; f++) {
     const light = (r + f) % 2 === 0, [sf, sr] = view(f, r); // the square drawn here
     if (B.src && f !== 0 && r !== 7) continue;
