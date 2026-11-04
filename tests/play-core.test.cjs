@@ -497,3 +497,77 @@ test('fiftyRule: a note from the FEN\'s half-move clock once a draw can be claim
   assert.equal(at('7k/5Q2/6K1/8/8/8/8/8 b - - 120 90'), null, 'stalemate ends the game first');
   assert.equal(at('7k/6Q1/6K1/8/8/8/8/8 b - - 120 90'), null, 'so does checkmate');
 });
+
+// Play from this position: a game that keeps the moves shown on the board (game.from of them) and plays on after them
+test('a game from a position keeps the moves up to the one shown, and its clocks start there', () => {
+  const b = B.go(playAll(B.fromFen(), ['e2e4', 'e7e5', 'g1f3', 'b8c6']), 2);
+  const g = P.start(b, '5+3', '2026.11.04', { keep: true });
+  assert.deepEqual(g.steps.map((s) => s.uci), ['e2e4', 'e7e5', 'g1f3'], 'moves after the one shown are dropped');
+  assert.equal(g.upto, 2);
+  assert.equal(g.game.from, 3);
+  assert.equal(P.played(g), 0);
+  assert.equal(g.game.clock.since, null, 'stopped until the first move of the game');
+  assert.equal(P.canTakeback(g), false, 'nothing of the game to take back');
+  assert.equal(P.start(b, null).game.from, undefined, 'without keep, the start as before');
+  assert.equal(P.start(b, null).steps.length, 0);
+});
+test('a game from a position: takebacks stop where it began, clocks and critique count its own moves', () => {
+  const b = playAll(B.fromFen(), ['e2e4', 'e7e5']);
+  let g = P.start(b, '5+3', '2026.11.04', { keep: true });
+  g = P.move(g, CC.stepFromUci(B.pos(g), 'g1f3'), 1000);
+  assert.equal(P.played(g), 1);
+  assert.deepEqual(g.game.clock.clk, [303000]);
+  assert.equal(P.canTakeback(g), true);
+  const back = P.takeback(g, 2000);
+  assert.equal(back.steps.length, 2);
+  assert.equal(back.game.clock.since, null, 'every move of the game taken back: the clocks stop again');
+  assert.equal(P.canTakeback(back), false, 'the moves before the game stay');
+  assert.equal(P.takeback(back, 3000), back);
+  // against Stockfish, as Black: White's earlier move isn't the player's, and the player's first move is step 2
+  let s = P.start(B.fromFen(), null, '2026.11.04', { mode: 'stockfish', you: 'b' });
+  s = P.start(playAll(B.fromFen(), ['e2e4', 'e7e5', 'g1f3']), null, '2026.11.04', { mode: 'stockfish', you: 'b', keep: true });
+  assert.equal(P.canTakeback(s), false, 'Black played e7e5 before the game');
+  assert.equal(P.addCritique(s, { j: 1, cls: 'blunder', best: 'c7c5' }), s, 'no critique of a move before the game');
+  s = P.move(s, CC.stepFromUci(B.pos(s), 'b8c6'), 1000);
+  s = P.addCritique(s, { j: 3, cls: 'mistake', best: 'g8f6' });
+  assert.equal(s.game.critique.length, 1);
+  s = P.move(s, CC.stepFromUci(B.pos(s), 'f1b5'), 2000);
+  const sb = P.takeback(s, 3000);
+  assert.equal(sb.steps.length, 3);
+  assert.deepEqual(sb.game.critique, []);
+});
+test('a game from a position: its PGN has the earlier moves, the clocks on its own, and it survives a reload', () => {
+  let g = P.start(playAll(B.fromFen(), ['e2e4', 'e7e5']), '5+3', '2026.11.04', { keep: true });
+  g = P.move(g, CC.stepFromUci(B.pos(g), 'g1f3'), 1000);
+  g = P.move(g, CC.stepFromUci(B.pos(g), 'b8c6'), 2000);
+  const pgn = P.pgn(g);
+  assert.match(pgn, /1\. e4 e5 2\. Nf3 \{ \[%clk 0:05:03\] \} 2\.\.\. Nc6 \{ \[%clk 0:05:02\] \}/);
+  const r = B.restore(B.save(g));
+  assert.equal(r.game.from, 2);
+  assert.deepEqual(r.game.clock.clk, g.game.clock.clk);
+  assert.equal(P.played(r), 2);
+  // a stored from past the moves is clamped; a bad one is dropped
+  assert.equal(B.restore({ ...B.save(g), game: { ...g.game, from: 9 } }).game.from, 4);
+  assert.equal(B.restore({ ...B.save(g), game: { ...g.game, from: 'x' } }).game.from, undefined);
+  // a game whose earlier moves already repeat: the repetition counts them
+  const shuffle = ['g1f3', 'g8f6', 'f3g1', 'f6g8'];
+  let h = P.start(playAll(B.fromFen(), shuffle.concat(['g1f3', 'g8f6', 'f3g1'])), null, null, { keep: true });
+  h = P.move(h, CC.stepFromUci(B.pos(h), 'f6g8'), 1000);
+  assert.equal(h.game.result, null);
+  assert.equal(P.claimable(h), 'repetition', 'the third time counts the two before the game');
+});
+test('a game stepped back to an earlier move: the clocks, flag, moves and resign go by its last position', () => {
+  let g = game('5+3', [['e2e4', 1000], ['e7e5', 2000], ['g1f3', 3000]]);
+  const back = B.go(g, 0);
+  assert.equal(B.pos(back).turn, 'b', 'shown: the position after 1. e4');
+  // Black is to move in the game; its clock runs, White's doesn't
+  assert.equal(P.timeLeft(back, 'b', 4000), P.timeLeft(g, 'b', 4000));
+  assert.equal(P.timeLeft(back, 'w', 4000), g.game.clock.left.w);
+  assert.equal(P.resign(back, 4000).game.result.side, 'b');
+  assert.equal(P.flag(back, 1e9).game.result.side, 'b');
+  // a move made while stepped back goes after the last move
+  const m = P.move(back, CC.stepFromUci(B.pos(g), 'b8c6'), 4000);
+  assert.deepEqual(m.steps.map((s) => s.uci), ['e2e4', 'e7e5', 'g1f3', 'b8c6']);
+  assert.equal(m.upto, 3);
+  assert.deepEqual(P.takeback(back, 4000).steps.map((s) => s.uci), ['e2e4', 'e7e5']);
+});

@@ -2458,6 +2458,79 @@ for (const name of BROWSERS) for (const site of SITES) {
       assert.deepEqual(g.errors, []);
       await g.ctx.close();
     });
+    // Play from this position: a loaded game stepped six plies in, Play vs human from there keeps those moves; Take back
+    // stops at them, and Play vs Stockfish from that game's board starts there again
+    await t.test('desktop: Play vs human and vs Stockfish from the position on the board', async () => {
+      const g = await open(browser, { width: 1440, height: 900 });
+      const p = g.page, stored = () => p.evaluate(() => JSON.parse(localStorage.getItem('chess-video.files.v1')).board);
+      await p.goto(base, { waitUntil: 'load' });
+      await loadedOn(p);
+      await p.getByRole('button', { name: 'Menu', exact: true }).click();
+      await p.getByRole('button', { name: 'Play vs human' }).click();
+      let dialog = p.getByRole('dialog', { name: 'Play vs human' });
+      await dialog.waitFor({ timeout: 3000 });
+      assert.equal(await dialog.getByRole('radio', { name: 'This position' }).count(), 0, 'not at the starting position');
+      await p.keyboard.press('Escape');
+      await dialog.waitFor({ state: 'detached', timeout: 3000 });
+      for (let i = 0; i < 6; i++) await p.keyboard.press('ArrowRight');
+      await assert.doesNotReject(p.locator('.plabel').filter({ hasText: /^3… / }).waitFor({ timeout: 5000 }));
+      await p.getByRole('button', { name: 'Menu', exact: true }).click();
+      await p.getByRole('button', { name: 'Play vs human' }).click();
+      dialog = p.getByRole('dialog', { name: 'Play vs human' });
+      await dialog.waitFor({ timeout: 3000 });
+      assert.equal(await dialog.getByRole('radio', { name: 'This position' }).getAttribute('aria-checked'), 'true');
+      await dialog.getByRole('radiogroup', { name: 'Time control' }).getByRole('radio', { name: '5+3' }).click();
+      await dialog.getByRole('button', { name: 'Start game' }).click();
+      await dialog.waitFor({ state: 'detached', timeout: 3000 });
+      await settled(p);
+      let st = await stored();
+      assert.equal(st.moves.length, 6);
+      assert.equal(st.game.from, 6);
+      assert.equal(await p.locator('.start-pill').count(), 1);
+      assert.equal(await p.getByRole('button', { name: 'Take back' }).count(), 0, 'the moves before the game stay');
+      // a legal move of White's (to move, so at the bottom), found by the page's own rules
+      const [from, to] = await p.evaluate((s) => {
+        const CC = window.ChessCore, sq = (i) => 'abcdefgh'[i % 8] + (8 - Math.floor(i / 8));
+        let pos = CC.parseFen(s.fen).pos;
+        for (const u of s.moves) pos = CC.applyUci(pos, u).pos;
+        for (let i = 0; i < 64; i++) if (pos.b[i] && pos.b[i] !== 'K' && pos.b[i] === pos.b[i].toUpperCase()) { const t = CC.legalTargets(pos, i); if (t.length) return [sq(i), sq(t[0])]; }
+        return [];
+      }, st);
+      const b = await boardBox(p), f = square(b, from), tt = square(b, to);
+      await p.mouse.move(f.x, f.y); await p.mouse.down(); await p.mouse.move(tt.x, tt.y, { steps: 8 }); await p.mouse.up();
+      await assert.doesNotReject(p.getByRole('button', { name: 'Take back' }).waitFor({ timeout: 5000 }));
+      await p.screenshot({ path: path.join(OUT, host + '-play-from-position.png') });
+      // stepping back through the game, the moves before it too: the board shows the move, takes no move, and a press on
+      // it (or End) goes back to the game's last move
+      const behind = p.getByText(/End or a press on the board goes back to the game/);
+      for (let i = 0; i < 2; i++) await p.keyboard.press('ArrowLeft');
+      await assert.doesNotReject(p.locator('.plabel').filter({ hasText: /^3\. Bg2$/ }).waitFor({ timeout: 5000 }));
+      await assert.doesNotReject(behind.waitFor({ timeout: 3000 }));
+      assert.equal((await stored()).upto, 4);
+      const b2 = await boardBox(p), c = square(b2, 'e4');
+      await p.mouse.click(c.x, c.y);
+      await assert.doesNotReject(behind.waitFor({ state: 'detached', timeout: 3000 }));
+      assert.equal((await stored()).upto, 7 - 1);
+      await p.keyboard.press('Home');
+      await assert.doesNotReject(behind.waitFor({ timeout: 3000 }));
+      await p.keyboard.press('End');
+      await assert.doesNotReject(behind.waitFor({ state: 'detached', timeout: 3000 }));
+      await p.getByRole('button', { name: 'Take back' }).click();
+      await assert.doesNotReject(p.getByRole('button', { name: 'Take back' }).waitFor({ state: 'detached', timeout: 5000 }));
+      assert.equal((await stored()).moves.length, 6);
+      await p.getByRole('button', { name: 'Menu', exact: true }).click();
+      await p.getByRole('button', { name: 'Play vs Stockfish' }).click();
+      dialog = p.getByRole('dialog', { name: 'Play vs Stockfish' });
+      await dialog.waitFor({ timeout: 3000 });
+      assert.equal(await dialog.getByRole('radio', { name: 'This position' }).getAttribute('aria-checked'), 'true');
+      await dialog.getByRole('button', { name: 'Start game' }).click();
+      await dialog.waitFor({ state: 'detached', timeout: 3000 });
+      st = await stored();
+      assert.equal(st.game.mode, 'stockfish');
+      assert.equal(st.game.from, 6);
+      assert.deepEqual(g.errors, []);
+      await g.ctx.close();
+    });
     // Play vs human: the board turns to the side to move, Take back takes a move back, the game ends in mate, nothing hints
     await t.test('desktop: Play vs human turns the board, takes back, ends in mate, and asks before leaving a game', async () => {
       const g = await open(browser, { width: 1440, height: 900 });
@@ -2502,11 +2575,14 @@ for (const name of BROWSERS) for (const site of SITES) {
       assert.ok(clocks.every((c) => /^4:5\d$|^5:0[0-3]$/.test(c)) && clocks.some((c) => c !== '5:00'), clocks.join(' '));
       await noHints();
       await p.screenshot({ path: path.join(OUT, host + '-play.png') });
-      // ← and the transport bar don't take moves back in a game; Take back does: Black to move again, still at the bottom
+      // ← steps back through the game without taking a move back (the board stays turned to the side to move), End
+      // returns; Take back takes it back: Black to move again, still at the bottom
       await p.keyboard.press('ArrowLeft');
-      await p.waitForTimeout(300);
-      assert.match(await label.innerText(), /1… e5/);
-      assert.equal(await p.getByRole('button', { name: 'Previous move (←)' }).isDisabled(), true);
+      await assert.doesNotReject(label.filter({ hasText: /^1\. f3$/ }).waitFor({ timeout: 5000 }));
+      assert.match(await panel('Moves'), /e5/);
+      assert.equal(await p.getByRole('button', { name: 'Previous move (←)' }).isDisabled(), false);
+      await p.keyboard.press('End');
+      await assert.doesNotReject(label.filter({ hasText: /1… e5/ }).waitFor({ timeout: 5000 }));
       await p.getByRole('button', { name: 'Take back' }).click();
       await assert.doesNotReject(label.filter({ hasText: /^1\. f3$/ }).waitFor({ timeout: 5000 }));
       assert.doesNotMatch(await panel('Moves'), /e5/);
@@ -2577,6 +2653,8 @@ for (const name of BROWSERS) for (const site of SITES) {
       // a finished game is left without asking; then a new one with a move asks
       await p.getByRole('button', { name: 'Menu', exact: true }).click();
       await p.getByRole('button', { name: 'Play vs human' }).click();
+      // the finished game's position is This position, chosen by default: a new game from the start
+      await p.getByRole('radio', { name: 'Starting position' }).click();
       await p.getByRole('button', { name: 'Start game' }).click();
       await drag(b, 'e2', 'e4', false);
       await assert.doesNotReject(label.filter({ hasText: /1\. e4/ }).waitFor({ timeout: 5000 }));
@@ -2823,6 +2901,7 @@ for (const name of BROWSERS) for (const site of SITES) {
       await p.keyboard.press('ArrowRight');
       // and one in progress, left for the free board (it asks, and says the game is kept)
       await menuItem('Play vs human');
+      await p.getByRole('radio', { name: 'Starting position' }).click();
       await p.getByRole('radio', { name: '10+0' }).click();
       await p.getByRole('button', { name: 'Start game' }).click();
       await drag(b, 'e2', 'e4', false);

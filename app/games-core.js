@@ -27,7 +27,7 @@
   // An entry's board restored, when it is still a game with moves; null otherwise
   function playable(e) {
     const b = B().restore(e.board);
-    return b && b.game && b.steps.length && b.game.id === e.id ? b : null;
+    return b && b.game && window.PlayCore.played(b) && b.game.id === e.id ? b : null;
   }
 
   // The list with this game kept, first: from its first move; a game with no moves (all taken back) leaves the list
@@ -35,7 +35,7 @@
     const g = board && board.game;
     if (!g || !g.id) return list;
     const rest = list.filter((e) => e.id !== g.id);
-    if (!board.steps.length) return rest;
+    if (!window.PlayCore.played(board)) return rest;
     return [{ id: g.id, updated: now, board: B().save(board) }].concat(rest).slice(0, KEEP);
   }
 

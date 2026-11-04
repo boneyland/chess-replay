@@ -711,10 +711,19 @@ function Header({ M, a }) {
   );
 }
 
+// The Moves list's mark where a game played on from a position begins: the moves before it came with the position. The
+// panel's colour on the accent (light on the light theme's dark gold, dark on the dark theme's bright one) for contrast
+function StartPill() {
+  return (
+    <span className="start-pill" title="The game begins here; the moves before it came with the position" style={{ ...NO_SELECT, flex: 'none', alignSelf: 'center', marginLeft: tx(6), padding: `${tx(3)}px ${tx(8)}px`, borderRadius: tx(8), background: C.last, color: C.panel, font: `700 ${tx(13)}px ${MONO}`, letterSpacing: '0.06em' }}>GAME STARTS</span>
+  );
+}
+
 // deadAt: the ply after which the position is dead (useFirstDead), marked with a pill on the paused list; end: the
 // game's result after the last move ({ score, why }, PlayCore.ending), shown while paused or once the last move is played,
-// and taking the pill's place there
-function MoveList({ M, T, S, a, paused, onPick, deadAt, end }) {
+// and taking the pill's place there; startAt: a game played on from a position (PlayCore's game.from), whose first
+// move gets a Game starts pill before it
+function MoveList({ M, T, S, a, paused, onPick, deadAt, end, startAt }) {
   const c = lastPly(T, S);
   // the moves wrap in lines, as the Analysis panel's lines do: a light chip for White's move, a dark one for Black's,
   // the move number before White's (and before the first, when the game starts on Black's). A line is a chip (CHIP)
@@ -771,7 +780,8 @@ function MoveList({ M, T, S, a, paused, onPick, deadAt, end }) {
     const edge = P.cls !== 'none' && P.cls !== 'best' ? `2px solid ${clsColor(P.cls)}` : `1px solid ${white ? 'rgba(60,40,20,0.22)' : 'rgba(255,236,214,0.22)'}`;
     moves.push(
       <span key={i} style={{ display: 'flex', alignItems: 'center', gap: tx(5), opacity: shown }}>
-        {(white || i === 0) && <span style={{ color: i <= c ? C.ink : C.dim, marginLeft: i ? tx(6) : 0, font: `500 ${tx(15)}px ${MONO}` }}>{window.ChessCore.moveNo(M.ply0 + i)}</span>}
+        {startAt > 0 && i === startAt && <StartPill />}
+        {(white || i === 0 || i === startAt) && <span style={{ color: i <= c ? C.ink : C.dim, marginLeft: i ? tx(6) : 0, font: `500 ${tx(15)}px ${MONO}` }}>{window.ChessCore.moveNo(M.ply0 + i)}</span>}
         <span className="mv" role="button" data-ply={i} tabIndex={i === focusPly ? 0 : -1} title={`Go to ${label(M, i)}`} onClick={(e) => { e.stopPropagation(); onPick(i); }}
           onKeyDown={(e) => moveKey(e, i)}
           style={{ opacity: ahead ? 0.5 : 1, height: CHIP, boxSizing: 'border-box', display: 'flex', alignItems: 'center', padding: `0 ${tx(8)}px`, borderRadius: 2, cursor: 'pointer', font: `${cur ? 700 : 600} ${tx(16)}px ${MONO}`, background: white ? '#f1ebe1' : '#2a2320', color: white ? '#15100d' : '#efe8de', border: edge, boxShadow: cur ? `0 0 0 3px ${C.last}` : 'none' }}>{P.san}{P.mark || ''}</span>
@@ -779,6 +789,8 @@ function MoveList({ M, T, S, a, paused, onPick, deadAt, end }) {
       </span>
     );
   }
+  // a game from a position with none of its own moves yet: the pill after the moves before it
+  if (startAt > 0 && startAt === S.N) moves.push(<StartPill key="start" />);
   if (end && S.N) {
     moves.push(
       <span key="end" className="move-result" style={{ ...NO_SELECT, display: 'flex', alignItems: 'baseline', gap: tx(6), marginLeft: tx(6), opacity: paused ? 1 : cl01((T - S.tp[S.N - 1]) / 0.15) }}>
@@ -1265,6 +1277,8 @@ function GameVideo({ M, tw, d, probe, queen, nav, scheme, sf, orient }) {
     };
     // the position on the board as a FEN, for the menu's Copy FEN
     nav.current.fen = shownFen;
+    // the moves to the position on the board (a shown line's after the game's before it), for the Play dialogs' This position
+    nav.current.line = () => ({ fen: M.start.fen, moves: (vline ? M.plies.slice(0, vline.at).concat(vline.moves.slice(0, vline.upto + 1)) : M.plies.slice(0, cNow + 1)).map((p) => p.uci) });
   }
   const navSig = nav && nav.current ? `${nav.current.label}|${nav.current.hasPrev}|${nav.current.hasNext}|${nav.current.hasLast}` : '';
   React.useEffect(() => { if (nav && nav.listen) nav.listen(); }, [navSig]);
