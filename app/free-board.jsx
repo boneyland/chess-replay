@@ -64,13 +64,13 @@ function OpeningExplorer({ board, book, onPlay, onHover }) {
         {next.length ? (
           <div className="book-moves" style={{ display: 'flex', flexDirection: 'column', gap: tx(2) }}>
             {next.map((m) => (
-              // a name that doesn't fit beside its move goes under it
+              // the name stays beside its move, cut short with an ellipsis when it doesn't fit
               <div key={m.uci} className="mv expl-row" role="button" tabIndex={0} title={`Play ${m.san}`} onClick={(e) => play(e, m.uci)}
                 onMouseEnter={() => onHover(m.uci)} onMouseLeave={() => onHover(null)} onFocus={() => onHover(m.uci)} onBlur={() => onHover(null)}
                 onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') play(e, m.uci); }}
-                style={{ display: 'flex', flexWrap: 'wrap', alignItems: 'center', columnGap: tx(14), rowGap: tx(2), minWidth: 0, padding: `${tx(3)}px ${tx(6)}px`, borderRadius: 2, cursor: 'pointer' }}>
+                style={{ display: 'flex', alignItems: 'center', gap: tx(14), minWidth: 0, padding: `${tx(3)}px ${tx(6)}px`, borderRadius: 2, cursor: 'pointer' }}>
                 <span style={{ flex: 'none', minWidth: tx(58), boxSizing: 'border-box', textAlign: 'center', padding: `${tx(2)}px ${tx(8)}px`, borderRadius: 2, font: `600 ${tx(17)}px ${MONO}`, background: white ? '#f1ebe1' : '#2a2320', color: white ? '#15100d' : '#efe8de', border: `1px solid ${white ? 'rgba(60,40,20,0.22)' : 'rgba(255,236,214,0.22)'}` }}>{m.san}</span>
-                <span style={{ minWidth: 0, maxWidth: '100%', font: `400 ${tx(17)}px ${SANS}`, color: C.dim, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{m.name || ''}</span>
+                <span style={{ flex: '1 1 auto', minWidth: 0, font: `400 ${tx(17)}px ${SANS}`, color: C.dim, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{m.name || ''}</span>
               </div>
             ))}
           </div>
