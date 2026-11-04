@@ -249,7 +249,7 @@ function GameApp() {
   const gameRef = React.useRef(false);
   gameRef.current = !!(board && board.game);
   // a game with moves and no result yet is thrown away only after asking
-  const playing = !!(board && window.PlayCore.inProgress(board) && board.steps.length);
+  const playing = !!(board && window.PlayCore.inProgress(board) && window.PlayCore.played(board));
   // (a game left to open the editor was kept then, and isn't asked about again)
   const guard = (run) => { if (playing && !editing) setLeave({ run }); else run(); };
   const guardRef = React.useRef(guard);
@@ -331,7 +331,7 @@ function GameApp() {
   };
   // a game left (for another board, a loaded game, or by closing the page) is kept with its clock charged up to then, so
   // Resume goes on from there; the stored board keeps its running clock, which a reload charges for the time away
-  const keepLeft = (b) => { if (b && window.PlayCore.inProgress(b) && b.steps.length) updateGames((list) => window.GamesCore.keep(list, window.PlayCore.pause(b, Date.now()), Date.now()), null); };
+  const keepLeft = (b) => { if (b && window.PlayCore.inProgress(b) && window.PlayCore.played(b)) updateGames((list) => window.GamesCore.keep(list, window.PlayCore.pause(b, Date.now()), Date.now()), null); };
   const boardRef = React.useRef(board);
   boardRef.current = board;
   React.useEffect(() => {
@@ -423,14 +423,21 @@ function GameApp() {
   React.useEffect(() => { if (fenNote && fenNote.ok) { const id = setTimeout(() => setFenNote(null), 4000); return () => clearTimeout(id); } }, [fenNote]);
   // the Play dialog's choices to open with (after the editor's Cancel), else its defaults
   const [playInit, setPlayInit] = React.useState(null);
-  const playIn = (mode) => () => { setNewMenu(false); setMenu(false); setPanel(false); guard(() => { setPlayInit(null); setPlayOpen(mode); }); };
+  // the position on the board when a Play dialog opens, with the moves to it, for its This position
+  const [playHere, setPlayHere] = React.useState(null);
+  const playIn = (mode) => () => {
+    const here = editing ? null : (nav.current && nav.current.line && nav.current.line()) || null;
+    setNewMenu(false); setMenu(false); setPanel(false); guard(() => { setPlayInit(null); setPlayHere(here); setPlayOpen(mode); });
+  };
   const playHuman = playIn('human'), playSf = playIn('stockfish');
   // against Stockfish the side is remembered as picked, and Random resolved here, for this game
-  const startGame = (mode, { fen, tc, you }) => {
+  // This position (here): a game played on after the moves to it, which it keeps
+  const startGame = (mode, { fen, here, tc, you }) => {
     setQueenOpen(false); setTweak('playClock', tc || 'Off');
     if (mode === 'stockfish') setTweak('playSide', you);
     const side = you === 'random' ? (Math.random() < 0.5 ? 'w' : 'b') : you;
-    commitBoard(window.PlayCore.start(window.BoardCore.fromFen(fen), tc, null, mode === 'stockfish' ? { mode, you: side } : undefined));
+    const from = here && window.BoardCore.restore({ fen: here.fen, moves: here.moves });
+    commitBoard(window.PlayCore.start(from || window.BoardCore.fromFen(fen), tc, null, { ...(mode === 'stockfish' ? { mode, you: side } : {}), keep: !!from }));
   };
   const playStart = (choice) => { const mode = playOpen; setPlayOpen(null); startGame(mode, choice); };
   // Set-up position with no position set up: the editor first, keeping the dialog's choices
@@ -691,7 +698,7 @@ function GameApp() {
       onChange: (v) => { setTweak('sfEngine', v); return v === 'Full' && full.state === 'absent'; } } : null };
 
   const gameName = (g) => (g.mode === 'stockfish' ? `Play vs Stockfish · you play ${g.you === 'w' ? 'White' : 'Black'}` : 'Play vs human');
-  const boardStatus = board && board.game ? `${gameName(board.game)} · ${board.game.tc || 'no clock'} · ${board.steps.length} move${board.steps.length === 1 ? '' : 's'}${board.game.result ? ' · ' + window.PlayCore.resultText(board.game.result).score : ''}`
+  const boardStatus = board && board.game ? `${gameName(board.game)} · ${board.game.tc || 'no clock'} · ${window.PlayCore.played(board)} move${window.PlayCore.played(board) === 1 ? '' : 's'}${board.game.result ? ' · ' + window.PlayCore.resultText(board.game.result).score : ''}`
     : board && `Free board · ${board.fen === window.ChessCore.START_FEN ? 'from the starting position' : 'from a set-up position'} · ${board.steps.length} move${board.steps.length === 1 ? '' : 's'}`;
   const status = boardStatus || `${M.white.short} – ${M.black.short} · ${M.plies.length} plies` + (M.evalSource === 'analysis' ? ' · analysis evals' : M.evalSource === 'pgn' ? ' · PGN evals' : '') + (M.hasNotes ? ' · notes' : '') + (files.sample ? ' (sample)' : '') + ' · ' + fmtLen(TM.total);
   const shownErr = err || built.error;
@@ -799,7 +806,7 @@ function GameApp() {
           </div>
         </DialogBox>
       )}
-      {playOpen && <PlayDialog key={playOpen} mode={playOpen} setUpFen={board && board.fen !== window.ChessCore.START_FEN ? board.fen : null} clock={t.playClock} side={t.playSide} initial={playInit} onStart={playStart} onSetUp={playSetUp} onFromImage={visionOk ? playFromImage : null} onClose={closePlay} />}
+      {playOpen && <PlayDialog key={playOpen} mode={playOpen} setUpFen={board && board.fen !== window.ChessCore.START_FEN ? board.fen : null} here={playHere} clock={t.playClock} side={t.playSide} initial={playInit} onStart={playStart} onSetUp={playSetUp} onFromImage={visionOk ? playFromImage : null} onClose={closePlay} />}
       {vision && <VisionDialog again={vision.again} onRead={visionRead} onClose={visionClose} />}
       {keysOpen && <ShortcutsDialog onClose={closeKeys} />}
       {shareOpen && (
