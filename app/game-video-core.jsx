@@ -141,6 +141,32 @@ function usePieceSet(chosen) {
   PIECE_SET = last.current;
   return { shown: last.current, failed: failed === want ? want : null };
 }
+// the board drawn (BoardThemes): the squares' colours (null under a picture) and the coordinates'; for a picture board,
+// its picture (src) and the CSS filter it is shown through (css). Set by GameApp as PIECE_SET is (useBoardLook)
+let BOARD_LOOK = { ...window.BoardThemes.colours('brown'), src: null, css: 'none' };
+// The board to draw: a flat one at once. A picture board is lila's file through a CSS filter on the page, so it follows
+// the sliders at once and never swaps pictures (a swap showed as a refresh when a slider stopped); a video export draws
+// the picture worked out through the sliders instead (BoardThemes.render, which exportVideo waits for), as the export
+// can't paint a filter. Until a newly chosen board's file has loaded, the last board. failed: it couldn't be loaded.
+function useBoardLook(theme, adj, exporting) {
+  const BT = window.BoardThemes, id = BT.valid(theme), a = BT.adjust(adj), want = [id, a.brightness, a.contrast, a.hue].join('/');
+  const pic = !!BT.byId(id).file;
+  const [failed, setFailed] = React.useState(null);
+  const [, bump] = React.useReducer((n) => n + 1, 0);
+  const last = React.useRef(BOARD_LOOK);
+  const need = pic && (!BT.loaded(id) || (exporting && !BT.rendered(id, a)));
+  React.useEffect(() => {
+    if (!need) return;
+    let live = true;
+    (exporting ? BT.render(id, a) : BT.preload(id)).then(() => { if (live) { setFailed(null); bump(); } }, () => { if (live) setFailed(want); });
+    return () => { live = false; };
+  }, [want, need, exporting]);
+  if (!pic) last.current = { ...BT.colours(id, a), src: null, css: 'none' };
+  else if (exporting && BT.rendered(id, a)) last.current = { ...BT.colours(id, a), src: BT.rendered(id, a), css: 'none' };
+  else if (BT.loaded(id)) last.current = { ...BT.colours(id, a), src: BT.url(id), css: BT.css(a) };
+  BOARD_LOOK = last.current;
+  return { failed: failed === want };
+}
 
 function simulate(M) {
   const board = {}, pieces = [];
@@ -289,13 +315,17 @@ function Arrow({ from, to, color, a, grow, thin }) {
 // the 64 squares with their rank and file coordinates, through view() (a flipped board turns them); the replay's
 // Board and the free board both draw these
 function boardSquares() {
-  const sq = [];
+  const B = BOARD_LOOK, sq = [];
+  // a picture board lies under the squares, which are then only where the coordinates go (a flipped board's picture
+  // stays put, as Lichess's does)
+  if (B.src) sq.push(<img key="pic" src={B.src} alt="" draggable={false} style={{ position: 'absolute', left: 0, top: 0, width: BW, height: BW, display: 'block', filter: B.css }} />);
   for (let r = 0; r < 8; r++) for (let f = 0; f < 8; f++) {
     const light = (r + f) % 2 === 0, [sf, sr] = view(f, r); // the square drawn here
+    if (B.src && f !== 0 && r !== 7) continue;
     sq.push(
-      <div key={r * 8 + f} style={{ position: 'absolute', left: f * SQ, top: r * SQ, width: SQ, height: SQ, background: light ? C.light : C.dark }}>
-        {f === 0 && <span style={{ position: 'absolute', left: 6, top: 4, font: `600 16px ${MONO}`, color: light ? C.dark : C.light }}>{8 - sr}</span>}
-        {r === 7 && <span style={{ position: 'absolute', right: 6, bottom: 3, font: `600 16px ${MONO}`, color: light ? C.dark : C.light }}>{String.fromCharCode(97 + sf)}</span>}
+      <div key={r * 8 + f} style={{ position: 'absolute', left: f * SQ, top: r * SQ, width: SQ, height: SQ, background: B.src ? 'transparent' : light ? B.light : B.dark }}>
+        {f === 0 && <span style={{ position: 'absolute', left: 6, top: 4, font: `600 16px ${MONO}`, color: light ? B.onLight : B.onDark }}>{8 - sr}</span>}
+        {r === 7 && <span style={{ position: 'absolute', right: 6, bottom: 3, font: `600 16px ${MONO}`, color: light ? B.onLight : B.onDark }}>{String.fromCharCode(97 + sf)}</span>}
       </div>
     );
   }

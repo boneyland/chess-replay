@@ -3252,6 +3252,48 @@ for (const name of BROWSERS) for (const site of SITES) {
       await dk.ctx.close();
     });
 
+    // a picture board through the sliders (Settings › View) lies under the squares as one picture: on the page lila's
+    // file through a CSS filter, which follows a slider at once; in an export the picture worked out through the
+    // sliders, which the export paints itself (it can't paint a filter). The coordinates follow the sliders too
+    await t.test('desktop: a picture board with its hue turned shows through a filter, and an export draws it itself', { timeout: 180000 }, async () => {
+      const dk = await open(browser, { width: 1440, height: 900 });
+      await dk.page.addInitScript(() => { try { localStorage.setItem('chess-video.tweaks.v1', JSON.stringify({ boardTheme: 'wood4', boardHue: 30 })); } catch (e) {} });
+      await dk.page.goto(base, { waitUntil: 'load' });
+      await loadedOn(dk.page);
+      const pic = dk.page.locator('.stage-frame img[src="boards/wood4.jpg"]');
+      await pic.waitFor();
+      assert.match(await pic.evaluate((i) => i.style.filter), /hue-rotate\(108deg\)/);
+      const [r, b] = await Promise.all([pic.boundingBox(), dk.page.locator('[title="Drag a piece to try your own move"]').first().boundingBox()]);
+      assert.ok(Math.abs(r.width - b.width) < 1 && Math.abs(r.height - b.height) < 1, 'the picture covers the board');
+      // each frame the export draws: the board picture's src then, and the layers handed to html2canvas, and why
+      await dk.page.evaluate(() => {
+        const C = window.ExportDraw.compositor;
+        window.__frames = [];
+        window.ExportDraw.compositor = (...a) => {
+          const st = C(...a), draw = st.draw;
+          // and the frame's colour at a6's middle (a light square): wood4's light square turned 108° is greener than red
+          st.draw = async (cx) => {
+            await draw(cx);
+            const im = document.querySelector('.stage-frame img[src^="blob:"], .stage-frame img[src^="boards/"]'), R = a[0].getBoundingClientRect(), r = im.getBoundingClientRect(), k = cx.canvas.width / R.width;
+            const [red, green] = cx.getImageData(Math.round((r.left - R.left + r.width / 16) * k), Math.round((r.top - R.top + r.height * 5 / 16) * k), 1, 1).data;
+            window.__frames.push({ src: im.getAttribute('src'), why: { ...st.stats.why }, red, green });
+          };
+          return st;
+        };
+      });
+      await exportSize(dk.page, host + '-board-theme');
+      const frames = await dk.page.evaluate(() => window.__frames);
+      assert.ok(frames.length >= 2, 'frames drawn');
+      for (const f of frames) assert.match(f.src, /^blob:/, 'the export draws the picture worked out through the sliders');
+      for (const f of frames) assert.ok(f.green > f.red + 20, `the frame's board turned green (${f.red}, ${f.green})`);
+      assert.ok(!Object.keys(frames.at(-1).why).some((w) => /filter|image not loaded/.test(w)), JSON.stringify(frames.at(-1).why));
+      await dk.page.getByRole('dialog', { name: 'Exporting' }).waitFor({ state: 'detached', timeout: 5000 });
+      assert.equal(await pic.count(), 1, 'the page is back on the filtered file');
+      await dk.page.screenshot({ path: path.join(OUT, host + '-board-theme.png') });
+      assert.deepEqual(dk.errors, []);
+      await dk.ctx.close();
+    });
+
     // a pinch doesn't zoom the page (Chromium only: the pinch is a DevTools gesture, and Firefox has no phone emulation)
     if (name === 'chromium') await t.test('phone: a pinch doesn\'t zoom the page', async () => {
       const ph = await open(browser, { width: 390, height: 844 }, { isMobile: true, hasTouch: true });
