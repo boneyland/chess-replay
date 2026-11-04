@@ -441,6 +441,9 @@ function FreeBoard({ board, onChange, tw, setTweak, onLichess, sf, nav, orient, 
   const from = board.fen === window.ChessCore.START_FEN ? 'from the starting position' : 'from a set-up position';
   const HM = G ? { white: { name: playerName(G, 'w') }, black: { name: playerName(G, 'b') }, event: sfGame ? 'Play vs Stockfish' : 'Play vs human', site: `${G.tc || 'no clock'} · ${from}` }
     : { white: { name: 'White' }, black: { name: 'Black' }, event: 'Free board', site: from, eco: named && named.eco, opening: named && named.name };
+  // an upright phone (one column in the phone tier; a tablet held upright keeps them) drops the free board's info box
+  // and the Analysis panel's keys hint, which a touch screen has no use for
+  const upright = L.cols === 1 && L.tier === 'phone';
   return (
     <div ref={flowRef} style={{ position: 'absolute', inset: 0, background: C.bg, overflow: 'hidden', ...flowStyle() }}>
       {!G && (deadv || tbv ? <EvalBarView cp={(deadv || tbv).cp} txt={(deadv || tbv).txt} a={1} /> : <EvalBarView cp={cp == null ? 0 : cp} txt={cp == null ? (down ? '' : '…') : fmtSf(cp)} a={1} />)}
@@ -452,7 +455,7 @@ function FreeBoard({ board, onChange, tw, setTweak, onLichess, sf, nav, orient, 
         </BoardDraw>
       </BoardSpace>
       <FreeBar pos={pos} side="w" a={1} clock={clockOf('w')} name={G ? playerName(G, 'w') : null} />
-      {L.header && <Header M={HM} a={1} />}
+      {L.header && !(upright && !G) && <Header M={HM} a={1} />}
       <MoveList M={MV} T={upto + 0.999} S={S} a={1} paused onPick={live ? () => {} : go} deadAt={deadAt} end={end} />
       {G ? <GameInfo board={board} /> : tb ? <TablebaseExplorer t={tb} posKey={boardKey} onPlay={onBook} /> : xl ? <LichessExplorer x={xl} tw={tw} setTweak={setTweak} onGame={onLichess} posKey={boardKey} onPlay={onBook} onHover={setHov} white={pos.turn === 'w'} fallback={<OpeningExplorer board={board} book={book} onPlay={onBook} onHover={setHov} />} /> : <OpeningExplorer board={board} book={book} onPlay={onBook} onHover={setHov} />}
       {G ? <Panel box={L.analysis} a={1} style={NO_SELECT} title="Game"><GameStatus board={board} onChange={onChange} down={opponent.down} /></Panel>
@@ -465,7 +468,7 @@ function FreeBoard({ board, onChange, tw, setTweak, onLichess, sf, nav, orient, 
           : <React.Fragment>
             <OwnMoveAnalysis M={MV} vline={{ at: 0, moves: steps, upto, src: 'you' }} own={own} status={sf.status} why={sf.why} onReply={onReply} onHover={setPv} />
             {rule && <div style={{ marginTop: tx(12), paddingTop: tx(12), borderTop: `1px solid ${C.line}` }}><RuleBlock w={rule} /></div>}
-            <FitOrHide style={{ ...NO_SELECT, display: 'block', marginTop: tx(8), font: `500 ${tx(15)}px ${MONO}`, color: C.dim }}>← → step · <KeyCap>Home</KeyCap> the start · <KeyCap>End</KeyCap> the last move</FitOrHide>
+            {!upright && <FitOrHide style={{ ...NO_SELECT, display: 'block', marginTop: tx(8), font: `500 ${tx(15)}px ${MONO}`, color: C.dim }}>← → step · <KeyCap>Home</KeyCap> the start · <KeyCap>End</KeyCap> the last move</FitOrHide>}
           </React.Fragment>}
       </AnalysisPanel>}
     </div>
