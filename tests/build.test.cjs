@@ -284,3 +284,16 @@ test('the built site serves the board reader\'s files from vision/, byte for byt
   const LOCAL = JSON.parse(fs.readFileSync(path.join(site, 'sw.js'), 'utf8').match(/^const LOCAL = (\[.*?\]);/m)[1]);
   assert.ok(!LOCAL.some((f) => f.startsWith('vision/')));
 });
+
+// Content blockers' social lists (Fanboy's Social and Annoyance, in uBlock Origin) hide elements by generic class names
+// such as .share-row, .share-btns and .share-box: one hid the Share and export dialog's box in a Firefox (2026-11-04).
+// No class of ours may start with share or social
+test('no class name a content blocker hides as a share or social widget', () => {
+  const files = ['app/shell.html', ...fs.readdirSync(path.join(ROOT, 'app')).filter((f) => f.endsWith('.jsx')).map((f) => 'app/' + f)];
+  for (const f of files) {
+    const src = fs.readFileSync(path.join(ROOT, f), 'utf8').replace(/\/\*[\s\S]*?\*\//g, '');
+    const css = f.endsWith('.html') ? src.match(/\.(share|social)[\w-]*(?=[\s{,:>.[])/gi) : null;
+    const jsx = [...src.matchAll(/className=(?:"([^"]*)"|\{[^}]*?'([^']*)')/g)].map((m) => m[1] || m[2]).join(' ').split(/\s+/).filter((c) => /^(share|social)/i.test(c));
+    assert.deepEqual([...(css || []), ...jsx], [], f);
+  }
+});

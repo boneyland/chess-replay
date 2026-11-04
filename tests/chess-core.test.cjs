@@ -237,6 +237,15 @@ test('annotatedPgn keeps the source PGN variations and other NAGs, and clocks in
   assert.equal(back.plies[3].clk, 5.3);
 });
 
+test('annotatedPgn raw writes the tags and bare moves: no comments, NAGs, evals, clocks or variations', () => {
+  const pgn = '[White "A"]\n[Black "B"]\n[Result "*"]\n\n1. e4 { [%eval 0.3] [%clk 0:05:00] } e5 { [%eval 0.25] } 2. Qh5 $10 { A queen. } Ke7?? ( 2... Nc6 3. Bc4 ) *';
+  const M = CC.buildGame({ pgn, notes: '[INTRO]\nA game.\n[4]\nThe king walks.' });
+  const out = CC.annotatedPgn(M, { raw: true });
+  assert.match(out, /\[White "A"\]\n\[Black "B"\]\n\[Result "\*"\]/);
+  assert.equal(out.split('\n\n')[1], '1. e4 e5 2. Qh5 Ke7 *\n');
+  assert.deepEqual(CC.buildGame({ pgn: out }).plies.map((p) => p.san), ['e4', 'e5', 'Qh5', 'Ke7']);
+});
+
 test('annotatedPgn never starts a line with %, which would make it an escape line', () => {
   const word = 'x'.repeat(70);
   const M = CC.buildGame({ pgn: '1. e4 e5 *', notes: `[1]\n${word} % up` });

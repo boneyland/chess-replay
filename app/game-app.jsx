@@ -84,6 +84,10 @@ function useFullscreen() {
 // Whether the browser has a connection (navigator.onLine: false means none; true can still be a network that gets
 // nowhere). A change shows a note for a few seconds, and a tag above the frame says Offline for as long as it lasts.
 // the Settings button's icon: an eight-toothed cog with a hole (16 × 16)
+// the Share and export button's icon: an arrow up out of an open box (16 × 16, stroked)
+const SHARE = 'M8 10V1.8M5 4.6L8 1.6L11 4.6M5.6 7H3v7.4h10V7h-2.6';
+// a copy icon: one sheet over another (16 × 16, stroked); TICK once copied
+const COPY = 'M6 5.5h7v8.5H6Z M10 3V2H3v8.5h1', TICK = 'M3 8.5l3.2 3.2L13 4.8';
 const GEAR = 'M13.33 6.27L15.24 6.46L15.24 9.54L13.33 9.73L12.99 10.54L14.21 12.03L12.03 14.21L10.54 12.99L9.73 13.33L9.54 15.24L6.46 15.24L6.27 13.33L5.46 12.99L3.97 14.21L1.79 12.03L3.01 10.54L2.67 9.73L0.76 9.54L0.76 6.46L2.67 6.27L3.01 5.46L1.79 3.97L3.97 1.79L5.46 3.01L6.27 2.67L6.46 0.76L9.54 0.76L9.73 2.67L10.54 3.01L12.03 1.79L14.21 3.97L12.99 5.46Z M10.4 8a2.4 2.4 0 1 0 -4.8 0a2.4 2.4 0 1 0 4.8 0Z';
 const OFFLINE_NOTE = 'You’re offline. Replays, Stockfish and exports keep working; Ask Queen needs a connection.';
 function useOnline() {
@@ -130,6 +134,22 @@ function useScheme(pref) {
     return () => { try { if (mq) mq.removeEventListener('change', update); } catch (e) {} };
   }, [pref]);
   return mode;
+}
+
+// Share and export's copy button: an icon that turns to a tick for 1.5 s once the clipboard has taken text();
+// onFail(text) where the clipboard is refused
+function CopyButton({ label, text, onFail }) {
+  const [done, setDone] = React.useState(false);
+  React.useEffect(() => { if (done) { const id = setTimeout(() => setDone(false), 1500); return () => clearTimeout(id); } }, [done]);
+  const run = () => {
+    const v = text();
+    try { navigator.clipboard.writeText(v).then(() => setDone(true), () => onFail(v)); } catch (e) { onFail(v); }
+  };
+  return (
+    <button type="button" className={'twk-btn secondary xfer-copy' + (done ? ' done' : '')} aria-label={label} title={done ? 'Copied' : label} onClick={run}>
+      <svg width="16" height="16" viewBox="0 0 16 16" fill="none" aria-hidden="true"><path d={done ? TICK : COPY} stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round" /></svg>
+    </button>
+  );
 }
 
 function GameApp() {
@@ -183,6 +203,7 @@ function GameApp() {
   const [gamesOpen, setGamesOpen] = React.useState(null);
   // the Keyboard shortcuts dialog
   const [keysOpen, setKeysOpen] = React.useState(false);
+  const [shareOpen, setShareOpen] = React.useState(null); // the Share and export dialog: { fen } of the position it opened on
   // leaving a game in progress asks first: { run } is what waits on the answer
   const [leave, setLeave] = React.useState(null);
   const newRef = React.useRef(null);
@@ -397,21 +418,8 @@ function GameApp() {
     if (play) { setPlayInit({ from: image ? 'image' : 'setup', tc: play.tc, you: play.you }); setPlayOpen(play.mode); }
   };
   const importGame = () => { setNewMenu(false); setMenu(false); setPanel(false); guard(() => setImportOpen({ text: '' })); };
-  // the position on the board, whichever view it's in; where the clipboard is refused the note shows it to select
-  const copyFen = () => {
-    setNewMenu(false); setMenu(false);
-    const fen = nav.current && nav.current.fen && nav.current.fen();
-    if (!fen) return;
-    const shown = (ok) => setFenNote({ fen, ok });
-    try { navigator.clipboard.writeText(fen).then(() => shown(true), () => shown(false)); } catch (e) { shown(false); }
-  };
-  // the game's PGN (a free board's moves, or the loaded game with its annotations), copied like the FEN
-  const copyPgn = () => {
-    setNewMenu(false); setMenu(false);
-    const pgn = board ? window.BoardCore.pgn(board) : window.ChessCore.annotatedPgn(withQueen(M, Q.resultAt));
-    const shown = (ok) => setFenNote({ fen: pgn, ok, what: 'PGN' });
-    try { navigator.clipboard.writeText(pgn).then(() => shown(true), () => shown(false)); } catch (e) { shown(false); }
-  };
+  // where the clipboard is refused, Share and export closes and the note shows the text to select
+  const copyFailed = (what) => (text) => { setShareOpen(null); setFenNote({ fen: text, ok: false, what }); };
   React.useEffect(() => { if (fenNote && fenNote.ok) { const id = setTimeout(() => setFenNote(null), 4000); return () => clearTimeout(id); } }, [fenNote]);
   // the Play dialog's choices to open with (after the editor's Cancel), else its defaults
   const [playInit, setPlayInit] = React.useState(null);
@@ -434,6 +442,9 @@ function GameApp() {
   const closeGames = React.useCallback(() => setGamesOpen(null), []);
   const openKeys = () => { setNewMenu(false); setMenu(false); setPanel(false); setQueenOpen(false); setKeysOpen(true); };
   const closeKeys = React.useCallback(() => setKeysOpen(false), []);
+  // the dialog shows the FEN of the position on the board, whichever view it's in, as it was when opened
+  const openShare = () => { setNewMenu(false); setMenu(false); setPanel(false); setQueenOpen(false); setShareOpen({ fen: (nav.current && nav.current.fen && nav.current.fen()) || '' }); };
+  const closeShare = React.useCallback(() => setShareOpen(null), []);
   // a finished game replays as a loaded game; one in progress goes back on the board, the side to move's clock running
   // from now (the time away isn't charged)
   const replayGame = (e) => { setGamesOpen(null); guard(() => { const b = window.BoardCore.restore(e.board); if (!b) return; setQueenOpen(false); commit({ pgn: window.PlayCore.pgn(b), pgnName: `my-game-${b.game.date}.pgn`, gameIndex: 0 }); }); };
@@ -543,7 +554,13 @@ function GameApp() {
     saveFile(files.analysisName || fileStem + '_analysis.json', a, 'application/json');
   };
   // the whole annotation whatever the video shows: commentary even when hidden, Queen's answers even when out of the video
-  const savePgn = () => saveFile(fileStem + '_annotated.pgn', window.ChessCore.annotatedPgn(withQueen(M, Q.resultAt)), 'application/x-chess-pgn');
+  const annotatedPgn = () => window.ChessCore.annotatedPgn(withQueen(M, Q.resultAt));
+  const rawPgn = () => window.ChessCore.annotatedPgn(M, { raw: true });
+  // a free board's moves (with a game's result and clocks)
+  const boardPgn = () => (board.game ? window.PlayCore.pgn(board) : window.BoardCore.pgn(board));
+  const savePgn = () => saveFile(fileStem + '_annotated.pgn', annotatedPgn(), 'application/x-chess-pgn');
+  const saveRawPgn = () => saveFile(fileStem + '.pgn', rawPgn(), 'application/x-chess-pgn');
+  const saveBoardPgn = () => saveFile(board.game ? `my-game-${board.game.date}.pgn` : 'free-board.pgn', boardPgn(), 'application/x-chess-pgn');
   const saveQueen = () => saveFile(fileStem + '_queen.json', JSON.stringify(Q.saved(), null, 1), 'application/json');
   const analysis = useGameAnalysis(M, files, () => filesRef.current, (next) => commit(next, true), engine, ES.game, t.tablebase !== false);
   // switching engines stops a running analysis (its searches so far are kept, to resume with the engine that made them)
@@ -595,7 +612,7 @@ function GameApp() {
   const plyTag = (i) => `${Math.floor((MV.ply0 + i) / 2) + 1}${(MV.ply0 + i) % 2 ? 'b' : 'w'}`;
   const clipSuffix = clipFrom < 0 && clipTo >= NP ? '' : `_${clipFrom < 0 ? 'start' : plyTag(clipFrom)}-${clipTo >= NP ? 'end' : plyTag(clipTo)}`;
   // a picture board is drawn through the sliders first: the export paints that picture, not the page's CSS filter
-  const exportVideo = () => { setPanel(false); setQueenOpen(false); window.BoardThemes.render(boardTheme.id, boardAdj).catch(() => null).then(() => video.run({ start: clipT.start, end: clipT.end, suffix: clipSuffix, audio: t.sound === false || webp ? null
+  const exportVideo = () => { setShareOpen(null); setPanel(false); setQueenOpen(false); window.BoardThemes.render(boardTheme.id, boardAdj).catch(() => null).then(() => video.run({ start: clipT.start, end: clipT.end, suffix: clipSuffix, audio: t.sound === false || webp ? null
     : () => window.Sfx.renderTrack(window.Sfx.fetchSound, soundSet, window.Sfx.track(MV, clipOpts.S, clipT.start, clipT.end), soundVolume, clipT.end - clipT.start) })); };
   const depthText = (d) => (d == null ? 'No limit' : String(d)), SF_KEYS = ['sfDepth', 'sfTime', 'sfOwnDepth', 'sfOwnTime', 'sfLines', 'sfHash', 'sfThreads'];
   const sfChanged = JSON.stringify(ES) !== JSON.stringify(window.AnalysisCore.engineSettings(window.TWEAK_DEFAULTS, sfKind, threading, hashChoices));
@@ -679,8 +696,7 @@ function GameApp() {
   const status = boardStatus || `${M.white.short} – ${M.black.short} · ${M.plies.length} plies` + (M.evalSource === 'analysis' ? ' · analysis evals' : M.evalSource === 'pgn' ? ' · PGN evals' : '') + (M.hasNotes ? ' · notes' : '') + (files.sample ? ' (sample)' : '') + ' · ' + fmtLen(TM.total);
   const shownErr = err || built.error;
 
-  const newGroups = [{ label: 'Explore', items: [{ label: 'Starting position', run: newBoard }, { label: 'Edit position', run: editPosition },
-    { label: 'Copy FEN', run: copyFen }, { label: 'Copy PGN', run: copyPgn }] },
+  const newGroups = [{ label: 'Explore', items: [{ label: 'Starting position', run: newBoard }, { label: 'Edit position', run: editPosition }] },
     { label: 'Play', items: [{ label: 'Play vs human', run: playHuman }, { label: 'Play vs Stockfish', run: playSf }, { label: 'My games', run: myGames }] },
     // Ask Queen sits here on the wide layouts; the folded menu keeps it in its last row. The folded menu's shortcuts item is hidden on a touch screen
     { label: 'More', items: [{ label: 'Keyboard shortcuts', run: openKeys }, ...(!phone && !board ? [{ label: 'Ask Queen', cls: 'dock-queen', run: () => { setNewMenu(false); askQueen(); } }] : [])] }];
@@ -704,9 +720,12 @@ function GameApp() {
           )}
         </div>
       )}
-      {/* Settings and Full screen are icons in every layout; on the phone they share the menu's last row with Ask Queen */}
+      {/* Share and export, Settings and Full screen are icons in every layout; on the phone they share the menu's last row with Ask Queen */}
       <div className="dock-icons">
       {phone && !board && <button type="button" className="dock-btn dock-queen" aria-expanded={queenOpen} onClick={() => { setMenu(false); askQueen(); }}>Ask Queen</button>}
+      <button type="button" className="dock-btn dock-iconic" aria-label="Share and export" title="Share and export" aria-haspopup="dialog" onClick={openShare}>
+        <svg className="dock-icon" width="16" height="16" viewBox="0 0 16 16" fill="none" aria-hidden="true"><path d={SHARE} stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round" /></svg>
+      </button>
       <button type="button" className="dock-btn dock-iconic" aria-label="Settings" title="Settings" aria-expanded={panel} onClick={() => { setMenu(false); setPanel((p) => !p); setQueenOpen(false); }}>
         <svg className="dock-icon" width="16" height="16" viewBox="0 0 16 16" aria-hidden="true"><path fill="currentColor" fillRule="evenodd" d={GEAR} /></svg>
       </button>
@@ -783,6 +802,57 @@ function GameApp() {
       {playOpen && <PlayDialog key={playOpen} mode={playOpen} setUpFen={board && board.fen !== window.ChessCore.START_FEN ? board.fen : null} clock={t.playClock} side={t.playSide} initial={playInit} onStart={playStart} onSetUp={playSetUp} onFromImage={visionOk ? playFromImage : null} onClose={closePlay} />}
       {vision && <VisionDialog again={vision.again} onRead={visionRead} onClose={visionClose} />}
       {keysOpen && <ShortcutsDialog onClose={closeKeys} />}
+      {shareOpen && (
+        <DialogBox label="Share and export" className="xfer-box" onClose={closeShare}>
+          <TweakSection label="FEN">
+            <div className="xfer-row">
+              <input className="xfer-field" type="text" readOnly value={shareOpen.fen} aria-label="FEN" spellCheck={false} onFocus={(e) => e.target.select()} />
+              <CopyButton label="Copy FEN" text={() => shareOpen.fen} onFail={copyFailed('FEN')} />
+            </div>
+          </TweakSection>
+          <TweakSection label="PGN">
+            {board ? (
+              <div className="xfer-row">
+                <TweakButton secondary label="Download" onClick={saveBoardPgn} />
+                <CopyButton label="Copy PGN" text={boardPgn} onFail={copyFailed('PGN')} />
+              </div>
+            ) : <>
+              <div className="xfer-row">
+                <TweakButton secondary label="Download annotated" onClick={savePgn} />
+                <CopyButton label="Copy annotated PGN" text={annotatedPgn} onFail={copyFailed('PGN')} />
+              </div>
+              <div className="xfer-row">
+                <TweakButton secondary label="Download raw" onClick={saveRawPgn} />
+                <CopyButton label="Copy raw PGN" text={rawPgn} onFail={copyFailed('PGN')} />
+              </div>
+              <div className="twk-note">Annotated: the marks, evals, clocks, commentary, Queen’s answers and better lines. Raw: the tags and the moves alone.</div>
+            </>}
+          </TweakSection>
+          {!board && browserAnalysis && <TweakSection label="Analysis">
+            <TweakButton secondary label="Download analysis" onClick={saveAnalysis} />
+          </TweakSection>}
+          {!board ? <TweakSection label="Export video">
+        <TweakRadio id="tw-format" label="Export as" value={exportFormat} options={EXPORT_FORMATS} onChange={(v) => setTweak('exportFormat', v)} />
+        {webp && <>
+          <TweakSelect id="tw-webp-width" label="WebP width" value={webpPx(webpWidth)} options={webpWidths.map(webpPx)} onChange={(v) => setTweak('webpWidth', webpWidths.find((x) => webpPx(x) === v))} />
+          <TweakSlider id="tw-webp-q" label="WebP quality" value={webpQuality} min={WEBP_QUALITY.min} max={WEBP_QUALITY.max} step={WEBP_QUALITY.step} format={(v) => (v >= 100 ? 'Lossless' : v)} onChange={(v) => setTweak('webpQuality', v)} />
+        </>}
+        {!webp && <TweakSelect id="tw-mp4-q" label="MP4 quality" value={mp4Quality} options={MP4_QUALITIES} onChange={(v) => setTweak('mp4Quality', v)} />}
+        {!webp && <TweakToggle id="tw-mp4-vfr" label="Variable frame rate" info="A frame that doesn’t change (a pause, the title and end cards) isn’t encoded: the frame before is held for its time. The frame rate is then the most frames a second a move’s animation gets. Some players and editors seek a variable-rate video less smoothly." value={mp4Vfr} onChange={(v) => setTweak('mp4Vfr', v)} />}
+        <TweakSelect id="tw-fps" label={!webp && mp4Vfr ? 'Export frame rate (at most)' : 'Export frame rate'} value={exportFps + ' fps'} options={EXPORT_FPS_OPTIONS.map((f) => f + ' fps')} onChange={(v) => setTweak('exportFps', parseInt(v, 10))} />
+        <div className="twk-pair">
+          <TweakSelect id="tw-clip-from" label="From" aria="Export from" value={clipFromOpts.find((o) => o.i === clipFrom).s} options={clipFromOpts.map((o) => o.s)} onChange={(v) => setClip((c) => ({ ...c, from: clipFromOpts.find((o) => o.s === v).i }))} />
+          <TweakSelect id="tw-clip-to" label="To" aria="Export to" value={clipToOpts.find((o) => o.i === clipTo).s} options={clipToOpts.map((o) => o.s)} onChange={(v) => setClip((c) => ({ ...c, to: clipToOpts.find((o) => o.s === v).i }))} />
+        </div>
+        <TweakButton label={`${webp ? 'Export animated WebP (' : 'Export video (MP4, '}${!webp && mp4Vfr ? 'up to ' : ''}${exportFps} fps${!webp && mp4Vfr ? ', variable' : ''}, ${fmtLen(clipT.end - clipT.start)})`} disabled={video.busy} onClick={exportVideo} />
+        <div className="twk-note">Renders every frame in this tab: about {fmtLen(Math.ceil((clipT.end - clipT.start) * exportFps * 0.04))} for {clipSuffix ? 'these moves' : 'this game'}, longer on a phone. Higher frame rates are smoother but slower. Each move’s clip runs from just before it until the board settles. {ncNote}{webp ? 'No sound, and it loops; a smaller width or quality makes a smaller file, and Lossless a much larger one.' : 'Includes move sounds when on; a lower quality makes a smaller file.'}</div>
+          </TweakSection> : !window.PlayCore.inProgress(board) && <TweakSection label="Export video">
+            <div className="twk-note">{board.steps.length ? 'A video or WebP is made from a loaded game: replay these moves as one, then export it here.' : 'Play some moves first; then they can be replayed as a game and exported as a video.'}</div>
+            {board.steps.length > 0 && <TweakButton label="Replay these moves as a game" onClick={() => { setShareOpen(null); boardAsGame(); }} />}
+          </TweakSection>}
+          <div className="fen-btns"><button type="button" className="twk-btn secondary" data-autofocus onClick={closeShare}>Close</button></div>
+        </DialogBox>
+      )}
       {gamesOpen && <MyGamesDialog games={gamesOpen} current={board && window.PlayCore.inProgress(board) ? board.game.id : null} onReplay={replayGame} onResume={resumeGame} onDelete={deleteGame} onClose={closeGames} />}
       {leave && <LeaveDialog onStay={() => setLeave(null)} onLeave={() => { const run = leave.run; setLeave(null); keepLeft(board); run(); }} />}
       {queenOpen && !board && <QueenPanel M={M} Q={Q} hf={hf} probe={probe} onClose={closeQueen} onOverlay={setQueenArrow} onSave={saveQueen} left={queenLeft} />}
@@ -864,24 +934,6 @@ function GameApp() {
             {queenSays && <TweakToggle id="tw-comm-queen" label="From Queen" value={sayFrom.queen} onChange={(v) => setTweak('commentQueen', v)} />}
             {sources.length + (queenSays ? 1 : 0) > 1 && <div className="twk-note">Where several comment on a move, the first one on wins: notes file, then the PGN; Queen’s sentence follows.</div>}
           </>}
-          {browserAnalysis && <TweakButton secondary label="Save analysis" onClick={saveAnalysis} />}
-          <TweakButton secondary label="Save as annotated PGN" onClick={savePgn} />
-        </> },
-        !board && { id: 'export', label: 'Export', body: <>
-          <TweakRadio id="tw-format" label="Export as" value={exportFormat} options={EXPORT_FORMATS} onChange={(v) => setTweak('exportFormat', v)} />
-          {webp && <>
-            <TweakSelect id="tw-webp-width" label="WebP width" value={webpPx(webpWidth)} options={webpWidths.map(webpPx)} onChange={(v) => setTweak('webpWidth', webpWidths.find((x) => webpPx(x) === v))} />
-            <TweakSlider id="tw-webp-q" label="WebP quality" value={webpQuality} min={WEBP_QUALITY.min} max={WEBP_QUALITY.max} step={WEBP_QUALITY.step} format={(v) => (v >= 100 ? 'Lossless' : v)} onChange={(v) => setTweak('webpQuality', v)} />
-          </>}
-          {!webp && <TweakSelect id="tw-mp4-q" label="MP4 quality" value={mp4Quality} options={MP4_QUALITIES} onChange={(v) => setTweak('mp4Quality', v)} />}
-          {!webp && <TweakToggle id="tw-mp4-vfr" label="Variable frame rate" info="A frame that doesn’t change (a pause, the title and end cards) isn’t encoded: the frame before is held for its time. The frame rate is then the most frames a second a move’s animation gets. Some players and editors seek a variable-rate video less smoothly." value={mp4Vfr} onChange={(v) => setTweak('mp4Vfr', v)} />}
-          <TweakSelect id="tw-fps" label={!webp && mp4Vfr ? 'Export frame rate (at most)' : 'Export frame rate'} value={exportFps + ' fps'} options={EXPORT_FPS_OPTIONS.map((f) => f + ' fps')} onChange={(v) => setTweak('exportFps', parseInt(v, 10))} />
-          <div className="twk-pair">
-            <TweakSelect id="tw-clip-from" label="From" aria="Export from" value={clipFromOpts.find((o) => o.i === clipFrom).s} options={clipFromOpts.map((o) => o.s)} onChange={(v) => setClip((c) => ({ ...c, from: clipFromOpts.find((o) => o.s === v).i }))} />
-            <TweakSelect id="tw-clip-to" label="To" aria="Export to" value={clipToOpts.find((o) => o.i === clipTo).s} options={clipToOpts.map((o) => o.s)} onChange={(v) => setClip((c) => ({ ...c, to: clipToOpts.find((o) => o.s === v).i }))} />
-          </div>
-          <TweakButton label={`${webp ? 'Export animated WebP (' : 'Export video (MP4, '}${!webp && mp4Vfr ? 'up to ' : ''}${exportFps} fps${!webp && mp4Vfr ? ', variable' : ''}, ${fmtLen(clipT.end - clipT.start)})`} disabled={video.busy} onClick={exportVideo} />
-          <div className="twk-note">Renders every frame in this tab: about {fmtLen(Math.ceil((clipT.end - clipT.start) * exportFps * 0.04))} for {clipSuffix ? 'these moves' : 'this game'}, longer on a phone. Higher frame rates are smoother but slower. Each move’s clip runs from just before it until the board settles. {ncNote}{webp ? 'No sound, and it loops; a smaller width or quality makes a smaller file, and Lossless a much larger one.' : 'Includes move sounds when on; a lower quality makes a smaller file.'}</div>
         </> },
         { id: 'sound', label: 'Sound', body: <>
           <TweakToggle id="tw-sound" label="Move sounds" value={t.sound !== false} onChange={(v) => setTweak('sound', v)} />

@@ -529,8 +529,8 @@
   };
   // the game as PGN: marks and the source's other NAGs, evals and clocks as [%eval]/[%clk], commentary (and
   // Queen's sentence) as comments, the source's variations as written plus the engine's better line on ?!/?/??
-  // moves; wrapped at 80 columns
-  function annotatedPgn(M) {
+  // moves; wrapped at 80 columns. raw: the tags and the moves alone (no comments, NAGs, evals, clocks or variations)
+  function annotatedPgn(M, { raw = false } = {}) {
     const H = { ...(M.headers || {}) };
     const set = (k, v) => { if (!H[k] && v) H[k] = v; };
     set('Event', M.event || '?'); set('Site', M.site || '?'); set('Date', String(M.pgnDate || '').replace(/-/g, '.') || '????.??.??'); set('Round', M.round || '?');
@@ -543,12 +543,13 @@
     const keys = order.filter((k) => H[k] != null).concat(Object.keys(H).filter((k) => !order.includes(k)));
     const head = keys.map((k) => `[${k} "${String(H[k]).replace(/\\/g, '\\\\').replace(/"/g, '\\"')}"]`).join('\n');
     const toks = [];
-    if (M.intro) toks.push(`{${pgnEsc(M.intro)}}`);
+    if (M.intro && !raw) toks.push(`{${pgnEsc(M.intro)}}`);
     M.plies.forEach((p, i) => {
       const abs = (M.ply0 || 0) + i, n = Math.floor(abs / 2) + 1;
       // a move number and its move stay on one line (NB is a no-break space until the wrap)
       const num = abs % 2 === 0 ? n + '.' + NB : !i || /[})]$/.test(toks[toks.length - 1]) ? n + '...' + NB : '';
       toks.push(num + p.san);
+      if (raw) return;
       (NAG_OF[p.mark] ? [NAG_OF[p.mark]] : []).concat(p.nags || []).forEach((g) => toks.push('$' + g));
       const tags = [];
       if (!p.checkmate && p.mate != null) tags.push(`[%eval #${p.mate}]`);
@@ -566,7 +567,7 @@
         if (v.length) toks.push('(' + v.join(' ') + ')');
       }
     });
-    if (M.conclusion) toks.push(`{${pgnEsc(M.conclusion)}}`);
+    if (M.conclusion && !raw) toks.push(`{${pgnEsc(M.conclusion)}}`);
     toks.push(H.Result);
     // break on spaces, comments included; a line never starts with % (in column 1 it makes an escape line)
     const lines = []; let cur = '';

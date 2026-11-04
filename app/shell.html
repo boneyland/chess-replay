@@ -228,6 +228,19 @@ body:has(.stage-one) .twk-panel { bottom: calc(51px + var(--safe-b)); max-height
 /* Import game: the file and picture tiles (vision-tile) over the paste box; the page's drop overlay shows over it */
 .fen-box.import-box { width: min(640px, 100%); max-height: calc(100dvh - 32px); overflow-y: auto; }
 .import-box .vision-tile { min-height: 120px; }
+/* Share and export: Settings' controls in sections (FEN, PGN, Export video), scrolling inside the dialog. Its classes are
+   xfer-*, never share-*: content blockers' social lists (Fanboy's, in uBlock Origin) hide .share-row, .share-box and the like,
+   which hid the whole box in a Firefox with one (2026-11-04) */
+.fen-box.xfer-box { width: min(520px, 100%); max-height: calc(100dvh - 32px); overflow-y: auto; gap: 18px; font: 0.75rem/1.4 var(--sans); scrollbar-width: thin; }
+/* a row: the FEN's field or a Download button, and a square copy button on its right */
+.xfer-row { display: flex; gap: 8px; }
+.xfer-row > .twk-btn:not(.xfer-copy) { flex: 1; min-height: 34px; }
+/* the Download buttons' text larger than Settings' 0.75rem, in buttons of the same height */
+.xfer-box .twk-group > .twk-btn.secondary, .xfer-row > .twk-btn:not(.xfer-copy) { height: 34px; min-height: 34px; padding-block: 0; font-size: 0.875rem; }
+.xfer-field { flex: 1; min-width: 0; height: 34px; box-sizing: border-box; padding: 0 10px; border: 1px solid var(--line); border-radius: 4px; background: var(--raise); color: var(--ink); font: 500 0.75rem var(--mono); }
+.xfer-copy { flex: none; display: inline-flex; align-items: center; justify-content: center; width: 38px; min-height: 34px; padding: 0; }
+.xfer-copy.done { color: var(--accent); }
+@media (pointer: coarse) { .xfer-field { font-size: 16px; height: 40px; } .xfer-copy { width: 44px; min-height: 40px; } .xfer-row > .twk-btn:not(.xfer-copy) { min-height: 40px; } }
 .import-box .import-one { grid-template-columns: 1fr; }
 .import-box .pgn-field { height: min(28vh, 200px); }
 .drop.drop-top { z-index: 95; }
