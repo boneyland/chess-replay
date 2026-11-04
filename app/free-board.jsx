@@ -565,14 +565,14 @@ function DialogBox({ label, className, onClose, children }) {
     e.stopPropagation();
     if (e.key === 'Escape') { e.preventDefault(); onClose(); } else if (e.key === 'Tab') {
       // a hidden file input and disabled buttons take no focus, so they are skipped; a focusable box (the crop box) is a stop
-      const stops = [...e.currentTarget.querySelectorAll('input, textarea, button, a[href], [tabindex="0"]')].filter((el) => !el.disabled && el.getClientRects().length), i = stops.indexOf(document.activeElement);
+      const stops = [...e.currentTarget.querySelectorAll('input, textarea, select, button, a[href], [tabindex="0"]')].filter((el) => !el.disabled && el.getClientRects().length), i = stops.indexOf(document.activeElement);
       e.preventDefault();
       if (stops.length) stops[(i + (e.shiftKey ? -1 : 1) + stops.length) % stops.length].focus();
     }
   };
   return (
     <div className="fen-scrim" onPointerDown={(e) => { if (e.target === e.currentTarget) onClose(); }}>
-      <div ref={box} className={className ? 'fen-box ' + className : 'fen-box'} role="dialog" aria-modal="true" aria-label={label} onKeyDown={onKey} onMouseDown={(e) => { if (!e.target.closest('input, textarea, button')) e.preventDefault(); }}>
+      <div ref={box} className={className ? 'fen-box ' + className : 'fen-box'} role="dialog" aria-modal="true" aria-label={label} onKeyDown={onKey} onMouseDown={(e) => { if (!e.target.closest('input, textarea, select, button')) e.preventDefault(); }}>
         <div className="fen-title">{label}</div>
         {children}
       </div>
