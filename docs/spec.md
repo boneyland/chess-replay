@@ -105,10 +105,10 @@ Hash table sizes by device (`AnalysisCore.hashChoices`): 256 and 512 MB are offe
 
 ### Piece sets
 
-- Settings › View › Pieces: cburnett (the default, in the page so the board draws at once) and 25 of Lichess's freely licensed sets (`PieceSets`, `app/piece-sets.js`; the list, licences and what was left out are in LAYOUT.md). Remembered like other settings.
+- Settings › View › Pieces: a grid of each set's white knight on a light square (as Lichess shows them; the name on hover and to screen readers, the chosen one outlined): cburnett (the default, in the page so the board draws at once) and 26 of Lichess's freely licensed sets (`PieceSets`, `app/piece-sets.js`; the list, licences and what was left out are in LAYOUT.md). Remembered like other settings. The grid's knights are fetched when the View tab first shows them (one small file a set).
 - A chosen set is fetched (12 SVGs from `pieces/<set>/`, about 30–90 KB) only when chosen, and drawn once all twelve have loaded, so the board never mixes sets or shows a broken one; until then it keeps the set it had. `sw.js` keeps a set when it's first drawn, not at install. If it can't be loaded (offline before it was ever kept), Settings says so and the board stays as it was.
-- Everywhere a piece is drawn (`img()` in `game-video-core.jsx`): the replay, the free board and games, Edit position, promotion and captured pieces. Exports draw it too, the 13 non-commercial (CC BY-NC-SA) sets included: with one chosen (or the lisp sounds, in an MP4), the Export tab warns that the video may not be used commercially and should credit them.
-- Credits: a line under the drop-down names the chosen set's author and licence; Settings › About, README's Credits and Licence.
+- Everywhere a piece is drawn (`img()` in `game-video-core.jsx`): the replay, the free board and games, Edit position, promotion and captured pieces. Exports draw it too, the 14 non-commercial (CC BY-NC-SA) sets included: with one chosen (or the lisp sounds, in an MP4), the Export tab warns that the video may not be used commercially and should credit them.
+- Credits: a line under the grid names the chosen set's author and licence; Settings › About, README's Credits and Licence.
 
 ### Drawing on the board
 
@@ -684,3 +684,4 @@ Deferred by the per-plan reviews; each was true when recorded and may since have
 - 2026-11-04: Lichess game import designed: finished games only, from Import game's paste box (games, broadcast games, study chapters; a round or a whole study lists its games, the unfinished greyed) and from the opening explorer's games (a remembered Open games: Here · On Lichess switch, Here by default); `/black` flips, `#ply` opens at the move; no setting, as nothing is sent until a link is opened.
 - 2026-11-04: piece sets: 25 of Lichess's freely licensed sets beside cburnett, chosen in Settings › View (the user picked them from a preview of all 32 free ones, dropping mono, shapes, horsey, anarcandy, disguised and monarchy; the "freeware" ones, alpha, chess7, companion and leipzig, have no licence to copy or change them). Served as files and fetched only when chosen (cburnett stays in the page). Exports use the chosen set, the non-commercial ones included.
 - 2026-11-04: exports now keep non-commercial parts, reversing the 2026-11-02 rule: the chosen piece set and the lisp sounds are in the video as on the page, and the Export tab warns that a video with them may not be used commercially (a monetised channel for one) and should credit them. The terms bind whoever shares the video; the site's own use stays non-commercial.
+- 2026-11-04: Pieces is a grid of knights in place of a drop-down (the user's pick, after Lichess's piece menu), and anarcandy (caderek, CC BY-NC-SA 4.0) joins the sets.
