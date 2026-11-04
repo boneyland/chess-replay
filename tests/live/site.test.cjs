@@ -2872,6 +2872,14 @@ for (const name of BROWSERS) for (const site of SITES) {
       assert.match(rawText, /^\[Event /);
       assert.ok(!/[{}$(]/.test(rawText.split('\n\n')[1]), 'raw: the moves alone');
       await assert.doesNotReject(share.getByRole('button', { name: /^Export (video|animated WebP)/ }).waitFor({ timeout: 5000 }));
+      // a drop-down opens to the real mouse: the dialog keeps a press on its text from taking focus, never one on a select
+      // (it did, and the export's drop-downs wouldn't open, 2026-11-04)
+      const fps = share.locator('#tw-fps'), fb = await fps.boundingBox();
+      await p.mouse.click(fb.x + fb.width / 2, fb.y + fb.height / 2);
+      assert.equal(await p.evaluate(() => document.activeElement && document.activeElement.id), 'tw-fps', 'the clicked drop-down has focus');
+      await p.keyboard.press('ArrowDown');
+      await p.keyboard.press('Enter');
+      assert.equal(await share.count(), 1, 'Enter chose an option rather than closing the dialog');
       await share.getByRole('button', { name: 'Close' }).click();
       // Delete asks in the row; Keep keeps, Delete deletes
       await menuItem('My games');
