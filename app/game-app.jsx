@@ -164,8 +164,8 @@ function GameApp() {
   React.useEffect(() => { if (!phone) setMenu(false); }, [phone]);
   // the dock's Menu (landscape); on a phone its items sit in the folded menu instead
   const [newMenu, setNewMenu] = React.useState(false);
-  // Import game's dialog while it is open: { text }, the paste box's text to open with (kept when it comes back from
-  // Edit position or Position from image)
+  // Import game's dialog while it is open: { text, auto }, the paste box's text to open with (kept when it comes back from
+  // Edit position or Position from image), auto to fetch it at once (a Lichess link the explorer opens)
   const [importOpen, setImportOpen] = React.useState(false);
   const [resetOpen, setResetOpen] = React.useState(false);
   // Edit position: { setup, text, msg, resume, play, image } while the editor shows in place of the board or the loaded
@@ -442,8 +442,17 @@ function GameApp() {
   // Import game's tiles and paste box (guard asked before the dialog opened): the picker's files close the dialog as they load
   const chooseFiles = () => inputRef.current.click();
   const importImage = () => { setImportOpen(false); setVision({ play: null, again: null, back: true }); };
-  // a pasted PGN is a loaded game, as a picked file; the dialog has checked it builds
-  const pgnLoad = (text) => { setImportOpen(false); setQueenOpen(false); commit({ pgn: text, pgnName: 'pasted.pgn', gameIndex: 0 }); };
+  // a pasted PGN is a loaded game, as a picked file; the dialog has checked it builds. link: the Lichess link it was
+  // fetched from (LichessCore.gameLink), which sets Flip as Lichess shows it (from Black's side for /black, else
+  // White's), and whose #ply opens the replay paused after that ply
+  const pgnLoad = (text, link) => {
+    setImportOpen(false); setQueenOpen(false);
+    if (link) setTweak('flip', link.side === 'b');
+    seekPly.current = link && link.ply ? link.ply : null;
+    if (!commit({ pgn: text, pgnName: link ? `lichess-${link.id}.pgn` : 'pasted.pgn', gameIndex: 0 })) seekPly.current = null;
+  };
+  // the explorer's games (Open games: Here): Import game on the game's link, fetched at once
+  const openLichess = (url) => guard(() => { setNewMenu(false); setMenu(false); setPanel(false); setImportOpen({ text: url, auto: true }); });
   // a pasted FEN: a legal position on the free board, else Edit position on it, saying what's wrong
   const fenLoad = (setup, text) => {
     setImportOpen(false);
@@ -454,6 +463,21 @@ function GameApp() {
   const boardAsGame = () => { commit({ pgn: window.BoardCore.pgn(board), pgnName: 'free-board.pgn', gameIndex: 0, fromBoard: files.board, fromLastGame: files.lastGame || null }); };
   // the game left for the board comes back as it was, paused where the playhead was (the board is kept to go back to)
   const backToGame = () => guard(() => { const l = files.lastGame; if (!l) return; seekAfter.current = l.at; setQueenOpen(false); if (!commit({ ...l.files, fromBoard: files.board })) seekAfter.current = null; });
+  // a Lichess link's #ply: once the replay has its timeline (probe), paused just after that ply, as Queen's moves seek
+  const seekPly = React.useRef(null);
+  React.useEffect(() => {
+    if (seekPly.current == null || files.board) return;
+    const ply = seekPly.current; seekPly.current = null;
+    let tries = 0, id;
+    const go = () => {
+      const S = probe.current && probe.current.S;
+      if (!S || S.N !== MV.plies.length) { if (++tries < 60) id = requestAnimationFrame(go); return; }
+      const i = Math.min(ply, S.N) - 1;
+      window.dispatchEvent(new CustomEvent('chess-video:seek', { detail: { time: i < 0 ? 0 : i + 1 < S.N ? S.tp[i + 1] - 0.12 : S.tp[i] + S.md[i] + 3 } }));
+    };
+    id = requestAnimationFrame(go);
+    return () => cancelAnimationFrame(id);
+  }, [files]);
   React.useEffect(() => {
     if (seekAfter.current == null || files.board) return;
     const time = seekAfter.current; seekAfter.current = null;
@@ -714,7 +738,7 @@ function GameApp() {
           ? <EditBoard setup={editing.setup} onChange={editTo} onDone={editDone} onCancel={editCancel} fenText={editing.text} onFenText={editText} fenMsg={editing.msg} doneLabel={editing.play ? 'Start game' : 'Done'} orient={t.flip ? 'b' : 'w'} nav={nav} overlay={panel || newMenu || menu || queenOpen}
             image={editing.image} onTurn={editTurn} onBackToCrop={backToCrop} />
           : board
-          ? <FreeBoard board={board} onChange={commitBoard} tw={t} sf={sf} nav={nav} orient={t.flip ? 'b' : 'w'} book={book && !board.game ? window.Openings.book() : null} />
+          ? <FreeBoard board={board} onChange={commitBoard} tw={t} setTweak={setTweak} onLichess={openLichess} sf={sf} nav={nav} orient={t.flip ? 'b' : 'w'} book={book && !board.game ? window.Openings.book() : null} />
           : <GameVideo M={MV} tw={video.busy ? { ...t, exporting: true } : t} d={TM.d} probe={probe} queen={queenArrow} nav={nav} scheme={scheme} sf={sf} orient={t.flip ? 'b' : 'w'} />}
       </CompositionStage>
       </EngineMenuContext.Provider>
@@ -737,7 +761,7 @@ function GameApp() {
         </div>
       )}
       <ExportOverlay x={video} />
-      {importOpen && <ImportDialog text={importOpen.text} onChoose={chooseFiles} onPgn={pgnLoad} onFen={fenLoad} onImage={visionOk ? importImage : null} onClose={closeImport} />}
+      {importOpen && <ImportDialog text={importOpen.text} auto={importOpen.auto} onChoose={chooseFiles} onPgn={pgnLoad} onFen={fenLoad} onImage={visionOk ? importImage : null} onClose={closeImport} />}
       {resetOpen && (
         <DialogBox label="Reset all settings" onClose={() => setResetOpen(false)}>
           <div className="fen-note">Every setting goes back to its default. Your saved games and the downloaded engine are kept.</div>

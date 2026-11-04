@@ -199,5 +199,73 @@
     };
   }
 
-  window.LichessCore = { EXPLORER_URL, explorerUrl, explorerKey, parseExplorer, TB_URL, CLOUD_URL, TB_MAX_PIECES, BACKOFF_MS, pieceCount, fenOf, tbKey, tablebaseUrl, parseTablebase, flip, outcome, verdict, bar, evalCp, groups, cloudKey, cloudUrl, cloudMoves, parseCloud, create };
+
+  // ---------- game import (Import game's paste box, the explorer's games) ----------
+  // A Lichess link to a game, a broadcast game or study chapter, or a broadcast round or study (lists), as the export URL
+  // and how to open it: { kind: 'game' | 'list', id, url, side ('w', 'b' or null: as the link says), ply (#32, or null) },
+  // or null for anything else. With or without https:// and www.; a player's 12-character game link is cut to its 8
+  const LI_ID = /^[A-Za-z0-9]{8}$/;
+  const NOT_IDS = new Set(['analysis', 'practice', 'training', 'streamer', 'tutorial', 'resource', 'feedback', 'research', 'insights', 'download', 'features', 'external']);
+  function gameLink(text) {
+    const t = String(text == null ? '' : text).trim();
+    const m = /^(?:https?:\/\/)?(?:www\.)?lichess\.org(\/[^\s?#]*)?(\?[^\s#]*)?(#\d+)?$/i.exec(t);
+    if (!m) return null;
+    const parts = (m[1] || '').split('/').filter(Boolean), ply = m[3] ? parseInt(m[3].slice(1), 10) : null;
+    const id8 = (p) => (p && /^[A-Za-z0-9]{8}([A-Za-z0-9]{4})?$/.test(p) && !NOT_IDS.has(p.toLowerCase()) ? p.slice(0, 8) : null);
+    const sideOf = (p) => (p === 'black' ? 'b' : p === 'white' ? 'w' : null);
+    const game = (id, side) => ({ kind: 'game', id, url: `https://lichess.org/game/export/${id}?clocks=true&evals=true`, side, ply });
+    const chapter = (s, c) => ({ kind: 'game', id: c, url: `https://lichess.org/api/study/${s}/${c}.pgn?clocks=true&comments=true`, side: null, ply });
+    if (parts[0] === 'broadcast') {
+      // /broadcast/<tour>/<round>/<roundId>[/<gameId>]; /broadcast/<roundId> alone is a round too
+      const ids = parts.slice(1).filter((p) => LI_ID.test(p)), last = parts[parts.length - 1], prev = parts[parts.length - 2];
+      if (parts.length >= 5 && LI_ID.test(last) && LI_ID.test(prev)) return chapter(prev, last);
+      if (LI_ID.test(last) && ids.length) return { kind: 'list', id: last, url: `https://lichess.org/api/broadcast/round/${last}.pgn`, side: null, ply: null };
+      return null;
+    }
+    if (parts[0] === 'study' && LI_ID.test(parts[1] || '')) {
+      if (LI_ID.test(parts[2] || '')) return chapter(parts[1], parts[2]);
+      return parts.length === 2 ? { kind: 'list', id: parts[1], url: `https://lichess.org/api/study/${parts[1]}.pgn?clocks=true&comments=true`, side: null, ply: null } : null;
+    }
+    if (parts[0] === 'game' && parts[1] !== 'export') { const id = id8(parts[1]); return id && parts.length <= 3 ? game(id, sideOf(parts[2])) : null; }
+    const id = id8(parts[0]);
+    return id && parts.length <= 2 && (parts.length === 1 || sideOf(parts[1])) ? game(id, sideOf(parts[1])) : null;
+  }
+  // a PGN's tags (the first game's), as written
+  const pgnTags = (pgn) => { const o = {}; String(pgn).replace(/^\s*\[(\w+)\s+"((?:[^"\\]|\\.)*)"\]\s*$/gm, (_, k, v) => { if (!(k in o)) o[k] = v.replace(/\\(.)/g, '$1'); return ''; }); return o; };
+  // a result tag the game has ended with
+  const finished = (pgn) => /^(1-0|0-1|1\/2-1\/2)$/.test(pgnTags(pgn).Result || '');
+  // A round's or study's PGN as its games: { pgn, white, black, result ('1–0', '0–1', '½–½' or null: not finished), board }.
+  // A round not started yet holds a placeholder game with no players, left out
+  const RESULT_TEXT = { '1-0': '1–0', '0-1': '0–1', '1/2-1/2': '½–½' };
+  function listGames(text) {
+    return window.ChessCore.splitGames(String(text)).filter((pgn) => { const g = pgnTags(pgn); return g.White || g.Black; }).map((pgn) => {
+      const g = pgnTags(pgn), board = /^\d+\.(\d+)$/.exec(g.Round || '');
+      return { pgn, white: g.White || '?', black: g.Black || '?', result: RESULT_TEXT[g.Result] || null, board: board ? +board[1] : null };
+    });
+  }
+  // Fetches a gameLink: { pgn } for a finished game, { list } for a round or study, or { error } saying what went
+  // wrong (offline, not found, private, busy, not finished). fetchFn is the page's fetch (a test's fake in Node)
+  async function fetchGame(link, { signal, fetchFn = (u, o) => fetch(u, o) } = {}) {
+    let r;
+    try { r = await fetchFn(link.url, { signal, headers: { Accept: 'application/x-chess-pgn' } }); } catch (e) {
+      if (e && e.name === 'AbortError') return { aborted: true };
+      return { error: 'Lichess can’t be reached: check that you’re online.' };
+    }
+    if (r.status === 404) return { error: link.kind === 'list' ? 'Lichess has nothing at that link.' : 'Lichess has no game at that link.' };
+    if (r.status === 403 || r.status === 401) return { error: 'That study is private: Lichess won’t share it.' };
+    if (r.status === 429) return { error: 'Lichess is busy: try again in a minute.' };
+    if (!r.ok) return { error: `Lichess answered with an error (${r.status}). Try again later.` };
+    let text;
+    try { text = await r.text(); } catch (e) { return e && e.name === 'AbortError' ? { aborted: true } : { error: 'Lichess can’t be reached: check that you’re online.' }; }
+    if (link.kind === 'list') {
+      const list = listGames(text);
+      if (!list.length) return { error: 'There are no games there yet: a broadcast round lists its games once it starts.' };
+      return { list };
+    }
+    if (!/\S/.test(text)) return { error: 'Lichess has no game at that link.' };
+    if (!finished(text)) return { error: 'This game is still being played: it can be opened once it ends.' };
+    return { pgn: text };
+  }
+
+  window.LichessCore = { gameLink, pgnTags, finished, listGames, fetchGame, EXPLORER_URL, explorerUrl, explorerKey, parseExplorer, TB_URL, CLOUD_URL, TB_MAX_PIECES, BACKOFF_MS, pieceCount, fenOf, tbKey, tablebaseUrl, parseTablebase, flip, outcome, verdict, bar, evalCp, groups, cloudKey, cloudUrl, cloudMoves, parseCloud, create };
 })();

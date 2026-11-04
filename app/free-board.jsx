@@ -324,7 +324,7 @@ function GameStatus({ board, onChange, down }) {
   );
 }
 
-function FreeBoard({ board, onChange, tw, sf, nav, orient, book }) {
+function FreeBoard({ board, onChange, tw, setTweak, onLichess, sf, nav, orient, book }) {
   const frame = useFrame();
   setLayout(frame, board.game ? 'game' : 'free'); // before the children render, which read the layout
   // a paused one-column page is as tall as its panels; the stage scrolls it
@@ -454,7 +454,7 @@ function FreeBoard({ board, onChange, tw, sf, nav, orient, book }) {
       <FreeBar pos={pos} side="w" a={1} clock={clockOf('w')} name={G ? playerName(G, 'w') : null} />
       {L.header && <Header M={HM} a={1} />}
       <MoveList M={MV} T={upto + 0.999} S={S} a={1} paused onPick={live ? () => {} : go} deadAt={deadAt} end={end} />
-      {G ? <GameInfo board={board} /> : tb ? <TablebaseExplorer t={tb} posKey={boardKey} onPlay={onBook} /> : xl ? <LichessExplorer x={xl} tw={tw} posKey={boardKey} onPlay={onBook} onHover={setHov} white={pos.turn === 'w'} fallback={<OpeningExplorer board={board} book={book} onPlay={onBook} onHover={setHov} />} /> : <OpeningExplorer board={board} book={book} onPlay={onBook} onHover={setHov} />}
+      {G ? <GameInfo board={board} /> : tb ? <TablebaseExplorer t={tb} posKey={boardKey} onPlay={onBook} /> : xl ? <LichessExplorer x={xl} tw={tw} setTweak={setTweak} onGame={onLichess} posKey={boardKey} onPlay={onBook} onHover={setHov} white={pos.turn === 'w'} fallback={<OpeningExplorer board={board} book={book} onPlay={onBook} onHover={setHov} />} /> : <OpeningExplorer board={board} book={book} onPlay={onBook} onHover={setHov} />}
       {G ? <Panel box={L.analysis} a={1} style={NO_SELECT} title="Game"><GameStatus board={board} onChange={onChange} down={opponent.down} /></Panel>
         : <AnalysisPanel box={L.analysis} a={1} paused depth={down ? null : searchDepth(ev.after)} deep={ev}>
         {upto < 0
@@ -473,40 +473,83 @@ function FreeBoard({ board, onChange, tw, sf, nav, orient, book }) {
 }
 
 // Import game (the dock's Import game): a tile that opens the file picker (or takes a drop: the page's own drop
-// overlay shows over the dialog), one that opens Position from image, and a paste box that tells a PGN from a FEN (ImportCore).
-// Ctrl+Enter (or Open) opens the text, Esc cancels; text that is neither gets a message under the box and changes nothing
-function ImportDialog({ text: text0, onChoose, onPgn, onFen, onImage, onClose }) {
+// overlay shows over the dialog), one that opens Position from image, and a paste box that tells a PGN from a FEN or a
+// Lichess link (ImportCore). A link is fetched here (LichessCore.fetchGame; Cancel or Esc stops it): a game opens, a
+// broadcast round or study lists its games in the box's place. Ctrl+Enter (or Open) opens the text; what can't be
+// opened gets a message under the box and changes nothing. auto: fetch text (a link) at once, as the explorer asks
+function ImportDialog({ text: text0, auto, onChoose, onPgn, onFen, onImage, onClose }) {
   const [text, setText] = React.useState(text0 || ''), [msg, setMsg] = React.useState('');
+  const [busy, setBusy] = React.useState(false), [list, setList] = React.useState(null); // list: { games, link }
+  const ctl = React.useRef(null), body = React.useRef(null), shown = React.useRef(false);
+  React.useEffect(() => () => ctl.current && ctl.current.abort(), []);
+  // the list takes focus on its first game that can open; Back gives it back to the box
+  React.useEffect(() => {
+    if (!shown.current) { shown.current = true; return; }
+    const el = body.current && body.current.closest('[role="dialog"]').querySelector(list ? '.import-game:not(:disabled), .import-list ~ .fen-btns button' : 'textarea');
+    if (el) el.focus();
+  }, [list]);
   const coarse = !!(window.matchMedia && window.matchMedia('(pointer: coarse)').matches); // a touch screen: nothing to drag from
-  const open = () => {
-    const r = window.ImportCore.read(text);
-    if (r.error) setMsg(r.error); else if (r.setup) onFen(r.setup, text); else onPgn(r.pgn);
+  const fetchLink = async (link) => {
+    const c = new AbortController();
+    ctl.current = c; setBusy(true); setMsg('');
+    const r = await window.LichessCore.fetchGame(link, { signal: c.signal });
+    if (r.aborted || ctl.current !== c) return;
+    ctl.current = null; setBusy(false);
+    if (r.error) setMsg(r.error); else if (r.list) setList({ games: r.list, link }); else onPgn(r.pgn, link);
   };
+  const open = (t = text) => {
+    if (busy) return;
+    const r = window.ImportCore.read(t);
+    if (r.error) setMsg(r.error); else if (r.link) fetchLink(r.link); else if (r.setup) onFen(r.setup, t); else onPgn(r.pgn, null);
+  };
+  React.useEffect(() => { if (auto) open(text0); }, []);
+  const close = () => { if (ctl.current) ctl.current.abort(); onClose(); };
   const onKey = (e) => { if (e.key === 'Enter' && (e.ctrlKey || e.metaKey)) { e.preventDefault(); open(); } };
+  const back = () => { setList(null); setMsg(''); };
+  const done = list && list.games.filter((g) => g.result).length;
   return (
-    <DialogBox label="Import game" className="import-box" onClose={onClose}>
-      <div className={onImage ? 'vision-tiles' : 'vision-tiles import-one'}>
-        <button type="button" className="vision-tile vision-tile-drop" aria-label="Choose a file, or drop one here" onClick={onChoose}>
-          <VisionUpIcon />
-          <span>{coarse ? <u>Choose a file</u> : <>Drop a PGN or <u>choose a file</u></>}</span>
-          <small>with this page’s analysis or notes files too, if you have them</small>
-        </button>
-        {onImage && <button type="button" className="vision-tile" onClick={onImage}>
-          <svg viewBox="0 0 24 24" aria-hidden="true"><rect x="3.5" y="4.5" width="17" height="15" rx="2" /><path d="M3.5 16l5-5 4 4 2.5-2.5 5.5 5.5" /><circle cx="15.5" cy="9" r="1.5" /></svg>
-          <span>Position from image</span>
-          <small>a screenshot, diagram or photo of a board</small>
-        </button>}
-      </div>
-      <textarea className="twk-field fen-field pgn-field" aria-label="PGN or FEN" aria-describedby="import-msg" data-autofocus spellCheck={false} autoComplete="off" autoCapitalize="off" autoCorrect="off"
-        placeholder={'Or paste a PGN or FEN\n\n1. e4 e5 2. Nf3 Nc6 …'} value={text} onKeyDown={onKey} onChange={(e) => { setText(e.target.value); setMsg(''); }} />
-      <div className="fen-info">
-        <div id="import-msg" className="fen-msg" role="alert">{msg}</div>
-        {!msg && <div className="fen-note">A PGN opens as a loaded game (tags, comments, evals and a [FEN] start are read; the first game of several), a FEN on the free board, or in Edit position when it isn’t legal. Ctrl+Enter opens it.</div>}
-      </div>
-      <div className="fen-btns">
-        <button type="button" className="twk-btn secondary" onClick={onClose}>Cancel</button>
-        <button type="button" className="twk-btn" onClick={open}>Open</button>
-      </div>
+    <DialogBox label="Import game" className="import-box" onClose={close}>
+      {list ? <>
+        <div ref={body} className="fen-note">{done ? `${list.games.length} game${list.games.length === 1 ? '' : 's'}; pick one to open${done < list.games.length ? ' (the greyed ones are still being played)' : ''}.` : 'No game here has finished yet: they can be opened once they end.'}</div>
+        <div className="import-list">
+          {list.games.map((g, i) => (
+            <button key={i} type="button" className="import-game" disabled={!g.result}
+              onClick={() => onPgn(g.pgn, { ...list.link, kind: 'game', id: list.link.id + '-' + (i + 1), side: null, ply: null })}>
+              {g.board != null && <span className="import-board">{g.board}</span>}
+              <span className="import-players">{g.white} – {g.black}</span>
+              <span className="import-result">{g.result || 'playing'}</span>
+            </button>
+          ))}
+        </div>
+        <div className="fen-btns">
+          <button type="button" className="twk-btn secondary" onClick={back}>Back</button>
+          <button type="button" className="twk-btn secondary" onClick={close}>Cancel</button>
+        </div>
+      </> : <>
+        <div ref={body} className={onImage ? 'vision-tiles' : 'vision-tiles import-one'}>
+          <button type="button" className="vision-tile vision-tile-drop" aria-label="Choose a file, or drop one here" onClick={onChoose}>
+            <VisionUpIcon />
+            <span>{coarse ? <u>Choose a file</u> : <>Drop a PGN or <u>choose a file</u></>}</span>
+            <small>with this page’s analysis or notes files too, if you have them</small>
+          </button>
+          {onImage && <button type="button" className="vision-tile" onClick={onImage}>
+            <svg viewBox="0 0 24 24" aria-hidden="true"><rect x="3.5" y="4.5" width="17" height="15" rx="2" /><path d="M3.5 16l5-5 4 4 2.5-2.5 5.5 5.5" /><circle cx="15.5" cy="9" r="1.5" /></svg>
+            <span>Position from image</span>
+            <small>a screenshot, diagram or photo of a board</small>
+          </button>}
+        </div>
+        <textarea className="twk-field fen-field pgn-field" aria-label="PGN, FEN or Lichess link" aria-describedby="import-msg" data-autofocus spellCheck={false} autoComplete="off" autoCapitalize="off" autoCorrect="off"
+          placeholder={'Or paste a PGN, a FEN or a Lichess link\n\n1. e4 e5 2. Nf3 Nc6 …\nhttps://lichess.org/…'} value={text} readOnly={busy} onKeyDown={onKey} onChange={(e) => { setText(e.target.value); setMsg(''); }} />
+        <div className="fen-info">
+          <div id="import-msg" className="fen-msg" role="alert">{msg}</div>
+          {busy ? <div className="fen-note" role="status">Fetching from Lichess…</div>
+            : !msg && <div className="fen-note">A PGN opens as a loaded game (tags, comments, evals and a [FEN] start are read; the first game of several), a FEN on the free board, or in Edit position when it isn’t legal. A Lichess link (a finished game, a broadcast or a study) is fetched from Lichess. Ctrl+Enter opens it.</div>}
+        </div>
+        <div className="fen-btns">
+          <button type="button" className="twk-btn secondary" onClick={close}>Cancel</button>
+          <button type="button" className="twk-btn" disabled={busy} onClick={() => open()}>Open</button>
+        </div>
+      </>}
     </DialogBox>
   );
 }

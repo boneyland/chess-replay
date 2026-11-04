@@ -1347,7 +1347,7 @@ for (const name of BROWSERS) for (const site of SITES) {
       // a two-move game, analysed in a few seconds
       await p.getByRole('button', { name: 'Import game' }).click();
       // typed, not filled: Firefox over WebDriver BiDi can miss fill()'s text (see typeFen)
-      await p.getByRole('textbox', { name: 'PGN or FEN' }).click();
+      await p.getByRole('textbox', { name: 'PGN, FEN or Lichess link' }).click();
       await p.keyboard.type('1. e4 e5 *');
       await p.getByRole('button', { name: 'Open', exact: true }).click();
       await p.getByRole('button', { name: /^Analyse with Stockfish/ }).first().click();
@@ -1717,7 +1717,7 @@ for (const name of BROWSERS) for (const site of SITES) {
       // the same game loaded as a PGN: the pill on 1... Bxd7, then DEAD and the block once stepped there
       await p.getByRole('button', { name: 'Import game' }).click();
       const pgn = p.getByRole('dialog', { name: 'Import game' });
-      await pgn.getByRole('textbox', { name: 'PGN or FEN' }).pressSequentially(`[SetUp "1"]\n[FEN "${BEFORE}"]\n\n1... Bxd7 2. Kd2 Ke7 3. Ke3 Ke6 *\n`);
+      await pgn.getByRole('textbox', { name: 'PGN, FEN or Lichess link' }).pressSequentially(`[SetUp "1"]\n[FEN "${BEFORE}"]\n\n1... Bxd7 2. Kd2 Ke7 3. Ke3 Ke6 *\n`);
       await pgn.getByRole('button', { name: 'Open', exact: true }).click();
       await Promise.race([pgn.waitFor({ state: 'detached', timeout: 5000 }), pgn.getByRole('alert').filter({ hasText: /\S/ }).waitFor({ timeout: 5000 })]);
       assert.equal(await pgn.count(), 0, 'the PGN loads: ' + (await pgn.getByRole('alert').innerText().catch(() => '')));
@@ -1772,7 +1772,7 @@ for (const name of BROWSERS) for (const site of SITES) {
     // Edit position, whose Cancel comes back to it, as Position from image's does
     await t.test('desktop: Import game opens a PGN or a FEN, and says what\'s wrong with a bad one', async () => {
       const pp = await open(browser, { width: 1440, height: 900 });
-      const p = pp.page, dialog = p.getByRole('dialog', { name: 'Import game' }), field = dialog.getByRole('textbox', { name: 'PGN or FEN' });
+      const p = pp.page, dialog = p.getByRole('dialog', { name: 'Import game' }), field = dialog.getByRole('textbox', { name: 'PGN, FEN or Lichess link' });
       const openIt = async () => {
         await p.getByRole('button', { name: 'Import game' }).click();
         await dialog.waitFor({ timeout: 5000 });
@@ -1787,7 +1787,7 @@ for (const name of BROWSERS) for (const site of SITES) {
       assert.equal(await field.evaluate((el) => el === document.activeElement), true, 'the box is focused on open');
       assert.equal(await p.getByRole('button', { name: 'Paste PGN' }).count(), 0, 'Paste PGN left the menu');
       await dialog.getByRole('button', { name: 'Open', exact: true }).click();
-      await assert.doesNotReject(dialog.getByRole('alert').filter({ hasText: /paste a pgn or fen/i }).waitFor({ timeout: 5000 }));
+      await assert.doesNotReject(dialog.getByRole('alert').filter({ hasText: /paste a pgn, a fen or a lichess link/i }).waitFor({ timeout: 5000 }));
       // keys typed in the box stay there, Enter included (a new line, not Open)
       await field.pressSequentially('1. e4 e5 2. Qh9\n');
       await p.keyboard.press('ControlOrMeta+Enter');
@@ -1851,7 +1851,7 @@ for (const name of BROWSERS) for (const site of SITES) {
       await ph.page.getByRole('button', { name: 'Import game' }).click();
       const pd = ph.page.getByRole('dialog', { name: 'Import game' });
       await assert.doesNotReject(pd.waitFor({ timeout: 5000 }));
-      await pd.getByRole('textbox', { name: 'PGN or FEN' }).pressSequentially('[White "Alpha Tester"]\n\n1. d4 d5 *');
+      await pd.getByRole('textbox', { name: 'PGN, FEN or Lichess link' }).pressSequentially('[White "Alpha Tester"]\n\n1. d4 d5 *');
       assert.deepEqual(await wider(ph.page), [], 'no sideways scroll');
       const box = await pd.boundingBox();
       assert.ok(box.x >= 8 && box.x + box.width <= 390 - 8 && box.y >= 0 && box.y + box.height <= 844, 'the dialog fits the screen');
@@ -1861,6 +1861,70 @@ for (const name of BROWSERS) for (const site of SITES) {
       await ph.page.waitForFunction(() => /Alpha Tester/.test(document.body.innerText), null, { timeout: 5000 });
       assert.deepEqual(ph.errors, []);
       await ph.ctx.close();
+    });
+    // Lichess links in Import game (Lichess faked: the page's own fetch answers for lichess.org): a finished game opens
+    // as a loaded game, its /black flipping the board and #ply opening there; an unfinished one and a 404 say so and
+    // keep the dialog; a broadcast round lists its games, the unfinished greyed, Back keeps the link
+    await t.test('desktop: Import game opens a Lichess game, refuses an unfinished one, and lists a round', async () => {
+      const li = await open(browser, { width: 1440, height: 900 });
+      const p = li.page, dialog = p.getByRole('dialog', { name: 'Import game' }), field = dialog.getByRole('textbox', { name: 'PGN, FEN or Lichess link' });
+      await li.ctx.addInitScript(() => {
+        const f = window.fetch, pgn = (w, b, r, round, moves) => `[Event "Test"]\n[Round "${round}"]\n[White "${w}"]\n[Black "${b}"]\n[Result "${r}"]\n\n${moves} ${r}\n\n`;
+        const answers = {
+          'https://lichess.org/game/export/Fin1shed?clocks=true&evals=true': [200, pgn('Lichess White', 'Lichess Black', '1-0', '-', '1. e4 { [%eval 0.3] [%clk 0:03:00] } 1... e5 { [%eval 0.25] [%clk 0:03:00] } 2. Nf3 Nc6 3. Bb5 a6 4. Ba4 Nf6')],
+          'https://lichess.org/game/export/Play1ng0?clocks=true&evals=true': [200, pgn('A', 'B', '*', '-', '1. d4')],
+          'https://lichess.org/game/export/N0tThere?clocks=true&evals=true': [404, ''],
+          'https://lichess.org/api/broadcast/round/R0und123.pgn': [200, pgn('Board One W', 'Board One B', '0-1', '3.1', '1. c4 c5') + pgn('Board Two W', 'Board Two B', '*', '3.2', '1. Nf3')],
+        };
+        window.__li = [];
+        window.fetch = function (u) {
+          if (!String(u).startsWith('https://lichess.org/')) return f.apply(this, arguments);
+          window.__li.push(String(u));
+          const a = answers[String(u)] || [404, ''];
+          return Promise.resolve(new Response(a[1], { status: a[0] }));
+        };
+      });
+      await p.goto(base, { waitUntil: 'load' });
+      await loadedOn(p);
+      const openWith = async (text) => {
+        await p.getByRole('button', { name: 'Import game' }).click();
+        await dialog.waitFor({ timeout: 5000 });
+        await field.click();
+        await p.keyboard.type(text);
+        await p.keyboard.press('ControlOrMeta+Enter');
+      };
+      // unfinished, then not there: messages, the dialog stays
+      await openWith('https://lichess.org/Play1ng0');
+      await assert.doesNotReject(dialog.getByRole('alert').filter({ hasText: /still being played/ }).waitFor({ timeout: 5000 }));
+      await field.fill(''); await field.click(); await p.keyboard.type('lichess.org/N0tThere'); await p.keyboard.press('ControlOrMeta+Enter');
+      await assert.doesNotReject(dialog.getByRole('alert').filter({ hasText: /no game at that link/ }).waitFor({ timeout: 5000 }));
+      // a finished game, from Black's side at ply 4 (after 2... Nc6)
+      await field.fill(''); await field.click(); await p.keyboard.type('https://lichess.org/Fin1shed/black#4'); await p.keyboard.press('ControlOrMeta+Enter');
+      await assert.doesNotReject(dialog.waitFor({ state: 'detached', timeout: 5000 }));
+      await p.waitForFunction(() => /Lichess White/.test(document.body.innerText) && /Lichess Black/.test(document.body.innerText), null, { timeout: 5000 });
+      assert.equal(await p.evaluate(() => JSON.parse(localStorage.getItem('chess-video.tweaks.v1') || '{}').flip), true, '/black flips the board');
+      // at ply 4: Copy FEN shows the position after 2... Nc6
+      await p.waitForTimeout(500);
+      await p.getByRole('button', { name: 'Menu', exact: true }).click();
+      await p.getByRole('button', { name: 'Copy FEN' }).click();
+      await assert.doesNotReject(p.waitForFunction((f) => { const e = document.querySelector('.fen-note-fen'); return e && e.value === f; }, 'r1bqkbnr/pppp1ppp/2n5/4p3/4P3/5N2/PPPP1PPP/RNBQKB1R w KQkq - 2 3', { timeout: 5000 }), 'at ply 4');
+      await p.screenshot({ path: path.join(OUT, host + '-lichess-import-game.png') });
+      // a round: its games listed, the unfinished one greyed; Back keeps the link; a pick opens it
+      await openWith('https://lichess.org/broadcast/test-tour/round-3/R0und123');
+      const one = dialog.getByRole('button', { name: /Board One W – Board One B/ }), two = dialog.getByRole('button', { name: /Board Two W – Board Two B/ });
+      await assert.doesNotReject(one.waitFor({ timeout: 5000 }));
+      assert.equal(await two.isDisabled(), true, 'the unfinished game greyed');
+      assert.match(await two.innerText(), /playing/);
+      await p.screenshot({ path: path.join(OUT, host + '-lichess-import-round.png') });
+      await dialog.getByRole('button', { name: 'Back' }).click();
+      assert.equal(await field.inputValue(), 'https://lichess.org/broadcast/test-tour/round-3/R0und123', 'Back keeps the link');
+      await p.keyboard.press('ControlOrMeta+Enter');
+      await one.click();
+      await assert.doesNotReject(dialog.waitFor({ state: 'detached', timeout: 5000 }));
+      await p.waitForFunction(() => /Board One W/.test(document.body.innerText), null, { timeout: 5000 });
+      assert.equal(await p.evaluate(() => JSON.parse(localStorage.getItem('chess-video.tweaks.v1') || '{}').flip), false, 'a link without /black: White\'s side');
+      assert.deepEqual(li.errors, []);
+      await li.ctx.close();
     });
     // the endgame tablebase (Lichess, the real service): at 7 pieces or fewer it takes the opening explorer's place and the
     // eval bar shows its result, a move from it plays on the board; more pieces, or the setting off, and nothing is sent
@@ -1974,7 +2038,7 @@ for (const name of BROWSERS) for (const site of SITES) {
     await t.test('desktop: the Lichess explorer asks for a token, then lists the moves with counts and plays one', async () => {
       const ex = await open(browser, { width: 1440, height: 900 });
       const p = ex.page;
-      const answer = { white: 1200, draws: 600, black: 700, moves: [{ uci: 'e7e5', san: 'e5', averageRating: 2210, white: 500, draws: 250, black: 300 }, { uci: 'c7c5', san: 'c5', averageRating: 2230, white: 450, draws: 200, black: 250 }], topGames: [], opening: { eco: 'B00', name: 'Lichess Test Opening' } };
+      const answer = { white: 1200, draws: 600, black: 700, moves: [{ uci: 'e7e5', san: 'e5', averageRating: 2210, white: 500, draws: 250, black: 300 }, { uci: 'c7c5', san: 'c5', averageRating: 2230, white: 450, draws: 200, black: 250 }], topGames: [{ id: 'jYSkjcuG', winner: null, white: { name: 'Carlsen, M.', rating: 2882 }, black: { name: 'Caruana, F.', rating: 2818 }, year: 2019 }], opening: { eco: 'B00', name: 'Lichess Test Opening' } };
       // The page's own fetch is replaced for the explorer's host: a route can't do it in every browser (Playwright's
       // WebKit doesn't route the CORS preflight that the Authorization header causes, and Firefox hides the header from
       // routes). It answers 401 until the token is pasted, and records the header it was sent
@@ -1985,6 +2049,14 @@ for (const name of BROWSERS) for (const site of SITES) {
           if (!String(u).startsWith('https://explorer.lichess.ovh/')) return f.apply(this, arguments);
           window.__expl.push((o && o.headers && o.headers.Authorization) || null);
           return Promise.resolve(window.__pasted ? new Response(JSON.stringify(ans), { status: 200, headers: { 'Content-Type': 'application/json' } }) : new Response('no', { status: 401 }));
+        };
+        // the explorer's game, fetched by Import game (Open games: Here)
+        const g = window.fetch;
+        window.__games = [];
+        window.fetch = function (u) {
+          if (!String(u).startsWith('https://lichess.org/game/export/')) return g.apply(this, arguments);
+          window.__games.push(String(u));
+          return Promise.resolve(new Response('[Event "Saint Louis Blitz 2019"]\n[White "Carlsen, M."]\n[Black "Caruana, F."]\n[Result "1/2-1/2"]\n\n1. e4 e5 2. Nf3 Nc6 1/2-1/2\n', { status: 200 }));
         };
       }, answer);
       const E4 = 'rnbqkbnr/pppppppp/8/8/4P3/8/PPPP1PPP/RNBQKBNR b KQkq - 0 1';
@@ -2012,6 +2084,21 @@ for (const name of BROWSERS) for (const site of SITES) {
       await p.screenshot({ path: path.join(OUT, host + '-lichess-explorer.png') });
       await p.locator('.expl-moves .mv', { hasText: 'e5' }).click();
       await p.waitForFunction(() => /1…\s*e5/.test(document.body.innerText), null, { timeout: 10000 });
+      // its games: On Lichess opens a new tab; Here (the default) opens the game in the replay through Import game
+      const game = p.getByRole('link', { name: /Carlsen, M\./ });
+      const sw = p.getByRole('radiogroup', { name: 'Open games' });
+      assert.equal(await sw.getByRole('radio', { name: 'Here' }).getAttribute('aria-checked'), 'true', 'Here by default');
+      assert.equal(await game.getAttribute('href'), 'https://lichess.org/jYSkjcuG');
+      await sw.getByRole('radio', { name: 'On Lichess' }).click();
+      const [tab] = await Promise.all([ex.ctx.waitForEvent('page', { timeout: 5000 }), game.click()]);
+      await tab.close();
+      assert.deepEqual(await p.evaluate(() => window.__games), [], 'On Lichess fetches nothing');
+      await sw.getByRole('radio', { name: 'Here' }).click();
+      await game.click();
+      await p.waitForFunction(() => /Saint Louis Blitz 2019/.test(document.body.innerText), null, { timeout: 10000 });
+      assert.equal(await p.getByRole('dialog', { name: 'Import game' }).count(), 0, 'the dialog closed');
+      assert.deepEqual(await p.evaluate(() => window.__games), ['https://lichess.org/game/export/jYSkjcuG?clocks=true&evals=true']);
+      assert.equal(await p.evaluate(() => JSON.parse(localStorage.getItem('chess-video.tweaks.v1') || '{}').explorerOpen), 'here', 'the switch is remembered');
       assert.deepEqual(ex.errors.filter((e) => !/status of 401/.test(e)), []);
       await ex.ctx.close();
     });

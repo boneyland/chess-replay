@@ -104,7 +104,7 @@ function ResultBar({ w, d, b, height }) {
 // The Commentary box on the free board while the explorer is on: the opening's name, then the moves with their game
 // counts and results, each a button that plays the move as a drag would. x: useExplorer's answer; fallback: the local book's
 // panel, for an answer that can't come (offline, a back-off)
-function LichessExplorer({ x, tw, posKey, onPlay, onHover, white, fallback }) {
+function LichessExplorer({ x, tw, setTweak, onGame, posKey, onPlay, onHover, white, fallback }) {
   const LA = useLichessAuth();
   const top = React.useRef(null), loading = x.state === 'loading';
   React.useLayoutEffect(() => { const box = top.current && top.current.parentElement; if (box) box.scrollTop = 0; }, [posKey]);
@@ -121,6 +121,8 @@ function LichessExplorer({ x, tw, posKey, onPlay, onHover, white, fallback }) {
   const note = (txt) => <span style={{ display: 'block', marginTop: tx(8), font: `500 ${tx(15)}px ${MONO}`, color: C.dim }}>{txt}</span>;
   const play = (e, uci) => { e.preventDefault(); e.stopPropagation(); onPlay(uci); };
   const masters = explorerFilters(tw).db === 'masters';
+  // Open games: Here (Import game fetches the game) or On Lichess (a new tab); a middle or Ctrl click is always Lichess
+  const here = !!onGame && !(tw && tw.explorerOpen === 'lichess');
   let body, right = null;
   if (x.state === 'auth') {
     body = (
@@ -154,8 +156,16 @@ function LichessExplorer({ x, tw, posKey, onPlay, onHover, white, fallback }) {
           })}
           {!e.moves.length && note('No games from here.')}
         </div>
-        {e.games.length > 0 && <div style={{ marginTop: tx(12) }}>{e.games.map((g) => (
-          <a key={g.id} href={`https://lichess.org/${g.id}`} target="_blank" rel="noopener noreferrer" title="Open the game on Lichess" onClick={(ev) => ev.stopPropagation()}
+        {e.games.length > 0 && onGame && <div className="expl-open" role="radiogroup" aria-label="Open games" style={{ display: 'flex', alignItems: 'center', gap: tx(6), marginTop: tx(12), font: `500 ${tx(14)}px ${MONO}`, color: C.dim }}>
+          <span>Open games</span>
+          {[['here', 'Here'], ['lichess', 'On Lichess']].map(([v, label]) => (
+            <button key={v} type="button" role="radio" aria-checked={here === (v === 'here')} className={'expl-open-btn' + (here === (v === 'here') ? ' on' : '')}
+              onClick={(ev) => { ev.stopPropagation(); setTweak('explorerOpen', v); }}>{label}</button>
+          ))}
+        </div>}
+        {e.games.length > 0 && <div style={{ marginTop: tx(onGame ? 6 : 12) }}>{e.games.map((g) => (
+          <a key={g.id} href={`https://lichess.org/${g.id}`} target="_blank" rel="noopener noreferrer" title={here ? 'Open the game here' : 'Open the game on Lichess'}
+            onClick={(ev) => { ev.stopPropagation(); if (here && !ev.ctrlKey && !ev.metaKey && !ev.shiftKey) { ev.preventDefault(); onGame(`https://lichess.org/${g.id}`); } }}
             style={{ display: 'block', font: `400 ${tx(15)}px ${SANS}`, color: C.dim, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
             {g.white} {g.winner === 'white' ? '1–0' : g.winner === 'black' ? '0–1' : '½–½'} {g.black}{g.year ? ` · ${g.year}` : ''}
           </a>

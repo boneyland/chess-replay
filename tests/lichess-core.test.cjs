@@ -292,3 +292,60 @@ test('parseExplorer turns the king-takes-rook castling into the board\'s move', 
   const e = LC.parseExplorer({ moves: [{ uci: 'e1h1', san: 'O-O' }, { uci: 'e8a8', san: 'O-O-O+' }, { uci: 'e1g1', san: 'O-O' }, { uci: 'e2e4', san: 'e4' }, { uci: 'e1h1', san: 'Rh1' }] });
   assert.deepEqual(e.moves.map((m) => m.uci), ['e1g1', 'e8c8', 'e1g1', 'e2e4', 'e1h1']);
 });
+
+// ---------- game import ----------
+test('gameLink reads game links', () => {
+  const g = (t) => LC.gameLink(t);
+  for (const t of ['https://lichess.org/q7ZvsdUF', 'lichess.org/q7ZvsdUF', 'http://www.lichess.org/q7ZvsdUF', '  https://lichess.org/game/q7ZvsdUF  ', 'https://lichess.org/q7ZvsdUFab12', 'https://lichess.org/q7ZvsdUF?foo=1']) {
+    const l = g(t);
+    assert.equal(l && l.kind, 'game', t); assert.equal(l.id, 'q7ZvsdUF', t);
+    assert.equal(l.url, 'https://lichess.org/game/export/q7ZvsdUF?clocks=true&evals=true'); assert.equal(l.side, null); assert.equal(l.ply, null);
+  }
+  assert.deepEqual([g('https://lichess.org/q7ZvsdUF/black#32').side, g('https://lichess.org/q7ZvsdUF/black#32').ply], ['b', 32]);
+  assert.equal(g('https://lichess.org/game/q7ZvsdUF/white').side, 'w');
+  assert.equal(g('lichess.org/jYSkjcuG#0').ply, 0);
+});
+test('gameLink reads broadcast and study links', () => {
+  const bg = LC.gameLink('https://lichess.org/broadcast/kazchess-masters-almaty-2026/round-9/IKZUMzM4/SgsEz8ct');
+  assert.deepEqual({ k: bg.kind, id: bg.id, url: bg.url }, { k: 'game', id: 'SgsEz8ct', url: 'https://lichess.org/api/study/IKZUMzM4/SgsEz8ct.pgn?clocks=true&comments=true' });
+  const r = LC.gameLink('https://lichess.org/broadcast/kazchess-masters-almaty-2026/round-9/IKZUMzM4');
+  assert.deepEqual({ k: r.kind, id: r.id, url: r.url }, { k: 'list', id: 'IKZUMzM4', url: 'https://lichess.org/api/broadcast/round/IKZUMzM4.pgn' });
+  assert.equal(LC.gameLink('lichess.org/broadcast/a-tour/round-1/IKZUMzM4#5').kind, 'list');
+  assert.equal(LC.gameLink('https://lichess.org/study/abcdEFGH/ijklMNOP#12').url, 'https://lichess.org/api/study/abcdEFGH/ijklMNOP.pgn?clocks=true&comments=true');
+  assert.equal(LC.gameLink('https://lichess.org/study/abcdEFGH/ijklMNOP#12').ply, 12);
+  assert.equal(LC.gameLink('https://lichess.org/study/abcdEFGH').kind, 'list');
+});
+test('gameLink refuses other links and text', () => {
+  for (const t of ['', 'hello', 'https://lichess.org/', 'https://lichess.org/analysis', 'https://lichess.org/training', 'https://lichess.org/@/DrNykterstein', 'https://lichess.org/q7ZvsdUF/foo',
+    'https://lichess.org/tournament/abcdEFGH', 'https://lichess.org/broadcast/a-tour', 'https://example.com/q7ZvsdUF', 'https://lichess.org.evil.com/q7ZvsdUF', 'lichess.org/q7Zvs', '1. e4 e5', 'https://lichess.org/game/export/q7ZvsdUF']) {
+    assert.equal(LC.gameLink(t), null, t);
+  }
+});
+test('finished and listGames', () => {
+  assert.equal(LC.finished('[Result "1-0"]\n\n1. e4 1-0'), true);
+  assert.equal(LC.finished('[Result "1/2-1/2"]\n\n1. e4 1/2-1/2'), true);
+  assert.equal(LC.finished('[Result "*"]\n\n1. e4 *'), false);
+  assert.equal(LC.finished('1. e4 e5'), false, 'no Result tag');
+  const round = '[White "A"]\n[Black "B"]\n[Result "0-1"]\n[Round "9.1"]\n\n1. e4 0-1\n\n[White "C"]\n[Black "D"]\n[Result "*"]\n[Round "9.2"]\n\n1. d4 *\n';
+  const L = LC.listGames(round);
+  assert.deepEqual(L.map((g) => [g.white, g.black, g.result, g.board]), [['A', 'B', '0–1', 1], ['C', 'D', null, 2]]);
+  assert.match(L[1].pgn, /1\. d4/);
+});
+test('fetchGame: a finished game, an unfinished one, errors and a list', async () => {
+  const reply = (status, body) => async () => ({ status, ok: status >= 200 && status < 300, text: async () => body });
+  const link = LC.gameLink('lichess.org/q7ZvsdUF');
+  let asked;
+  const ok = await LC.fetchGame(link, { fetchFn: async (u, o) => { asked = u; return reply(200, '[Result "1-0"]\n\n1. e4 1-0')(); } });
+  assert.equal(asked, link.url); assert.match(ok.pgn, /1\. e4/);
+  assert.match((await LC.fetchGame(link, { fetchFn: reply(200, '[Result "*"]\n\n1. e4 *') })).error, /still being played/);
+  assert.match((await LC.fetchGame(link, { fetchFn: reply(404, '') })).error, /no game/);
+  assert.match((await LC.fetchGame(link, { fetchFn: reply(429, '') })).error, /busy/);
+  assert.match((await LC.fetchGame(link, { fetchFn: reply(500, '') })).error, /500/);
+  assert.match((await LC.fetchGame(LC.gameLink('lichess.org/study/abcdEFGH/ijklMNOP'), { fetchFn: reply(403, '') })).error, /private/);
+  assert.match((await LC.fetchGame(link, { fetchFn: async () => { throw new TypeError('Failed to fetch'); } })).error, /online/);
+  assert.deepEqual(await LC.fetchGame(link, { fetchFn: async () => { const e = new Error('x'); e.name = 'AbortError'; throw e; } }), { aborted: true });
+  const list = await LC.fetchGame(LC.gameLink('lichess.org/broadcast/t/r/IKZUMzM4'), { fetchFn: reply(200, '[White "A"]\n[Black "B"]\n[Result "1-0"]\n\n1. e4 1-0\n') });
+  assert.equal(list.list.length, 1);
+  assert.match((await LC.fetchGame(LC.gameLink('lichess.org/broadcast/t/r/IKZUMzM4'), { fetchFn: reply(200, '') })).error, /no games there yet/);
+  assert.match((await LC.fetchGame(LC.gameLink('lichess.org/broadcast/t/r/IKZUMzM4'), { fetchFn: reply(200, '[Event "R"]\n[Result "*"]\n\n*\n') })).error, /no games there yet/, 'a round not started');
+});
