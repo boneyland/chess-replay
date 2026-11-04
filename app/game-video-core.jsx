@@ -32,6 +32,8 @@ const clsColor = (cls) => C[cls] || C.ink;
 const BOARD = PALETTES.dark;
 const boardCls = (cls) => BOARD[cls] || BOARD.last;
 const LAST_MOVE = 'rgba(155,199,0,0.41)'; // Lichess's last-move tint, clear on both square colours
+// the selected piece's square (a board index, or null), in the last move's tint under the pieces
+const selSquare = (sel) => (sel == null ? null : <div key="sel" data-sel style={{ position: 'absolute', left: idxXY(sel)[0] * SQ, top: idxXY(sel)[1] * SQ, width: SQ, height: SQ, background: LAST_MOVE }} />);
 
 const SQ = 96, BW = SQ * 8;
 // The page's boxes in real CSS pixels (LayoutCore), for the window's size and the view; the board is drawn as a 768 px
@@ -281,10 +283,11 @@ function boardSquares() {
 }
 
 // lines: the engine lines' arrows on the viewer's own line (lineArrows)
-function Board({ M, T, S, a, arrows, pieces, queen, vline, hide, lines }) {
+// sel: the square of the piece picked to move (useBoardInput)
+function Board({ M, T, S, a, arrows, pieces, queen, vline, hide, lines, sel }) {
   const c = lastPly(T, S);
   const sq = boardSquares();
-  if (vline) return <LineBoard a={a} sq={sq} v={vline} hide={hide} arrows={lines} />;
+  if (vline) return <LineBoard a={a} sq={sq} v={vline} hide={hide} arrows={lines} sel={sel} />;
   const over = [];
   let badge = null, best = null;
   if (c >= 0) {
@@ -313,7 +316,7 @@ function Board({ M, T, S, a, arrows, pieces, queen, vline, hide, lines }) {
   }
   return (
     <div onDragStart={(e) => e.preventDefault()} style={{ ...NO_SELECT, position: 'absolute', left: 0, top: 0, width: BW, height: BW, borderRadius: 2, overflow: 'hidden', boxShadow: `${C.haloBoard}0 4px 12px rgba(0,0,0,0.28)`, opacity: a, transform: `scale(${lerp(0.96, 1, a)})` }}>
-      {sq}{over}
+      {sq}{over}{selSquare(sel)}
       {pieces.map((p) => <Piece key={p.id} p={p} T={T} S={S} />)}
       <svg width={BW} height={BW} style={{ position: 'absolute', left: 0, top: 0, zIndex: 6, pointerEvents: 'none' }}>
         {best}
@@ -400,7 +403,7 @@ function AnalysisPanel({ box, a, depth, deep, paused, style, children }) {
 }
 const lineAccent = (src) => (src === 'queen' ? C.queen : src === 'you' ? C.last : C.best);
 // arrows: the engine lines' first moves from the position shown ([{ uci, k }], lineArrows), line 1 the strongest
-function LineBoard({ a, sq, v, hide, arrows }) {
+function LineBoard({ a, sq, v, hide, arrows, sel }) {
   // the ring around the board says whose line it is; its last move gets the same tint as the game's
   const step = v.upto >= 0 ? v.moves[v.upto] : null, accent = v.src === 'queen' ? BOARD.queen : v.src === 'you' ? BOARD.last : BOARD.best;
   const board = step ? step.board : v.base.b;
@@ -420,7 +423,7 @@ function LineBoard({ a, sq, v, hide, arrows }) {
   return (
     // drawing only: taps and drags go to BoardTouch (without this its pieces sit above it and swallow them)
     <div style={{ ...NO_SELECT, position: 'absolute', left: 0, top: 0, width: BW, height: BW, borderRadius: 2, overflow: 'hidden', boxShadow: `0 0 0 2px ${accent}, ${C.haloBoard}0 4px 12px rgba(0,0,0,0.28)`, opacity: a, pointerEvents: 'none' }}>
-      {sq}{over}{pieces}
+      {sq}{over}{selSquare(sel)}{pieces}
       {arrows && (
         <svg width={BW} height={BW} style={{ position: 'absolute', left: 0, top: 0, zIndex: 6, pointerEvents: 'none' }}>
           {arrows.slice().reverse().map((r) => <Arrow key={r.k} from={r.uci.slice(0, 2)} to={r.uci.slice(2, 4)} color={r.color || BOARD.best} a={r.a != null ? r.a : r.k === 1 ? 1 : 0.5} grow={1} thin={r.k > 1} />)}
@@ -445,13 +448,12 @@ function DragGhost({ el, piece, x, y }) {
 // The pieces a pawn can become, in the picker's order, and where each sits: a column on the promotion square's file
 const PROMO_PIECES = ['q', 'n', 'r', 'b'];
 const promoPieces = (pr) => PROMO_PIECES.map((t, k) => ({ t, sq: pr.to + (pr.white ? 8 : -8) * k }));
-function BoardTouch({ pos, sel, targets, drag, promo, onDown, onMove, onUp, onCancel }) {
+function BoardTouch({ pos, targets, drag, promo, onDown, onMove, onUp, onCancel }) {
   const dragged = drag && drag.moved ? pos.b[drag.from] : null, el = React.useRef(null);
   return (
     <div ref={el} data-no-drag-scroll onPointerDown={onDown} onPointerMove={onMove} onPointerUp={onUp} onPointerCancel={onCancel}
       onDragStart={(e) => e.preventDefault()} title="Drag a piece to try your own move"
       style={{ ...NO_SELECT, position: 'absolute', left: 0, top: 0, width: BW, height: BW, cursor: drag && drag.moved ? 'grabbing' : 'grab', touchAction: 'none' }}>
-      {sel != null && <div style={{ position: 'absolute', left: idxXY(sel)[0] * SQ, top: idxXY(sel)[1] * SQ, width: SQ, height: SQ, boxSizing: 'border-box', border: `5px solid ${BOARD.last}`, background: 'rgba(255,255,255,0.12)', pointerEvents: 'none' }} />}
       {targets.map((t) => (
         <div key={t} style={{ position: 'absolute', left: idxXY(t)[0] * SQ, top: idxXY(t)[1] * SQ, width: SQ, height: SQ, display: 'flex', alignItems: 'center', justifyContent: 'center', pointerEvents: 'none' }}>
           {pos.b[t]
@@ -1038,7 +1040,7 @@ function EndCard({ M, T, CUES }) {
 // onMove(step) with a legal move (a ChessCore.userMove step, promotion piece included)
 function useBoardInput({ pos, onPick, onMiss, onMove }) {
   const [sel, setSel] = React.useState(null); // selected square (0 = a8)
-  const [drag, setDrag] = React.useState(null); // { from, x, y, x0, y0, moved } in board pixels
+  const [drag, setDrag] = React.useState(null); // { from, x, y, x0, y0, moved, again (pressed on the selected piece) } in board pixels
   const [promo, setPromo] = React.useState(null); // { from, to, white }: a pawn move waiting for its piece
   // a promotion first shows the picker, and plays once a piece is picked
   const playMove = (from, to, piece) => {
@@ -1071,7 +1073,7 @@ function useBoardInput({ pos, onPick, onMiss, onMove }) {
       const pc = pos.b[p.sq];
       if (pc && (pc === pc.toUpperCase() ? 'w' : 'b') === pos.turn) {
         try { e.currentTarget.setPointerCapture(e.pointerId); } catch (err) {}
-        onPick(); setSel(p.sq); setDrag({ from: p.sq, x: p.x, y: p.y, x0: p.x, y0: p.y, moved: false });
+        onPick(); setSel(p.sq); setDrag({ from: p.sq, x: p.x, y: p.y, x0: p.x, y0: p.y, moved: false, again: sel === p.sq });
       } else { setSel(null); onMiss(); }
     },
     onMove: (e) => { if (!drag) return; const p = boardXY(e); setDrag((d) => d && { ...d, x: p.x, y: p.y, moved: moved(d, p) }); },
@@ -1079,7 +1081,8 @@ function useBoardInput({ pos, onPick, onMiss, onMove }) {
       if (!drag) return;
       const p = boardXY(e), d = drag;
       setDrag(null);
-      if (!moved(d, p)) return; // a tap keeps the piece selected; the next tap picks its square
+      // a tap keeps the piece selected (the next tap picks its square); a tap on the piece already selected lets it go
+      if (!moved(d, p)) { if (d.again) setSel(null); return; }
       if (p.sq !== d.from && playMove(d.from, p.sq)) setSel(null); else { setSel(null); onMiss(); }
     },
     onCancel: () => setDrag(null),
@@ -1251,9 +1254,9 @@ function GameVideo({ M, tw, d, probe, queen, nav, scheme, sf, orient }) {
           <EvalBar M={M} T={T} S={S} a={enter(1)} tb={tbBar(tb)} dead={deadBar(dead)} />
           <PlayerBar M={M} T={T} S={S} side="b" a={enter(1)} pieces={pieces} />
           <BoardSpace onStep={tw.exporting ? null : stepBy}>
-            <Board M={M} T={T} S={S} a={enter(0)} arrows={tw.bestArrows} pieces={pieces} queen={queen} vline={pv || vline} hide={input.drag && input.drag.moved ? input.drag.from : null} lines={tw.bestArrows && own ? lineArrows(own.after) : null} />
+            <Board M={M} T={T} S={S} a={enter(0)} arrows={tw.bestArrows} pieces={pieces} queen={queen} vline={pv || vline} hide={input.drag && input.drag.moved ? input.drag.from : null} lines={tw.bestArrows && own ? lineArrows(own.after) : null} sel={input.sel} />
             <BoardDraw draw={draw} hidden={playing || !!pv}>
-              <BoardTouch pos={touchPos} sel={input.sel} targets={input.targets} drag={input.drag} promo={input.promo} {...input.handlers} />
+              <BoardTouch pos={touchPos} targets={input.targets} drag={input.drag} promo={input.promo} {...input.handlers} />
             </BoardDraw>
           </BoardSpace>
           <PlayerBar M={M} T={T} S={S} side="w" a={enter(1)} pieces={pieces} />

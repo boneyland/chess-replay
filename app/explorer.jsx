@@ -182,7 +182,7 @@ function ExplorerSettings({ t, setTweak }) {
       {on && <React.Fragment>
         <TweakSelect id="tw-expl-db" label="Database" value={db} options={['Lichess', 'Masters']} onChange={(v) => setTweak('explorerDb', v)} />
         {db === 'Lichess' && <TweakSelect id="tw-expl-rating" label="Rating" value={EXPL_RATINGS[t.explorerRating] ? t.explorerRating : 'Lichess default'} options={Object.keys(EXPL_RATINGS)} onChange={(v) => setTweak('explorerRating', v)} />}
-        {db === 'Lichess' && <TweakSelect id="tw-expl-speed" label="Speed" value={EXPL_SPEEDS[t.explorerSpeed] ? t.explorerSpeed : 'Lichess default'} options={Object.keys(EXPL_SPEEDS)} onChange={(v) => setTweak('explorerSpeed', v)} />}
+        {db === 'Lichess' && <TweakSelect id="tw-expl-speed" label="Time control" value={EXPL_SPEEDS[t.explorerSpeed] ? t.explorerSpeed : 'Lichess default'} options={Object.keys(EXPL_SPEEDS)} onChange={(v) => setTweak('explorerSpeed', v)} />}
         {LA.auth
           ? <TweakButton secondary label={`Sign out of Lichess${LA.auth.name ? ' (' + LA.auth.name + ')' : ''}`} onClick={LA.signOut} />
           : <React.Fragment>
