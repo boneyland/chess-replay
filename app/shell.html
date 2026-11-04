@@ -236,7 +236,7 @@ body:has(.stage-one) .twk-panel { bottom: calc(51px + var(--safe-b)); max-height
 .xfer-row { display: flex; gap: 8px; }
 .xfer-row > .twk-btn:not(.xfer-copy) { flex: 1; min-height: 34px; }
 /* the Download buttons' text larger than Settings' 0.75rem, in buttons of the same height */
-.xfer-box .twk-group > .twk-btn.secondary, .xfer-row > .twk-btn:not(.xfer-copy) { height: 34px; min-height: 34px; padding-block: 0; font-size: 0.875rem; }
+.xfer-box :is(.twk-group, .twk-lead) > .twk-btn.secondary, .xfer-row > .twk-btn:not(.xfer-copy) { height: 34px; min-height: 34px; padding-block: 0; font-size: 0.875rem; }
 .xfer-field { flex: 1; min-width: 0; height: 34px; box-sizing: border-box; padding: 0 10px; border: 1px solid var(--line); border-radius: 4px; background: var(--raise); color: var(--ink); font: 500 0.75rem var(--mono); }
 .xfer-copy { flex: none; display: inline-flex; align-items: center; justify-content: center; width: 38px; min-height: 34px; padding: 0; }
 .xfer-copy.done { color: var(--accent); }
@@ -315,7 +315,7 @@ body:has(.stage-one) .twk-panel { bottom: calc(51px + var(--safe-b)); max-height
 /* a scrolling flex column squeezes its children before it scrolls: a wrapped two-line button lost its second line */
 .twk-body > *, .twk-flow > * { flex-shrink: 0; }
 .twk-keep { display: flex; flex-direction: column; gap: 10px; }
-.twk-group { display: flex; flex-direction: column; gap: 10px; }
+.twk-group, .twk-lead { display: flex; flex-direction: column; gap: 10px; }
 .twk-flow > * + .twk-group { padding-top: 10px; }
 .twk-sect { font: 600 0.625rem var(--mono); letter-spacing: 0.14em; text-transform: uppercase; color: var(--accent); }
 /* Settings: one size in every layout and on every tab, so a tab reads the same on a phone as on a desktop and switching
@@ -339,7 +339,6 @@ body:has(.stage-one) .twk-panel { bottom: calc(51px + var(--safe-b)); max-height
   body:has(.stage) .twk-panel.twk-tabbed .twk-flow { display: block; columns: 2; column-gap: 28px; }
   body:has(.stage) .twk-panel.twk-tabbed .twk-group { display: block; }
   body:has(.stage) .twk-panel.twk-tabbed :is(.twk-flow > :not(.twk-group), .twk-group > *) { break-inside: avoid; margin-bottom: 10px; }
-  body:has(.stage) .twk-panel.twk-tabbed .twk-sect { break-after: avoid; }
   body:has(.stage) .twk-panel.twk-tabbed .twk-btn { display: block; width: 100%; }
   /* the bar in the sidebar: 4 px margin, 34 px high */
   body:has(.stage.stage-short) .twk-panel.twk-tabbed { bottom: calc(44px + var(--safe-b)); height: calc(100% - 52px - var(--safe-b)); }

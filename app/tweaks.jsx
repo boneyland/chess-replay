@@ -55,7 +55,12 @@ function TweaksPanel({ open, onClose, title = 'Settings', tabs, tab, onTab }) {
 }
 
 // a titled group of rows within a tab
-function TweakSection({ label, children }) { return <section className="twk-group"><div className="twk-sect">{label}</div>{children}</section>; }
+// a title shares an unbreakable box with its first item, so a column break never leaves it alone at a column's foot (browsers don't honour break-after: avoid in columns)
+const flatKids = (children) => React.Children.toArray(children).flatMap((c) => (c.type === React.Fragment ? flatKids(c.props.children) : [c]));
+function TweakSection({ label, children }) {
+  const [first, ...rest] = flatKids(children);
+  return <section className="twk-group"><div className="twk-lead"><div className="twk-sect">{label}</div>{first}</div>{rest}</section>;
+}
 
 // info: the row's explanation, behind an ⓘ: a floating tip just above it on hover, focus or a tap, drawn into the page's
 // body so no scrolling box clips it and no row grows

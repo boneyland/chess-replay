@@ -2801,7 +2801,7 @@ for (const name of BROWSERS) for (const site of SITES) {
       await dialog.getByRole('radio', { name: 'White' }).click();
       await dialog.getByRole('button', { name: 'Start game' }).click();
       await assert.doesNotReject(dialog.waitFor({ state: 'detached', timeout: 3000 }));
-      assert.match(await panel('Play vs Stockfish'), /You play White[\s\S]*Stockfish 19 plays at full strength/);
+      assert.match(await panel('Play vs Stockfish'), /You play White[\s\S]*No hints: Stockfish only says/);
       // measured in the game, whose board is larger than the replay's on the wide frame: by its touch layer, as a few
       // pieces don't span the board
       const b = await p.evaluate(() => { const r = [...document.querySelectorAll('div')].find((d) => d.style.touchAction === 'none').getBoundingClientRect(); return { x0: r.left, y0: r.top, sq: r.width / 8 }; });
