@@ -472,27 +472,40 @@ function FreeBoard({ board, onChange, tw, sf, nav, orient, book }) {
   );
 }
 
-// Paste PGN: a box for a whole PGN, Ctrl+Enter (or Load) opens it as a loaded game, Esc cancels. A PGN that doesn't
-// build gets ChessCore's message and changes nothing; Enter in the box is a new line, as in any text area
-function PgnDialog({ onLoad, onClose }) {
-  const [text, setText] = React.useState(''), [msg, setMsg] = React.useState('');
-  const load = () => {
-    if (!text.trim()) { setMsg('Paste a PGN first.'); return; }
-    try { window.ChessCore.buildGame({ pgn: text }); } catch (e) { setMsg((e && e.message) || 'That isn’t a PGN this page can read.'); return; }
-    onLoad(text);
+// Import game (the dock's Import game): a tile that opens the file picker (or takes a drop: the page's own drop
+// overlay shows over the dialog), one that opens Position from image, and a paste box that tells a PGN from a FEN (ImportCore).
+// Ctrl+Enter (or Open) opens the text, Esc cancels; text that is neither gets a message under the box and changes nothing
+function ImportDialog({ text: text0, onChoose, onPgn, onFen, onImage, onClose }) {
+  const [text, setText] = React.useState(text0 || ''), [msg, setMsg] = React.useState('');
+  const coarse = !!(window.matchMedia && window.matchMedia('(pointer: coarse)').matches); // a touch screen: nothing to drag from
+  const open = () => {
+    const r = window.ImportCore.read(text);
+    if (r.error) setMsg(r.error); else if (r.setup) onFen(r.setup, text); else onPgn(r.pgn);
   };
-  const onKey = (e) => { if (e.key === 'Enter' && (e.ctrlKey || e.metaKey)) { e.preventDefault(); load(); } };
+  const onKey = (e) => { if (e.key === 'Enter' && (e.ctrlKey || e.metaKey)) { e.preventDefault(); open(); } };
   return (
-    <DialogBox label="Paste PGN" onClose={onClose}>
-      <textarea className="twk-field fen-field pgn-field" aria-label="PGN" aria-describedby="pgn-msg" data-autofocus spellCheck={false} autoComplete="off" autoCapitalize="off" autoCorrect="off"
-        placeholder={'[Event "…"]\n\n1. e4 e5 2. Nf3 Nc6 …'} value={text} onKeyDown={onKey} onChange={(e) => { setText(e.target.value); setMsg(''); }} />
+    <DialogBox label="Import game" className="import-box" onClose={onClose}>
+      <div className={onImage ? 'vision-tiles' : 'vision-tiles import-one'}>
+        <button type="button" className="vision-tile vision-tile-drop" aria-label="Choose a file, or drop one here" onClick={onChoose}>
+          <VisionUpIcon />
+          <span>{coarse ? <u>Choose a file</u> : <>Drop a PGN or <u>choose a file</u></>}</span>
+          <small>with this page’s analysis or notes files too, if you have them</small>
+        </button>
+        {onImage && <button type="button" className="vision-tile" onClick={onImage}>
+          <svg viewBox="0 0 24 24" aria-hidden="true"><rect x="3.5" y="4.5" width="17" height="15" rx="2" /><path d="M3.5 16l5-5 4 4 2.5-2.5 5.5 5.5" /><circle cx="15.5" cy="9" r="1.5" /></svg>
+          <span>Position from image</span>
+          <small>a screenshot, diagram or photo of a board</small>
+        </button>}
+      </div>
+      <textarea className="twk-field fen-field pgn-field" aria-label="PGN or FEN" aria-describedby="import-msg" data-autofocus spellCheck={false} autoComplete="off" autoCapitalize="off" autoCorrect="off"
+        placeholder={'Or paste a PGN or FEN\n\n1. e4 e5 2. Nf3 Nc6 …'} value={text} onKeyDown={onKey} onChange={(e) => { setText(e.target.value); setMsg(''); }} />
       <div className="fen-info">
-        <div id="pgn-msg" className="fen-msg" role="alert">{msg}</div>
-        {!msg && <div className="fen-note">Opens as a loaded game, as Load game does: tags, comments, evals and a [FEN] start are read. Ctrl+Enter loads it.</div>}
+        <div id="import-msg" className="fen-msg" role="alert">{msg}</div>
+        {!msg && <div className="fen-note">A PGN opens as a loaded game (tags, comments, evals and a [FEN] start are read; the first game of several), a FEN on the free board, or in Edit position when it isn’t legal. Ctrl+Enter opens it.</div>}
       </div>
       <div className="fen-btns">
         <button type="button" className="twk-btn secondary" onClick={onClose}>Cancel</button>
-        <button type="button" className="twk-btn" onClick={load}>Load</button>
+        <button type="button" className="twk-btn" onClick={open}>Open</button>
       </div>
     </DialogBox>
   );
@@ -668,7 +681,7 @@ const SHORTCUTS = [
   { title: 'Menus and dialogs', rows: [
     ['Esc', 'Close the menu, Settings, Ask Queen or a dialog'],
     ['Tab', 'Go round a dialog\u2019s controls'],
-    ['Ctrl/Cmd + Enter', 'Paste PGN: load the text'],
+    ['Ctrl/Cmd + Enter', 'Import game: open the pasted text'],
     ['← → Home End', 'Settings: switch tab'],
   ] },
 ];
