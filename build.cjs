@@ -11,6 +11,7 @@ const SOUND_FILES = ['futuristic', 'lisp', 'nes', 'piano', 'sfx'].flatMap((set) 
 const units = [
   ['pieces.js', read(path.join(src, 'pieces.js'))],
   ['piece-sets.js', read(path.join(app, 'piece-sets.js'))],
+  ['board-themes.js', read(path.join(app, 'board-themes.js'))],
   ['chess-core.js', read(path.join(app, 'chess-core.js'))],
   ['analysis-core.js', read(path.join(app, 'analysis-core.js'))],
   ['lichess-core.js', read(path.join(app, 'lichess-core.js'))],
@@ -135,6 +136,9 @@ for (const f of fs.readdirSync(path.join(dir, 'vision'))) if (!/LICENSE$|^NOTICE
 // worker keeps a set when it's first drawn, not at install, so a first visit doesn't fetch all 1.4 MB
 const PIECES = path.join(dir, 'vendor', 'pieces');
 for (const set of fs.readdirSync(PIECES)) fs.cpSync(path.join(PIECES, set), path.join(dir, 'out', 'site', 'pieces', set), { recursive: true });
+// the picture boards and every board's picker tile, served as boards/<file> (BoardThemes.url, .thumb), kept by the
+// service worker as they're used, as the piece sets are
+fs.cpSync(path.join(dir, 'vendor', 'boards'), path.join(dir, 'out', 'site', 'boards'), { recursive: true });
 for (const f of SOUND_FILES) { fs.mkdirSync(path.dirname(path.join(dir, 'out', 'site', f)), { recursive: true }); fs.copyFileSync(path.join(SOUNDS, f.slice('sounds/'.length)), path.join(dir, 'out', 'site', f)); }
 // Add to Home Screen opens the page without the browser's bars (iPhone Safari has no other way to lose them).
 // The icons are the tab icon above drawn as PNGs; the maskable and Apple ones are full-bleed for the launcher to round.
