@@ -3259,7 +3259,8 @@ for (const name of BROWSERS) for (const site of SITES) {
       await dk.page.addInitScript(() => { try { localStorage.setItem('chess-video.tweaks.v1', JSON.stringify({ boardTheme: 'wood4', boardHue: 30 })); } catch (e) {} });
       await dk.page.goto(base, { waitUntil: 'load' });
       await loadedOn(dk.page);
-      await dk.page.waitForFunction(() => [...document.querySelectorAll('.stage-frame img')].some((i) => /^blob:/.test(i.src) && i.complete && i.naturalWidth === 1024));
+      // the drawn picture loaded over lila's file, which is then hidden (the export can't paint its CSS filter)
+      await dk.page.waitForFunction(() => { const im = [...document.querySelectorAll('.stage-frame img')]; return im.some((i) => /^blob:/.test(i.src) && i.complete && i.naturalWidth === 1024) && !im.some((i) => i.style.filter && i.style.filter !== 'none' && i.style.visibility !== 'hidden'); });
       const got = await dk.page.evaluate(() => {
         const el = document.querySelector('.stage-frame > div');
         window.dispatchEvent(new CustomEvent('chess-video:seek', { detail: { time: 7.0, sync: true } }));
