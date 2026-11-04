@@ -15,6 +15,7 @@ What each part of the repo is, with the pinned SHA-256 of every vendored file. B
   - `queen-core.js`, `queen.jsx`: Ask Queen and its Hugging Face sign-in
   - `export.jsx`, `webp-core.js`: MP4 and animated WebP export
   - `sfx-core.js`, `sfx.jsx`: the move sounds
+  - `piece-sets.js`: the piece sets (Settings › View › Pieces): their credits, which are kept out of exports, and loading the chosen one
   - `drag-scroll.js`: a mouse drag scrolls whatever scrolls under it
   - `sample-analysis.js`: the sample game's analysis, trimmed
   - `sw.js`: the site's service worker (offline); `icons/`, `og-image.png`: web app icons and the link-preview image
@@ -67,6 +68,8 @@ What each part of the repo is, with the pinned SHA-256 of every vendored file. B
   - `sfx/Check.mp3` sha256 `efaa7ae9a88025b6678de680441d806ce55e1a49f9009305235c5cd63a226093`
   - `sfx/Victory.mp3` sha256 `1821e541f533e3e6214d9b05a80b2edc3600ce1fbf8700d014315c9570b93d72`
   - `sfx/Draw.mp3` sha256 `cd8f8a02a63a94ab221cb01ebe1679771c83329cb4ce0549b78fc119aa1c2883`
+- `vendor/pieces/`: 25 of Lichess's piece sets, per lila's `COPYING.md`, unchanged SVGs from `public/piece/` at lila commit `9e780e9f2ce4b18a1c7991b9fe0b069c001459b8`: merida (Armando Hernandez Marroquin, GPL-2.0-or-later), chessnut (Alexis Luengas, Apache 2.0), fantasy, spatial and celtic (Maurizio Monge, MIT), rhosgfx (RhosGFX, CC0 1.0), kiwen-suwi (neverRare) and firi (James Faure, CC BY 4.0), letter (usolando), pirouetti (pirouetti) and pixel (therealqtpi, all AGPL-3.0-or-later), mpchess (Maxime Chupin, GPL-3.0-or-later), and, non-commercial, staunty, maestro, fresca, cardinal, icpieces, gioco, tatiana and dubrovny (sadsnake1), california (Jerry S.), caliente (avi), cooke (fejfar) and minimal-warmth (blunder_reign) under CC BY-NC-SA 4.0 and xkcd (Randall Munroe) under CC BY-NC-SA 2.5. cburnett, the default, is in the page (`src/pieces.js`). The site serves them as `pieces/<set>/<piece>.svg` (`PieceSets.url`, `app/piece-sets.js`); `sw.js` keeps a set when it's first drawn. The non-commercial sets are kept out of video exports (`PieceSets.exportSet`). Left out: Lichess's non-free sets (alpha, chess7, companion, leipzig, reillycraig, riohacha, shahi-ivory-brown, totoy, papercut), governor and kosal (not in `COPYING.md`), and, by choice, mono, shapes, horsey, anarcandy, disguised and monarchy
+  - all 300 files: sha256 `750f6301d43f2da6b81141f792e98b8e47164b5802545bbade292324bd80738f` of `cd vendor/pieces && sha256sum */*.svg | sort -k2` (checked by `tests/piece-sets.test.cjs`)
 - `openings-data.cjs`: embeds `openings/*.tsv` (Lichess chess-openings, CC0; a copy of chess-animator's) into the page
 - `render.yaml`: the Render static site's settings (a Blueprint: Render syncs them from this file)
 - `docs/`: `spec.md`, the one spec (principles, what's built, roadmap, known gaps, decisions log), and `plans/`, the implementation plans of built features, kept as written (the oldest, browser Stockfish of 2026-10-16, was written when this was `artifact/` in chess-animator; its paths are now repo-root paths)

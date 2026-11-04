@@ -89,6 +89,19 @@ test('the built site serves the five Lichess sound sets as MP3s where Sfx.soundU
   assert.equal(LOCAL.filter((f) => f.startsWith('sounds/')).length, sets.length * X.KINDS.length);
 });
 
+// cburnett is in the page; the other piece sets are served next to it and kept by sw.js only as they're drawn
+test('the built site serves every piece set but cburnett as SVGs where PieceSets.url names them, not kept at install', () => {
+  const { loadUnit } = require('./load.cjs');
+  loadUnit('piece-sets.js');
+  const P = window.PieceSets, site = path.join(ROOT, 'out', 'site');
+  const LOCAL = JSON.parse(fs.readFileSync(path.join(site, 'sw.js'), 'utf8').match(/^const LOCAL = (\[.*?\]);/m)[1]);
+  for (const s of P.SETS.slice(1)) for (const p of P.PIECES) {
+    const url = P.url(s.id, p);
+    assert.ok(fs.readFileSync(path.join(site, url)).equals(fs.readFileSync(path.join(ROOT, 'vendor', url))), url + ' is the vendored file');
+  }
+  assert.equal(LOCAL.filter((f) => f.startsWith('pieces/')).length, 0);
+});
+
 // an unmatched } in the page's stylesheet makes the browser drop the rule after it (it once hid the drop overlay)
 test('the page stylesheet opens and closes its braces in pairs', () => {
   const css = fs.readFileSync(path.join(ROOT, 'app', 'shell.html'), 'utf8').match(/<style>([\s\S]*?)<\/style>/)[1].replace(/\/\*[\s\S]*?\*\//g, '');
