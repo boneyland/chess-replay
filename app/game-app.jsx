@@ -809,7 +809,7 @@ function GameApp() {
           <TweakSection label="Appearance">
             <TweakRadio id="tw-scheme" label="Theme" value={t.scheme || 'Auto'} options={['Auto', 'Light', 'Dark']} onChange={(v) => setTweak('scheme', v)} />
             <TweakRadio id="tw-text-size" label="Text size" value={t.textSize || 'Default'} options={Object.keys(LayoutCore.TEXT_SIZES)} onChange={(v) => setTweak('textSize', v)} />
-            <TweakSelect id="tw-pieces" label="Pieces" value={pieceSet.name} options={window.PieceSets.SETS.map((s) => s.name)} onChange={(v) => setTweak('pieceSet', window.PieceSets.SETS.find((s) => s.name === v).id)} />
+            <PiecePicker value={pieceSet.id} onChange={(id) => setTweak('pieceSet', id)} />
             <div className="twk-note">{pieceSet.name} by {pieceSet.home ? <a href={pieceSet.home} target="_blank" rel="noopener">{pieceSet.by}</a> : pieceSet.by}, under <a href={pieceSet.licenceUrl} target="_blank" rel="noopener">{pieceSet.licence}</a>{pieceSet.id === window.PieceSets.DEFAULT ? '' : <>, from <a href="https://github.com/lichess-org/lila" target="_blank" rel="noopener">Lichess’s source</a></>}{window.PieceSets.NON_COMMERCIAL.includes(pieceSet.id) ? ' (non-commercial: a video exported with it may not be used commercially)' : ''}.{pieces.failed ? ' Couldn’t load it (offline?): the board keeps the pieces it had.' : ''}</div>
           </TweakSection>
           <TweakSection label="Board">
@@ -878,6 +878,34 @@ function GameApp() {
         </> },
       ]} />
     </React.Fragment>
+  );
+}
+
+// A picker tile's knight, asked for again a little later when it fails: right after a deploy Render's CDN can answer a
+// file with a 404 it then keeps for a few minutes (seen 2026-11-04). The query only makes the browser ask afresh; the
+// CDN's copy is shared whatever the query, so the later tries are what outlast it
+const TILE_RETRY_S = [5, 15, 30, 60, 120];
+function TileKnight({ src }) {
+  const [tries, setTries] = React.useState(0);
+  const timer = React.useRef(null);
+  React.useEffect(() => () => clearTimeout(timer.current), []);
+  const retry = () => { if (tries < TILE_RETRY_S.length) timer.current = setTimeout(() => setTries((n) => n + 1), TILE_RETRY_S[tries] * 1000); };
+  return <img src={tries ? `${src}?retry=${tries}` : src} alt="" draggable={false} loading="lazy" onError={retry} />;
+}
+
+// Settings › View › Pieces: each set's white knight on a light square (Lichess's way), its name on hover and to a
+// screen reader. The knights are fetched when the View tab first shows them, one small file a set
+function PiecePicker({ value, onChange }) {
+  return (
+    <TweakRow label="Pieces">
+      <div className="piece-picker" role="group" aria-label="Pieces">
+        {window.PieceSets.SETS.map((s) => (
+          <button key={s.id} type="button" className="piece-tile" title={s.name} aria-label={s.name} aria-pressed={s.id === value} onClick={() => onChange(s.id)}>
+            <TileKnight src={window.PieceSets.url(s.id, 'wN')} />
+          </button>
+        ))}
+      </div>
+    </TweakRow>
   );
 }
 

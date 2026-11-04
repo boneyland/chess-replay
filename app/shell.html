@@ -362,6 +362,11 @@ body:has(.stage.stage-short) .twk-panel { bottom: calc(44px + var(--safe-b)); ma
 .twk-err { color: var(--danger); }
 .twk-progress { height: 6px; border-radius: 2px; background: var(--raise); overflow: hidden; }
 .twk-progress > i { display: block; height: 100%; background: var(--accent); }
+.piece-picker { display: grid; grid-template-columns: repeat(auto-fill, minmax(42px, 1fr)); gap: 4px; }
+.piece-tile { aspect-ratio: 1; padding: 3px; border: 1px solid var(--line); border-radius: 4px; background: #f0d9b5; cursor: pointer; }
+.piece-tile img { display: block; width: 100%; height: 100%; }
+.piece-tile:hover { border-color: var(--accent); }
+.piece-tile[aria-pressed="true"] { border-color: var(--accent); box-shadow: inset 0 0 0 2px var(--accent); background: color-mix(in srgb, var(--accent) 30%, #f0d9b5); }
 .twk-field { width: 100%; height: 28px; padding: 0 8px; border: 1px solid var(--line); border-radius: 4px; background: var(--raise); color: var(--ink); font: inherit; }
 .twk-slider { width: 100%; margin: 4px 0; accent-color: var(--accent); }
 .twk-seg { position: relative; display: grid; grid-template-columns: repeat(var(--n), 1fr); padding: 2px; border-radius: 4px; background: var(--raise); }

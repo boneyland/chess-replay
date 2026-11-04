@@ -38,6 +38,7 @@
     ['caliente', 'Caliente', 'avi', 'CC BY-NC-SA 4.0', 'https://github.com/avi-0/caliente'],
     ['cooke', 'Cooke', 'fejfar', 'CC BY-NC-SA 4.0', 'https://github.com/fejfar'],
     ['minimal-warmth', 'Minimal warmth', 'blunder_reign', 'CC BY-NC-SA 4.0', 'https://lichess.org/@/blunder_reign'],
+    ['anarcandy', 'Anarcandy', 'caderek', 'CC BY-NC-SA 4.0', 'https://github.com/caderek'],
     ['xkcd', 'xkcd', 'Randall Munroe', 'CC BY-NC-SA 2.5', 'https://xkcd.com/about'],
   ].map(([id, name, by, licence, home]) => ({ id, name, by, licence, licenceUrl: LIC[licence], home: home || null }));
   const DEFAULT = SETS[0].id, IDS = SETS.map((s) => s.id);
