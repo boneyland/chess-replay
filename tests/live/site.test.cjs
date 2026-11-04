@@ -3271,7 +3271,13 @@ for (const name of BROWSERS) for (const site of SITES) {
         window.__frames = [];
         window.ExportDraw.compositor = (...a) => {
           const st = C(...a), draw = st.draw;
-          st.draw = async (cx) => { await draw(cx); window.__frames.push({ src: document.querySelector('.stage-frame img[src^="blob:"], .stage-frame img[src^="boards/"]').getAttribute('src'), why: { ...st.stats.why } }); };
+          // and the frame's colour at a6's middle (a light square): wood4's light square turned 108° is greener than red
+          st.draw = async (cx) => {
+            await draw(cx);
+            const im = document.querySelector('.stage-frame img[src^="blob:"], .stage-frame img[src^="boards/"]'), R = a[0].getBoundingClientRect(), r = im.getBoundingClientRect(), k = cx.canvas.width / R.width;
+            const [red, green] = cx.getImageData(Math.round((r.left - R.left + r.width / 16) * k), Math.round((r.top - R.top + r.height * 5 / 16) * k), 1, 1).data;
+            window.__frames.push({ src: im.getAttribute('src'), why: { ...st.stats.why }, red, green });
+          };
           return st;
         };
       });
@@ -3279,6 +3285,7 @@ for (const name of BROWSERS) for (const site of SITES) {
       const frames = await dk.page.evaluate(() => window.__frames);
       assert.ok(frames.length >= 2, 'frames drawn');
       for (const f of frames) assert.match(f.src, /^blob:/, 'the export draws the picture worked out through the sliders');
+      for (const f of frames) assert.ok(f.green > f.red + 20, `the frame's board turned green (${f.red}, ${f.green})`);
       assert.ok(!Object.keys(frames.at(-1).why).some((w) => /filter|image not loaded/.test(w)), JSON.stringify(frames.at(-1).why));
       await dk.page.getByRole('dialog', { name: 'Exporting' }).waitFor({ state: 'detached', timeout: 5000 });
       assert.equal(await pic.count(), 1, 'the page is back on the filtered file');
