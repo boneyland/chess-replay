@@ -571,6 +571,8 @@ function GameApp() {
   const mp4Vfr = t.mp4Vfr === true;
   const video = useVideoExport({ fps: exportFps, format: exportFormat, webp: { width: webpWidth, quality: webpQuality }, mp4Quality, mp4Vfr: mp4Vfr && !webp, stem: fileStem, save: (name, blob) => saveFile(name, blob, blob.type) });
   busyRef.current = video.busy;
+  const pieces = usePieceSet(t.pieceSet, video.busy);
+  const pieceSet = window.PieceSets.byId(t.pieceSet);
   // the stretch to export, in plies: from -1 starts on the title card, to N (the ply count) ends after the end card
   const [clip, setClip] = React.useState({ from: -1, to: Infinity });
   React.useEffect(() => { setClip({ from: -1, to: Infinity }); }, [M]);
@@ -795,7 +797,7 @@ function GameApp() {
             <TweakSelect id="tw-game" label="Game in PGN" value={String((files.gameIndex || 0) + 1)} options={Array.from({ length: M.gameCount }, (_, i) => String(i + 1))} onChange={(v) => commit({ ...files, gameIndex: +v - 1, analysis: null, analysisName: null })} />
           )}
           <TweakSection label="About">
-            <div className="twk-note">This player is free software under the GPL-3.0-or-later; <a href="https://github.com/boneyland/chess-replay" target="_blank" rel="noopener">source on GitHub</a>. Two parts aren’t covered by the GPL: the lisp move sounds (see the Sound tab) and the board reader’s model (Position from image, <code>vision/</code>), <a href="https://github.com/JSeytre/chessqueries" target="_blank" rel="noopener">ChessQueries</a>’ ChessQ Lite by Joël Seytre, under <a href="https://polyformproject.org/licenses/noncommercial/1.0.0/" target="_blank" rel="noopener">PolyForm Noncommercial 1.0.0</a>: non-commercial use only (Required Notice: Copyright (c) 2026 Joël Seytre). It is built on Meta AI’s <a href="https://github.com/facebookresearch/dinov2" target="_blank" rel="noopener">DINOv2</a> (Copyright (c) Meta Platforms, Inc. and affiliates), under the <a href="https://www.apache.org/licenses/LICENSE-2.0" target="_blank" rel="noopener">Apache License 2.0</a>.</div>
+            <div className="twk-note">This player is free software under the GPL-3.0-or-later; <a href="https://github.com/boneyland/chess-replay" target="_blank" rel="noopener">source on GitHub</a>. Some parts aren’t covered by the GPL: the piece sets other than Cburnett have their own licences, some of them non-commercial (see View › Pieces), and so do the lisp move sounds (see the Sound tab) and the board reader’s model (Position from image, <code>vision/</code>), <a href="https://github.com/JSeytre/chessqueries" target="_blank" rel="noopener">ChessQueries</a>’ ChessQ Lite by Joël Seytre, under <a href="https://polyformproject.org/licenses/noncommercial/1.0.0/" target="_blank" rel="noopener">PolyForm Noncommercial 1.0.0</a>: non-commercial use only (Required Notice: Copyright (c) 2026 Joël Seytre). It is built on Meta AI’s <a href="https://github.com/facebookresearch/dinov2" target="_blank" rel="noopener">DINOv2</a> (Copyright (c) Meta Platforms, Inc. and affiliates), under the <a href="https://www.apache.org/licenses/LICENSE-2.0" target="_blank" rel="noopener">Apache License 2.0</a>.</div>
           </TweakSection>
           {/* every setting back to its default; the kept games, the loaded game, Queen's answers, sign-ins and the engine download stay, and so does the engine choice */}
           <TweakButton danger label="Reset all settings" onClick={() => setResetOpen(true)} />
@@ -804,6 +806,8 @@ function GameApp() {
           <TweakSection label="Appearance">
             <TweakRadio id="tw-scheme" label="Theme" value={t.scheme || 'Auto'} options={['Auto', 'Light', 'Dark']} onChange={(v) => setTweak('scheme', v)} />
             <TweakRadio id="tw-text-size" label="Text size" value={t.textSize || 'Default'} options={Object.keys(LayoutCore.TEXT_SIZES)} onChange={(v) => setTweak('textSize', v)} />
+            <TweakSelect id="tw-pieces" label="Pieces" value={pieceSet.name} options={window.PieceSets.SETS.map((s) => s.name)} onChange={(v) => setTweak('pieceSet', window.PieceSets.SETS.find((s) => s.name === v).id)} />
+            <div className="twk-note">{pieceSet.name} by {pieceSet.home ? <a href={pieceSet.home} target="_blank" rel="noopener">{pieceSet.by}</a> : pieceSet.by}, under <a href={pieceSet.licenceUrl} target="_blank" rel="noopener">{pieceSet.licence}</a>{pieceSet.id === window.PieceSets.DEFAULT ? '' : <>, from <a href="https://github.com/lichess-org/lila" target="_blank" rel="noopener">Lichess’s source</a></>}{window.PieceSets.NON_COMMERCIAL.includes(pieceSet.id) ? ' (non-commercial, so video exports use Cburnett in its place)' : ''}.{pieces.failed ? ' Couldn’t load it (offline?): the board keeps the pieces it had.' : ''}</div>
           </TweakSection>
           <TweakSection label="Board">
             {board && board.game ? (
@@ -861,7 +865,7 @@ function GameApp() {
             <TweakSelect id="tw-clip-to" label="To" aria="Export to" value={clipToOpts.find((o) => o.i === clipTo).s} options={clipToOpts.map((o) => o.s)} onChange={(v) => setClip((c) => ({ ...c, to: clipToOpts.find((o) => o.s === v).i }))} />
           </div>
           <TweakButton label={`${webp ? 'Export animated WebP (' : 'Export video (MP4, '}${!webp && mp4Vfr ? 'up to ' : ''}${exportFps} fps${!webp && mp4Vfr ? ', variable' : ''}, ${fmtLen(clipT.end - clipT.start)})`} disabled={video.busy} onClick={exportVideo} />
-          <div className="twk-note">Renders every frame in this tab: about {fmtLen(Math.ceil((clipT.end - clipT.start) * exportFps * 0.04))} for {clipSuffix ? 'these moves' : 'this game'}, longer on a phone. Higher frame rates are smoother but slower. Each move’s clip runs from just before it until the board settles. {webp ? 'No sound, and it loops; a smaller width or quality makes a smaller file, and Lossless a much larger one.' : `Includes move sounds when on${window.Sfx.exportSet(soundSet) !== soundSet ? ` (${window.Sfx.exportSet(soundSet)} in place of ${soundSet}, whose licence is non-commercial)` : ''}; a lower quality makes a smaller file.`}</div>
+          <div className="twk-note">Renders every frame in this tab: about {fmtLen(Math.ceil((clipT.end - clipT.start) * exportFps * 0.04))} for {clipSuffix ? 'these moves' : 'this game'}, longer on a phone. Higher frame rates are smoother but slower. Each move’s clip runs from just before it until the board settles. {window.PieceSets.exportSet(pieceSet.id) !== pieceSet.id ? `Drawn with Cburnett pieces in place of ${pieceSet.name}, whose licence is non-commercial. ` : ''}{webp ? 'No sound, and it loops; a smaller width or quality makes a smaller file, and Lossless a much larger one.' : `Includes move sounds when on${window.Sfx.exportSet(soundSet) !== soundSet ? ` (${window.Sfx.exportSet(soundSet)} in place of ${soundSet}, whose licence is non-commercial)` : ''}; a lower quality makes a smaller file.`}</div>
         </> },
         { id: 'sound', label: 'Sound', body: <>
           <TweakToggle id="tw-sound" label="Move sounds" value={t.sound !== false} onChange={(v) => setTweak('sound', v)} />
