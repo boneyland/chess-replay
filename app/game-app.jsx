@@ -573,6 +573,9 @@ function GameApp() {
   busyRef.current = video.busy;
   const pieces = usePieceSet(t.pieceSet);
   const pieceSet = window.PieceSets.byId(t.pieceSet);
+  const boardTheme = window.BoardThemes.byId(t.boardTheme);
+  const boardAdj = window.BoardThemes.adjust({ brightness: t.boardBrightness, contrast: t.boardContrast, hue: t.boardHue });
+  const boardLook = useBoardLook(boardTheme.id, boardAdj);
   // what an export would carry under a non-commercial licence (CC BY-NC-SA): such a video may not be used commercially
   const ncParts = [window.PieceSets.NON_COMMERCIAL.includes(pieceSet.id) && `${pieceSet.name} pieces`, !webp && t.sound !== false && window.Sfx.NON_COMMERCIAL.includes(soundSet) && `${soundSet.replace(/^Lichess /, '')} sounds`].filter(Boolean);
   const ncNote = ncParts.length ? `The ${ncParts.join(' and ')} are under a non-commercial licence (CC BY-NC-SA): a video made with ${ncParts.length > 1 ? 'them' : 'it'} may not be used commercially, on a monetised channel for one, and should credit ${ncParts.length > 1 ? 'them' : 'it'} (Settings › View and Sound name the authors). ` : '';
@@ -811,6 +814,12 @@ function GameApp() {
             <TweakRadio id="tw-text-size" label="Text size" value={t.textSize || 'Default'} options={Object.keys(LayoutCore.TEXT_SIZES)} onChange={(v) => setTweak('textSize', v)} />
             <PiecePicker value={pieceSet.id} onChange={(id) => setTweak('pieceSet', id)} />
             <div className="twk-note">{pieceSet.name} by {pieceSet.home ? <a href={pieceSet.home} target="_blank" rel="noopener">{pieceSet.by}</a> : pieceSet.by}, under <a href={pieceSet.licenceUrl} target="_blank" rel="noopener">{pieceSet.licence}</a>{pieceSet.id === window.PieceSets.DEFAULT ? '' : <>, from <a href="https://github.com/lichess-org/lila" target="_blank" rel="noopener">Lichess’s source</a></>}{window.PieceSets.NON_COMMERCIAL.includes(pieceSet.id) ? ' (non-commercial: a video exported with it may not be used commercially)' : ''}.{pieces.failed ? ' Couldn’t load it (offline?): the board keeps the pieces it had.' : ''}</div>
+            <BoardPicker value={boardTheme.id} adj={boardAdj} onChange={(id) => setTweak('boardTheme', id)} />
+            <div className="twk-note">{boardTheme.name}{boardTheme.id === window.BoardThemes.DEFAULT ? '' : <>, from <a href="https://github.com/lichess-org/lila" target="_blank" rel="noopener">Lichess’s source</a>, by the lila authors and <a href="https://lichess.org/@/pirouetti" target="_blank" rel="noopener">pirouetti</a> under <a href="https://www.gnu.org/licenses/agpl-3.0.html" target="_blank" rel="noopener">AGPL-3.0-or-later</a></>}. The sliders change the board’s colours, in exports too.{boardLook.failed ? ' Couldn’t load it (offline?): the board keeps the one it had.' : ''}</div>
+            <TweakSlider id="tw-board-brightness" label="Brightness" value={boardAdj.brightness} min={window.BoardThemes.SLIDERS.brightness.min} max={window.BoardThemes.SLIDERS.brightness.max} step={window.BoardThemes.SLIDERS.brightness.step} unit="%" onChange={(v) => setTweak('boardBrightness', v)} />
+            <TweakSlider id="tw-board-contrast" label="Contrast" value={boardAdj.contrast} min={window.BoardThemes.SLIDERS.contrast.min} max={window.BoardThemes.SLIDERS.contrast.max} step={window.BoardThemes.SLIDERS.contrast.step} unit="%" onChange={(v) => setTweak('boardContrast', v)} />
+            <TweakSlider id="tw-board-hue" label="Hue" value={boardAdj.hue} min={window.BoardThemes.SLIDERS.hue.min} max={window.BoardThemes.SLIDERS.hue.max} step={window.BoardThemes.SLIDERS.hue.step} format={(v) => `+ ${Math.round(v * 3.6)}°`} onChange={(v) => setTweak('boardHue', v)} />
+            {!window.BoardThemes.isDefault(boardAdj) && <TweakButton secondary label="Reset colours to default" onClick={() => { setTweak('boardBrightness', 100); setTweak('boardContrast', 100); setTweak('boardHue', 0); }} />}
           </TweakSection>
           <TweakSection label="Board">
             {board && board.game ? (
@@ -881,16 +890,16 @@ function GameApp() {
   );
 }
 
-// A picker tile's knight, asked for again a little later when it fails: right after a deploy Render's CDN can answer a
+// A picker tile's picture (a knight, a board), asked for again a little later when it fails: right after a deploy Render's CDN can answer a
 // file with a 404 it then keeps for a few minutes (seen 2026-11-04). The query only makes the browser ask afresh; the
 // CDN's copy is shared whatever the query, so the later tries are what outlast it
 const TILE_RETRY_S = [5, 15, 30, 60, 120];
-function TileKnight({ src }) {
+function TileImage({ src, style }) {
   const [tries, setTries] = React.useState(0);
   const timer = React.useRef(null);
   React.useEffect(() => () => clearTimeout(timer.current), []);
   const retry = () => { if (tries < TILE_RETRY_S.length) timer.current = setTimeout(() => setTries((n) => n + 1), TILE_RETRY_S[tries] * 1000); };
-  return <img src={tries ? `${src}?retry=${tries}` : src} alt="" draggable={false} loading="lazy" onError={retry} />;
+  return <img src={tries ? `${src}?retry=${tries}` : src} alt="" draggable={false} loading="lazy" style={style} onError={retry} />;
 }
 
 // Settings › View › Pieces: each set's white knight on a light square (Lichess's way), its name on hover and to a
@@ -901,7 +910,24 @@ function PiecePicker({ value, onChange }) {
       <div className="piece-picker" role="group" aria-label="Pieces">
         {window.PieceSets.SETS.map((s) => (
           <button key={s.id} type="button" className="piece-tile" title={s.name} aria-label={s.name} aria-pressed={s.id === value} onClick={() => onChange(s.id)}>
-            <TileKnight src={window.PieceSets.url(s.id, 'wN')} />
+            <TileImage src={window.PieceSets.url(s.id, 'wN')} />
+          </button>
+        ))}
+      </div>
+    </TweakRow>
+  );
+}
+
+// Settings › View › Board: each board's two squares (lila's thumbnails) through the sliders, as Lichess shows them; its
+// name on hover and to a screen reader. The CSS filter is close to the board's own (BoardThemes.filter), not exact
+function BoardPicker({ value, adj, onChange }) {
+  const BT = window.BoardThemes, filter = BT.isDefault(adj) ? 'none' : `brightness(${adj.brightness}%) contrast(${adj.contrast}%) hue-rotate(${Math.round(adj.hue * 3.6)}deg)`;
+  return (
+    <TweakRow label="Board">
+      <div className="board-picker" role="group" aria-label="Board">
+        {BT.THEMES.map((b) => (
+          <button key={b.id} type="button" className="board-tile" title={b.name} aria-label={b.name} aria-pressed={b.id === value} onClick={() => onChange(b.id)}>
+            {BT.thumb(b.id) ? <TileImage src={BT.thumb(b.id)} style={{ filter }} /> : <i style={{ backgroundImage: `url(${BT.url(b.id)})`, filter }} />}
           </button>
         ))}
       </div>

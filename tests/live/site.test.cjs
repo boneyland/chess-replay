@@ -3252,6 +3252,31 @@ for (const name of BROWSERS) for (const site of SITES) {
       await dk.ctx.close();
     });
 
+    // a picture board through the sliders (Settings › View) lies under the squares as one picture the export draws itself;
+    // the coordinates take the board's colours through the sliders too
+    await t.test('desktop: a picture board with its hue turned draws, and the export draws it itself', { timeout: 60000 }, async () => {
+      const dk = await open(browser, { width: 1440, height: 900 });
+      await dk.page.addInitScript(() => { try { localStorage.setItem('chess-video.tweaks.v1', JSON.stringify({ boardTheme: 'wood4', boardHue: 30 })); } catch (e) {} });
+      await dk.page.goto(base, { waitUntil: 'load' });
+      await loadedOn(dk.page);
+      await dk.page.waitForFunction(() => [...document.querySelectorAll('.stage-frame img')].some((i) => /^blob:/.test(i.src) && i.complete && i.naturalWidth === 1024));
+      const got = await dk.page.evaluate(() => {
+        const el = document.querySelector('.stage-frame > div');
+        window.dispatchEvent(new CustomEvent('chess-video:seek', { detail: { time: 7.0, sync: true } }));
+        const bd = window.ExportDraw.layersOf(el).find((n) => n.querySelectorAll('img').length >= 20);
+        const cv = window.ExportDraw.paintLayer(el, bd, 1), pic = bd.querySelector('img[src^="blob:"]').getBoundingClientRect();
+        // the middle of a6 (a light square), drawn: wood4's light square turned 108° is greener than it is red
+        const R = bd.getBoundingClientRect(), [r, g] = typeof cv === 'string' ? [] : cv.getContext('2d').getImageData(Math.round(pic.left - R.left + pic.width / 16), Math.round(pic.top - R.top + pic.height * 5 / 16), 1, 1).data;
+        return { drawn: typeof cv === 'string' ? cv : 'drawn', r, g, size: [pic.width, pic.height].map(Math.round), board: [R.width, R.height].map(Math.round) };
+      });
+      assert.equal(got.drawn, 'drawn');
+      assert.ok(got.g > got.r, `turned green (${got.r}, ${got.g})`);
+      assert.deepEqual(got.size, got.board, 'the picture covers the board');
+      await dk.page.screenshot({ path: path.join(OUT, host + '-board-theme.png') });
+      assert.deepEqual(dk.errors, []);
+      await dk.ctx.close();
+    });
+
     // a pinch doesn't zoom the page (Chromium only: the pinch is a DevTools gesture, and Firefox has no phone emulation)
     if (name === 'chromium') await t.test('phone: a pinch doesn\'t zoom the page', async () => {
       const ph = await open(browser, { width: 390, height: 844 }, { isMobile: true, hasTouch: true });
