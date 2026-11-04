@@ -181,7 +181,7 @@ body:has(.stage-one) .twk-panel { bottom: calc(51px + var(--safe-b)); max-height
   .dock-pop .dock-group { display: flex; flex-direction: column; gap: 6px; }
 }
 .dock-menu-label { padding: 6px 4px 0; font: 600 0.625rem var(--mono); letter-spacing: 0.14em; text-transform: uppercase; color: var(--accent); }
-/* the dialogs (Paste PGN, Play, My games): a centred box over a scrim, which also keeps taps off the board */
+/* the dialogs (Import game, Play, My games): a centred box over a scrim, which also keeps taps off the board */
 .fen-scrim { position: fixed; inset: 0; z-index: 85; display: grid; place-items: center; padding: 16px; background: var(--scrim); }
 .fen-box {
   width: min(560px, 100%); display: flex; flex-direction: column; gap: 12px; padding: 16px 18px 18px; border-radius: 6px;
@@ -225,6 +225,13 @@ body:has(.stage-one) .twk-panel { bottom: calc(51px + var(--safe-b)); max-height
   .vision-tile { min-height: 128px; font-size: 1rem; }
 }
 .fen-box:has(.keys-body) { width: min(640px, 100%); max-height: calc(100dvh - 32px); }
+/* Import game: the file and picture tiles (vision-tile) over the paste box; the page's drop overlay shows over it */
+.fen-box.import-box { width: min(640px, 100%); max-height: calc(100dvh - 32px); overflow-y: auto; }
+.import-box .vision-tile { min-height: 120px; }
+.import-box .import-one { grid-template-columns: 1fr; }
+.import-box .pgn-field { height: min(28vh, 200px); }
+.drop.drop-top { z-index: 95; }
+@media (max-width: 520px) { .import-box .vision-tile { min-height: 96px; font-size: 0.9375rem; } .import-box .vision-tile small { display: none; } }
 .keys-body { display: flex; flex-direction: column; gap: 14px; overflow-y: auto; min-height: 0; }
 .keys-title { margin: 0 0 6px; font: 600 0.625rem var(--mono); letter-spacing: 0.14em; text-transform: uppercase; color: var(--accent); }
 .keys-list { display: grid; grid-template-columns: minmax(max-content, 11rem) 1fr; gap: 6px 14px; margin: 0; align-items: baseline; }

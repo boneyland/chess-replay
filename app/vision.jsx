@@ -1,5 +1,5 @@
 // ---------- position from image: the dialog ----------
-// Play/Explore › Position from image (and the Play dialogs' Start from › From image): the board reader's download when it isn't
+// Import game › Position from image (and the Play dialogs' Start from › From image): the board reader's download when it isn't
 // kept (need), a picture chosen or pasted (pick), a box pulled over it to the squares (crop), and the read handed on to
 // Edit position (onRead). The picture never leaves the device: it is decoded here and read by Vision's Worker.
 // again = { bitmap, box, grey, found }: Back to crop, opening at the box with the picture (and its greyscale copy and

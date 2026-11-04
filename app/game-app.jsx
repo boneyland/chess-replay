@@ -164,14 +164,16 @@ function GameApp() {
   React.useEffect(() => { if (!phone) setMenu(false); }, [phone]);
   // the dock's Menu (landscape); on a phone its items sit in the folded menu instead
   const [newMenu, setNewMenu] = React.useState(false);
-  const [pgnOpen, setPgnOpen] = React.useState(false);
+  // Import game's dialog while it is open: { text }, the paste box's text to open with (kept when it comes back from
+  // Edit position or Position from image)
+  const [importOpen, setImportOpen] = React.useState(false);
   const [resetOpen, setResetOpen] = React.useState(false);
   // Edit position: { setup, text, msg, resume, play, image } while the editor shows in place of the board or the loaded
   // game; text is the FEN field's, msg why it doesn't parse, resume the paused game in progress left to open it (Cancel
   // goes back to it), image the picture it was read from ({ url, unsure, bitmap, box }, or null)
   const [editing, setEditing] = React.useState(null);
-  // Position from image's dialog while it is open: { play, again }, play the Play dialog's choices it came from (or null),
-  // again the picture, box, greyscale copy and found squares for Back to crop (or null)
+  // Position from image's dialog while it is open: { play, again, back }, play the Play dialog's choices it came from (or null),
+  // again the picture, box, greyscale copy and found squares for Back to crop (or null), back true when Import game opened it
   const [vision, setVision] = React.useState(null);
   const [fenNote, setFenNote] = React.useState(null); // { fen, ok } after Copy FEN; a copy that failed stays up to select
 
@@ -320,7 +322,8 @@ function GameApp() {
   // the editor opens on the position on the board (empty when there is none); a game in progress is paused for it (and
   // kept, when it has moves, by guard's Leave). play: the Play dialog's { mode, tc, you } when its Set-up position opened
   // the editor, whose Done starts that game
-  // read: Position from image's { setup, image }, the editor opening on it with the picture
+  // read: Position from image's { setup, image }, the editor opening on it with the picture, or Import game's
+  // { setup, image: null, back }, an illegal pasted FEN, back the paste box's text for Cancel to restore
   const openEditor = (play, read) => {
     // the board as it is now: Stockfish may have replied, or a flag fallen, while the Leave dialog was up
     const E = window.EditCore, P = window.PlayCore, b = boardRef.current, fen = nav.current && nav.current.fen && nav.current.fen();
@@ -328,7 +331,7 @@ function GameApp() {
     const resume = editing ? editing.resume : b && P.inProgress(b) ? P.pause(b, Date.now()) : null;
     if (resume && !editing) commitBoard(resume);
     const setup = read ? read.setup : s;
-    setQueenOpen(false); setEditing({ setup, text: E.toFen(setup), msg: '', resume, play: play || null, image: read ? read.image : null });
+    setQueenOpen(false); setEditing({ setup, text: E.toFen(setup), msg: '', resume, play: play || null, image: read ? read.image : null, back: read && read.back != null ? read.back : null });
   };
   const editPosition = () => { setNewMenu(false); setMenu(false); setPanel(false); guard(() => openEditor()); };
   // a square the reader was unsure of stops being outlined once its piece changes, however it was edited
@@ -362,9 +365,8 @@ function GameApp() {
     if (!editPic || editPic.url !== was.url) URL.revokeObjectURL(was.url);
     if (!editPic || editPic.bitmap !== was.bitmap) was.bitmap.close();
   }, [editPic]);
-  // Play/Explore › Position from image asks first from a game in progress, as Edit position does
+  // Import game's Position from image tile, where the reader can run
   const visionOk = React.useMemo(() => !!window.Vision && window.Vision.supported(), []);
-  const fromImage = () => { setNewMenu(false); setMenu(false); setPanel(false); guard(() => setVision({ play: null, again: null })); };
   // Read board: from Back to crop it replaces the editor's board, edits and marks with the new read; else the editor opens
   // on it (in the Play dialog's mode when that is where it came from, so Done starts the game)
   const visionRead = ({ setup, unsure, url, bitmap, box, grey, found }) => {
@@ -373,10 +375,11 @@ function GameApp() {
     if (v && v.again && editing) setEditing((e) => e && { ...e, setup, text: window.EditCore.toFen(setup), msg: '', image });
     else openEditor(v && v.play, { setup, image });
   };
-  // Cancel goes back to what showed before: the editor as it was (Back to crop), else the Play dialog as it was
+  // Cancel goes back to what showed before: the editor as it was (Back to crop), else the Play dialog as it was, or Import game
   const visionClose = () => {
     const v = vision;
     setVision(null);
+    if (v && v.back) setImportOpen({ text: '' });
     if (v && !v.again && v.play) { setPlayInit({ from: 'image', tc: v.play.tc, you: v.play.you }); setPlayOpen(v.play.mode); }
   };
   const editDone = () => {
@@ -385,14 +388,15 @@ function GameApp() {
     else { setQueenOpen(false); commitBoard(window.BoardCore.fromFen(fen)); }
   };
   // Cancel goes back to what showed before: a game left for the editor resumes, its clock running from now, and the Play
-  // dialog that opened it comes back as it was
+  // dialog or Import game that opened it comes back as it was
   const editCancel = () => {
-    const { resume: r, play, image } = editing || {};
+    const { resume: r, play, image, back } = editing || {};
     setEditing(null);
+    if (back != null) setImportOpen({ text: back });
     if (r) commitBoard(window.PlayCore.runClock(r, Date.now()));
     if (play) { setPlayInit({ from: image ? 'image' : 'setup', tc: play.tc, you: play.you }); setPlayOpen(play.mode); }
   };
-  const pastePgn = () => { setNewMenu(false); setMenu(false); setPanel(false); guard(() => setPgnOpen(true)); };
+  const importGame = () => { setNewMenu(false); setMenu(false); setPanel(false); guard(() => setImportOpen({ text: '' })); };
   // the position on the board, whichever view it's in; where the clipboard is refused the note shows it to select
   const copyFen = () => {
     setNewMenu(false); setMenu(false);
@@ -435,10 +439,17 @@ function GameApp() {
   const replayGame = (e) => { setGamesOpen(null); guard(() => { const b = window.BoardCore.restore(e.board); if (!b) return; setQueenOpen(false); commit({ pgn: window.PlayCore.pgn(b), pgnName: `my-game-${b.game.date}.pgn`, gameIndex: 0 }); }); };
   const resumeGame = (e) => { setGamesOpen(null); guard(() => { const b = window.BoardCore.restore(e.board); if (!b) return; setQueenOpen(false); commitBoard(window.PlayCore.runClock(b, Date.now())); }); };
   const deleteGame = (id) => { const next = updateGames((list) => window.GamesCore.remove(list, id), 'The game couldn’t be deleted: the browser’s storage is full.'); if (next) setGamesOpen(next); };
-  const loadGame = () => guard(() => inputRef.current.click());
+  // Import game's tiles and paste box (guard asked before the dialog opened): the picker's files close the dialog as they load
+  const chooseFiles = () => inputRef.current.click();
+  const importImage = () => { setImportOpen(false); setVision({ play: null, again: null, back: true }); };
   // a pasted PGN is a loaded game, as a picked file; the dialog has checked it builds
-  const pgnLoad = (text) => { setPgnOpen(false); setQueenOpen(false); commit({ pgn: text, pgnName: 'pasted.pgn', gameIndex: 0 }); };
-  const closePgn = React.useCallback(() => setPgnOpen(false), []);
+  const pgnLoad = (text) => { setImportOpen(false); setQueenOpen(false); commit({ pgn: text, pgnName: 'pasted.pgn', gameIndex: 0 }); };
+  // a pasted FEN: a legal position on the free board, else Edit position on it, saying what's wrong
+  const fenLoad = (setup, text) => {
+    setImportOpen(false);
+    if (window.EditCore.ok(setup)) { setQueenOpen(false); commitBoard(window.BoardCore.fromFen(window.EditCore.toFen(setup))); } else openEditor(null, { setup, image: null, back: text });
+  };
+  const closeImport = React.useCallback(() => setImportOpen(false), []);
   // the board's moves as a loaded game (replay, Analyse with Stockfish, PGN and video export); the board is kept with it, to go back to
   const boardAsGame = () => { commit({ pgn: window.BoardCore.pgn(board), pgnName: 'free-board.pgn', gameIndex: 0, fromBoard: files.board, fromLastGame: files.lastGame || null }); };
   // the game left for the board comes back as it was, paused where the playhead was (the board is kept to go back to)
@@ -449,7 +460,7 @@ function GameApp() {
     window.dispatchEvent(new CustomEvent('chess-video:seek', { detail: { time } }));
   }, [files]);
   // a dialog closed (Esc, Cancel, Set up, Start game): focus goes back to what opened it, Menu
-  const newBtn = React.useRef(null), menuBtn = React.useRef(null), fenWasOpen = React.useRef(false), dialogOpen = pgnOpen || !!playOpen || !!gamesOpen || keysOpen || !!vision;
+  const newBtn = React.useRef(null), menuBtn = React.useRef(null), fenWasOpen = React.useRef(false), dialogOpen = !!importOpen || !!playOpen || !!gamesOpen || keysOpen || !!vision;
   React.useEffect(() => {
     if (fenWasOpen.current && !dialogOpen) { const b = phone ? menuBtn.current : newBtn.current; if (b) b.focus(); }
     fenWasOpen.current = dialogOpen;
@@ -481,15 +492,16 @@ function GameApp() {
   // the drags while it is open
   const loadRef = React.useRef(loadFiles);
   loadRef.current = loadFiles; // the listeners below are registered once and always load with the current files
-  const visionOpen = React.useRef(false);
-  visionOpen.current = !!vision;
+  const visionOpen = React.useRef(false), importRef = React.useRef(false);
+  visionOpen.current = !!vision; importRef.current = importOpen;
   React.useEffect(() => watchFileDrag({
     skip: () => visionOpen.current,
     over: (e) => { e.dataTransfer.dropEffect = 'copy'; setDrag(true); },
     off: () => setDrag(false),
     drop: (e) => {
       const list = droppedFiles(e);
-      if (list.length) guardRef.current(() => loadRef.current(list)); else setErr('The drop arrived without a file. Use “Load game” to pick the files instead.');
+      // over Import game, which asked before it opened, the files load at once
+      if (list.length) { if (importRef.current) { setImportOpen(false); loadRef.current(list); } else guardRef.current(() => loadRef.current(list)); } else setErr('The drop arrived without a file. Use “Import game” to pick the files instead.');
     },
   }), []);
   React.useEffect(() => { if (vision) setDrag(false); }, [vision]);
@@ -635,7 +647,7 @@ function GameApp() {
   const shownErr = err || built.error;
 
   const newGroups = [{ label: 'Explore', items: [{ label: 'Starting position', run: newBoard }, { label: 'Edit position', run: editPosition },
-    ...(visionOk ? [{ label: 'Position from image', run: fromImage }] : []), { label: 'Paste PGN', run: pastePgn }, { label: 'Copy FEN', run: copyFen }, { label: 'Copy PGN', run: copyPgn }] },
+    { label: 'Copy FEN', run: copyFen }, { label: 'Copy PGN', run: copyPgn }] },
     { label: 'Play', items: [{ label: 'Play vs human', run: playHuman }, { label: 'Play vs Stockfish', run: playSf }, { label: 'My games', run: myGames }] },
     // Ask Queen sits here on the wide layouts; the folded menu keeps it in its last row. The folded menu's shortcuts item is hidden on a touch screen
     { label: 'More', items: [{ label: 'Keyboard shortcuts', run: openKeys }, ...(!phone && !board ? [{ label: 'Ask Queen', cls: 'dock-queen', run: () => { setNewMenu(false); askQueen(); } }] : [])] }];
@@ -647,7 +659,7 @@ function GameApp() {
   const dockItems = (
     <div id="dock-items" className="dock-items">
       {phone && <span className="dock-menu-status">{shownErr || status}</span>}
-      <button type="button" className="dock-btn dock-primary" onClick={() => { setMenu(false); loadGame(); }}>Load game</button>
+      <button type="button" className="dock-btn dock-primary" onClick={importGame}>Import game</button>
       {/* a list of starting points and tools in groups, each under its heading; on the phone they sit in the folded menu */}
       {phone ? newItems : (
         <div ref={newRef} className="dock-new">
@@ -706,7 +718,7 @@ function GameApp() {
           : <GameVideo M={MV} tw={video.busy ? { ...t, exporting: true } : t} d={TM.d} probe={probe} queen={queenArrow} nav={nav} scheme={scheme} sf={sf} orient={t.flip ? 'b' : 'w'} />}
       </CompositionStage>
       </EngineMenuContext.Provider>
-      <input ref={inputRef} id="game-files" type="file" multiple accept=".pgn,.txt,.json,application/json,text/plain" hidden onChange={(e) => { loadFiles(e.target.files); e.target.value = ''; }} />
+      <input ref={inputRef} id="game-files" type="file" multiple accept=".pgn,.txt,.json,application/json,text/plain" hidden onChange={(e) => { if (e.target.files.length) setImportOpen(false); loadFiles(e.target.files); e.target.value = ''; }} />
       {hf.note && (
         <div className="signin-note" role="status">{hf.note}<button type="button" className="twk-x" aria-label="Dismiss" onClick={hf.clearNote}>✕</button></div>
       )}
@@ -720,12 +732,12 @@ function GameApp() {
         <div className={'signin-note net-note ' + (net.online ? 'net-note-on' : 'net-note-off')} role="status">{net.note}<button type="button" className="twk-x" aria-label="Dismiss" onClick={net.clearNote}>✕</button></div>
       )}
       {drag && (
-        <div className="drop">
-          <div className="drop-box">Drop a PGN<br /><span>with this page’s analysis or notes files too, if you have them · if dropping doesn’t work here, use Load game</span></div>
+        <div className={importOpen ? 'drop drop-top' : 'drop'}>
+          <div className="drop-box">Drop a PGN<br /><span>with this page’s analysis or notes files too, if you have them · if dropping doesn’t work here, use Import game</span></div>
         </div>
       )}
       <ExportOverlay x={video} />
-      {pgnOpen && <PgnDialog onLoad={pgnLoad} onClose={closePgn} />}
+      {importOpen && <ImportDialog text={importOpen.text} onChoose={chooseFiles} onPgn={pgnLoad} onFen={fenLoad} onImage={visionOk ? importImage : null} onClose={closeImport} />}
       {resetOpen && (
         <DialogBox label="Reset all settings" onClose={() => setResetOpen(false)}>
           <div className="fen-note">Every setting goes back to its default. Your saved games and the downloaded engine are kept.</div>
@@ -744,7 +756,7 @@ function GameApp() {
       <TweaksPanel open={panel} onClose={closePanel} tab={panelTab} onTab={setPanelTab} tabs={[
         { id: 'game', label: 'Game', body: <>
           <div className={shownErr ? 'twk-note twk-err' : 'twk-note'}>{shownErr || status}</div>
-          <TweakButton label="Load game" onClick={loadGame} />
+          <TweakButton label="Import game" onClick={importGame} />
           {board && board.game && <div className="twk-note">{board.game.mode === 'stockfish' ? 'Stockfish 19 plays the other side at full strength (there is no strength setting) and quietly rates your moves; Analyse on the free board shows its eval once the game ends.' : 'Stockfish is off during a game; Analyse on the free board brings it back once the game ends.'}</div>}
           {!board && <div className="twk-note">Uses the PGN’s own evals (Lichess [%eval] or cutechess +0.25/20). Without them, run “Analyse with Stockfish” from the Analysis panel’s ☰ menu. Saved analysis, notes and Queen files load here too.</div>}
           {board && !window.PlayCore.inProgress(board) && <TweakButton label="Replay these moves as a game" disabled={!board.steps.length} onClick={boardAsGame} />}

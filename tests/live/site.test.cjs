@@ -1345,12 +1345,11 @@ for (const name of BROWSERS) for (const site of SITES) {
       await p.goto(base, { waitUntil: 'load' });
       await loadedOn(p);
       // a two-move game, analysed in a few seconds
-      await p.getByRole('button', { name: 'Menu', exact: true }).click();
-      await p.getByRole('button', { name: 'Paste PGN' }).click();
+      await p.getByRole('button', { name: 'Import game' }).click();
       // typed, not filled: Firefox over WebDriver BiDi can miss fill()'s text (see typeFen)
-      await p.getByRole('textbox', { name: 'PGN' }).click();
+      await p.getByRole('textbox', { name: 'PGN or FEN' }).click();
       await p.keyboard.type('1. e4 e5 *');
-      await p.getByRole('button', { name: 'Load', exact: true }).click();
+      await p.getByRole('button', { name: 'Open', exact: true }).click();
       await p.getByRole('button', { name: /^Analyse with Stockfish/ }).first().click();
       await p.getByRole('button', { name: 'Menu', exact: true }).click();
       await p.getByRole('button', { name: 'Edit position' }).click();
@@ -1479,9 +1478,11 @@ for (const name of BROWSERS) for (const site of SITES) {
       // how many of the 64 squares two placements agree on
       const same = (f, g) => { const sq = (x) => x.replace(/\d/g, (d) => '.'.repeat(+d)).replace(/\//g, ''), a = sq(f), b = sq(g); return [...a].filter((c, i) => c === b[i]).length; };
       const picWidth = () => p.locator('img[alt="The picture read"]').evaluate((i) => (i.complete ? i.naturalWidth : new Promise((ok) => { i.onload = () => ok(i.naturalWidth); })));
+      // through Import game, which Cancel from the picking or crop step comes back to
       const fromImage = async () => {
-        await p.getByRole('button', { name: 'Menu', exact: true }).click();
-        await p.getByRole('button', { name: 'Position from image' }).click();
+        const imp = p.getByRole('dialog', { name: 'Import game' });
+        if (!(await imp.count())) await p.getByRole('button', { name: 'Import game' }).click();
+        await imp.getByRole('button', { name: /^Position from image/ }).click();
         await assert.doesNotReject(dialog.waitFor({ timeout: 5000 }));
       };
       await p.goto(base, { waitUntil: 'load' });
@@ -1498,6 +1499,7 @@ for (const name of BROWSERS) for (const site of SITES) {
       // (opened again: Firefox over WebDriver BiDi opens no second chooser for the same file field)
       await dialog.getByRole('button', { name: 'Cancel' }).click();
       await dialog.waitFor({ state: 'detached', timeout: 5000 });
+      await assert.doesNotReject(p.getByRole('dialog', { name: 'Import game' }).waitFor({ timeout: 5000 }), 'Cancel goes back to Import game');
       await fromImage();
       // (the dialog takes a paste once it has found the kept copy and offers Choose image)
       await dialog.getByRole('button', { name: 'Choose image' }).waitFor({ timeout: 5000 });
@@ -1673,8 +1675,8 @@ for (const name of BROWSERS) for (const site of SITES) {
       const q = off.page;
       await q.goto(base, { waitUntil: 'load' });
       await loadedOn(q);
-      await q.getByRole('button', { name: 'Menu', exact: true }).click();
-      await q.getByRole('button', { name: 'Position from image' }).click();
+      await q.getByRole('button', { name: 'Import game' }).click();
+      await q.getByRole('dialog', { name: 'Import game' }).getByRole('button', { name: /^Position from image/ }).click();
       const qd = q.getByRole('dialog', { name: 'Position from image' });
       await assert.doesNotReject(qd.getByText('The board reader downloads once; you’re offline.').waitFor({ timeout: 5000 }));
       assert.equal(await qd.getByRole('button', { name: 'Download board reader · 56 MB' }).isDisabled(), true);
@@ -1713,11 +1715,10 @@ for (const name of BROWSERS) for (const site of SITES) {
       assert.equal(await p.locator('.dead-pill').count(), 0, 'the result takes the pill\'s place');
       await p.screenshot({ path: path.join(OUT, host + '-dead-game.png') });
       // the same game loaded as a PGN: the pill on 1... Bxd7, then DEAD and the block once stepped there
-      await p.getByRole('button', { name: 'Menu', exact: true }).click();
-      await p.getByRole('button', { name: 'Paste PGN' }).click();
-      const pgn = p.getByRole('dialog', { name: 'Paste PGN' });
-      await pgn.getByRole('textbox', { name: 'PGN' }).pressSequentially(`[SetUp "1"]\n[FEN "${BEFORE}"]\n\n1... Bxd7 2. Kd2 Ke7 3. Ke3 Ke6 *\n`);
-      await pgn.getByRole('button', { name: 'Load' }).click();
+      await p.getByRole('button', { name: 'Import game' }).click();
+      const pgn = p.getByRole('dialog', { name: 'Import game' });
+      await pgn.getByRole('textbox', { name: 'PGN or FEN' }).pressSequentially(`[SetUp "1"]\n[FEN "${BEFORE}"]\n\n1... Bxd7 2. Kd2 Ke7 3. Ke3 Ke6 *\n`);
+      await pgn.getByRole('button', { name: 'Open', exact: true }).click();
       await Promise.race([pgn.waitFor({ state: 'detached', timeout: 5000 }), pgn.getByRole('alert').filter({ hasText: /\S/ }).waitFor({ timeout: 5000 })]);
       assert.equal(await pgn.count(), 0, 'the PGN loads: ' + (await pgn.getByRole('alert').innerText().catch(() => '')));
       await assert.doesNotReject(p.locator('.dead-pill').waitFor({ timeout: 15000 }));
@@ -1766,14 +1767,14 @@ for (const name of BROWSERS) for (const site of SITES) {
       assert.deepEqual(dp.errors, []);
       await dp.ctx.close();
     });
-    // Paste PGN: an empty box or a PGN that doesn't build gets a plain message and changes nothing; a good one, loaded
-    // with Ctrl+Enter, is the loaded game, from the free board too
-    await t.test('desktop: Paste PGN loads a game, and says what\'s wrong with a bad one', async () => {
+    // Import game: an empty box or a PGN that doesn't build gets a plain message and changes nothing; a good one, loaded
+    // with Ctrl+Enter, is the loaded game, from the free board too; a legal FEN opens the free board, an illegal one
+    // Edit position, whose Cancel comes back to it, as Position from image's does
+    await t.test('desktop: Import game opens a PGN or a FEN, and says what\'s wrong with a bad one', async () => {
       const pp = await open(browser, { width: 1440, height: 900 });
-      const p = pp.page, dialog = p.getByRole('dialog', { name: 'Paste PGN' }), field = dialog.getByRole('textbox', { name: 'PGN' });
+      const p = pp.page, dialog = p.getByRole('dialog', { name: 'Import game' }), field = dialog.getByRole('textbox', { name: 'PGN or FEN' });
       const openIt = async () => {
-        await p.getByRole('button', { name: 'Menu', exact: true }).click();
-        await p.getByRole('button', { name: 'Paste PGN' }).click();
+        await p.getByRole('button', { name: 'Import game' }).click();
         await dialog.waitFor({ timeout: 5000 });
       };
       await p.goto(base, { waitUntil: 'load' });
@@ -1784,18 +1785,19 @@ for (const name of BROWSERS) for (const site of SITES) {
       await assert.doesNotReject(p.getByRole('button', { name: 'Play (space)' }).waitFor({ state: 'detached', timeout: 5000 }));
       await openIt();
       assert.equal(await field.evaluate((el) => el === document.activeElement), true, 'the box is focused on open');
-      await dialog.getByRole('button', { name: 'Load' }).click();
-      await assert.doesNotReject(dialog.getByRole('alert').filter({ hasText: /paste a pgn/i }).waitFor({ timeout: 5000 }));
-      // keys typed in the box stay there, Enter included (a new line, not Load)
+      assert.equal(await p.getByRole('button', { name: 'Paste PGN' }).count(), 0, 'Paste PGN left the menu');
+      await dialog.getByRole('button', { name: 'Open', exact: true }).click();
+      await assert.doesNotReject(dialog.getByRole('alert').filter({ hasText: /paste a pgn or fen/i }).waitFor({ timeout: 5000 }));
+      // keys typed in the box stay there, Enter included (a new line, not Open)
       await field.pressSequentially('1. e4 e5 2. Qh9\n');
       await p.keyboard.press('ControlOrMeta+Enter');
       await assert.doesNotReject(dialog.getByRole('alert').filter({ hasText: /\S/ }).waitFor({ timeout: 5000 }));
       assert.equal(await dialog.isVisible(), true, 'a bad PGN keeps the dialog open');
       assert.equal(await field.inputValue(), '1. e4 e5 2. Qh9\n', 'and its text, the new line in it');
       assert.equal(await p.getByRole('button', { name: 'Play (space)' }).count(), 0, 'still the free board');
-      await p.screenshot({ path: path.join(OUT, host + '-pgn-dialog.png') });
-      // Tab goes round the box, Cancel and Load
-      for (let i = 0; i < 3; i++) {
+      await p.screenshot({ path: path.join(OUT, host + '-import-dialog.png') });
+      // Tab goes round the tiles, the box, Cancel and Open
+      for (let i = 0; i < 5; i++) {
         await p.keyboard.press('Tab');
         assert.equal(await p.evaluate(() => !!document.activeElement.closest('[role="dialog"]')), true, `focus stays in the dialog after ${i + 1} Tab${i ? 's' : ''}`);
       }
@@ -1809,22 +1811,52 @@ for (const name of BROWSERS) for (const site of SITES) {
       await assert.doesNotReject(dialog.waitFor({ state: 'detached', timeout: 5000 }));
       await assert.doesNotReject(p.getByRole('button', { name: 'Play (space)' }).waitFor({ timeout: 5000 }));
       await p.waitForFunction(() => /Alpha Tester/.test(document.body.innerText) && /Beta Tester/.test(document.body.innerText), null, { timeout: 5000 });
+      // a legal FEN: the free board at it
+      await openIt();
+      await field.click();
+      await field.pressSequentially('4k3/8/8/8/8/8/8/R3K3 b Q - 3 40');
+      await p.keyboard.press('ControlOrMeta+Enter');
+      await assert.doesNotReject(dialog.waitFor({ state: 'detached', timeout: 5000 }));
+      await assert.doesNotReject(p.getByRole('button', { name: 'Play (space)' }).waitFor({ state: 'detached', timeout: 5000 }));
+      await p.waitForFunction(() => /from a set-up position/.test(document.body.innerText), null, { timeout: 5000 });
+      // an illegal one (no black king): Edit position on it, saying what's wrong
+      await openIt();
+      await field.click();
+      await field.pressSequentially('8/8/8/8/8/8/8/R3K3 w - - 0 1');
+      await dialog.getByRole('button', { name: 'Open', exact: true }).click();
+      await assert.doesNotReject(dialog.waitFor({ state: 'detached', timeout: 5000 }));
+      assert.equal(await p.getByRole('textbox', { name: 'FEN' }).inputValue(), '8/8/8/8/8/8/8/R3K3 w - - 0 1');
+      // its Cancel comes back to Import game, the pasted text still in the box
+      await p.getByRole('button', { name: 'Cancel', exact: true }).click();
+      await assert.doesNotReject(dialog.waitFor({ timeout: 5000 }));
+      assert.equal(await field.inputValue(), '8/8/8/8/8/8/8/R3K3 w - - 0 1');
+      assert.equal(await p.getByRole('textbox', { name: 'FEN', exact: true }).count(), 0, 'the editor closed');
+      // Position from image's Cancel comes back to Import game (where the reader can run)
+      const tile = dialog.getByRole('button', { name: /^Position from image/ });
+      if (await tile.count()) {
+        await tile.click();
+        const vd = p.getByRole('dialog', { name: 'Position from image' });
+        await vd.waitFor({ timeout: 5000 });
+        await vd.getByRole('button', { name: 'Cancel', exact: true }).first().click();
+        await assert.doesNotReject(dialog.waitFor({ timeout: 5000 }));
+      }
+      await p.keyboard.press('Escape');
       assert.deepEqual(pp.errors, []);
       await pp.ctx.close();
-      // the phone: the item is in the folded menu, the dialog fits the width
+      // the phone: Import game is in the folded menu, the dialog fits the width
       const ph = await open(browser, { width: 390, height: 844 }, phone({}));
       await ph.page.goto(base, { waitUntil: 'load' });
       await loadedOn(ph.page);
       await ph.page.getByRole('button', { name: 'Menu' }).click();
-      await ph.page.getByRole('button', { name: 'Paste PGN' }).click();
-      const pd = ph.page.getByRole('dialog', { name: 'Paste PGN' });
+      await ph.page.getByRole('button', { name: 'Import game' }).click();
+      const pd = ph.page.getByRole('dialog', { name: 'Import game' });
       await assert.doesNotReject(pd.waitFor({ timeout: 5000 }));
-      await pd.getByRole('textbox', { name: 'PGN' }).pressSequentially('[White "Alpha Tester"]\n\n1. d4 d5 *');
+      await pd.getByRole('textbox', { name: 'PGN or FEN' }).pressSequentially('[White "Alpha Tester"]\n\n1. d4 d5 *');
       assert.deepEqual(await wider(ph.page), [], 'no sideways scroll');
       const box = await pd.boundingBox();
       assert.ok(box.x >= 8 && box.x + box.width <= 390 - 8 && box.y >= 0 && box.y + box.height <= 844, 'the dialog fits the screen');
-      await ph.page.screenshot({ path: path.join(OUT, host + '-pgn-dialog-phone.png') });
-      await pd.getByRole('button', { name: 'Load' }).click();
+      await ph.page.screenshot({ path: path.join(OUT, host + '-import-dialog-phone.png') });
+      await pd.getByRole('button', { name: 'Open', exact: true }).click();
       await assert.doesNotReject(pd.waitFor({ state: 'detached', timeout: 5000 }));
       await ph.page.waitForFunction(() => /Alpha Tester/.test(document.body.innerText), null, { timeout: 5000 });
       assert.deepEqual(ph.errors, []);
