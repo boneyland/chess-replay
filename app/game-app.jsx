@@ -902,22 +902,15 @@ function GameApp() {
             <TweakSlider id="tw-board-hue" label="Hue" value={boardAdj.hue} min={window.BoardThemes.SLIDERS.hue.min} max={window.BoardThemes.SLIDERS.hue.max} step={window.BoardThemes.SLIDERS.hue.step} format={(v) => `+ ${Math.round(v * 3.6)}°`} onChange={(v) => setTweak('boardHue', v)} />
             {!window.BoardThemes.isDefault(boardAdj) && <TweakButton secondary label="Reset colours to default" onClick={() => { setTweak('boardBrightness', 100); setTweak('boardContrast', 100); setTweak('boardHue', 0); }} />}
           </TweakSection>
-          <TweakSection label="Board">
-            {board && board.game ? (
-              <div className="twk-note">{board.game.mode === 'stockfish'
-                ? 'Drag or tap a piece to play a move; the board stays on your side, and Stockfish replies after a short pause. Take back and Resign are in the Game box.'
-                : 'Drag or tap a piece to play a move; the board turns after each one, so the side to move plays from the bottom. Take back, Offer a draw and Resign are in the Game box.'}</div>
-            ) : board ? <>
-              <div className="twk-note">Drag or tap a piece to play a move, for either side; Stockfish rates each one.</div>
-              <TweakToggle id="tw-flip" label="Flip board" value={!!t.flip} onChange={(v) => setTweak('flip', v)} />
-            </> : <>
+          {!(board && board.game) && <TweakSection label="Board">
+            {board ? <TweakToggle id="tw-flip" label="Flip board" value={!!t.flip} onChange={(v) => setTweak('flip', v)} /> : <>
               <TweakToggle id="tw-flip" label="Flip board" value={!!t.flip} onChange={(v) => setTweak('flip', v)} />
               <TweakToggle id="tw-arrows" label="Best-move arrows" value={t.bestArrows} onChange={(v) => setTweak('bestArrows', v)} />
               <TweakToggle id="tw-push" label="Camera push on blunders" value={t.cameraPush} onChange={(v) => setTweak('cameraPush', v)} />
               <TweakToggle id="tw-glow" label="Red glow on blunders and mates" value={t.blunderGlow !== false} onChange={(v) => setTweak('blunderGlow', v)} />
               <TweakToggle id="tw-queen" label="Queen in the video" info="Shows Queen’s comments and lines on the moves it has analysed; those moves stay on screen longer." value={queenInVideo} onChange={(v) => setTweak('queenInVideo', v)} />
             </>}
-          </TweakSection>
+          </TweakSection>}
           {!board && <TweakSection label="Pace">
             <div className="twk-note">Video length {fmtLen(TM.total)}{TM.capped ? ' (capped at 5:00)' : ''}</div>
             <TweakSlider id="tw-spm" label="Seconds per move" value={t.secondsPerMove} min={0.5} max={4} step={0.1} unit="s" onChange={(v) => setTweak('secondsPerMove', v)} />

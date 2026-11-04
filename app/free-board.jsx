@@ -25,9 +25,6 @@ function FreeBar({ pos, side, a, clock, name }) {
   );
 }
 
-// a key's name drawn as a key: filled and bordered like a button, but only a label (no pointer, no clicks)
-const KeyCap = ({ children }) => <span style={{ display: 'inline-block', padding: `0 ${tx(7)}px`, margin: `0 ${tx(1)}px`, borderRadius: 2, background: C.off, border: `1px solid ${C.line}`, boxShadow: `0 1px 0 ${C.line}`, color: C.ink, lineHeight: 1.45, pointerEvents: 'none', userSelect: 'none' }}>{children}</span>;
-
 // the book's name for the position on the board (the last named one on the way there, the start included), or null
 function boardOpening(board, book) {
   if (!book) return null;
@@ -234,7 +231,6 @@ function GameInfo({ board }) {
       body = (
         <React.Fragment>
           {c ? <div className="game-critique">{heading(named(c), clsColor(c.cls))}{line(why(c))}</div> : heading(`You play ${side}`)}
-          {note('Stockfish 19 plays at full strength.')}
           {note('No hints: Stockfish only says when one of your moves is an inaccuracy, a mistake or a blunder.')}
         </React.Fragment>
       );
@@ -276,7 +272,6 @@ function GameStatus({ board, onChange, down }) {
           <div style={{ marginLeft: 'auto' }}><FrameButton primary onClick={again}>Play again</FrameButton></div>
         </div>
         {row(<FrameButton primary color={C.last} onClick={() => onChange(free)}>Analyse on the free board</FrameButton>)}
-        {board.steps.length > 0 && hint('← → step through the game')}
       </React.Fragment>
     );
   }
@@ -448,7 +443,6 @@ function FreeBoard({ board, onChange, tw, setTweak, onLichess, sf, nav, orient, 
   const HM = G ? { white: { name: playerName(G, 'w') }, black: { name: playerName(G, 'b') }, event: sfGame ? 'Play vs Stockfish' : 'Play vs human', site: `${G.tc || 'no clock'} · ${from}` }
     : { white: { name: 'White' }, black: { name: 'Black' }, event: 'Free board', site: from, eco: named && named.eco, opening: named && named.name };
   // an upright phone (one column in the phone tier; a tablet held upright keeps them) drops the free board's info box
-  // and the Analysis panel's keys hint, which a touch screen has no use for
   const upright = L.cols === 1 && L.tier === 'phone';
   return (
     <div ref={flowRef} style={{ position: 'absolute', inset: 0, background: C.bg, overflow: 'hidden', ...flowStyle() }}>
@@ -474,7 +468,6 @@ function FreeBoard({ board, onChange, tw, setTweak, onLichess, sf, nav, orient, 
           : <React.Fragment>
             <OwnMoveAnalysis M={MV} vline={{ at: 0, moves: steps, upto, src: 'you' }} own={own} status={sf.status} why={sf.why} onReply={onReply} onHover={setPv} />
             {rule && <div style={{ marginTop: tx(12), paddingTop: tx(12), borderTop: `1px solid ${C.line}` }}><RuleBlock w={rule} /></div>}
-            {!upright && <FitOrHide style={{ ...NO_SELECT, display: 'block', marginTop: tx(8), font: `500 ${tx(15)}px ${MONO}`, color: C.dim }}>← → step · <KeyCap>Home</KeyCap> the start · <KeyCap>End</KeyCap> the last move</FitOrHide>}
           </React.Fragment>}
       </AnalysisPanel>}
     </div>

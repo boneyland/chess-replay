@@ -875,7 +875,7 @@ function Analysis({ M, T, S, a, vline, onLine, onPreview, onReplyHover, paused, 
         <OwnMoveAnalysis M={M} vline={vline} own={own} status={sf ? sf.status : 'idle'} why={sf ? sf.why : ''} onReply={onReply} onHover={onReplyHover} />
         {tbEl}
         <span style={{ display: 'block', marginTop: tx(8), font: `500 ${tx(15)}px ${MONO}`, color: C.dim }}>
-          <span style={{ color: lineAccent('you') }}>Your moves: {vline.moves.slice(0, vline.upto + 1).map((m, j) => (j === 0 || (M.ply0 + vline.at + j) % 2 === 0 ? lineLabel(M, vline.at, j, m.san) : m.san)).join(' ')}</span> · ← → step · Esc returns to the game
+          <span style={{ color: lineAccent('you') }}>Your moves: {vline.moves.slice(0, vline.upto + 1).map((m, j) => (j === 0 || (M.ply0 + vline.at + j) % 2 === 0 ? lineLabel(M, vline.at, j, m.san) : m.san)).join(' ')}</span>
         </span>
       </AnalysisPanel>
     );
@@ -942,11 +942,11 @@ function Analysis({ M, T, S, a, vline, onLine, onPreview, onReplyHover, paused, 
               {vline.src === 'you'
                 ? (vline.upto < 0 ? 'Your moves: drag a piece to play' : `Your moves: ${vline.moves.slice(0, vline.upto + 1).map((m, j) => (j === 0 || (M.ply0 + vline.at + j) % 2 === 0 ? lineLabel(M, vline.at, j, m.san) : m.san)).join(' ')}`)
                 : `On the board: ${vline.src === 'queen' ? 'Queen line' : vline.src === 'sf' ? 'better line' : 'best line'} to ${lineLabel(M, vline.at, vline.upto, vline.moves[vline.upto].san)} · drag a piece to branch off`}
-            </span> · ← → step · Esc returns to the game
+            </span>
           </span>
         )}
         {sf && !M.hasAnalysis && (sf.run.state === 'running' || paused) && <EngineEmptyState M={M} sf={sf} paused={paused} compact />}
-        {!vline && paused && M.hasEval && <FitOrHide style={{ ...NO_SELECT, font: `500 ${tx(15)}px ${MONO}`, color: sfAsm ? C.blunder : C.dim }}>{sfAsm ? SF_ASM_SHORT : 'Tip: drag a piece on the board to try your own move.'}</FitOrHide>}
+        {!vline && paused && M.hasEval && sfAsm && <FitOrHide style={{ ...NO_SELECT, font: `500 ${tx(15)}px ${MONO}`, color: C.blunder }}>{SF_ASM_SHORT}</FitOrHide>}
       </div>
     </AnalysisPanel>
   );
