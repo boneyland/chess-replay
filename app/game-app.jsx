@@ -881,6 +881,18 @@ function GameApp() {
   );
 }
 
+// A picker tile's knight, asked for again a little later when it fails: right after a deploy Render's CDN can answer a
+// file with a 404 it then keeps for a few minutes (seen 2026-11-04). The query only makes the browser ask afresh; the
+// CDN's copy is shared whatever the query, so the later tries are what outlast it
+const TILE_RETRY_S = [5, 15, 30, 60, 120];
+function TileKnight({ src }) {
+  const [tries, setTries] = React.useState(0);
+  const timer = React.useRef(null);
+  React.useEffect(() => () => clearTimeout(timer.current), []);
+  const retry = () => { if (tries < TILE_RETRY_S.length) timer.current = setTimeout(() => setTries((n) => n + 1), TILE_RETRY_S[tries] * 1000); };
+  return <img src={tries ? `${src}?retry=${tries}` : src} alt="" draggable={false} loading="lazy" onError={retry} />;
+}
+
 // Settings › View › Pieces: each set's white knight on a light square (Lichess's way), its name on hover and to a
 // screen reader. The knights are fetched when the View tab first shows them, one small file a set
 function PiecePicker({ value, onChange }) {
@@ -889,7 +901,7 @@ function PiecePicker({ value, onChange }) {
       <div className="piece-picker" role="group" aria-label="Pieces">
         {window.PieceSets.SETS.map((s) => (
           <button key={s.id} type="button" className="piece-tile" title={s.name} aria-label={s.name} aria-pressed={s.id === value} onClick={() => onChange(s.id)}>
-            <img src={window.PieceSets.url(s.id, 'wN')} alt="" draggable={false} loading="lazy" />
+            <TileKnight src={window.PieceSets.url(s.id, 'wN')} />
           </button>
         ))}
       </div>
