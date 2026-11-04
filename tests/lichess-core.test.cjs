@@ -288,6 +288,10 @@ test('parseExplorer keeps counts above 2^31 (the start position has billions of 
   assert.equal(e.total, 3700000000);
   assert.equal(e.moves[0].total, 3700000000);
 });
+test('parseExplorer turns the king-takes-rook castling into the board\'s move', () => {
+  const e = LC.parseExplorer({ moves: [{ uci: 'e1h1', san: 'O-O' }, { uci: 'e8a8', san: 'O-O-O+' }, { uci: 'e1g1', san: 'O-O' }, { uci: 'e2e4', san: 'e4' }, { uci: 'e1h1', san: 'Rh1' }] });
+  assert.deepEqual(e.moves.map((m) => m.uci), ['e1g1', 'e8c8', 'e1g1', 'e2e4', 'e1h1']);
+});
 
 // ---------- game import ----------
 test('gameLink reads game links', () => {

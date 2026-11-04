@@ -132,6 +132,8 @@
   const explorerKey = (fen, o = {}) => 'explorer ' + explorerDb(o) + ' ' + String(fen).trim().split(/\s+/).slice(0, 4).join(' ') + ' ' + (explorerDb(o) === 'lichess' ? [(o.ratings || []).join(','), (o.speeds || []).join(',')].join('|') : '');
   // { total, white, draws, black, moves: [{ uci, san, white, draws, black, total, averageRating }], games: [{ id, white, black,
   // winner, year }], opening: { eco, name } | null }; throws on an answer that isn't the explorer's
+  // the explorer gives castling as the king taking its rook (e1h1, as Lichess plays Chess960); the board plays e1g1
+  const castleUci = (uci, san) => (/^O-O/.test(san || '') && /^e[18][ah][18]$/.test(uci || '') ? uci.slice(0, 2) + (/^O-O-O/.test(san) ? 'c' : 'g') + uci[3] : uci);
   function parseExplorer(j) {
     if (!j || !Array.isArray(j.moves)) throw new Error('not an explorer answer');
     const n = (x) => Math.max(0, Math.floor(+x || 0)); // not `| 0`: the start position has over 2^31 games
@@ -139,7 +141,7 @@
     const name = (p) => (p && p.name ? p.name + (p.rating ? ' (' + p.rating + ')' : '') : '?');
     return {
       total: total(j), white: n(j.white), draws: n(j.draws), black: n(j.black),
-      moves: j.moves.map((m) => ({ uci: m.uci, san: m.san, white: n(m.white), draws: n(m.draws), black: n(m.black), total: total(m), averageRating: m.averageRating == null ? null : n(m.averageRating) })),
+      moves: j.moves.map((m) => ({ uci: castleUci(m.uci, m.san), san: m.san, white: n(m.white), draws: n(m.draws), black: n(m.black), total: total(m), averageRating: m.averageRating == null ? null : n(m.averageRating) })),
       games: (j.topGames || []).map((g) => ({ id: g.id, white: name(g.white), black: name(g.black), winner: g.winner || null, year: g.year || null })),
       opening: j.opening && j.opening.name ? { eco: j.opening.eco || '', name: j.opening.name } : null,
     };
