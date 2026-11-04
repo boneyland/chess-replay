@@ -575,7 +575,7 @@ function GameApp() {
   const pieceSet = window.PieceSets.byId(t.pieceSet);
   const boardTheme = window.BoardThemes.byId(t.boardTheme);
   const boardAdj = window.BoardThemes.adjust({ brightness: t.boardBrightness, contrast: t.boardContrast, hue: t.boardHue });
-  const boardLook = useBoardLook(boardTheme.id, boardAdj);
+  const boardLook = useBoardLook(boardTheme.id, boardAdj, video.busy);
   // what an export would carry under a non-commercial licence (CC BY-NC-SA): such a video may not be used commercially
   const ncParts = [window.PieceSets.NON_COMMERCIAL.includes(pieceSet.id) && `${pieceSet.name} pieces`, !webp && t.sound !== false && window.Sfx.NON_COMMERCIAL.includes(soundSet) && `${soundSet.replace(/^Lichess /, '')} sounds`].filter(Boolean);
   const ncNote = ncParts.length ? `The ${ncParts.join(' and ')} are under a non-commercial licence (CC BY-NC-SA): a video made with ${ncParts.length > 1 ? 'them' : 'it'} may not be used commercially, on a monetised channel for one, and should credit ${ncParts.length > 1 ? 'them' : 'it'} (Settings › View and Sound name the authors). ` : '';
@@ -594,8 +594,9 @@ function GameApp() {
   const clipT = clipOpts.at(clipFrom, clipTo), clipFromOpts = clipOpts.from, clipToOpts = clipOpts.to.filter((o) => o.i >= clipFrom);
   const plyTag = (i) => `${Math.floor((MV.ply0 + i) / 2) + 1}${(MV.ply0 + i) % 2 ? 'b' : 'w'}`;
   const clipSuffix = clipFrom < 0 && clipTo >= NP ? '' : `_${clipFrom < 0 ? 'start' : plyTag(clipFrom)}-${clipTo >= NP ? 'end' : plyTag(clipTo)}`;
-  const exportVideo = () => { setPanel(false); setQueenOpen(false); video.run({ start: clipT.start, end: clipT.end, suffix: clipSuffix, audio: t.sound === false || webp ? null
-    : () => window.Sfx.renderTrack(window.Sfx.fetchSound, soundSet, window.Sfx.track(MV, clipOpts.S, clipT.start, clipT.end), soundVolume, clipT.end - clipT.start) }); };
+  // a picture board is drawn through the sliders first: the export paints that picture, not the page's CSS filter
+  const exportVideo = () => { setPanel(false); setQueenOpen(false); window.BoardThemes.render(boardTheme.id, boardAdj).catch(() => null).then(() => video.run({ start: clipT.start, end: clipT.end, suffix: clipSuffix, audio: t.sound === false || webp ? null
+    : () => window.Sfx.renderTrack(window.Sfx.fetchSound, soundSet, window.Sfx.track(MV, clipOpts.S, clipT.start, clipT.end), soundVolume, clipT.end - clipT.start) })); };
   const depthText = (d) => (d == null ? 'No limit' : String(d)), SF_KEYS = ['sfDepth', 'sfTime', 'sfOwnDepth', 'sfOwnTime', 'sfLines', 'sfHash', 'sfThreads'];
   const sfChanged = JSON.stringify(ES) !== JSON.stringify(window.AnalysisCore.engineSettings(window.TWEAK_DEFAULTS, sfKind, threading, hashChoices));
   const askQueen = () => { setQueenOpen((q) => !q); setPanel(false); };

@@ -195,6 +195,8 @@ function useVideoExport({ fps, format, webp, mp4Quality, mp4Vfr = false, save, s
       // its top (a paused one-column page may have been scrolled)
       await new Promise((ok) => requestAnimationFrame(ok));
       const el = document.querySelector('.stage-frame > div');
+      // its pictures decoded (a picture board's own, drawn through the sliders, has just taken the page's place)
+      await Promise.all([...el.querySelectorAll('img')].map((im) => im.decode().catch(() => {})));
       el.closest('.stage-area').scrollTop = 0;
       // the page is drawn at the screen's density (LayoutCore.exportScale, as Settings' widths assume), up to 1920 px on its longer side
       const cssW = el.offsetWidth, cssH = el.offsetHeight, scale = LayoutCore.exportScale(cssW, cssH, window.devicePixelRatio);

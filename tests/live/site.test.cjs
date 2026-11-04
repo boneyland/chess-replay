@@ -3252,27 +3252,36 @@ for (const name of BROWSERS) for (const site of SITES) {
       await dk.ctx.close();
     });
 
-    // a picture board through the sliders (Settings › View) lies under the squares as one picture the export draws itself;
-    // the coordinates take the board's colours through the sliders too
-    await t.test('desktop: a picture board with its hue turned draws, and the export draws it itself', { timeout: 60000 }, async () => {
+    // a picture board through the sliders (Settings › View) lies under the squares as one picture: on the page lila's
+    // file through a CSS filter, which follows a slider at once; in an export the picture worked out through the
+    // sliders, which the export paints itself (it can't paint a filter). The coordinates follow the sliders too
+    await t.test('desktop: a picture board with its hue turned shows through a filter, and an export draws it itself', { timeout: 180000 }, async () => {
       const dk = await open(browser, { width: 1440, height: 900 });
       await dk.page.addInitScript(() => { try { localStorage.setItem('chess-video.tweaks.v1', JSON.stringify({ boardTheme: 'wood4', boardHue: 30 })); } catch (e) {} });
       await dk.page.goto(base, { waitUntil: 'load' });
       await loadedOn(dk.page);
-      // the drawn picture loaded over lila's file, which is then hidden (the export can't paint its CSS filter)
-      await dk.page.waitForFunction(() => { const im = [...document.querySelectorAll('.stage-frame img')]; return im.some((i) => /^blob:/.test(i.src) && i.complete && i.naturalWidth === 1024) && !im.some((i) => i.style.filter && i.style.filter !== 'none' && i.style.visibility !== 'hidden'); });
-      const got = await dk.page.evaluate(() => {
-        const el = document.querySelector('.stage-frame > div');
-        window.dispatchEvent(new CustomEvent('chess-video:seek', { detail: { time: 7.0, sync: true } }));
-        const bd = window.ExportDraw.layersOf(el).find((n) => n.querySelectorAll('img').length >= 20);
-        const cv = window.ExportDraw.paintLayer(el, bd, 1), pic = bd.querySelector('img[src^="blob:"]').getBoundingClientRect();
-        // the middle of a6 (a light square), drawn: wood4's light square turned 108° is greener than it is red
-        const R = bd.getBoundingClientRect(), [r, g] = typeof cv === 'string' ? [] : cv.getContext('2d').getImageData(Math.round(pic.left - R.left + pic.width / 16), Math.round(pic.top - R.top + pic.height * 5 / 16), 1, 1).data;
-        return { drawn: typeof cv === 'string' ? cv : 'drawn', r, g, size: [pic.width, pic.height].map(Math.round), board: [R.width, R.height].map(Math.round) };
+      const pic = dk.page.locator('.stage-frame img[src="boards/wood4.jpg"]');
+      await pic.waitFor();
+      assert.match(await pic.evaluate((i) => i.style.filter), /hue-rotate\(108deg\)/);
+      const [r, b] = await Promise.all([pic.boundingBox(), dk.page.locator('[title="Drag a piece to try your own move"]').first().boundingBox()]);
+      assert.ok(Math.abs(r.width - b.width) < 1 && Math.abs(r.height - b.height) < 1, 'the picture covers the board');
+      // each frame the export draws: the board picture's src then, and the layers handed to html2canvas, and why
+      await dk.page.evaluate(() => {
+        const C = window.ExportDraw.compositor;
+        window.__frames = [];
+        window.ExportDraw.compositor = (...a) => {
+          const st = C(...a), draw = st.draw;
+          st.draw = async (cx) => { await draw(cx); window.__frames.push({ src: document.querySelector('.stage-frame img[src^="blob:"], .stage-frame img[src^="boards/"]').getAttribute('src'), why: { ...st.stats.why } }); };
+          return st;
+        };
       });
-      assert.equal(got.drawn, 'drawn');
-      assert.ok(got.g > got.r, `turned green (${got.r}, ${got.g})`);
-      assert.deepEqual(got.size, got.board, 'the picture covers the board');
+      await exportSize(dk.page, host + '-board-theme');
+      const frames = await dk.page.evaluate(() => window.__frames);
+      assert.ok(frames.length >= 2, 'frames drawn');
+      for (const f of frames) assert.match(f.src, /^blob:/, 'the export draws the picture worked out through the sliders');
+      assert.ok(!Object.keys(frames.at(-1).why).some((w) => /filter|image not loaded/.test(w)), JSON.stringify(frames.at(-1).why));
+      await dk.page.getByRole('dialog', { name: 'Exporting' }).waitFor({ state: 'detached', timeout: 5000 });
+      assert.equal(await pic.count(), 1, 'the page is back on the filtered file');
       await dk.page.screenshot({ path: path.join(OUT, host + '-board-theme.png') });
       assert.deepEqual(dk.errors, []);
       await dk.ctx.close();

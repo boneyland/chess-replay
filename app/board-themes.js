@@ -100,8 +100,9 @@
     const im = new Image(); im.src = url(id);
     return (pictures[id] = im.decode().then(() => { decoded[id] = true; return im; }, (e) => { delete pictures[id]; throw e; }));
   }
-  // lila's file for the board has been loaded, so an <img> of it draws at once
+  // lila's file for the board has been loaded, so an <img> of it draws at once (preload: load it)
   const loaded = (id) => !!decoded[valid(id)];
+  const preload = (id) => (byId(id).file ? picture(valid(id)).then(() => true) : Promise.resolve(true));
   async function render(id, a) {
     id = valid(id);
     if (!byId(id).file) return null;
@@ -124,5 +125,5 @@
     return u;
   }
 
-  window.BoardThemes = { THEMES, DEFAULT, SLIDERS, valid, byId, url, thumb, adjust, isDefault, css, filter, colours, filterPixels, rendered, loaded, render };
+  window.BoardThemes = { THEMES, DEFAULT, SLIDERS, valid, byId, url, thumb, adjust, isDefault, css, filter, colours, filterPixels, rendered, loaded, preload, render };
 })();
