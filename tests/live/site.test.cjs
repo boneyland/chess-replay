@@ -50,6 +50,20 @@ test.before(async () => {
 });
 test.after(() => local && local.close());
 
+// the Share and export dialog (Copy FEN/PGN, Save, Export video), from its icon in the dock or the phone's folded menu
+async function openShare(p) {
+  const btn = p.getByRole('button', { name: 'Share and export' });
+  if (!(await btn.isVisible())) await p.getByRole('button', { name: 'Menu', exact: true }).click();
+  await btn.click();
+  return p.getByRole('dialog', { name: 'Share and export' });
+}
+// the FEN Share and export shows, with the dialog closed again
+async function shareFen(p) {
+  const dialog = await openShare(p), fen = await dialog.getByRole('textbox', { name: 'FEN' }).inputValue();
+  await p.keyboard.press('Escape');
+  await dialog.waitFor({ state: 'detached', timeout: 5000 });
+  return fen;
+}
 async function open(browser, viewport, opts) {
   const ctx = await browser.newContext({ viewport, ...(PROXY_CA && browser.browserType().name() === 'firefox' ? { ignoreHTTPSErrors: true } : {}), ...opts });
   const cdn = process.env.LIVE_CDN_DIR;
@@ -301,7 +315,7 @@ for (const name of BROWSERS) for (const site of SITES) {
       await page.getByRole('button', { name: 'Settings' }).click();
       // the tabs, and the arrow keys moving between them
       const tabs = page.getByRole('tablist', { name: 'Settings' }).getByRole('tab');
-      assert.deepEqual(await tabs.allInnerTexts(), ['Game', 'View', 'Online', 'Commentary', 'Export', 'Sound']);
+      assert.deepEqual(await tabs.allInnerTexts(), ['Game', 'View', 'Online', 'Commentary', 'Sound']);
       await tabs.first().focus();
       await page.keyboard.press('ArrowRight');
       assert.equal(await page.getByRole('tab', { name: 'View' }).getAttribute('aria-selected'), 'true');
@@ -1145,9 +1159,7 @@ for (const name of BROWSERS) for (const site of SITES) {
       await typeFen(field, '4k3/4R3/8/8/8/8/8/4K3 b - - 0 1');
       await done.click();
       await assert.doesNotReject(field.waitFor({ state: 'detached', timeout: 5000 }));
-      await p.getByRole('button', { name: 'Menu', exact: true }).click();
-      await p.getByRole('button', { name: 'Copy FEN' }).click();
-      await assert.doesNotReject(p.waitForFunction(() => { const f = document.querySelector('.fen-note-fen'); return f && f.value === '4k3/4R3/8/8/8/8/8/4K3 b - - 0 1'; }, null, { timeout: 5000 }));
+      assert.equal(await shareFen(p), '4k3/4R3/8/8/8/8/8/4K3 b - - 0 1');
       assert.deepEqual(ep.errors, []);
       await ep.ctx.close();
     });
@@ -1554,10 +1566,7 @@ for (const name of BROWSERS) for (const site of SITES) {
       // Done: the free board at the position read
       await p.getByRole('button', { name: 'Done' }).click();
       await assert.doesNotReject(field.waitFor({ state: 'detached', timeout: 5000 }));
-      await p.getByRole('button', { name: 'Menu', exact: true }).click();
-      await p.getByRole('button', { name: 'Copy FEN' }).click();
-      await assert.doesNotReject(p.waitForFunction((f) => { const e = document.querySelector('.fen-note-fen'); return e && e.value === f; }, LICHESS + ' w - - 0 1', { timeout: 5000 }));
-      await p.keyboard.press('Escape');
+      assert.equal(await shareFen(p), LICHESS + ' w - - 0 1');
       // the screenshot stored a quarter turned, upright by its EXIF orientation: the same read (the reader kept: no download)
       await fromImage();
       await choose(fixture('vision-exif6.jpg', 'image/jpeg'));
@@ -1905,9 +1914,7 @@ for (const name of BROWSERS) for (const site of SITES) {
       assert.equal(await p.evaluate(() => JSON.parse(localStorage.getItem('chess-video.tweaks.v1') || '{}').flip), true, '/black flips the board');
       // at ply 4: Copy FEN shows the position after 2... Nc6
       await p.waitForTimeout(500);
-      await p.getByRole('button', { name: 'Menu', exact: true }).click();
-      await p.getByRole('button', { name: 'Copy FEN' }).click();
-      await assert.doesNotReject(p.waitForFunction((f) => { const e = document.querySelector('.fen-note-fen'); return e && e.value === f; }, 'r1bqkbnr/pppp1ppp/2n5/4p3/4P3/5N2/PPPP1PPP/RNBQKB1R w KQkq - 2 3', { timeout: 5000 }), 'at ply 4');
+      assert.equal(await shareFen(p), 'r1bqkbnr/pppp1ppp/2n5/4p3/4P3/5N2/PPPP1PPP/RNBQKB1R w KQkq - 2 3', 'at ply 4');
       await p.screenshot({ path: path.join(OUT, host + '-lichess-import-game.png') });
       // a round: its games listed, the unfinished one greyed; Back keeps the link; a pick opens it
       await openWith('https://lichess.org/broadcast/test-tour/round-3/R0und123');
@@ -2397,8 +2404,10 @@ for (const name of BROWSERS) for (const site of SITES) {
       await p.getByRole('button', { name: 'Settings' }).click();
       await p.getByRole('button', { name: 'Replay these moves as a game' }).click();
       await assert.doesNotReject(p.getByRole('button', { name: 'Play (space)' }).waitFor({ timeout: 5000 }));
-      await p.getByRole('tab', { name: 'Export' }).click();
-      await assert.doesNotReject(p.getByRole('button', { name: /^Export (video|animated WebP)/ }).waitFor({ timeout: 5000 }));
+      const share = await openShare(p);
+      await assert.doesNotReject(share.getByRole('button', { name: /^Export (video|animated WebP)/ }).waitFor({ timeout: 5000 }));
+      await share.getByRole('button', { name: 'Close' }).click();
+      await p.getByRole('button', { name: 'Settings' }).click();
       await p.getByRole('tab', { name: 'Game' }).click();
       await p.getByRole('button', { name: 'Back to the free board' }).click();
       await assert.doesNotReject(p.getByRole('button', { name: 'Play (space)' }).waitFor({ state: 'detached', timeout: 5000 }));
@@ -2853,11 +2862,17 @@ for (const name of BROWSERS) for (const site of SITES) {
       await assert.doesNotReject(p.getByRole('button', { name: 'Play (space)' }).waitFor({ timeout: 5000 }));
       await p.locator('.pdock').getByRole('button', { name: 'Settings' }).click();
       assert.match(await p.locator('.twk-note').first().innerText(), /White – Black · 4 plies/);
-      await p.getByRole('tab', { name: 'Commentary' }).click();
-      await assert.doesNotReject(p.getByRole('button', { name: 'Save as annotated PGN' }).waitFor({ timeout: 5000 }));
-      await p.getByRole('tab', { name: 'Export' }).click();
-      await assert.doesNotReject(p.getByRole('button', { name: /^Export (video|animated WebP)/ }).waitFor({ timeout: 5000 }));
       await p.getByRole('button', { name: 'Close settings' }).click();
+      const share = await openShare(p);
+      // PGN: Download annotated and Download raw, each with a copy button
+      for (const name of ['Download annotated', 'Copy annotated PGN', 'Copy raw PGN']) await assert.doesNotReject(share.getByRole('button', { name }).waitFor({ timeout: 5000 }));
+      const [raw] = await Promise.all([p.waitForEvent('download', { timeout: 10000 }), share.getByRole('button', { name: 'Download raw' }).click()]);
+      const rawText = fs.readFileSync(await raw.path(), 'utf8');
+      assert.match(raw.suggestedFilename(), /^[\w-]+\.pgn$/);
+      assert.match(rawText, /^\[Event /);
+      assert.ok(!/[{}$(]/.test(rawText.split('\n\n')[1]), 'raw: the moves alone');
+      await assert.doesNotReject(share.getByRole('button', { name: /^Export (video|animated WebP)/ }).waitFor({ timeout: 5000 }));
+      await share.getByRole('button', { name: 'Close' }).click();
       // Delete asks in the row; Keep keeps, Delete deletes
       await menuItem('My games');
       await rows.nth(1).getByRole('button', { name: 'Delete' }).click();
@@ -3047,10 +3062,7 @@ for (const name of BROWSERS) for (const site of SITES) {
       const area = await p.locator('.stage-area').evaluate((el) => ({ w: el.clientWidth, h: el.clientHeight })); // client: a classic scrollbar's gutter (Firefox) is in neither the page's width nor the video's
       const dpr = await p.evaluate(() => window.devicePixelRatio), s = Math.min(dpr, 1920 / Math.max(area.w, area.h));
       const even = (v) => 2 * Math.floor(v / 2);
-      const settings = p.getByRole('button', { name: 'Settings' });
-      if (!(await settings.isVisible())) await p.getByRole('button', { name: 'Menu' }).click();
-      await settings.click();
-      await p.getByRole('tab', { name: 'Export' }).click();
+      await openShare(p);
       await p.getByRole('radio', { name: 'WebP' }).click();
       await p.locator('#tw-webp-width').selectOption({ index: 0 });
       await p.locator('#tw-clip-from').selectOption({ index: 1 });
@@ -3102,10 +3114,8 @@ for (const name of BROWSERS) for (const site of SITES) {
       const dk = await open(browser, { width: 1440, height: 900 });
       await dk.page.goto(base, { waitUntil: 'load' });
       await loadedOn(dk.page);
-      const p = dk.page, settings = p.getByRole('button', { name: 'Settings' });
-      if (!(await settings.isVisible())) await p.getByRole('button', { name: 'Menu' }).click();
-      await settings.click();
-      await p.getByRole('tab', { name: 'Export' }).click();
+      const p = dk.page;
+      await openShare(p);
       await p.locator('#tw-fps').selectOption('8 fps');
       // the samples of an MP4's video track: its stts box (found by walking the boxes, as the video data can hold the
       // same four letters), as [count, delta] pairs
@@ -3157,11 +3167,7 @@ for (const name of BROWSERS) for (const site of SITES) {
         }
       }
       if (cfr) assert.equal(cfr.out.length, 1, 'constant frame rate: every sample is the same length');
-      if (!(await p.getByRole('tab', { name: 'Export' }).isVisible())) { // the export closed Settings
-        if (!(await settings.isVisible())) await p.getByRole('button', { name: 'Menu' }).click();
-        await settings.click();
-      }
-      await p.getByRole('tab', { name: 'Export' }).click();
+      await openShare(p); // the export closed the dialog
       await p.getByRole('switch', { name: 'Variable frame rate' }).click();
       assert.ok(await p.getByRole('button', { name: /^Export video \(MP4, up to 8 fps, variable/ }).isVisible());
       const vfr = samples(await exportMp4('vfr'));

@@ -194,10 +194,8 @@ const ready = async (page) => { await page.locator('.dock-primary').waitFor({ st
       await page.waitForTimeout(1500);
       rec.start();
       await rec.hold(600);
-      await glide(page, page.getByRole('button', { name: 'Settings' }));
+      await glide(page, page.getByRole('button', { name: 'Share and export' }));
       await rec.hold(800);
-      await glide(page, page.getByRole('tab', { name: 'Export' }));
-      await rec.hold(500);
       await zoom(page, ['^export as$']);
       await glide(page, page.getByRole('button', { name: /^Export (video|animated WebP)/ }), { click: false });
       await rec.hold(3000);
