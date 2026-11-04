@@ -64,13 +64,13 @@ function OpeningExplorer({ board, book, onPlay, onHover }) {
         {next.length ? (
           <div className="book-moves" style={{ display: 'flex', flexDirection: 'column', gap: tx(2) }}>
             {next.map((m) => (
-              // a name that doesn't fit beside its move goes under it
+              // the name stays beside its move, cut short with an ellipsis when it doesn't fit
               <div key={m.uci} className="mv expl-row" role="button" tabIndex={0} title={`Play ${m.san}`} onClick={(e) => play(e, m.uci)}
                 onMouseEnter={() => onHover(m.uci)} onMouseLeave={() => onHover(null)} onFocus={() => onHover(m.uci)} onBlur={() => onHover(null)}
                 onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') play(e, m.uci); }}
-                style={{ display: 'flex', flexWrap: 'wrap', alignItems: 'center', columnGap: tx(14), rowGap: tx(2), minWidth: 0, padding: `${tx(3)}px ${tx(6)}px`, borderRadius: 2, cursor: 'pointer' }}>
+                style={{ display: 'flex', alignItems: 'center', gap: tx(14), minWidth: 0, padding: `${tx(3)}px ${tx(6)}px`, borderRadius: 2, cursor: 'pointer' }}>
                 <span style={{ flex: 'none', minWidth: tx(58), boxSizing: 'border-box', textAlign: 'center', padding: `${tx(2)}px ${tx(8)}px`, borderRadius: 2, font: `600 ${tx(17)}px ${MONO}`, background: white ? '#f1ebe1' : '#2a2320', color: white ? '#15100d' : '#efe8de', border: `1px solid ${white ? 'rgba(60,40,20,0.22)' : 'rgba(255,236,214,0.22)'}` }}>{m.san}</span>
-                <span style={{ minWidth: 0, maxWidth: '100%', font: `400 ${tx(17)}px ${SANS}`, color: C.dim, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{m.name || ''}</span>
+                <span style={{ flex: '1 1 auto', minWidth: 0, font: `400 ${tx(17)}px ${SANS}`, color: C.dim, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{m.name || ''}</span>
               </div>
             ))}
           </div>
@@ -109,7 +109,6 @@ function StartAnalysis({ board, ev, status, why, onLine, onHover }) {
           : line.length > 0
           ? <LineChips name={null} tip="stockfish’s best line" accent={C.best} moves={line.map((m) => m.san)} ply0={board.start.ply0} c={0} legal={line.length} sel={null} onPick={(j) => onLine(line.slice(0, j + 1))} onHover={(j) => onHover(j == null ? null : line.slice(0, j + 1))} />
           : <span> </span>}
-        <span style={{ ...NO_SELECT, font: `500 ${tx(15)}px ${MONO}` }}>Drag a piece to play a move, for either side; Stockfish rates every move.</span>
       </div>
     </React.Fragment>
   );
@@ -441,6 +440,9 @@ function FreeBoard({ board, onChange, tw, setTweak, onLichess, sf, nav, orient, 
   const from = board.fen === window.ChessCore.START_FEN ? 'from the starting position' : 'from a set-up position';
   const HM = G ? { white: { name: playerName(G, 'w') }, black: { name: playerName(G, 'b') }, event: sfGame ? 'Play vs Stockfish' : 'Play vs human', site: `${G.tc || 'no clock'} · ${from}` }
     : { white: { name: 'White' }, black: { name: 'Black' }, event: 'Free board', site: from, eco: named && named.eco, opening: named && named.name };
+  // an upright phone (one column in the phone tier; a tablet held upright keeps them) drops the free board's info box
+  // and the Analysis panel's keys hint, which a touch screen has no use for
+  const upright = L.cols === 1 && L.tier === 'phone';
   return (
     <div ref={flowRef} style={{ position: 'absolute', inset: 0, background: C.bg, overflow: 'hidden', ...flowStyle() }}>
       {!G && (deadv || tbv ? <EvalBarView cp={(deadv || tbv).cp} txt={(deadv || tbv).txt} a={1} /> : <EvalBarView cp={cp == null ? 0 : cp} txt={cp == null ? (down ? '' : '…') : fmtSf(cp)} a={1} />)}
@@ -452,7 +454,7 @@ function FreeBoard({ board, onChange, tw, setTweak, onLichess, sf, nav, orient, 
         </BoardDraw>
       </BoardSpace>
       <FreeBar pos={pos} side="w" a={1} clock={clockOf('w')} name={G ? playerName(G, 'w') : null} />
-      {L.header && <Header M={HM} a={1} />}
+      {L.header && !(upright && !G) && <Header M={HM} a={1} />}
       <MoveList M={MV} T={upto + 0.999} S={S} a={1} paused onPick={live ? () => {} : go} deadAt={deadAt} end={end} />
       {G ? <GameInfo board={board} /> : tb ? <TablebaseExplorer t={tb} posKey={boardKey} onPlay={onBook} /> : xl ? <LichessExplorer x={xl} tw={tw} setTweak={setTweak} onGame={onLichess} posKey={boardKey} onPlay={onBook} onHover={setHov} white={pos.turn === 'w'} fallback={<OpeningExplorer board={board} book={book} onPlay={onBook} onHover={setHov} />} /> : <OpeningExplorer board={board} book={book} onPlay={onBook} onHover={setHov} />}
       {G ? <Panel box={L.analysis} a={1} style={NO_SELECT} title="Game"><GameStatus board={board} onChange={onChange} down={opponent.down} /></Panel>
@@ -465,7 +467,7 @@ function FreeBoard({ board, onChange, tw, setTweak, onLichess, sf, nav, orient, 
           : <React.Fragment>
             <OwnMoveAnalysis M={MV} vline={{ at: 0, moves: steps, upto, src: 'you' }} own={own} status={sf.status} why={sf.why} onReply={onReply} onHover={setPv} />
             {rule && <div style={{ marginTop: tx(12), paddingTop: tx(12), borderTop: `1px solid ${C.line}` }}><RuleBlock w={rule} /></div>}
-            <FitOrHide style={{ ...NO_SELECT, display: 'block', marginTop: tx(8), font: `500 ${tx(15)}px ${MONO}`, color: C.dim }}>← → step · <KeyCap>Home</KeyCap> the start · <KeyCap>End</KeyCap> the last move</FitOrHide>
+            {!upright && <FitOrHide style={{ ...NO_SELECT, display: 'block', marginTop: tx(8), font: `500 ${tx(15)}px ${MONO}`, color: C.dim }}>← → step · <KeyCap>Home</KeyCap> the start · <KeyCap>End</KeyCap> the last move</FitOrHide>}
           </React.Fragment>}
       </AnalysisPanel>}
     </div>
