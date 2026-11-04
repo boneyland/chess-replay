@@ -1,11 +1,11 @@
 const test = require('node:test');
 const assert = require('node:assert/strict');
 const { loadUnit } = require('./load.cjs');
-loadUnit('chess-core.js'); loadUnit('board-core.js'); loadUnit('edit-core.js'); loadUnit('import-core.js');
+loadUnit('chess-core.js'); loadUnit('lichess-core.js'); loadUnit('board-core.js'); loadUnit('edit-core.js'); loadUnit('import-core.js');
 const I = window.ImportCore, E = window.EditCore;
 
 test('empty text asks for something', () => {
-  for (const t of ['', '   \n ', null]) assert.match(I.read(t).error, /Paste a PGN or FEN/);
+  for (const t of ['', '   \n ', null]) assert.match(I.read(t).error, /Paste a PGN, a FEN or a Lichess link/);
 });
 test('a FEN is a setup, legal or not', () => {
   const r = I.read('  rnbqkbnr/pppppppp/8/8/4P3/8/PPPP1PPP/RNBQKBNR b KQkq e3 0 1 ');
@@ -30,4 +30,10 @@ test('text that is neither gets the PGN reader\'s message', () => {
   const r = I.read('hello there');
   assert.equal(typeof r.error, 'string'); assert.ok(r.error.length);
   assert.ok(I.read('1. e4 e5 2. Ke3 Ke6').error, 'an illegal move');
+});
+test('a Lichess link is a link', () => {
+  assert.equal(I.read(' https://lichess.org/q7ZvsdUF/black#32\n').link.id, 'q7ZvsdUF');
+  assert.equal(I.read('lichess.org/broadcast/t/r/IKZUMzM4').link.kind, 'list');
+  assert.match(I.read('https://lichess.org/analysis').error, /isn’t a Lichess game/);
+  assert.match(I.read('https://example.com/x').error, /isn’t a Lichess game/);
 });
