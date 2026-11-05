@@ -355,14 +355,13 @@ function FreeBoard({ board, onChange, tw, setTweak, onLichess, sf, nav, orient, 
   const down = sf.status === 'unavailable' || sf.status === 'stopped';
   const cp = ev.after && ev.after.cp != null ? ev.after.cp : null;
   // the endgame tablebase for the position on the board (never in a game): it takes the explorer's place, and its
-  // result replaces the eval in the bar
+  // result replaces the eval in the bar. chasolver on it: in a game it ends the game (the answer may come after the
+  // move: PlayCore's recheck), and nothing shows; elsewhere DEAD on the eval bar and the Analysis panel's block
   const boardFen = () => window.ChessCore.fenAfter(board.fen, steps.slice(0, upto + 1).map((s) => s.san), pos);
-  const tb = useTablebase(G ? null : boardFen(), tw.tablebase !== false), tbv = tbBar(tb);
-  // chasolver on the position on the board: in a game it ends the game (the answer may come after the move: PlayCore's
-  // recheck), and nothing shows; elsewhere DEAD on the eval bar and the Analysis panel's block
-  const dead = useDead(pos), deadv = G ? null : deadBar(dead);
+  const { tb, dead, fifty, fen } = useBoardFacts({ pos, fen: boardFen, tbOn: !G, tablebase: tw.tablebase !== false });
+  const tbv = tbBar(tb), deadv = G ? null : deadBar(dead);
   // Lichess's opening explorer (Settings › Online), asked where the tablebase isn't, in place of the local book
-  const xf = explorerFilters(tw), xl = useExplorer(G || tb ? null : boardFen(), tw.explorer === true, xf);
+  const xf = explorerFilters(tw), xl = useExplorer(G || tb ? null : fen, tw.explorer === true, xf);
   // the running clock: redrawn ten times a second, and the game ends when it reaches zero
   const running = live && G.clock && G.clock.since != null;
   const [, tick] = React.useState(0);
@@ -418,7 +417,7 @@ function FreeBoard({ board, onChange, tw, setTweak, onLichess, sf, nav, orient, 
   // the move after which the position is first dead, marked with a pill on the Moves list
   const deadAt = useFirstDead(MV, (p) => p.pos);
   // a dead position's block, else the fifty-move rule's for the position on the board
-  const rule = deadWords(dead) || P.fiftyRule(boardFen(), pos);
+  const rule = deadWords(dead) || fifty;
   // the result after the last move: a game's, else the last position's own end (checkmate, stalemate, a dead position)
   const end = G ? (G.result ? P.ending({ r: G.result }) : null) : steps.length ? P.ending({ pos: steps[last].pos, dead: deadAt != null }) : null;
   const S = React.useMemo(() => ({ N: steps.length, tp: steps.map((_, i) => i) }), [steps.length]);
