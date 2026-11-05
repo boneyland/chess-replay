@@ -21,16 +21,17 @@
   // today as PGN's YYYY.MM.DD
   const today = () => { const d = new Date(); return `${d.getFullYear()}.${String(d.getMonth() + 1).padStart(2, '0')}.${String(d.getDate()).padStart(2, '0')}`; };
 
-  // The board's whole line (not only up to the move shown) as a PGN ending in res: the tags, SetUp and FEN after them when
-  // the start isn't the standard one, then `more`. A move number goes before White's moves, the first move, and Black's
-  // moves where again(j) says (after a comment); after(j) is written after step j's move (its comment)
-  function pgnOf(b, tags, res, { more = [], again = () => false, after = () => '' } = {}) {
-    const all = tags.concat(b.fen !== CC().START_FEN ? [['SetUp', '1'], ['FEN', b.fen]] : [], more);
-    const moves = b.steps.map((s, j) => {
-      const ply = b.start.ply0 + j, n = Math.floor(ply / 2) + 1;
-      return (ply % 2 === 0 ? `${n}. ` : j === 0 || again(j) ? `${n}... ` : '') + s.san + after(j);
+  // The board's whole line (not only up to the move shown) as a PGN ending in res (ChessCore.pgnText): the tags, SetUp and
+  // FEN after them when the start isn't the standard one, then `more`; after(j) is the comment written after step j's move
+  // ('' for none)
+  function pgnOf(b, tags, res, { more = [], after = () => '' } = {}) {
+    const all = tags.concat(b.fen !== CC().START_FEN ? [['SetUp', '1'], ['FEN', b.fen]] : [], more), toks = [];
+    b.steps.forEach((s, j) => {
+      toks.push(CC().pgnMoveNo(b.start.ply0 + j, j === 0 || CC().pgnReopens(toks[toks.length - 1])) + s.san);
+      const c = after(j);
+      if (c) toks.push(c);
     });
-    return all.map(([k, v]) => `[${k} "${v}"]`).join('\n') + '\n\n' + moves.concat(res).join(' ') + '\n';
+    return CC().pgnText(all, toks.concat(res));
   }
 
   // The board's moves as a game for the replay. date: PGN's YYYY.MM.DD, today when omitted

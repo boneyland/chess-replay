@@ -571,6 +571,23 @@
     const t = Math.round(s * 10) / 10, sec = t % 60;
     return `${Math.floor(t / 3600)}:${String(Math.floor(t / 60) % 60).padStart(2, '0')}:${Number.isInteger(t) ? String(sec).padStart(2, '0') : sec.toFixed(1).padStart(4, '0')}`;
   };
+  // PGN's move number before a move's SAN, the two kept on one line (NB becomes a space once wrapped): "12." before White's
+  // move, "12..." before Black's where one is needed (the first move of a line, after a comment or a variation), else ''
+  const pgnMoveNo = (abs, needed) => (abs % 2 === 0 ? Math.floor(abs / 2) + 1 + '.' + NB : needed ? Math.floor(abs / 2) + 1 + '...' + NB : '');
+  // does Black's move after this token need its number again (it closes a comment or a variation)?
+  const pgnReopens = (tok) => /[})]$/.test(tok || '');
+  // PGN text from tags ([[name, value]]) and movetext tokens (moves, comments, the result): values escaped, the moves
+  // wrapped at 80 columns, breaking on spaces, comments included; a line never starts with % (in column 1 it makes an
+  // escape line)
+  function pgnText(tags, toks) {
+    const head = tags.map(([k, v]) => `[${k} "${String(v).replace(/\\/g, '\\\\').replace(/"/g, '\\"')}"]`).join('\n');
+    const lines = []; let cur = '';
+    toks.join(' ').split(' ').forEach((w) => {
+      if (cur && cur.length + 1 + w.length > 80 && w[0] !== '%') { lines.push(cur); cur = w; } else cur = cur ? cur + ' ' + w : w;
+    });
+    if (cur) lines.push(cur);
+    return head + '\n\n' + lines.join('\n').replace(/\u00a0/g, ' ') + '\n';
+  }
   // the game as PGN: marks and the source's other NAGs, evals and clocks as [%eval]/[%clk], commentary (and
   // Queen's sentence) as comments, the source's variations as written plus the engine's better line on ?!/?/??
   // moves; wrapped at 80 columns. raw: the tags and the moves alone (no comments, NAGs, evals, clocks or variations)
@@ -585,14 +602,11 @@
     if (M.start && M.start.fen !== START_FEN) { H.SetUp = '1'; H.FEN = M.start.fen; }
     const order = ['Event', 'Site', 'Date', 'Round', 'White', 'Black', 'Result'];
     const keys = order.filter((k) => H[k] != null).concat(Object.keys(H).filter((k) => !order.includes(k)));
-    const head = keys.map((k) => `[${k} "${String(H[k]).replace(/\\/g, '\\\\').replace(/"/g, '\\"')}"]`).join('\n');
     const toks = [];
     if (M.intro && !raw) toks.push(`{${pgnEsc(M.intro)}}`);
     M.plies.forEach((p, i) => {
-      const abs = (M.ply0 || 0) + i, n = Math.floor(abs / 2) + 1;
-      // a move number and its move stay on one line (NB is a no-break space until the wrap)
-      const num = abs % 2 === 0 ? n + '.' + NB : !i || /[})]$/.test(toks[toks.length - 1]) ? n + '...' + NB : '';
-      toks.push(num + p.san);
+      const abs = (M.ply0 || 0) + i;
+      toks.push(pgnMoveNo(abs, !i || pgnReopens(toks[toks.length - 1])) + p.san);
       if (raw) return;
       (NAG_OF[p.mark] ? [NAG_OF[p.mark]] : []).concat(p.nags || []).forEach((g) => toks.push('$' + g));
       const tags = [];
@@ -607,19 +621,13 @@
       if (!fromPgn && p.best && p.best.line && p.best.line.length && ['inaccuracy', 'mistake', 'blunder'].includes(p.cls)) {
         const before = i ? M.plies[i - 1] : null;
         const line = playLine(before ? before.fen : M.start.fen, p.best.line, before ? before.castle : M.start.pos.castle, before ? before.ep : M.start.pos.ep);
-        const v = line.map((m, j) => { const k = abs + j; return (k % 2 === 0 ? Math.floor(k / 2) + 1 + '.' + NB : j === 0 ? Math.floor(k / 2) + 1 + '...' + NB : '') + m.san; });
+        const v = line.map((m, j) => pgnMoveNo(abs + j, j === 0) + m.san);
         if (v.length) toks.push('(' + v.join(' ') + ')');
       }
     });
     if (M.conclusion && !raw) toks.push(`{${pgnEsc(M.conclusion)}}`);
     toks.push(H.Result);
-    // break on spaces, comments included; a line never starts with % (in column 1 it makes an escape line)
-    const lines = []; let cur = '';
-    toks.join(' ').split(' ').forEach((w) => {
-      if (cur && cur.length + 1 + w.length > 80 && w[0] !== '%') { lines.push(cur); cur = w; } else cur = cur ? cur + ' ' + w : w;
-    });
-    if (cur) lines.push(cur);
-    return head + '\n\n' + lines.join('\n').replace(/\u00a0/g, ' ') + '\n';
+    return pgnText(keys.map((k) => [k, H[k]]), toks);
   }
 
   // castle: the castling rights before the line (the page's FENs don't carry them); omitted = all
@@ -715,5 +723,5 @@
     for (let m = step; 2 * m - ply0 <= N; m += step) if (2 * (m - 1) - ply0 >= 0) ticks.push({ m, at: 2 * (m - 1) - ply0 });
     return ticks;
   }
-  window.ChessCore = { START_FEN, splitGames, fmtDate, fmtLen, hasLegal, inCheck, checkers, evalTicks, CASTLE_HOME, canCastle, readFen, setupProblems, setupFen, parseFen, fenAfter, moveNo, sqIndex: sqIdx, applySan, applyUci, stepFromUci, toFen, playLine, posFromFen, legalTargets, isPromotion, userMove, buildGame, withCommentary, commentarySources, classifyFile, plan, timing, schedule, cues, settledAt, clipRange, winChance, plyCp, MARK_CLASS, annotatedPgn };
+  window.ChessCore = { START_FEN, splitGames, fmtDate, fmtLen, hasLegal, inCheck, checkers, evalTicks, CASTLE_HOME, canCastle, readFen, setupProblems, setupFen, parseFen, fenAfter, moveNo, sqIndex: sqIdx, applySan, applyUci, stepFromUci, toFen, playLine, posFromFen, legalTargets, isPromotion, userMove, buildGame, withCommentary, commentarySources, classifyFile, plan, timing, schedule, cues, settledAt, clipRange, winChance, plyCp, MARK_CLASS, pgnClk, pgnMoveNo, pgnReopens, pgnText, annotatedPgn };
 })();
