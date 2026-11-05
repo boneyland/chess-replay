@@ -10,6 +10,7 @@ const BASE = process.argv[2] || 'http://127.0.0.1:8765/';
 const ROOT = path.join(__dirname, '..');
 const PGN = fs.readFileSync(path.join(__dirname, 'demo-game.pgn'));
 const W = 1440, H = 900, FPS = 30;
+const PACE = 0.8; // every hold and pointer glide is this fraction of its written length
 const WORK = fs.mkdtempSync(path.join(process.env.TMPDIR || os.tmpdir(), 'demo-'));
 const CHROMIUM = process.env.CHROMIUM_PATH || ['/var/lib/flatpak/exports/bin/io.github.ungoogled_software.ungoogled_chromium'].find((f) => fs.existsSync(f));
 
@@ -52,7 +53,7 @@ async function clip(browser, name, ctxOpts, script) {
   });
   const vp = ctxOpts.viewport, dpr = ctxOpts.deviceScaleFactor || 1;
   await cdp.send('Page.startScreencast', { format: 'jpeg', quality: 92, maxWidth: vp.width * dpr, maxHeight: vp.height * dpr });
-  const rec = { start: () => { recording = true; }, hold: (ms) => page.waitForTimeout(ms) };
+  const rec = { start: () => { recording = true; }, hold: (ms) => page.waitForTimeout(ms * PACE) };
   await script(page, rec);
   const end = Date.now() / 1000;
   await cdp.send('Page.stopScreencast');
@@ -65,37 +66,41 @@ async function clip(browser, name, ctxOpts, script) {
 }
 
 // the pointer glides to an element (or point) the way a hand would, then clicks
-async function glide(page, target, { click = true, steps = 30 } = {}) {
+async function glide(page, target, { click = true, steps = Math.round(30 * PACE) } = {}) {
   const b = typeof target.boundingBox === 'function' ? await target.boundingBox() : target;
   const x = b.x + (b.width || 0) / 2, y = b.y + (b.height || 0) / 2;
   await page.mouse.move(x, y, { steps });
   if (click) { await page.waitForTimeout(150); await page.mouse.click(x, y); }
 }
-// Upscayl-style zoom: the page eases in on the panels whose headings match (union of their boxes), or back out with
-// none. A CSS transform on <body>, so text stays sharp; the drawn cursor sits outside it at its true size.
-async function zoom(page, headings = [], max = 1.7) {
-  await page.evaluate(({ headings, max, W, H }) => {
-    const b = document.body, z = window.__zoom || { s: 1, tx: 0, ty: 0 };
-    if (!window.__zoom) { b.style.transformOrigin = '0 0'; b.style.transition = 'transform 1s cubic-bezier(.65,0,.35,1)'; }
+// A red outline drawn clockwise around the panels whose headings match (union of their boxes), or taken away with
+// none. An SVG laid over the page, under the drawn cursor; the line is drawn by easing its dash offset to zero.
+async function focus(page, headings = []) {
+  const drawn = await page.evaluate(({ headings }) => {
+    const old = document.getElementById('demo-focus');
+    if (old) { old.style.opacity = '0'; setTimeout(() => old.remove(), 250); }
+    if (!headings.length) return !!old;
     const rects = headings.map((h) => {
       const re = new RegExp(h, 'i');
-      let e = [...b.querySelectorAll('*')].find((x) => x.children.length === 0 && re.test(x.textContent.trim()) && x.getBoundingClientRect().width > 0);
+      let e = [...document.body.querySelectorAll('*')].find((x) => x.children.length === 0 && re.test(x.textContent.trim()) && x.getBoundingClientRect().width > 0);
       while (e && e.parentElement && (e.getBoundingClientRect().height < 150 || e.getBoundingClientRect().width < 250)) e = e.parentElement;
-      const r = e.getBoundingClientRect();
-      // back to unzoomed page coordinates
-      return { l: (r.left - z.tx) / z.s, t: (r.top - z.ty) / z.s, r: (r.right - z.tx) / z.s, b: (r.bottom - z.ty) / z.s };
+      return e.getBoundingClientRect();
     });
-    let n = { s: 1, tx: 0, ty: 0 };
-    if (rects.length) {
-      const l = Math.min(...rects.map((r) => r.l)), t = Math.min(...rects.map((r) => r.t)), r = Math.max(...rects.map((r) => r.r)), bt = Math.max(...rects.map((r) => r.b));
-      const sc = Math.min(max, (W * 0.94) / (r - l), (H * 0.94) / (bt - t));
-      const clamp = (v, lo) => Math.min(0, Math.max(lo, v));
-      n = { s: sc, tx: clamp(W / 2 - sc * (l + r) / 2, W - sc * W), ty: clamp(H / 2 - sc * (t + bt) / 2, H - sc * H) };
-    }
-    window.__zoom = n;
-    b.style.transform = `translate(${n.tx}px, ${n.ty}px) scale(${n.s})`;
-  }, { headings, max, W, H });
-  await page.waitForTimeout(1100);
+    const pad = 6, l = Math.min(...rects.map((r) => r.left)) - pad, t = Math.min(...rects.map((r) => r.top)) - pad;
+    const r = Math.max(...rects.map((r) => r.right)) + pad, b = Math.max(...rects.map((r) => r.bottom)) + pad;
+    const NS = 'http://www.w3.org/2000/svg', svg = document.createElementNS(NS, 'svg'), path = document.createElementNS(NS, 'path');
+    svg.id = 'demo-focus';
+    svg.setAttribute('width', innerWidth); svg.setAttribute('height', innerHeight);
+    svg.style.cssText = 'position:fixed;left:0;top:0;z-index:2147483646;pointer-events:none;transition:opacity .25s';
+    // from the top-left corner: right, down, left, up (clockwise on screen)
+    path.setAttribute('d', `M${l} ${t}H${r}V${b}H${l}Z`);
+    const len = 2 * (r - l + b - t);
+    path.style.cssText = `fill:none;stroke:#e01b24;stroke-width:4;stroke-linejoin:round;stroke-dasharray:${len};stroke-dashoffset:${len};transition:stroke-dashoffset .5s cubic-bezier(.4,0,.2,1)`;
+    svg.appendChild(path); document.documentElement.appendChild(svg);
+    path.getBoundingClientRect();
+    requestAnimationFrame(() => { path.style.strokeDashoffset = '0'; });
+    return true;
+  }, { headings });
+  if (drawn) await page.waitForTimeout(headings.length ? 600 : 300);
 }
 async function boardBox(page) {
   return page.evaluate(() => {
@@ -108,10 +113,10 @@ async function boardBox(page) {
 const square = (b, s) => ({ x: b.x0 + (s.charCodeAt(0) - 97 + 0.5) * b.sq, y: b.y0 + (8 - +s[1] + 0.5) * b.sq });
 async function drag(page, from, to) {
   const b = await boardBox(page), a = square(b, from), z = square(b, to);
-  await page.mouse.move(a.x, a.y, { steps: 25 });
+  await page.mouse.move(a.x, a.y, { steps: Math.round(25 * PACE) });
   await page.waitForTimeout(200);
   await page.mouse.down();
-  await page.mouse.move(z.x, z.y, { steps: 40 });
+  await page.mouse.move(z.x, z.y, { steps: Math.round(40 * PACE) });
   await page.waitForTimeout(120);
   await page.mouse.up();
 }
@@ -124,7 +129,6 @@ const ready = async (page) => { await page.locator('.dock-primary').waitFor({ st
     // shots 1-4: the desktop page
     lists.push(await clip(browser, 'desktop', { viewport: { width: W, height: H } }, async (page, rec) => {
       await page.goto(BASE); await ready(page);
-      await zoom(page);
       await page.mouse.move(700, 450);
       await page.waitForTimeout(800);
       rec.start();
@@ -141,26 +145,26 @@ const ready = async (page) => { await page.locator('.dock-primary').waitFor({ st
       await glide(page, page.getByRole('button', { name: 'Qc5?!' }));
       await rec.hold(700);
       await glide(page, page.getByRole('button', { name: 'Play (space)' }));
-      await page.mouse.move(1000, 640, { steps: 30 });
+      await page.mouse.move(1000, 640, { steps: Math.round(30 * PACE) });
       await rec.hold(10000);
       await glide(page, page.getByRole('button', { name: 'Pause (space)' }));
       // 3. the queen sacrifice
       await page.getByRole('button', { name: 'Be6!!' }).scrollIntoViewIfNeeded();
       await glide(page, page.getByRole('button', { name: 'Be6!!' }));
       await rec.hold(900);
-      await zoom(page, ['^commentary$', '^analysis$']);
+      await focus(page, ['^commentary$', '^analysis$']);
       await rec.hold(2800);
-      await zoom(page);
+      await focus(page);
       // 4. try 18.Bxe6 instead: Stockfish finds the smothered mate
       await drag(page, 'c4', 'e6');
       await page.waitForFunction(() => /your move · .*(stockfish’s choice|cp vs|as good as|mate)/i.test(document.body.innerText), null, { timeout: 45000 }).catch(() => {});
-      await page.mouse.move(1000, 560, { steps: 30 });
+      await page.mouse.move(1000, 560, { steps: Math.round(30 * PACE) });
       await rec.hold(600);
-      await zoom(page, ['^analysis$']);
+      await focus(page, ['^analysis$']);
       await rec.hold(3200);
-      await zoom(page);
+      await focus(page);
       // ... and the opening explorer on the free board
-      await glide(page, page.getByRole('button', { name: 'Play/Explore' }));
+      await glide(page, page.locator('.dock-new > .dock-btn')); // the wide layout's Menu (the phone's is a different button)
       await rec.hold(500);
       await glide(page, page.getByRole('button', { name: 'Starting position' }));
       await rec.hold(1500);
@@ -168,7 +172,7 @@ const ready = async (page) => { await page.locator('.dock-primary').waitFor({ st
       await rec.hold(2000);
       await drag(page, 'c7', 'c5');
       await rec.hold(700);
-      await zoom(page, ['^opening explorer$']);
+      await focus(page, ['^opening explorer$']);
       await rec.hold(2800);
     }));
     // 5. the phone layout
@@ -189,16 +193,21 @@ const ready = async (page) => { await page.locator('.dock-primary').waitFor({ st
       await page.setInputFiles('#game-files', { name: 'Byrne-Fischer_1956.pgn', mimeType: 'application/x-chess-pgn', buffer: PGN });
       await page.getByText('Donald Byrne').first().waitFor();
       await page.getByRole('button', { name: 'Be6!!' }).click();
-      await zoom(page);
       await page.mouse.move(1000, 640);
       await page.waitForTimeout(1500);
       rec.start();
       await rec.hold(600);
       await glide(page, page.getByRole('button', { name: 'Share and export' }));
       await rec.hold(800);
-      await zoom(page, ['^export as$']);
-      await glide(page, page.getByRole('button', { name: /^Export (video|animated WebP)/ }), { click: false });
-      await rec.hold(3000);
+      await focus(page, ['^export as$']);
+      const exportBtn = page.getByRole('button', { name: /^Export (video|animated WebP)/ });
+      await glide(page, exportBtn, { click: false });
+      await rec.hold(900);
+      await focus(page); // the outline goes before the click: the export's first frames keep the page busy
+      await glide(page, exportBtn);
+      // a few seconds of the export running, its progress bar filling
+      await page.getByRole('dialog', { name: 'Exporting' }).getByText(/^Frame \d+ of/).waitFor({ timeout: 20000 });
+      await rec.hold(3500);
     }));
   } finally { await browser.close(); }
 
