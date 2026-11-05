@@ -1,16 +1,18 @@
 // Stockfish analysis in the browser: the rating, accuracy and JSON rules of chess_game_analyzer.py, ported.
-// Evals are centipawns from White's point of view; a mate in N is ±(10000 − 10·N), as in _eval_to_cp.
+// Evals are centipawns from White's point of view; a mate in N is a mate score (ChessCore.mateCp), as in _eval_to_cp.
+// The mate-score encoding and the win-chance curve and its thresholds are ChessCore's (it loads first), named here too.
 (function () {
+  const CC = window.ChessCore;
   const C = {
-    WIN_CHANCES_K: 0.00368208, BEST_MAX_LOSS_CP: 5,
-    WIN_DROP_INACCURACY: 0.10, WIN_DROP_MISTAKE: 0.20, WIN_DROP_BLUNDER: 0.30,
+    WIN_CHANCES_K: CC.WIN_K, BEST_MAX_LOSS_CP: 5,
+    WIN_DROP_INACCURACY: CC.WIN_DROP.inaccuracy, WIN_DROP_MISTAKE: CC.WIN_DROP.mistake, WIN_DROP_BLUNDER: CC.WIN_DROP.blunder,
     MAX_EVAL_LOSS_FOR_ACCURACY: 1500,
-    MATE_SCORE_CP: 10000, MATE_STEP_CP: 10, MATE_BAND_CP: 1000,
+    MATE_SCORE_CP: CC.MATE_CP, MATE_STEP_CP: CC.MATE_STEP, MATE_BAND_CP: CC.MATE_CP - CC.MATE_BAND,
     MATE_INACCURACY_CP: 999, MATE_MISTAKE_CP: 700,
     MATE_CREATED: 'Checkmate is now unavoidable', MATE_LOST: 'Lost forced checkmate sequence', MATE_DELAYED: 'Not the best checkmate sequence',
     MATE_LINE_MAX_PLIES: 9, BEST_LINE_MAX_PLIES: 12,
   };
-  const winningChances = (cp) => 2 / (1 + Math.exp(-C.WIN_CHANCES_K * cp)) - 1;
+  const winningChances = CC.winChance;
 
   // A UCI info line with a score → { cp (White POV), depth, pv, multipv (the line's rank, 1 without MultiPV) } ; null for other lines and bound-only scores
   function infoToScore(line, sideToMove) {
@@ -18,7 +20,7 @@
     const cp = line.match(/\sscore cp (-?\d+)/), mate = line.match(/\sscore mate (-?\d+)/);
     let v;
     if (cp) v = +cp[1];
-    else if (mate) { const n = +mate[1]; v = n > 0 ? C.MATE_SCORE_CP - C.MATE_STEP_CP * n : -(C.MATE_SCORE_CP - C.MATE_STEP_CP * Math.abs(n)); }
+    else if (mate) v = CC.mateCp(+mate[1]);
     else return null;
     const depth = line.match(/\sdepth (\d+)/), pv = line.match(/\spv (.+)$/), nodes = line.match(/\snodes (\d+)/), time = line.match(/\stime (\d+)/), k = line.match(/\smultipv (\d+)/);
     return { cp: sideToMove === 'w' ? v : -v, depth: depth ? +depth[1] : 0, pv: pv ? pv[1].trim().split(/\s+/) : [], nodes: nodes ? +nodes[1] : null, timeMs: time ? +time[1] : null, multipv: k ? +k[1] : 1 };
@@ -84,7 +86,7 @@
 
   // "Mate in N: …" for a lost or delayed mate, from the line the mover had (pvSans starts with the mover's move)
   function mateLine(beforeEval, pvSans) {
-    const n = Math.round((C.MATE_SCORE_CP - Math.abs(beforeEval)) / C.MATE_STEP_CP);
+    const n = CC.mateIn(beforeEval);
     let s = `Mate in ${n}: ${pvSans.slice(0, Math.min(2 * n - 1, C.MATE_LINE_MAX_PLIES)).join(' ')}`;
     if (2 * n - 1 > C.MATE_LINE_MAX_PLIES) s += ' ...';
     return s;
@@ -226,7 +228,7 @@
   // so the move between them is rated on two searches. onSearched(R, { searches, tbMs, tbAsks }): the engine searches made,
   // and the time spent on the tablebase and its requests since the last call, for the run's pace. now, sleep: the clock, for tests
   async function runAnalysis({ engine, ucis, sans, headers, signal, onProgress, earlier = [], onSearched, settings = ENGINE, startFen = window.ChessCore.START_FEN, tablebase = null, tablebaseOn = () => true, tbGapMs = TB_GAP_MS, now = Date.now, sleep = (ms) => new Promise((r) => setTimeout(r, ms)) }) {
-    const CC = window.ChessCore, LC = window.LichessCore;
+    const LC = window.LichessCore;
     const N = ucis.length, R = earlier.slice(0, N + 1);
     const fens = tablebase && LC ? positionFens(startFen, ucis) : null;
     let tbFailed = false, lastAsk = -Infinity;
@@ -303,7 +305,6 @@
 
   // The full FEN of each position of a game (castling, en passant and the fifty-move count, which the tablebase needs)
   function positionFens(startFen, ucis) {
-    const CC = window.ChessCore;
     let pos = CC.parseFen(startFen).pos;
     const sans = [], out = [CC.fenAfter(startFen, [], pos)];
     for (const u of ucis) {

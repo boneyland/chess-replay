@@ -5,7 +5,6 @@
   const TB_URL = 'https://tablebase.lichess.ovh/standard';
   const CLOUD_URL = 'https://lichess.org/api/cloud-eval';
   const EXPLORER_URL = 'https://explorer.lichess.ovh';
-  const MATE_CP = 10000, MATE_STEP = 10; // AnalysisCore's mate scores: mate in N as ±(10000 − 10·N)
   const TB_MAX_PIECES = 7; // the Syzygy tables Lichess serves; never asked above this
   const BACKOFF_MS = 60000, TIMEOUT_MS = 10000, CACHE_SIZE = 300;
 
@@ -67,13 +66,13 @@
     if (!o) return null;
     if (o === 'draw') return { cp: 0, txt: 'TB 0.00' };
     const white = (o === 'win') === (turn === 'w'), n = t.dtm != null && t.dtm !== 0 ? Math.ceil(Math.abs(t.dtm) / 2) : null;
-    const cp = (white ? 1 : -1) * (10000 - 10 * (n || 1));
+    const cp = window.ChessCore.mateCp((white ? 1 : -1) * (n || 1));
     return { cp, txt: n ? `TB ${white ? '' : '−'}M${n}` : `TB ${white ? '1-0' : '0-1'}` };
   }
   // A game analysis's eval for a certain answer, from White's point of view (as the eval bar's, a checkmate as
-  // ±10000 and a stalemate as 0, as Stockfish scores them), or null where the answer isn't certain
+  // ±MATE_CP and a stalemate as 0, as Stockfish scores them), or null where the answer isn't certain
   function evalCp(t, turn) {
-    if (t.checkmate) return turn === 'w' ? -10000 : 10000;
+    if (t.checkmate) return (turn === 'w' ? -1 : 1) * window.ChessCore.MATE_CP;
     if (t.stalemate || t.insufficient) return 0;
     const b = bar(t, turn);
     return b ? b.cp : null;
@@ -104,11 +103,11 @@
     return out;
   }
   // A cloud answer as an engine search's result (sf-engine.js): { cp (White's side, as the API gives it; a mate as
-  // ±(10000 − 10·N)), depth, pv, best, lines: [{ k, cp, depth, pv }], nodes, timeMs: null, source: 'cloud' }
+  // ChessCore.mateCp), depth, pv, best, lines: [{ k, cp, depth, pv }], nodes, timeMs: null, source: 'cloud' }
   function parseCloud(j, fen) {
     if (!j || typeof j !== 'object' || typeof j.depth !== 'number' || !Array.isArray(j.pvs) || !j.pvs.length) throw new Error('Not a cloud evaluation');
     const lines = j.pvs.map((p, i) => {
-      const cp = typeof p.mate === 'number' ? (p.mate > 0 ? 1 : -1) * (MATE_CP - MATE_STEP * Math.abs(p.mate)) : typeof p.cp === 'number' ? p.cp : null;
+      const cp = typeof p.mate === 'number' ? window.ChessCore.mateCp(p.mate) : typeof p.cp === 'number' ? p.cp : null;
       return { k: i + 1, cp, depth: j.depth, pv: cloudMoves(fen, p.moves) };
     }).filter((l) => l.cp != null);
     if (!lines.length) throw new Error('Not a cloud evaluation');

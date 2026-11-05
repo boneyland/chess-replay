@@ -530,7 +530,7 @@ const lineArrows = (r) => (r && r.lines && r.lines.length > 1 ? r.lines.filter((
 
 const fmtSf = (cp) => {
   if (cp == null) return '…';
-  if (Math.abs(cp) >= 9000) { const n = Math.round((10000 - Math.abs(cp)) / 10); return n === 0 ? (cp > 0 ? '1-0' : '0-1') : (cp > 0 ? 'M' : '−M') + n; }
+  if (window.ChessCore.isMateCp(cp)) { const n = window.ChessCore.mateIn(cp); return n === 0 ? (cp > 0 ? '1-0' : '0-1') : (cp > 0 ? 'M' : '−M') + n; }
   return (cp > 0 ? '+' : cp < 0 ? '−' : '') + Math.abs(cp / 100).toFixed(2);
 };
 

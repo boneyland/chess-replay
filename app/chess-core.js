@@ -278,6 +278,17 @@
     else if (ch.length === 2 && inLine(ch[0], ch[1], k)) out.push(`${SIDE_NAME[s.turn]} is in check from two pieces in a line, which no move can give.`);
     return out;
   }
+  // ---------- evals ----------
+  // Evals are centipawns from White's point of view. A mate in N is ±(MATE_CP − MATE_STEP·N), as in Python's _eval_to_cp
+  // (a checkmate on the board ±MATE_CP); any eval at least MATE_BAND from zero is a mate score
+  const MATE_CP = 10000, MATE_STEP = 10, MATE_BAND = 9000;
+  const mateCp = (n) => (n > 0 ? 1 : -1) * (MATE_CP - MATE_STEP * Math.abs(n)); // n > 0: White mates
+  const isMateCp = (cp) => Math.abs(cp) >= MATE_BAND;
+  const mateIn = (cp) => Math.round((MATE_CP - Math.abs(cp)) / MATE_STEP); // the N of a mate score (0 for a checkmate)
+  // Lichess's win chances (−1 to 1) and the drops in them, for the mover, that make a move ?!, ? or ??
+  const WIN_K = 0.00368208, WIN_DROP = { inaccuracy: 0.10, mistake: 0.20, blunder: 0.30 };
+  const winChance = (cp) => 2 / (1 + Math.exp(-WIN_K * cp)) - 1;
+
   // a setup's six-field FEN
   const setupFen = (s) => [toFen({ b: s.b, turn: s.turn }), s.castle || '-', s.ep >= 0 ? idxSq(s.ep) : '-', s.half, s.full].join(' ');
 
@@ -370,12 +381,12 @@
       ply.castle = pos.castle;
       ply.ep = pos.ep; // the FEN carries neither, so positions rebuilt from it need both
       ply.capture = !!before.b[mv.to] || pos.epCap >= 0;
-      // analysis files encode mate in N as ±(10000 − 10·N), White's point of view
+      // analysis files encode mate in N as a mate score (mateCp), White's point of view
       // the position after it from the tablebase: a win with no distance to mate (6 and 7 pieces) is won, not a mate count
       if (am && am.tb_after) ply.tb = am.tb_after;
       if (am && am.tb_before) ply.tbBefore = am.tb_before; // its best move and line came from the tablebase
-      if (am && typeof am.eval_after === 'number' && ply.tb && !ply.tb.dtm && Math.abs(am.eval_after) >= 9000 && Math.abs(am.eval_after) < 10000) { ply.cp = am.eval_after; ply.won = am.eval_after > 0 ? 'w' : 'b'; }
-      else if (am && typeof am.eval_after === 'number') { if (Math.abs(am.eval_after) >= 9000) ply.mate = Math.sign(am.eval_after) * Math.max(1, Math.round((10000 - Math.abs(am.eval_after)) / 10)); else ply.cp = am.eval_after; }
+      if (am && typeof am.eval_after === 'number' && ply.tb && !ply.tb.dtm && isMateCp(am.eval_after) && Math.abs(am.eval_after) < MATE_CP) { ply.cp = am.eval_after; ply.won = am.eval_after > 0 ? 'w' : 'b'; }
+      else if (am && typeof am.eval_after === 'number') { if (isMateCp(am.eval_after)) ply.mate = Math.sign(am.eval_after) * Math.max(1, mateIn(am.eval_after)); else ply.cp = am.eval_after; }
       else if (pp.cp != null) ply.cp = pp.cp;
       else if (pp.mate != null) ply.mate = pp.mate;
       if (ply.checkmate) { ply.mate = ply.side === 'w' ? 0.5 : -0.5; delete ply.cp; }
@@ -406,13 +417,13 @@
     // PGN-only evals: rate unmarked moves by win-chance drop (Lichess thresholds)
     if (!useA) {
       const known = (p) => p && (p.cp != null || (p.mate != null && !p.checkmate));
-      const cpv = (p) => (p.mate != null ? Math.sign(p.mate) * 10000 : p.cp);
+      const cpv = (p) => (p.mate != null ? Math.sign(p.mate) * MATE_CP : p.cp);
       plies.forEach((p, i) => {
         const prev = i ? plies[i - 1] : stdStart ? { cp: 20 } : null; // no known eval before a custom start's first move
         if (p.mark || !known(p) || !known(prev) || p.mate != null || prev.mate != null) return;
         const sgn = p.side === 'w' ? 1 : -1;
         const drop = sgn * (winChance(cpv(prev)) - winChance(cpv(p)));
-        const mk = drop >= 0.3 ? '??' : drop >= 0.2 ? '?' : drop >= 0.1 ? '?!' : null;
+        const mk = drop >= WIN_DROP.blunder ? '??' : drop >= WIN_DROP.mistake ? '?' : drop >= WIN_DROP.inaccuracy ? '?!' : null;
         if (mk) { p.mark = mk; p.cls = MARK_CLASS[mk]; }
         const loss = Math.round(sgn * (cpv(prev) - cpv(p)));
         if (loss > 0) p.loss = loss;
@@ -422,9 +433,9 @@
     const aStart = useA && A.moves[0] && typeof A.moves[0].eval_before === 'number';
     const first = plies.find((p) => p.cp != null || (p.mate != null && !p.checkmate));
     // the +0.20 first-move edge is the standard start's; a custom start has only its first known eval
-    let lastCp = aStart ? A.moves[0].eval_before : stdStart ? 20 : first ? (first.mate != null ? Math.sign(first.mate) * 10000 : first.cp) : 20;
+    let lastCp = aStart ? A.moves[0].eval_before : stdStart ? 20 : first ? (first.mate != null ? Math.sign(first.mate) * MATE_CP : first.cp) : 20;
     const evalStart = lastCp, evalStartKnown = aStart || stdStart;
-    plies.forEach((p) => { if (p.cp == null && p.mate == null) p.cpFill = lastCp; else lastCp = p.mate != null ? Math.sign(p.mate) * 10000 : p.cp; });
+    plies.forEach((p) => { if (p.cp == null && p.mate == null) p.cpFill = lastCp; else lastCp = p.mate != null ? Math.sign(p.mate) * MATE_CP : p.cp; });
     // the checkmate on the last move is a fact of the game, not an engine eval
     const hasEval = plies.some((p) => p.cp != null || (p.mate != null && !p.checkmate));
     const hasClock = plies.some((p) => p.clk != null);
@@ -457,8 +468,7 @@
     };
   }
 
-  const winChance = (cp) => 2 / (1 + Math.exp(-0.00368208 * cp)) - 1;
-  const plyCp = (p) => (p.mate != null ? Math.sign(p.mate) * 10000 : p.cp != null ? p.cp : p.cpFill);
+  const plyCp = (p) => (p.mate != null ? Math.sign(p.mate) * MATE_CP : p.cp != null ? p.cp : p.cpFill);
 
   // Split plies across the timeline sections: opening / middlegame / critical window around the biggest swing / endgame
   function plan(M) {
@@ -723,5 +733,5 @@
     for (let m = step; 2 * m - ply0 <= N; m += step) if (2 * (m - 1) - ply0 >= 0) ticks.push({ m, at: 2 * (m - 1) - ply0 });
     return ticks;
   }
-  window.ChessCore = { START_FEN, splitGames, fmtDate, fmtLen, hasLegal, inCheck, checkers, evalTicks, CASTLE_HOME, canCastle, readFen, setupProblems, setupFen, parseFen, fenAfter, moveNo, sqIndex: sqIdx, applySan, applyUci, stepFromUci, toFen, playLine, posFromFen, legalTargets, isPromotion, userMove, buildGame, withCommentary, commentarySources, classifyFile, plan, timing, schedule, cues, settledAt, clipRange, winChance, plyCp, MARK_CLASS, pgnClk, pgnMoveNo, pgnReopens, pgnText, annotatedPgn };
+  window.ChessCore = { START_FEN, splitGames, fmtDate, fmtLen, hasLegal, inCheck, checkers, evalTicks, CASTLE_HOME, canCastle, readFen, setupProblems, setupFen, parseFen, fenAfter, moveNo, sqIndex: sqIdx, applySan, applyUci, stepFromUci, toFen, playLine, posFromFen, legalTargets, isPromotion, userMove, buildGame, withCommentary, commentarySources, classifyFile, plan, timing, schedule, cues, settledAt, clipRange, MATE_CP, MATE_STEP, MATE_BAND, mateCp, isMateCp, mateIn, WIN_K, WIN_DROP, winChance, plyCp, MARK_CLASS, pgnClk, pgnMoveNo, pgnReopens, pgnText, annotatedPgn };
 })();
