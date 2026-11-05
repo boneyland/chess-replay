@@ -79,12 +79,13 @@ async function open(browser, viewport, opts) {
   // still loading as errors: the wasm fetch "due to access control checks", and unhandled rejections raised in
   // stockfish.js's glue, whose wording varies ("Load failed", "Maximum call stack size exceeded"). Those are left out
   // there: the page did nothing wrong, and an engine that really can't load fails the tests of its verdicts. The wasm
-  // fetch cut off can also arrive as a page error (the HEAD check before an engine starts, whose rejection the page handles)
+  // fetch cut off can also arrive as a page error (the HEAD check before an engine starts, whose rejection the page handles),
+  // whose message WebKit can hand Playwright cut short at the URL's colon (the whole sentence is then in its stack)
   const webkit = browser.browserType().name() === 'webkit';
   const wasmCut = (text) => /Fetch API cannot load \S+\/stockfish-[\w-]+\.wasm due to access control checks\./.test(text);
   const cutOff = (m) => webkit && ((wasmCut(m.text()) && /^Fetch API/.test(m.text())) || (/^Unhandled Promise Rejection: /.test(m.text()) && /\/stockfish-[\w-]+\.js$/.test(m.location().url)));
   page.on('console', (m) => { if (m.type() === 'error' && !cutOff(m)) errors.push(m.text() + (m.location().url ? ` (${m.location().url}:${m.location().lineNumber})` : '')); });
-  page.on('pageerror', (e) => { if (!(webkit && wasmCut(e.message))) errors.push(e.message + (e.stack ? ' ' + e.stack.split('\n').slice(0, 3).join(' | ') : '')); });
+  page.on('pageerror', (e) => { if (!(webkit && wasmCut(`${e.message} ${e.stack || ''}`))) errors.push(e.message + (e.stack ? ' ' + e.stack.split('\n').slice(0, 3).join(' | ') : '')); });
   return { ctx, page, errors };
 }
 // the elements reaching past the window's right edge, when the page scrolls sideways (none when it doesn't)
@@ -2319,10 +2320,11 @@ for (const name of BROWSERS) for (const site of SITES) {
       });
       await p.mouse.move(from.x + 40, from.y + from.height / 2);
       await p.mouse.down();
-      await p.mouse.move(from.x + 40, from.y + from.height / 2 - 120, { steps: 8 });
+      await p.mouse.move(from.x + 40, from.y + from.height / 2 - 200, { steps: 12 });
       await p.mouse.up();
       // CI's Firefox can still be applying the drag's last moves (and the glide after it) when mouse.up resolves: it
-      // read 66–99 px there straight away, so wait for the list to get there rather than reading it once
+      // read 66–99 px there straight away from a 120 px drag, and once settled at 88 (2026-11-05), so the drag is 200 px
+      // and the test waits for the list to get past 100 rather than reading it once
       await p.waitForFunction(() => document.querySelector('.book-moves').parentElement.parentElement.scrollTop >= 100, null, { timeout: 3000 }).catch(() => {});
       assert.ok(await listTop() >= 100, `the list scrolled (${await listTop()} px of ${await room()} px it can)`);
       assert.match(await label.innerText(), /^Start$/, 'the drag played no move');
