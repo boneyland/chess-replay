@@ -102,15 +102,21 @@ if ('serviceWorker' in navigator) window.addEventListener('load', () => { naviga
 // Mediabunny start workers from Blob URLs, and the full engine's glue fetches its wasm from one. Scripts from a CDN are
 // allowed by their exact URLs (those in shell.html and export.jsx), not the whole host, so no other file there can run.
 // Framing (frame-ancestors) can't be set in a <meta>: render.yaml sends it as a header
-const SW_REMOTE = [...new Set([read(path.join(app, 'shell.html')), read(path.join(app, 'export.jsx'))].join('\n')
-  .match(/https:\/\/(?:cdnjs\.cloudflare\.com|cdn\.jsdelivr\.net|fonts\.googleapis\.com\/css2)[^'"\s]*/g))].filter((u) => !/\/$/.test(u));
+// The hosts of the CDN files and fonts: allowed by the CSP, and their files kept by the service worker (KEEP_HOSTS in
+// sw.js: as they're used; SW_REMOTE, the files shell.html and export.jsx name there: at install)
+const CDN_HOSTS = ['cdnjs.cloudflare.com', 'cdn.jsdelivr.net', 'fonts.googleapis.com', 'fonts.gstatic.com'];
+// the other hosts the page talks to, never kept: Hugging Face (sign-in, the Queen Space), Lichess (tablebase, explorer,
+// games), the full engine's download (unpkg, kept in a cache of its own)
+const API_HOSTS = ['huggingface.co', 'boneyland-queen-pawn-8.hf.space', 'tablebase.lichess.ovh', 'explorer.lichess.ovh', 'lichess.org', 'unpkg.com'];
+const hostRe = new RegExp(`https://(?:${CDN_HOSTS.map((h) => h.replace(/\./g, '\\.')).join('|')})/[^'"\\s\`]+`, 'g');
+const SW_REMOTE = [...new Set([read(path.join(app, 'shell.html')), read(path.join(app, 'export.jsx'))].join('\n').match(hostRe))];
 const CDN_SCRIPTS = SW_REMOTE.filter((u) => /\.js$/.test(u));
 const inlineHashes = [...site.matchAll(/<script>([\s\S]*?)<\/script>/g)].map((m) => `'sha256-${require('crypto').createHash('sha256').update(m[1]).digest('base64')}'`);
 const CSP = [
   "default-src 'self'",
   `script-src 'self' 'wasm-unsafe-eval' ${CDN_SCRIPTS.join(' ')} ${inlineHashes.join(' ')}`,
   "worker-src 'self' blob:",
-  "connect-src 'self' blob: data: https://huggingface.co https://boneyland-queen-pawn-8.hf.space https://tablebase.lichess.ovh https://explorer.lichess.ovh https://lichess.org https://unpkg.com https://cdnjs.cloudflare.com https://cdn.jsdelivr.net https://fonts.googleapis.com https://fonts.gstatic.com",
+  `connect-src 'self' blob: data: ${API_HOSTS.concat(CDN_HOSTS).map((h) => 'https://' + h).join(' ')}`,
   "style-src 'self' 'unsafe-inline' https://fonts.googleapis.com",
   "font-src 'self' data: https://fonts.gstatic.com",
   "img-src 'self' data: blob:",
@@ -119,31 +125,41 @@ const CSP = [
   "base-uri 'self'",
   "form-action 'none'",
 ].join('; ');
-fs.writeFileSync(path.join(dir, 'out', 'site', 'chess-game-video.html'), site.replace('<meta charset="utf-8">\n', () => `<meta charset="utf-8">\n<meta http-equiv="Content-Security-Policy" content="${CSP}">\n`));
-// the engine, the WebP export's encoder, the MP4 export's muxer and the move sounds, served next to the page, and the link preview's image (a
-// 1653×944 frame from the player)
-fs.copyFileSync(path.join(app, 'og-image.png'), path.join(dir, 'out', 'site', 'og-image.png'));
-for (const f of VENDOR) fs.copyFileSync(path.join(dir, 'vendor', f), path.join(dir, 'out', 'site', f));
+// Everything served next to the page goes through put(), which says whether the service worker keeps it at install
+// (SW_LOCAL below is built from those, so a file copied here is never left out of the offline copy by mistake)
+const SITE = path.join(dir, 'out', 'site'), PAGE = 'chess-game-video.html';
+const kept = [];
+// a folder's files (no dotfiles, no folders)
+const filesIn = (d) => fs.readdirSync(d).filter((f) => !f.startsWith('.') && fs.statSync(path.join(d, f)).isFile());
+const put = (rel, from, { keep = false, text } = {}) => {
+  fs.mkdirSync(path.dirname(path.join(SITE, rel)), { recursive: true });
+  if (text != null) fs.writeFileSync(path.join(SITE, rel), text); else fs.copyFileSync(from, path.join(SITE, rel));
+  if (keep) kept.push(rel);
+};
+fs.writeFileSync(path.join(SITE, PAGE), site.replace('<meta charset="utf-8">\n', () => `<meta charset="utf-8">\n<meta http-equiv="Content-Security-Policy" content="${CSP}">\n`));
+// the engine, the WebP export's encoder, the MP4 export's muxer and the dead-position prover, kept; the link preview's
+// image (a 1653×944 frame from the player), not needed offline
+put('og-image.png', path.join(app, 'og-image.png'));
+for (const f of VENDOR) put(f, path.join(dir, 'vendor', f), { keep: true });
 // the dead-position prover's Worker, which runs chasolver.wasm (a Worker is started from a file of the page's own origin)
-fs.copyFileSync(path.join(app, 'dead-worker.js'), path.join(dir, 'out', 'site', 'dead-worker.js'));
+put('dead-worker.js', path.join(app, 'dead-worker.js'), { keep: true });
 // the board reader's Worker (small, kept with the page; the model and runtime it loads are in vision/, kept only on request)
-fs.copyFileSync(path.join(app, 'vision-worker.js'), path.join(dir, 'out', 'site', 'vision-worker.js'));
-// the board reader's model and runtime (vision/, 55 MB), served next to the page for the viewer who asks to keep them; the licence
-// texts stay in the repo
-fs.mkdirSync(path.join(dir, 'out', 'site', 'vision'), { recursive: true });
-for (const f of fs.readdirSync(path.join(dir, 'vision'))) if (!/LICENSE$|^NOTICE$/.test(f)) fs.copyFileSync(path.join(dir, 'vision', f), path.join(dir, 'out', 'site', 'vision', f));
+put('vision-worker.js', path.join(app, 'vision-worker.js'), { keep: true });
+// the board reader's model and runtime (vision/, 55 MB), served next to the page for the viewer who asks to keep them
+// (sw.js answers them from VISION_CACHE, never from its own copy); the licence texts stay in the repo
+for (const f of filesIn(path.join(dir, 'vision'))) if (!/LICENSE$|^NOTICE$/.test(f)) put('vision/' + f, path.join(dir, 'vision', f));
 // the piece sets other than cburnett (which is in the page), served as pieces/<set>/<piece>.svg (PieceSets.url); the service
 // worker keeps a set when it's first drawn, not at install, so a first visit doesn't fetch all 1.4 MB
 const PIECES = path.join(dir, 'vendor', 'pieces');
-for (const set of fs.readdirSync(PIECES)) fs.cpSync(path.join(PIECES, set), path.join(dir, 'out', 'site', 'pieces', set), { recursive: true });
+for (const set of fs.readdirSync(PIECES).filter((s) => !s.startsWith('.'))) for (const f of filesIn(path.join(PIECES, set))) put(`pieces/${set}/${f}`, path.join(PIECES, set, f));
 // the picture boards and every board's picker tile, served as boards/<file> (BoardThemes.url, .thumb), kept by the
 // service worker as they're used, as the piece sets are
-fs.cpSync(path.join(dir, 'vendor', 'boards'), path.join(dir, 'out', 'site', 'boards'), { recursive: true });
-for (const f of SOUND_FILES) { fs.mkdirSync(path.dirname(path.join(dir, 'out', 'site', f)), { recursive: true }); fs.copyFileSync(path.join(SOUNDS, f.slice('sounds/'.length)), path.join(dir, 'out', 'site', f)); }
+for (const f of filesIn(path.join(dir, 'vendor', 'boards'))) put('boards/' + f, path.join(dir, 'vendor', 'boards', f));
+for (const f of SOUND_FILES) put(f, path.join(SOUNDS, f.slice('sounds/'.length)), { keep: true });
 // Add to Home Screen opens the page without the browser's bars (iPhone Safari has no other way to lose them).
 // The icons are the tab icon above drawn as PNGs; the maskable and Apple ones are full-bleed for the launcher to round.
 const ICONS = path.join(app, 'icons');
-for (const f of fs.readdirSync(ICONS)) fs.copyFileSync(path.join(ICONS, f), path.join(dir, 'out', 'site', f));
+for (const f of filesIn(ICONS)) put(f, path.join(ICONS, f), { keep: true });
 const manifest = {
   name: 'Chess Replay', short_name: 'Chess Replay', description: DESCRIPTION,
   start_url: './', scope: './', display: 'fullscreen', display_override: ['fullscreen', 'standalone'], orientation: 'any',
@@ -154,14 +170,24 @@ const manifest = {
     { src: 'icon-maskable-512.png', sizes: '512x512', type: 'image/png', purpose: 'maskable' },
   ],
 };
-fs.writeFileSync(path.join(dir, 'out', 'site', 'manifest.webmanifest'), JSON.stringify(manifest, null, 2) + '\n');
-// The service worker (app/sw.js) and what it keeps: the files next to the page, and the CDN files the page names (React
-// and the fonts' stylesheet in shell.html, the export's libraries in export.jsx). Its VERSION changes with any of
-// them, so a deploy that changes one replaces the kept copies; the page itself is fetched afresh on every visit.
-const SW_LOCAL = ['chess-game-video.html', 'manifest.webmanifest', ...fs.readdirSync(ICONS), ...VENDOR, 'dead-worker.js', 'vision-worker.js', ...SOUND_FILES];
-const swSrc = read(path.join(app, 'sw.js'));
-const swHash = require('crypto').createHash('sha256').update(swSrc).update(JSON.stringify(SW_REMOTE));
-for (const f of SW_LOCAL.slice(1)) swHash.update(fs.readFileSync(path.join(dir, 'out', 'site', f)));
-fs.writeFileSync(path.join(dir, 'out', 'site', 'sw.js'), swSrc.replace('__VERSION__', swHash.digest('hex').slice(0, 16))
-  .replace('__LOCAL__', JSON.stringify(SW_LOCAL)).replace('__REMOTE__', JSON.stringify(SW_REMOTE, null, 2)));
+put('manifest.webmanifest', null, { keep: true, text: JSON.stringify(manifest, null, 2) + '\n' });
+// The service worker (app/sw.js) and what it keeps: the page and the files put() kept, and the CDN files the page names
+// (React and the fonts' stylesheet in shell.html, the export's libraries in export.jsx). The rest it is given here, each
+// from the one place it is set: the board reader's cache name (VisionCore's CACHE, which a model update bumps), the
+// cross-origin isolation headers (render.yaml's: removing them there removes them from the worker's answers too) and
+// the hosts it keeps files from. Its VERSION is a hash of all that and of the kept files, so a deploy that changes one
+// replaces the kept copies; the page itself is fetched afresh on every visit.
+const SW_LOCAL = [PAGE, ...kept];
+const VISION_CACHE = (() => {
+  const m = [...read(path.join(app, 'vision-core.js')).matchAll(/const CACHE = '(chess-vision-\d+)'/g)];
+  if (m.length !== 1) throw new Error('vision-core.js: no single `const CACHE = \'chess-vision-N\'`');
+  return m[0][1];
+})();
+const swFilled = read(path.join(app, 'sw.js'))
+  .replace('__LOCAL__', () => JSON.stringify(SW_LOCAL)).replace('__REMOTE__', () => JSON.stringify(SW_REMOTE, null, 2))
+  .replace('__VISION_CACHE__', () => VISION_CACHE).replace('__ISOLATION__', () => JSON.stringify(require('./render-headers.cjs').isolation()))
+  .replace('__KEEP_HOSTS__', () => JSON.stringify(CDN_HOSTS));
+const swHash = require('crypto').createHash('sha256').update(swFilled);
+for (const f of kept) swHash.update(fs.readFileSync(path.join(SITE, f)));
+fs.writeFileSync(path.join(SITE, 'sw.js'), swFilled.replace('__VERSION__', swHash.digest('hex').slice(0, 16)));
 console.log('wrote', site.length, 'bytes (site)');

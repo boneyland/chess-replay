@@ -18,8 +18,10 @@ services:
         - vendor/**
         - openings/**
         - babel/**
+        - vision/**
         - openings-data.cjs
         - build.cjs
+        - render-headers.cjs
         - render.yaml
     # each pull request gets a temporary deployment, linked on the PR; a Blueprint without this turns them off
     previews:
@@ -31,7 +33,8 @@ services:
         destination: /chess-game-video.html
     # revalidate on every visit, so a deploy is live at once; files are taken only as the type they're served as, and
     # other sites see only the origin a visitor came from. The page's Content-Security-Policy is a <meta> in it
-    # (build.cjs: it lists the inline scripts' hashes). tests/live/serve.cjs reads these headers from here
+    # (build.cjs: it lists the inline scripts' hashes). Each entry here is for /* (render-headers.cjs reads them for
+    # build.cjs and tests/live/serve.cjs, and refuses any other path)
     headers:
       - path: /*
         name: Cache-Control
@@ -50,7 +53,8 @@ services:
         name: X-Frame-Options
         value: SAMEORIGIN
       # cross-origin isolation, so the page gets SharedArrayBuffer and Stockfish can search with several threads; every
-      # cross-origin file the page loads must then be CORS or send Cross-Origin-Resource-Policy. Rollback: delete these two
+      # cross-origin file the page loads must then be CORS or send Cross-Origin-Resource-Policy. Rollback: delete these two;
+      # build.cjs gives sw.js these same headers, so the next build's service worker (a new VERSION) stops adding them too
       - path: /*
         name: Cross-Origin-Opener-Policy
         value: same-origin

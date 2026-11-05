@@ -207,18 +207,20 @@ test('the threaded lite and asm.js engines are vendored, pinned in LAYOUT.md and
   }
 });
 
+// the service worker as built (build.cjs fills in its lists, cache name and headers)
+const builtSw = () => fs.readFileSync(path.join(ROOT, 'out', 'site', 'sw.js'), 'utf8');
+
 // threads need SharedArrayBuffer, which a browser gives only a cross-origin isolated page
 test('render.yaml isolates the page: COOP same-origin and COEP require-corp on every path', () => {
-  const yaml = fs.readFileSync(path.join(ROOT, 'render.yaml'), 'utf8');
-  const h = Object.fromEntries([...yaml.matchAll(/- path: \/\*\n\s+name: (.+)\n\s+value: (.+)/g)].map((m) => [m[1].trim(), m[2].trim()]));
+  const h = require('../render-headers.cjs').headers();
   assert.equal(h['Cross-Origin-Opener-Policy'], 'same-origin');
   assert.equal(h['Cross-Origin-Embedder-Policy'], 'require-corp');
 });
 
 // a copy kept before the headers existed, or a HEAD made from a kept GET, still answers isolated
 test('the service worker gives its own files the isolation headers', () => {
-  const sw = fs.readFileSync(path.join(ROOT, 'app', 'sw.js'), 'utf8');
-  const run = new Function('self', 'caches', 'fetch', sw.replace(/__VERSION__/, 'x').replace('__LOCAL__', '[]').replace('__REMOTE__', '[]') + '\nreturn isolated;');
+  const sw = builtSw();
+  const run = new Function('self', 'caches', 'fetch', sw + '\nreturn isolated;');
   const isolated = run({ addEventListener() {} }, {}, () => {});
   const r = isolated(new Response('x', { status: 200, headers: { 'content-type': 'text/html' } }));
   assert.equal(r.headers.get('cross-origin-opener-policy'), 'same-origin');
@@ -228,9 +230,9 @@ test('the service worker gives its own files the isolation headers', () => {
 
 // a server error answering the page gives way to the kept copy; a 404 doesn't, and with no copy the error comes through
 test('the service worker answers a navigation with the kept page when the server errs', async () => {
-  const sw = fs.readFileSync(path.join(ROOT, 'app', 'sw.js'), 'utf8');
+  const sw = builtSw();
   const kept = new Response('kept', { status: 200 });
-  const run = (status, copy) => new Function('self', 'caches', 'fetch', sw.replace(/__VERSION__/, 'x').replace('__LOCAL__', '[]').replace('__REMOTE__', '[]') + '\nreturn page;')(
+  const run = (status, copy) => new Function('self', 'caches', 'fetch', sw + '\nreturn page;')(
     { addEventListener() {} }, { open: async () => ({ put: async () => {}, match: async () => copy }) }, async () => new Response(String(status), { status }));
   assert.equal(await (await run(503, kept.clone())('x')).text(), 'kept');
   assert.equal((await run(404, kept.clone())('x')).status, 404);
@@ -240,8 +242,8 @@ test('the service worker answers a navigation with the kept page when the server
 
 // a navigation fetched with redirect: 'manual' answers an opaqueredirect (status 0), which can't be rebuilt
 test('the service worker passes a navigation redirect through untouched', () => {
-  const sw = fs.readFileSync(path.join(ROOT, 'app', 'sw.js'), 'utf8');
-  const isolated = new Function('self', 'caches', 'fetch', sw.replace(/__VERSION__/, 'x').replace('__LOCAL__', '[]').replace('__REMOTE__', '[]') + '\nreturn isolated;')({ addEventListener() {} }, {}, () => {});
+  const sw = builtSw();
+  const isolated = new Function('self', 'caches', 'fetch', sw + '\nreturn isolated;')({ addEventListener() {} }, {}, () => {});
   const redirect = { type: 'opaqueredirect', status: 0, headers: new Headers() };
   assert.equal(isolated(redirect), redirect);
 });
@@ -296,4 +298,35 @@ test('no class name a content blocker hides as a share or social widget', () => 
     const jsx = [...src.matchAll(/className=(?:"([^"]*)"|\{[^}]*?'([^']*)')/g)].map((m) => m[1] || m[2]).join(' ').split(/\s+/).filter((c) => /^(share|social)/i.test(c));
     assert.deepEqual([...(css || []), ...jsx], [], f);
   }
+});
+
+// What sw.js is given comes from the one place each is set: VisionCore's cache name, render.yaml's isolation headers,
+// build.cjs's CDN hosts (which the CSP allows too), and the files build.cjs put next to the page
+test('the built sw.js takes its vision cache, isolation headers, hosts and files from where they are set', () => {
+  const sw = builtSw(), site = path.join(ROOT, 'out', 'site');
+  assert.doesNotMatch(sw, /__[A-Z_]+__/, 'every placeholder filled');
+  require('./load.cjs').loadUnit('vision-core.js');
+  assert.equal(sw.match(/const VISION_CACHE = '([^']+)'/)[1], window.VisionCore.CACHE);
+  assert.deepEqual(JSON.parse(sw.match(/const ISOLATION = (\{.*\});/)[1]), require('../render-headers.cjs').isolation());
+  const hosts = JSON.parse(sw.match(/const KEEP_HOSTS = (\[.*?\]);/)[1]);
+  const page = fs.readFileSync(path.join(site, 'chess-game-video.html'), 'utf8'), connect = page.match(/connect-src ([^;"]+)/)[1].split(' ');
+  for (const h of hosts) assert.ok(connect.includes('https://' + h), h + ' in connect-src');
+  for (const u of JSON.parse(sw.match(/const REMOTE = (\[[\s\S]*?\]);/)[1])) assert.ok(hosts.includes(new URL(u).hostname), u);
+  const local = JSON.parse(sw.match(/const LOCAL = (\[.*\]);/)[1]);
+  assert.equal(local[0], 'chess-game-video.html', 'the page first');
+  for (const f of local) assert.ok(fs.statSync(path.join(site, f)).isFile(), f + ' is served');
+  assert.ok(!local.some((f) => /^(vision|pieces|boards)\//.test(f) || f === 'og-image.png'), 'kept on use or on request, not at install');
+});
+
+// render.yaml without the isolation headers (the rollback): the service worker adds none either
+test('without isolation headers in render.yaml, the service worker adds none', () => {
+  const RH = require('../render-headers.cjs');
+  const yaml = fs.readFileSync(path.join(ROOT, 'render.yaml'), 'utf8').replace(/\n\s+- path: \/\*\n\s+name: Cross-Origin-(Opener|Embedder)-Policy\n\s+value: .+/g, '');
+  assert.deepEqual(RH.isolation(RH.headers(yaml)), {});
+  assert.equal(RH.headers(yaml)['X-Frame-Options'], 'SAMEORIGIN', 'the other headers stay');
+  const sw = builtSw().replace(/const ISOLATION = \{.*\};/, 'const ISOLATION = {};');
+  const isolated = new Function('self', 'caches', 'fetch', sw + '\nreturn isolated;')({ addEventListener() {} }, {}, () => {});
+  const r = new Response('x', { status: 200, headers: { 'content-type': 'text/html' } });
+  assert.equal(isolated(r), r);
+  assert.throws(() => RH.headers('headers:\n  - path: /app/*\n    name: X\n    value: y\n'), /only \/\* is read/);
 });
