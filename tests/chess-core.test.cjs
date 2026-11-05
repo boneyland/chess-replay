@@ -368,3 +368,12 @@ test('each move gets the line from the position after it: the next best line, or
   assert.deepEqual(M.plies[1].next, ['Nf3', 'Nc6']);
   assert.equal(M.plies[1].best, undefined);
 });
+
+test('fmtLen floors to whole seconds, so a length never reads 1:60', () => {
+  assert.equal(CC.fmtLen(119.6), '1:59');
+  assert.equal(CC.fmtLen(59.99), '0:59');
+  assert.equal(CC.fmtLen(60), '1:00');
+  assert.equal(CC.fmtLen(0), '0:00');
+  assert.equal(CC.fmtLen(-3), '0:00');
+  assert.equal(CC.fmtLen(605.2), '10:05');
+});

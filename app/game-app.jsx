@@ -290,7 +290,7 @@ function GameApp() {
   const queenSays = queenInVideo && M.plies.some((p, i) => { const r = Q.resultAt(i + 1); return r && r.evalText; });
   const TM = React.useMemo(() => window.ChessCore.timing(MV, { secondsPerMove: t.secondsPerMove, keyHold: t.keyHold, fastOpening: t.fastOpening }), [MV, t.secondsPerMove, t.keyHold, t.fastOpening]);
   const scenes = JSON.stringify(TM.scenes);
-  const fmtLen = (x) => `${Math.floor(x / 60)}:${String(Math.round(x % 60)).padStart(2, '0')}`;
+  const fmtLen = window.ChessCore.fmtLen;
   const closePanel = React.useCallback(() => setPanel(false), []);
   const closeQueen = React.useCallback(() => setQueenOpen(false), []);
   React.useEffect(() => { setQueenArrow(null); }, [M]);

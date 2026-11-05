@@ -1378,6 +1378,27 @@ for (const name of BROWSERS) for (const site of SITES) {
       assert.deepEqual(ep.errors, []);
       await ep.ctx.close();
     });
+    // Play vs Stockfish where the engine won't start: the Game panel says so, with why, and the view doesn't crash
+    await t.test('desktop: Play vs Stockfish says when Stockfish can\'t run', async () => {
+      const g = await open(browser, { width: 1440, height: 900 });
+      const p = g.page;
+      // the engine files missing (a route misses what the service worker fetches in Firefox; see Go deeper's test)
+      await g.ctx.addInitScript(() => { const f = window.fetch; window.fetch = (u, o) => (/stockfish-19/.test(String(u)) ? Promise.resolve(new Response('', { status: 404 })) : f(u, o)); });
+      await p.goto(base, { waitUntil: 'load' });
+      await loadedOn(p);
+      await p.getByRole('button', { name: 'Menu', exact: true }).click();
+      await p.getByRole('button', { name: 'Play vs Stockfish' }).click();
+      const dialog = p.getByRole('dialog', { name: 'Play vs Stockfish' });
+      await dialog.getByRole('radio', { name: 'Black' }).click();
+      await dialog.getByRole('radio', { name: 'Off' }).click();
+      await dialog.getByRole('button', { name: 'Start game' }).click();
+      await assert.doesNotReject(p.getByText(/Stockfish can’t run here|Stockfish stopped/).first().waitFor({ timeout: 20000 }));
+      await assert.doesNotReject(p.getByText('Stockfish to move', { exact: true }).waitFor({ timeout: 3000 }));
+      await assert.doesNotReject(p.getByRole('button', { name: 'Resign' }).waitFor({ timeout: 3000 }));
+      await p.screenshot({ path: path.join(OUT, host + '-play-stockfish-down.png') });
+      assert.deepEqual(g.errors, []);
+      await g.ctx.close();
+    });
     await t.test('desktop: Leaving a Stockfish game for Edit position keeps the reply made meanwhile', async () => {
       const ep = await open(browser, { width: 1440, height: 900 });
       const p = ep.page, label = p.locator('.plabel');

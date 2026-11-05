@@ -247,7 +247,7 @@ function GameInfo({ board }) {
 // offered by the side to move and accepted by the other; against Stockfish there is no draw offer, and the player resigns),
 // and Claim a draw when the side to move can (vs human: a threefold repetition or the fifty-move rule),
 // or the result with Play again beside it and Analyse on the free board below. down: why Stockfish can't answer, if so
-function GameStatus({ board, onChange, down }) {
+function GameStatus({ board, onChange, down, why }) {
   const P = window.PlayCore, G = board.game, last = board.steps.length ? board.steps[board.steps.length - 1] : null;
   const turn = (last ? last.pos : board.start.pos).turn, side = sideName(turn), sfGame = G.mode === 'stockfish';
   // the question waiting on an answer: 'resign' or 'draw'; another position or result drops it
@@ -283,7 +283,7 @@ function GameStatus({ board, onChange, down }) {
   const backNote = behind && hint(`Looking at ${board.upto < 0 ? 'the start' : window.BoardCore.label(board, board.upto)} · End or a press on the board goes back to the game`);
   if (sfGame) {
     const mine = turn === G.you;
-    const trouble = down ? sfDownText(down, sf.why, 'Take back or Resign') : null;
+    const trouble = down ? sfDownText(down, why, 'Take back or Resign') : null;
     return (
       <React.Fragment>
         <div style={{ display: 'flex', flexDirection: 'column', gap: tx(6) }}>
@@ -458,7 +458,7 @@ function FreeBoard({ board, onChange, tw, setTweak, onLichess, sf, nav, orient, 
       {L.header && !(upright && !G) && <Header M={HM} a={1} />}
       <MoveList M={MV} T={upto + 0.999} S={S} a={1} paused onPick={go} deadAt={deadAt} end={end} startAt={G && G.from} />
       {G ? <GameInfo board={board} /> : tb ? <TablebaseExplorer t={tb} posKey={boardKey} onPlay={onBook} /> : xl ? <LichessExplorer x={xl} tw={tw} setTweak={setTweak} onGame={onLichess} posKey={boardKey} onPlay={onBook} onHover={setHov} white={pos.turn === 'w'} fallback={<OpeningExplorer board={board} book={book} onPlay={onBook} onHover={setHov} />} /> : <OpeningExplorer board={board} book={book} onPlay={onBook} onHover={setHov} />}
-      {G ? <Panel box={L.analysis} a={1} style={NO_SELECT} title="Game"><GameStatus board={board} onChange={onChange} down={opponent.down} /></Panel>
+      {G ? <Panel box={L.analysis} a={1} style={NO_SELECT} title="Game"><GameStatus board={board} onChange={onChange} down={opponent.down} why={sf.why} /></Panel>
         : <AnalysisPanel box={L.analysis} a={1} paused depth={down ? null : searchDepth(ev.after)} deep={ev}>
         {upto < 0
           ? <React.Fragment>
