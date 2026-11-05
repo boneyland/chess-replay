@@ -8,7 +8,7 @@ const PIECE_NAME = { p: 'pawn', n: 'knight', b: 'bishop', r: 'rook', q: 'queen',
 const trayLabel = (p) => `${p === p.toUpperCase() ? 'White' : 'Black'} ${PIECE_NAME[p.toLowerCase()]}`;
 const EDIT_HINT = 'Drag pieces from the tray, or tap one and then tap squares.';
 const EDIT_KEYS = 'Arrows move the square; Enter places the tray piece, or picks up a piece and puts it down; Delete takes it away; K, Q, R, B, N, P place White pieces, k, q, r, b, n, p Black ones.';
-const squareName = (i) => 'abcdefgh'[i % 8] + (8 - Math.floor(i / 8));
+const squareName = (i) => window.ChessCore.sqName(i);
 // the text a screen reader says for the keyboard's square
 const squareSay = (b, i) => `${squareName(i)}, ${b[i] ? trayLabel(b[i]).toLowerCase() : 'empty'}`;
 // the text a screen reader can read without showing it

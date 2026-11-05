@@ -11,14 +11,9 @@ const deadClient = () => {
   return DEAD;
 };
 
-const DEAD_SQ = (i) => 'abcdefgh'[i % 8] + (8 - Math.floor(i / 8));
 // a position's FEN for chasolver: castling rights only where the king and rook are still at home (it refuses a FEN whose
-// rights don't fit the pieces, as an edited start's might not); the move counters don't matter to it
-function deadFen(pos) {
-  const b = pos.b, home = { K: [60, 63, 'K', 'R'], Q: [60, 56, 'K', 'R'], k: [4, 7, 'k', 'r'], q: [4, 0, 'k', 'r'] };
-  const castle = [...(pos.castle == null ? 'KQkq' : pos.castle)].filter((r) => home[r] && b[home[r][0]] === home[r][2] && b[home[r][1]] === home[r][3]).join('');
-  return [window.ChessCore.toFen(pos), castle || '-', pos.ep >= 0 ? DEAD_SQ(pos.ep) : '-', '0 1'].join(' ');
-}
+// rights don't fit the pieces, as an edited start's might not; ChessCore.fullFen); the move counters don't matter to it
+const deadFen = (pos) => window.ChessCore.fullFen(pos, { counters: [0, 1] });
 // the position after a loaded game's ply (its FEN carries neither castling nor en passant: the ply has them)
 const plyPos = (p) => ({ ...window.ChessCore.posFromFen(p.fen), castle: p.castle, ep: p.ep });
 

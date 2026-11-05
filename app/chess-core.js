@@ -49,7 +49,11 @@
     }
     return false;
   }
-  const CASTLE_LOSS = { 60: /[KQ]/g, 4: /[kq]/g, 63: /K/g, 56: /Q/g, 7: /k/g, 0: /q/g }; // e1 e8 h1 a1 h8 a8
+  // Each castling right's king and rook squares (e1/h1, e1/a1, e8/h8, e8/a8), the one place they are written; CASTLE_LOSS:
+  // the rights a move from or to each of those squares takes away
+  const CASTLE_HOME = { K: [60, 63], Q: [60, 56], k: [4, 7], q: [4, 0] };
+  const CASTLE_LOSS = {};
+  for (const [r, sqs] of Object.entries(CASTLE_HOME)) for (const sq of sqs) CASTLE_LOSS[sq] = (CASTLE_LOSS[sq] || '') + r;
   function applyMove(pos, from, to, promo) {
     const b = pos.b.slice(), p = b[from], t = p.toLowerCase(), color = colorOf(p);
     let ep = -1, epCap = -1;
@@ -62,7 +66,7 @@
     b[to] = promo ? (color === 'w' ? promo.toUpperCase() : promo.toLowerCase()) : p; b[from] = null;
     // castling rights go when the king or a rook leaves its square, or a rook is taken there
     let castle = pos.castle == null ? 'KQkq' : pos.castle;
-    for (const sq of [from, to]) castle = castle.replace(CASTLE_LOSS[sq] || /^$/, '');
+    for (const sq of [from, to]) if (CASTLE_LOSS[sq]) castle = castle.replace(new RegExp(`[${CASTLE_LOSS[sq]}]`, 'g'), '');
     return { b, ep, epCap, turn: color === 'w' ? 'b' : 'w', castle };
   }
   function toFen(pos) {
@@ -223,40 +227,108 @@
   // "12." for White's ply, "12…" for Black's; absPly counts half-moves from the standard start (Black's first move is 1)
   const moveNo = (absPly) => Math.floor(absPly / 2) + 1 + (absPly % 2 ? '…' : '.');
 
-  // A FEN → { pos, ply0, fen }: fen is the six-field form, ply0 the half-moves before the position (so the move
-  // number of the next move is moveNo(ply0)). Throws an Error a reader can act on.
-  function parseFen(fen) {
-    const f = String(fen).trim().split(/\s+/);
-    const bad = () => new Error(`That isn't a FEN: ${String(fen).trim().slice(0, 80)}`);
-    const ranks = f[0].split('/');
-    const width = (r) => [...r].reduce((s, c) => s + (/\d/.test(c) ? +c : 1), 0);
-    if (f.length > 6 || ranks.length !== 8 || !ranks.every((r) => /^[pnbrqkPNBRQK1-8]+$/.test(r) && width(r) === 8)) throw bad();
+  // ---------- FEN and setups ----------
+  // A setup is { b, turn, castle, ep, half, full }: b a board (64 squares, 0 = a8), castle the rights in KQkq order ('' for
+  // none), ep a square index or -1. Any placement is a setup; setupProblems says what stops it being a position.
+  const canCastle = (b, r) => { const [k, rk] = CASTLE_HOME[r], w = r < 'a'; return b[k] === (w ? 'K' : 'k') && b[rk] === (w ? 'R' : 'r'); };
+  // the en passant square stands if the pawn that just moved two is in front of it and the squares it crossed are empty
+  function epFits(b, turn, ep) {
+    const dir = turn === 'w' ? 1 : -1;
+    return Math.floor(ep / 8) === (turn === 'w' ? 2 : 5) && !b[ep] && !b[ep - 8 * dir] && b[ep + 8 * dir] === (turn === 'w' ? 'p' : 'P');
+  }
+
+  // A FEN's text as a setup: the fields after the board optional, rights in any order. Only malformed text is an error
+  // ({ error }); castling rights or an en passant square the pieces don't support are left out of the setup and named in
+  // dropped: { castle: the rights left out, ep: whether the square was }
+  function readFen(text) {
+    const t = String(text == null ? '' : text).trim(), f = t.split(/\s+/), bad = { error: `That isn't a FEN: ${t.slice(0, 80)}` };
+    const ranks = f[0].split('/'), width = (r) => [...r].reduce((n, c) => n + (/\d/.test(c) ? +c : 1), 0);
+    if (f.length > 6 || ranks.length !== 8 || !ranks.every((r) => /^[pnbrqkPNBRQK1-8]+$/.test(r) && width(r) === 8)) return bad;
     const turn = f[1] || 'w', castle = f[2] || '-', ep = f[3] || '-', half = f[4] || '0', full = f[5] || '1';
-    if (!/^[wb]$/.test(turn) || !/^\d+$/.test(half) || !/^\d+$/.test(full) || !/^(-|[a-h][1-8])$/.test(ep)) throw bad();
-    const b = fromFen(f[0]);
-    const count = (ch) => b.filter((p) => p === ch).length;
-    if (count('K') !== 1 || count('k') !== 1) throw new Error('A position needs one king of each colour');
-    if (b.some((p, i) => (p === 'P' || p === 'p') && (i < 8 || i > 55))) throw new Error("A pawn can't stand on the first or last rank");
-    if (inCheck(b, turn === 'w' ? 'b' : 'w')) throw new Error('The side not to move is in check');
-    if (/[A-Ha-h]/.test(castle)) throw new Error("Chess960 positions aren't supported yet");
-    if (castle !== '-' && !/^K?Q?k?q?$/.test(castle)) throw new Error("Castling rights don't match the pieces");
-    const rights = castle === '-' ? '' : castle;
-    for (const [r, king, rook] of [['K', 60, 63], ['Q', 60, 56], ['k', 4, 7], ['q', 4, 0]]) {
-      const white = r === r.toUpperCase();
-      if (rights.includes(r) && !(b[king] === (white ? 'K' : 'k') && b[rook] === (white ? 'R' : 'r'))) throw new Error("Castling rights don't match the pieces");
-    }
-    let epIdx = -1;
-    if (ep !== '-') {
-      epIdx = sqIdx(ep);
-      // the pawn that just moved two stands in front of the square, and the square it left behind is empty
-      const dir = turn === 'w' ? 1 : -1;
-      if (+ep[1] !== (turn === 'w' ? 6 : 3) || b[epIdx] || b[epIdx - 8 * dir] || b[epIdx + 8 * dir] !== (turn === 'w' ? 'p' : 'P')) throw new Error("The en passant square doesn't match the pieces");
-    }
-    const fullmove = Math.max(1, +full);
+    if (!/^[wb]$/.test(turn) || !/^\d+$/.test(half) || !/^\d+$/.test(full) || !/^(-|[a-h][1-8])$/.test(ep)) return bad;
+    if (/[A-Ha-h]/.test(castle)) return { error: "Chess960 positions aren't supported yet" };
+    if (castle !== '-' && !/^[KQkq]{1,4}$/.test(castle)) return bad;
+    const b = fromFen(f[0]), asked = castle === '-' ? '' : castle, epIdx = ep === '-' ? -1 : sqIdx(ep);
+    const rights = 'KQkq'.split('').filter((r) => asked.includes(r));
+    const kept = rights.filter((r) => canCastle(b, r)).join(''), epOk = epIdx >= 0 && epFits(b, turn, epIdx);
     return {
-      pos: { b, ep: epIdx, turn, castle: rights },
-      ply0: (fullmove - 1) * 2 + (turn === 'b' ? 1 : 0),
-      fen: [f[0], turn, castle, ep, +half, fullmove].join(' '),
+      setup: { b, turn, castle: kept, ep: epOk ? epIdx : -1, half: +half, full: Math.max(1, +full) },
+      dropped: { castle: rights.filter((r) => !kept.includes(r)).join(''), ep: epIdx >= 0 && !epOk },
+    };
+  }
+
+  // two pieces on one rank, file or diagonal with the king: no single move gives both checks
+  function inLine(a, c, k) {
+    const dx = (k % 8) - (a % 8), dy = Math.floor(k / 8) - Math.floor(a / 8), ex = (c % 8) - (a % 8), ey = Math.floor(c / 8) - Math.floor(a / 8);
+    const line = ex === 0 || ey === 0 || Math.abs(ex) === Math.abs(ey);
+    return line && dx * ey === dy * ex;
+  }
+  const SIDE_NAME = { w: 'White', b: 'Black' };
+  // What stops the setup being a position, in plain words, each a sentence; [] when it is one
+  function setupProblems(s) {
+    const out = [], count = (p) => s.b.filter((x) => x === p).length;
+    for (const [side, K] of [['w', 'K'], ['b', 'k']]) {
+      const n = count(K);
+      if (n === 0) out.push(`${SIDE_NAME[side]} has no king.`); else if (n > 1) out.push(`${SIDE_NAME[side]} has ${n} kings.`);
+    }
+    s.b.forEach((p, i) => { if ((p === 'P' || p === 'p') && (i < 8 || i > 55)) out.push(`The pawn on ${idxSq(i)} can't stand on the first or last rank.`); });
+    if (count('K') !== 1 || count('k') !== 1) return out;
+    const other = s.turn === 'w' ? 'b' : 'w';
+    if (inCheck(s.b, other)) out.push(`${SIDE_NAME[other]} is in check, but it's ${SIDE_NAME[s.turn]}'s turn.`);
+    const ch = checkers(s.b, s.turn), k = s.b.indexOf(s.turn === 'w' ? 'K' : 'k');
+    if (ch.length > 2) out.push(`${SIDE_NAME[s.turn]} is in check from ${ch.length} pieces, which no move can give.`);
+    else if (ch.length === 2 && inLine(ch[0], ch[1], k)) out.push(`${SIDE_NAME[s.turn]} is in check from two pieces in a line, which no move can give.`);
+    return out;
+  }
+  // ---------- evals ----------
+  // Evals are centipawns from White's point of view. A mate in N is ±(MATE_CP − MATE_STEP·N), as in Python's _eval_to_cp
+  // (a checkmate on the board ±MATE_CP); any eval at least MATE_BAND from zero is a mate score
+  const MATE_CP = 10000, MATE_STEP = 10, MATE_BAND = 9000;
+  const mateCp = (n) => (n > 0 ? 1 : -1) * (MATE_CP - MATE_STEP * Math.abs(n)); // n > 0: White mates
+  const isMateCp = (cp) => Math.abs(cp) >= MATE_BAND;
+  const mateIn = (cp) => Math.round((MATE_CP - Math.abs(cp)) / MATE_STEP); // the N of a mate score (0 for a checkmate)
+  // Lichess's win chances (−1 to 1) and the drops in them, for the mover, that make a move ?!, ? or ??
+  const WIN_K = 0.00368208, WIN_DROP = { inaccuracy: 0.10, mistake: 0.20, blunder: 0.30 };
+  const winChance = (cp) => 2 / (1 + Math.exp(-WIN_K * cp)) - 1;
+
+  // Can the side to move take en passant (a legal capture on pos.ep)? Only then does a position's key name the square
+  // (FIDE's repetition rule, python-chess's epd())
+  function epCapturable(pos) {
+    if (pos.ep < 0) return false;
+    // only a pawn beside the one that moved two, one rank behind the square, can take there
+    const pawn = pos.turn === 'w' ? 'P' : 'p', row = pos.turn === 'w' ? 8 : -8, x = pos.ep % 8;
+    for (const dx of [-1, 1]) {
+      const from = pos.ep + row + dx;
+      if (x + dx >= 0 && x + dx < 8 && pos.b[from] === pawn && legalTargets(pos, from).includes(pos.ep)) return true;
+    }
+    return false;
+  }
+  // A position's FEN: castling rights only where the king and rook are still at home ('KQkq' asked where pos records
+  // none), the en passant square pos records (ep: 'legal', only where a capture there is legal), then `counters`
+  // ([half, full]; none gives the four-field form a position's key uses)
+  function fullFen(pos, { ep = 'any', counters = [] } = {}) {
+    const asked = pos.castle == null ? 'KQkq' : pos.castle;
+    const castle = 'KQkq'.split('').filter((r) => asked.includes(r) && canCastle(pos.b, r)).join('') || '-';
+    const e = pos.ep >= 0 && (ep !== 'legal' || epCapturable(pos)) ? idxSq(pos.ep) : '-';
+    return [toFen(pos), castle, e, ...counters].join(' ');
+  }
+  // a setup's six-field FEN
+  const setupFen = (s) => [toFen({ b: s.b, turn: s.turn }), s.castle || '-', s.ep >= 0 ? idxSq(s.ep) : '-', s.half, s.full].join(' ');
+
+  // A FEN → { pos, ply0, fen }: fen is the six-field form, ply0 the half-moves before the position (so the move
+  // number of the next move is moveNo(ply0)). Throws an Error a reader can act on: unlike readFen, rights or an en
+  // passant square the pieces don't support are refused, not dropped
+  function parseFen(fen) {
+    const r = readFen(fen);
+    if (r.error) throw new Error(r.error);
+    const s = r.setup, problems = setupProblems(s);
+    if (problems.length) throw new Error(problems[0]);
+    if (r.dropped.castle) throw new Error("Castling rights don't match the pieces");
+    if (r.dropped.ep) throw new Error("The en passant square doesn't match the pieces");
+    return {
+      pos: { b: s.b, ep: s.ep, turn: s.turn, castle: s.castle },
+      ply0: (s.full - 1) * 2 + (s.turn === 'b' ? 1 : 0),
+      fen: setupFen(s),
     };
   }
 
@@ -266,8 +338,7 @@
     const s = parseFen(startFen);
     let half = +s.fen.split(' ')[4];
     for (const san of sans) half = /^[a-h]/.test(san) || san.includes('x') ? 0 : half + 1;
-    const castle = pos.castle == null ? 'KQkq' : pos.castle || '-';
-    return [toFen(pos), castle, pos.ep >= 0 ? idxSq(pos.ep) : '-', half, Math.floor((s.ply0 + sans.length) / 2) + 1].join(' ');
+    return fullFen(pos, { counters: [half, Math.floor((s.ply0 + sans.length) / 2) + 1] });
   }
 
   const ends = (N) => ({ intro: (N && N.intro) || '', conclusion: (N && (N.conclusion || N.result)) || '' });
@@ -332,12 +403,12 @@
       ply.castle = pos.castle;
       ply.ep = pos.ep; // the FEN carries neither, so positions rebuilt from it need both
       ply.capture = !!before.b[mv.to] || pos.epCap >= 0;
-      // analysis files encode mate in N as ±(10000 − 10·N), White's point of view
+      // analysis files encode mate in N as a mate score (mateCp), White's point of view
       // the position after it from the tablebase: a win with no distance to mate (6 and 7 pieces) is won, not a mate count
       if (am && am.tb_after) ply.tb = am.tb_after;
       if (am && am.tb_before) ply.tbBefore = am.tb_before; // its best move and line came from the tablebase
-      if (am && typeof am.eval_after === 'number' && ply.tb && !ply.tb.dtm && Math.abs(am.eval_after) >= 9000 && Math.abs(am.eval_after) < 10000) { ply.cp = am.eval_after; ply.won = am.eval_after > 0 ? 'w' : 'b'; }
-      else if (am && typeof am.eval_after === 'number') { if (Math.abs(am.eval_after) >= 9000) ply.mate = Math.sign(am.eval_after) * Math.max(1, Math.round((10000 - Math.abs(am.eval_after)) / 10)); else ply.cp = am.eval_after; }
+      if (am && typeof am.eval_after === 'number' && ply.tb && !ply.tb.dtm && isMateCp(am.eval_after) && Math.abs(am.eval_after) < MATE_CP) { ply.cp = am.eval_after; ply.won = am.eval_after > 0 ? 'w' : 'b'; }
+      else if (am && typeof am.eval_after === 'number') { if (isMateCp(am.eval_after)) ply.mate = Math.sign(am.eval_after) * Math.max(1, mateIn(am.eval_after)); else ply.cp = am.eval_after; }
       else if (pp.cp != null) ply.cp = pp.cp;
       else if (pp.mate != null) ply.mate = pp.mate;
       if (ply.checkmate) { ply.mate = ply.side === 'w' ? 0.5 : -0.5; delete ply.cp; }
@@ -368,13 +439,13 @@
     // PGN-only evals: rate unmarked moves by win-chance drop (Lichess thresholds)
     if (!useA) {
       const known = (p) => p && (p.cp != null || (p.mate != null && !p.checkmate));
-      const cpv = (p) => (p.mate != null ? Math.sign(p.mate) * 10000 : p.cp);
+      const cpv = (p) => (p.mate != null ? Math.sign(p.mate) * MATE_CP : p.cp);
       plies.forEach((p, i) => {
         const prev = i ? plies[i - 1] : stdStart ? { cp: 20 } : null; // no known eval before a custom start's first move
         if (p.mark || !known(p) || !known(prev) || p.mate != null || prev.mate != null) return;
         const sgn = p.side === 'w' ? 1 : -1;
         const drop = sgn * (winChance(cpv(prev)) - winChance(cpv(p)));
-        const mk = drop >= 0.3 ? '??' : drop >= 0.2 ? '?' : drop >= 0.1 ? '?!' : null;
+        const mk = drop >= WIN_DROP.blunder ? '??' : drop >= WIN_DROP.mistake ? '?' : drop >= WIN_DROP.inaccuracy ? '?!' : null;
         if (mk) { p.mark = mk; p.cls = MARK_CLASS[mk]; }
         const loss = Math.round(sgn * (cpv(prev) - cpv(p)));
         if (loss > 0) p.loss = loss;
@@ -384,9 +455,9 @@
     const aStart = useA && A.moves[0] && typeof A.moves[0].eval_before === 'number';
     const first = plies.find((p) => p.cp != null || (p.mate != null && !p.checkmate));
     // the +0.20 first-move edge is the standard start's; a custom start has only its first known eval
-    let lastCp = aStart ? A.moves[0].eval_before : stdStart ? 20 : first ? (first.mate != null ? Math.sign(first.mate) * 10000 : first.cp) : 20;
+    let lastCp = aStart ? A.moves[0].eval_before : stdStart ? 20 : first ? (first.mate != null ? Math.sign(first.mate) * MATE_CP : first.cp) : 20;
     const evalStart = lastCp, evalStartKnown = aStart || stdStart;
-    plies.forEach((p) => { if (p.cp == null && p.mate == null) p.cpFill = lastCp; else lastCp = p.mate != null ? Math.sign(p.mate) * 10000 : p.cp; });
+    plies.forEach((p) => { if (p.cp == null && p.mate == null) p.cpFill = lastCp; else lastCp = p.mate != null ? Math.sign(p.mate) * MATE_CP : p.cp; });
     // the checkmate on the last move is a fact of the game, not an engine eval
     const hasEval = plies.some((p) => p.cp != null || (p.mate != null && !p.checkmate));
     const hasClock = plies.some((p) => p.clk != null);
@@ -419,8 +490,7 @@
     };
   }
 
-  const winChance = (cp) => 2 / (1 + Math.exp(-0.00368208 * cp)) - 1;
-  const plyCp = (p) => (p.mate != null ? Math.sign(p.mate) * 10000 : p.cp != null ? p.cp : p.cpFill);
+  const plyCp = (p) => (p.mate != null ? Math.sign(p.mate) * MATE_CP : p.cp != null ? p.cp : p.cpFill);
 
   // Split plies across the timeline sections: opening / middlegame / critical window around the biggest swing / endgame
   function plan(M) {
@@ -533,6 +603,23 @@
     const t = Math.round(s * 10) / 10, sec = t % 60;
     return `${Math.floor(t / 3600)}:${String(Math.floor(t / 60) % 60).padStart(2, '0')}:${Number.isInteger(t) ? String(sec).padStart(2, '0') : sec.toFixed(1).padStart(4, '0')}`;
   };
+  // PGN's move number before a move's SAN, the two kept on one line (NB becomes a space once wrapped): "12." before White's
+  // move, "12..." before Black's where one is needed (the first move of a line, after a comment or a variation), else ''
+  const pgnMoveNo = (abs, needed) => (abs % 2 === 0 ? Math.floor(abs / 2) + 1 + '.' + NB : needed ? Math.floor(abs / 2) + 1 + '...' + NB : '');
+  // does Black's move after this token need its number again (it closes a comment or a variation)?
+  const pgnReopens = (tok) => /[})]$/.test(tok || '');
+  // PGN text from tags ([[name, value]]) and movetext tokens (moves, comments, the result): values escaped, the moves
+  // wrapped at 80 columns, breaking on spaces, comments included; a line never starts with % (in column 1 it makes an
+  // escape line)
+  function pgnText(tags, toks) {
+    const head = tags.map(([k, v]) => `[${k} "${String(v).replace(/\\/g, '\\\\').replace(/"/g, '\\"')}"]`).join('\n');
+    const lines = []; let cur = '';
+    toks.join(' ').split(' ').forEach((w) => {
+      if (cur && cur.length + 1 + w.length > 80 && w[0] !== '%') { lines.push(cur); cur = w; } else cur = cur ? cur + ' ' + w : w;
+    });
+    if (cur) lines.push(cur);
+    return head + '\n\n' + lines.join('\n').replace(/\u00a0/g, ' ') + '\n';
+  }
   // the game as PGN: marks and the source's other NAGs, evals and clocks as [%eval]/[%clk], commentary (and
   // Queen's sentence) as comments, the source's variations as written plus the engine's better line on ?!/?/??
   // moves; wrapped at 80 columns. raw: the tags and the moves alone (no comments, NAGs, evals, clocks or variations)
@@ -547,14 +634,11 @@
     if (M.start && M.start.fen !== START_FEN) { H.SetUp = '1'; H.FEN = M.start.fen; }
     const order = ['Event', 'Site', 'Date', 'Round', 'White', 'Black', 'Result'];
     const keys = order.filter((k) => H[k] != null).concat(Object.keys(H).filter((k) => !order.includes(k)));
-    const head = keys.map((k) => `[${k} "${String(H[k]).replace(/\\/g, '\\\\').replace(/"/g, '\\"')}"]`).join('\n');
     const toks = [];
     if (M.intro && !raw) toks.push(`{${pgnEsc(M.intro)}}`);
     M.plies.forEach((p, i) => {
-      const abs = (M.ply0 || 0) + i, n = Math.floor(abs / 2) + 1;
-      // a move number and its move stay on one line (NB is a no-break space until the wrap)
-      const num = abs % 2 === 0 ? n + '.' + NB : !i || /[})]$/.test(toks[toks.length - 1]) ? n + '...' + NB : '';
-      toks.push(num + p.san);
+      const abs = (M.ply0 || 0) + i;
+      toks.push(pgnMoveNo(abs, !i || pgnReopens(toks[toks.length - 1])) + p.san);
       if (raw) return;
       (NAG_OF[p.mark] ? [NAG_OF[p.mark]] : []).concat(p.nags || []).forEach((g) => toks.push('$' + g));
       const tags = [];
@@ -569,19 +653,13 @@
       if (!fromPgn && p.best && p.best.line && p.best.line.length && ['inaccuracy', 'mistake', 'blunder'].includes(p.cls)) {
         const before = i ? M.plies[i - 1] : null;
         const line = playLine(before ? before.fen : M.start.fen, p.best.line, before ? before.castle : M.start.pos.castle, before ? before.ep : M.start.pos.ep);
-        const v = line.map((m, j) => { const k = abs + j; return (k % 2 === 0 ? Math.floor(k / 2) + 1 + '.' + NB : j === 0 ? Math.floor(k / 2) + 1 + '...' + NB : '') + m.san; });
+        const v = line.map((m, j) => pgnMoveNo(abs + j, j === 0) + m.san);
         if (v.length) toks.push('(' + v.join(' ') + ')');
       }
     });
     if (M.conclusion && !raw) toks.push(`{${pgnEsc(M.conclusion)}}`);
     toks.push(H.Result);
-    // break on spaces, comments included; a line never starts with % (in column 1 it makes an escape line)
-    const lines = []; let cur = '';
-    toks.join(' ').split(' ').forEach((w) => {
-      if (cur && cur.length + 1 + w.length > 80 && w[0] !== '%') { lines.push(cur); cur = w; } else cur = cur ? cur + ' ' + w : w;
-    });
-    if (cur) lines.push(cur);
-    return head + '\n\n' + lines.join('\n').replace(/\u00a0/g, ' ') + '\n';
+    return pgnText(keys.map((k) => [k, H[k]]), toks);
   }
 
   // castle: the castling rights before the line (the page's FENs don't carry them); omitted = all
@@ -677,5 +755,5 @@
     for (let m = step; 2 * m - ply0 <= N; m += step) if (2 * (m - 1) - ply0 >= 0) ticks.push({ m, at: 2 * (m - 1) - ply0 });
     return ticks;
   }
-  window.ChessCore = { START_FEN, splitGames, fmtDate, fmtLen, hasLegal, inCheck, checkers, evalTicks, parseFen, fenAfter, moveNo, sqIndex: sqIdx, applySan, applyUci, stepFromUci, toFen, playLine, posFromFen, legalTargets, isPromotion, userMove, buildGame, withCommentary, commentarySources, classifyFile, plan, timing, schedule, cues, settledAt, clipRange, winChance, plyCp, MARK_CLASS, annotatedPgn };
+  window.ChessCore = { START_FEN, splitGames, fmtDate, fmtLen, hasLegal, inCheck, checkers, evalTicks, sqName: idxSq, CASTLE_HOME, canCastle, readFen, setupProblems, setupFen, epCapturable, fullFen, parseFen, fenAfter, moveNo, sqIndex: sqIdx, applySan, applyUci, stepFromUci, toFen, playLine, posFromFen, legalTargets, isPromotion, userMove, buildGame, withCommentary, commentarySources, classifyFile, plan, timing, schedule, cues, settledAt, clipRange, MATE_CP, MATE_STEP, MATE_BAND, mateCp, isMateCp, mateIn, WIN_K, WIN_DROP, winChance, plyCp, MARK_CLASS, pgnClk, pgnMoveNo, pgnReopens, pgnText, annotatedPgn };
 })();

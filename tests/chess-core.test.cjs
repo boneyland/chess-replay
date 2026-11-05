@@ -269,7 +269,8 @@ test('parseFen reads a full FEN and its move number', () => {
 test('parseFen rejects what is not a legal position', () => {
   for (const [fen, msg] of [
     ['8/8/8/8/8/8/8/4K3 w - - 0 1', /king/i],          // no black king
-    ['4k2R/8/8/8/8/8/8/4K3 w - - 0 1', /not to move is in check/i], // Black, not to move, is in check
+    ['4k2R/8/8/8/8/8/8/4K3 w - - 0 1', /Black is in check, but it's White's turn/], // Black, not to move, is in check
+    ['4k3/8/8/8/8/8/8/4K2R w QK - 0 1', /castling/i],   // rights in any order, but still checked against the pieces
     ['P3k3/8/8/8/8/8/8/4K3 w - - 0 1', /pawn/i],        // a pawn on the back rank
     ['4k3/8/8/8/8/8/8/4K3 w KQ - 0 1', /castling/i],    // rights without the rooks
     ['4k3/8/8/8/8/8/8/1R2K1R1 w BG - 0 1', /Chess960/], // Shredder-FEN rights by file: Chess960
@@ -277,6 +278,20 @@ test('parseFen rejects what is not a legal position', () => {
     ['not a fen', /FEN/],
   ]) assert.throws(() => CC.parseFen(fen), msg, fen);
   assert.doesNotThrow(() => CC.parseFen('4k3/8/8/8/8/8/8/R3K2r w Q - 0 1')); // White to move in check is legal
+});
+test('parseFen takes castling rights in any order, as Edit position does, and writes them in KQkq order', () => {
+  const fen = 'r3k2r/8/8/8/8/8/8/R3K2R w QKqk - 0 1';
+  assert.equal(CC.parseFen(fen).fen, 'r3k2r/8/8/8/8/8/8/R3K2R w KQkq - 0 1');
+  assert.equal(CC.parseFen(fen).pos.castle, 'KQkq');
+  assert.ok(window.EditCore === undefined || window.EditCore.fromFen(fen).setup);
+});
+test('readFen keeps what the pieces allow and says what it dropped', () => {
+  const r = CC.readFen('r3k3/8/8/8/8/8/8/4K2R w KQkq e3 0 1');
+  assert.equal(r.setup.castle, 'Kq'); assert.equal(r.setup.ep, -1);
+  assert.deepEqual(r.dropped, { castle: 'Qk', ep: true });
+  assert.deepEqual(CC.readFen(CC.START_FEN).dropped, { castle: '', ep: false });
+  assert.equal(CC.setupFen(CC.readFen('4k3/8/8/3pP3/8/8/8/4K3 w - d6 3 20').setup), '4k3/8/8/3pP3/8/8/8/4K3 w - d6 3 20');
+  assert.match(CC.readFen('rnbqkbnr/pppppppp').error, /isn't a FEN/);
 });
 test('a FEN start with Black to move numbers and sides its plies', () => {
   const M = CC.buildGame({ pgn: '[SetUp "1"]\n[FEN "r1bqkbnr/pppp1ppp/2n5/4p3/4P3/5N2/PPPP1PPP/RNBQKB1R b KQkq - 3 3"]\n\n3... Nf6 4. Nc3 { [%clk 0:04:50] } Bc5 *' });
@@ -393,4 +408,26 @@ test('settledAt: a move settles before the next starts, the start before the fir
   // the export's clip ends where a jump to its last move lands
   assert.equal(CC.clipRange(M, TM)(3, 7).end, at(7));
   assert.equal(CC.clipRange(M, TM)(0, N - 1).end, at(N - 1));
+});
+
+test('fullFen: rights only where king and rook are home, the en passant square any or only where it can be taken', () => {
+  const pos = { ...CC.posFromFen('4k3/8/8/3pP3/8/8/8/4K2R w'), castle: 'KQ', ep: CC.sqIndex('d6') };
+  assert.equal(CC.fullFen(pos), '4k3/8/8/3pP3/8/8/8/4K2R w K d6');
+  assert.equal(CC.fullFen(pos, { ep: 'legal', counters: [0, 30] }), '4k3/8/8/3pP3/8/8/8/4K2R w K d6 0 30');
+  // no white pawn beside d5: the square stays out of a key
+  const none = { ...CC.posFromFen('4k3/8/8/3p4/8/8/8/4K2R w'), castle: 'K', ep: CC.sqIndex('d6') };
+  assert.equal(CC.fullFen(none, { ep: 'legal' }), '4k3/8/8/3p4/8/8/8/4K2R w K -');
+  assert.equal(CC.epCapturable(none), false);
+  // a pawn beside it, pinned to its king along the e-file: taking would leave the file, so not legal either
+  const pinned = { ...CC.posFromFen('4r1k1/8/8/3pP3/8/8/8/4K3 w'), castle: '', ep: CC.sqIndex('d6') };
+  assert.equal(CC.epCapturable(pinned), false);
+  assert.equal(CC.epCapturable(pos), true);
+});
+test('square names, and castling rights lost from the homes', () => {
+  assert.equal(CC.sqName(0), 'a8'); assert.equal(CC.sqName(63), 'h1'); assert.equal(CC.sqName(CC.sqIndex('e4')), 'e4');
+  let pos = CC.posFromFen(CC.START_FEN);
+  for (const u of ['h2h4', 'a7a5', 'h1h3', 'a8a6']) pos = CC.applyUci(pos, u).pos;
+  assert.equal(pos.castle, 'Qk');
+  for (const u of ['e2e3', 'e7e6', 'e1e2']) pos = CC.applyUci(pos, u).pos;
+  assert.equal(pos.castle, 'k');
 });

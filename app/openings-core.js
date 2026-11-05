@@ -4,31 +4,16 @@
 (function () {
   const CC = () => window.ChessCore;
   const START = 'rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w';
-  const HOME = { e1: 'KQ', e8: 'kq', h1: 'K', a1: 'Q', h8: 'k', a8: 'q' };
-  const FILES = 'abcdefgh';
-  const sq = (i) => FILES[i % 8] + (8 - Math.floor(i / 8));
 
   // A line of moves from the start, with each position's key: placement, side to move, castling rights
-  // and the en-passant square only when a capture there is legal (python-chess's epd())
+  // and the en-passant square only when a capture there is legal (python-chess's epd(); ChessCore.fullFen)
   function tracker(startFen) {
-    const from = startFen ? CC().parseFen(startFen) : null;
-    let pos = from ? from.pos : CC().posFromFen(START), rights = from ? from.fen.split(' ')[2].replace('-', '') : 'KQkq';
-    const key = () => {
-      let ep = '-';
-      if (pos.ep >= 0) {
-        const pawn = pos.turn === 'w' ? 'P' : 'p', row = pos.turn === 'w' ? 1 : -1; // capturing pawns stand one rank behind the ep square
-        for (const dx of [-1, 1]) {
-          const x = (pos.ep % 8) + dx, from = pos.ep + row * 8 + dx;
-          if (x >= 0 && x < 8 && pos.b[from] === pawn && CC().applyUci(pos, sq(from) + sq(pos.ep))) { ep = sq(pos.ep); break; }
-        }
-      }
-      return CC().toFen(pos) + ' ' + (rights || '-') + ' ' + ep;
-    };
-    const lose = (s) => { if (HOME[s]) rights = rights.replace(new RegExp('[' + HOME[s] + ']', 'g'), ''); };
+    let pos = startFen ? CC().parseFen(startFen).pos : CC().posFromFen(START);
+    const key = () => CC().fullFen(pos, { ep: 'legal' });
     const t = {
       key, lastUci: null,
-      san(s) { const r = CC().applySan(pos, s); lose(r.uci.slice(0, 2)); lose(r.uci.slice(2, 4)); pos = r.pos; t.lastUci = r.uci; return key(); },
-      uci(u) { const r = CC().applyUci(pos, u); if (!r) return null; lose(u.slice(0, 2)); lose(u.slice(2, 4)); pos = r.pos; return key(); },
+      san(s) { const r = CC().applySan(pos, s); pos = r.pos; t.lastUci = r.uci; return key(); },
+      uci(u) { const r = CC().applyUci(pos, u); if (!r) return null; pos = r.pos; return key(); },
     };
     return t;
   }

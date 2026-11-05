@@ -93,3 +93,16 @@ test('a turn the other way mid-stream starts the count again', () => {
   const d = wheelRun([[10, 0], [40, 100], [-40, 116], [-40, 132]]);
   assert.deepEqual(d, [1, 0, 0, -1]);
 });
+
+test('pgnOf writes as the annotated PGN does: tag values escaped, moves wrapped at 80 columns', () => {
+  let b = B.fromFen();
+  for (const u of ['g1f3', 'g8f6', 'f3g1', 'f6g8'].concat(['g1f3', 'g8f6', 'f3g1', 'f6g8'], ['g1f3', 'g8f6', 'f3g1', 'f6g8'], ['g1f3', 'g8f6', 'f3g1', 'f6g8'])) b = B.play(b, CC.stepFromUci(B.pos(b), u));
+  const text = B.pgnOf(b, [['Event', 'A "quoted" \\ name']], '*', { after: (j) => (j === 2 ? '{a note}' : '') });
+  assert.match(text, /^\[Event "A \\"quoted\\" \\\\ name"\]\n\n/);
+  const moves = text.split('\n\n')[1];
+  assert.ok(moves.split('\n').every((l) => l.length <= 80), moves);
+  assert.ok(moves.trim().split('\n').length > 1, 'wrapped');
+  assert.match(moves.replace(/\n/g, ' '), /^1\. Nf3 Nf6 2\. Ng1 \{a note\} 2\.\.\. Ng8 3\. Nf3/);
+  // the export reads it back
+  assert.equal(CC.buildGame({ pgn: text }).plies.length, 16);
+});

@@ -134,7 +134,8 @@ test('the PGN has the result, the time control and the clocks', () => {
   const text = P.pgn(g);
   assert.match(text, /\[Event "Play vs human"\]/); assert.match(text, /\[Date "2026\.10\.19"\]/);
   assert.match(text, /\[Result "1-0"\]/); assert.match(text, /\[TimeControl "600\+0"\]/); assert.match(text, /\[Termination "normal"\]/);
-  assert.match(text, /1\. e4 \{ \[%clk 0:10:00\] \} 1\.\.\. e5 \{ \[%clk 0:09:58\] \} 2\. Nf3 \{ \[%clk 0:09:58\] \} 1-0/);
+  // the clocks as an annotated game writes them (ChessCore.pgnClk): tenths kept
+  assert.match(text, /1\. e4 \{\[%clk 0:10:00\]\} 1\.\.\. e5 \{\[%clk 0:09:58\]\} 2\. Nf3 \{\[%clk 0:09:58\.5\]\} 1-0/);
   const M = CC.buildGame({ pgn: text });
   assert.equal(M.plies.length, 3); assert.equal(M.hasClock, true); assert.equal(M.result, '1-0');
   const f = P.pgn(P.start(B.fromFen('4k3/8/8/8/8/8/4P3/4K3 b - - 0 40'), null, '2026.10.19'));
@@ -541,7 +542,7 @@ test('a game from a position: its PGN has the earlier moves, the clocks on its o
   g = P.move(g, CC.stepFromUci(B.pos(g), 'g1f3'), 1000);
   g = P.move(g, CC.stepFromUci(B.pos(g), 'b8c6'), 2000);
   const pgn = P.pgn(g);
-  assert.match(pgn, /1\. e4 e5 2\. Nf3 \{ \[%clk 0:05:03\] \} 2\.\.\. Nc6 \{ \[%clk 0:05:02\] \}/);
+  assert.match(pgn, /1\. e4 e5 2\. Nf3 \{\[%clk 0:05:03\]\} 2\.\.\. Nc6 \{\[%clk 0:05:02\]\}/);
   const r = B.restore(B.save(g));
   assert.equal(r.game.from, 2);
   assert.deepEqual(r.game.clock.clk, g.game.clock.clk);

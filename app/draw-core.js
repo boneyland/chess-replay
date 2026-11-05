@@ -21,6 +21,6 @@
     if (shapes[k].brush === s.brush) return shapes.filter((_, j) => j !== k);
     return shapes.map((t, j) => (j === k ? s : t));
   };
-  const sqName = (i) => 'abcdefgh'[i % 8] + (8 - Math.floor(i / 8));
+  const sqName = (i) => window.ChessCore.sqName(i);
   window.DrawCore = { BRUSHES, COLORS, brush, shape, toggle, sqName };
 })();
