@@ -522,6 +522,8 @@
     }
     return out.replace(/ +/g, ' ').replace(/\( /g, '(').replace(/ \)/g, ')').trim();
   }
+  // a length as m:ss (the video's, a clip's, an export's), whole seconds floored: 119.6 s is 1:59, never 1:60
+  const fmtLen = (x) => { const s = Math.max(0, Math.floor(x)); return `${Math.floor(s / 60)}:${String(s % 60).padStart(2, '0')}`; };
   // clock as h:mm:ss, keeping tenths (Lichess writes them under 10 s)
   const pgnClk = (s) => {
     const t = Math.round(s * 10) / 10, sec = t % 60;
@@ -671,5 +673,5 @@
     for (let m = step; 2 * m - ply0 <= N; m += step) if (2 * (m - 1) - ply0 >= 0) ticks.push({ m, at: 2 * (m - 1) - ply0 });
     return ticks;
   }
-  window.ChessCore = { START_FEN, splitGames, fmtDate, hasLegal, inCheck, checkers, evalTicks, parseFen, fenAfter, moveNo, sqIndex: sqIdx, applySan, applyUci, stepFromUci, toFen, playLine, posFromFen, legalTargets, isPromotion, userMove, buildGame, withCommentary, commentarySources, classifyFile, plan, timing, schedule, cues, clipRange, winChance, plyCp, MARK_CLASS, annotatedPgn };
+  window.ChessCore = { START_FEN, splitGames, fmtDate, fmtLen, hasLegal, inCheck, checkers, evalTicks, parseFen, fenAfter, moveNo, sqIndex: sqIdx, applySan, applyUci, stepFromUci, toFen, playLine, posFromFen, legalTargets, isPromotion, userMove, buildGame, withCommentary, commentarySources, classifyFile, plan, timing, schedule, cues, clipRange, winChance, plyCp, MARK_CLASS, annotatedPgn };
 })();
