@@ -74,10 +74,10 @@ What each part of the repo is, with the pinned SHA-256 of every vendored file. B
 - `vendor/boards/`: Lichess's 2D boards, unchanged files from `public/images/board/` (and `svg/newspaper.svg`) at lila commit `9e780e9f2ce4b18a1c7991b9fe0b069c001459b8`, by the lila authors and pirouetti under the AGPL-3.0-or-later (lila's `COPYING.md`): the 20 picture boards and every board's 64×32 picker tile (`*.thumbnail.*`; newspaper has none). The five flat boards (brown, blue, green, ic, purple) are their two colours in `app/board-themes.js`, not files. The site serves them as `boards/<file>` (`BoardThemes.url`, `.thumb`); `sw.js` keeps one when it's first drawn. Left out: ncf-board (not in Lichess's list) and the 3D boards
   - all 44 board files: sha256 `c8c566fb2967370867e484f0def14ba5ed47f2a5b60a2f79c29226432202ca78` of `cd vendor/boards && sha256sum * | LC_ALL=C sort -k2` (checked by `tests/board-themes.test.cjs`)
 - `openings-data.cjs`: embeds `openings/*.tsv` (Lichess chess-openings, CC0; a copy of chess-animator's) into the page
-- `render.yaml`: the Render static site's settings (a Blueprint: Render syncs them from this file)
+- `render.yaml`: the Render static site's settings (a Blueprint: Render syncs them from this file); `render-headers.cjs` reads its headers for `build.cjs`, `tests/live/serve.cjs` and the tests
 - `docs/`: `spec.md`, the one spec (principles, what's built, roadmap, known gaps, decisions log), and `plans/`, the implementation plans of built features, kept as written (the oldest, browser Stockfish of 2026-10-16, was written when this was `artifact/` in chess-animator; its paths are now repo-root paths)
 - `media/`: the README's pictures and video
   - `preview.webp`: the preview from the sample game (scaled to 1676 wide to fill GitHub's 838 px README column on 2× screens; 8 fps, WebP quality 80)
   - `demo.mp4`: the ~65 s showcase video (Byrne–Fischer 1956, `demo-game.pgn`), re-recorded by `record-demo.cjs`
 - `games/`: local PGNs (not committed)
-- `tests/`: JS tests (`*.test.cjs`), the Python cross-check `check_browser_json.py` with its fixture generators (`make_rating_expected.py`, `make_openings_expected.py`), and `live/`, Playwright smoke tests of the site; see [Tests](README.md#tests)
+- `tests/`: JS tests (`*.test.cjs`; `pins.test.cjs` checks every SHA-256 pinned here), the Python cross-check `check_browser_json.py` with its fixture generators (`make_rating_expected.py`, `make_openings_expected.py`), and `live/`, Playwright smoke tests of the site; see [Tests](README.md#tests)
