@@ -1,4 +1,4 @@
-// The site's service worker (build.cjs fills in VERSION, LOCAL and REMOTE): it keeps a copy of the page and everything
+// The site's service worker (build.cjs fills in VERSION, LOCAL, REMOTE, KEEP_HOSTS, VISION_CACHE and ISOLATION): it keeps a copy of the page and everything
 // it loads, so the player, Stockfish and the export work with no connection. Only Ask Queen, Hugging Face sign-in and
 // the endgame tablebase need the network. The page itself comes from the network first, so a deploy shows up at once;
 // the files around it change only with a deploy that changes this file's VERSION, so they come from the copy first.
@@ -8,10 +8,10 @@ const REMOTE = __REMOTE__; // pinned CDN files: React, the export's libraries, t
 const PAGE = 'chess-game-video.html';
 const CACHE = 'chess-replay-' + VERSION;
 // hosts whose files are kept as they're used (the fonts' stylesheet names font files by the browser that asks)
-const KEEP_HOSTS = ['cdnjs.cloudflare.com', 'cdn.jsdelivr.net', 'fonts.googleapis.com', 'fonts.gstatic.com'];
+const KEEP_HOSTS = __KEEP_HOSTS__; // build.cjs's CDN_HOSTS, which the page's CSP allows
 // The board reader's model and runtime (vision/, 55 MB) are kept only by viewers who ask for them, in a cache of their own
-// that no deploy replaces (kept-files.js fills it under these same URLs)
-const VISION_CACHE = 'chess-vision-1';
+// that no deploy replaces (kept-files.js fills it under these same URLs): VisionCore's CACHE, which a model update bumps
+const VISION_CACHE = '__VISION_CACHE__';
 // a page that hasn't answered by then comes from the copy (a connection that is up but not getting through)
 const PAGE_TIMEOUT_MS = 6000;
 
@@ -84,8 +84,9 @@ async function page(req) {
 }
 
 // The site sends the cross-origin isolation headers (render.yaml) that let Stockfish use threads; the page and its files
-// answered from here carry them too, also from a copy kept before they existed (a worker without them isn't isolated)
-const ISOLATION = { 'Cross-Origin-Opener-Policy': 'same-origin', 'Cross-Origin-Embedder-Policy': 'require-corp' };
+// answered from here carry them too, also from a copy kept before they existed (a worker without them isn't isolated).
+// They are render.yaml's, filled in by build.cjs: none there, none here
+const ISOLATION = __ISOLATION__;
 function isolated(r) {
   if (!r || r.type === 'opaque' || r.type === 'opaqueredirect' || r.status === 0 || Object.keys(ISOLATION).every((k) => r.headers.has(k))) return r;
   const headers = new Headers(r.headers);

@@ -10,7 +10,7 @@
     { name: 'ort-wasm-simd-threaded.mjs', size: 24381, type: 'text/javascript', sha256: 'e13f7f94fc51b4ca72b12faeb1ee95f4ace6dfbc8939bc718aabdc0a27c4299b' },
     { name: 'ort-wasm-simd-threaded.wasm', size: 14239897, type: 'application/wasm', sha256: '3398c10d07d229bd91b364548e130e0e51a8e5704b88c7c083ebbeb78842dee2' },
   ];
-  const CACHE = 'chess-vision-1'; // the same name sw.js keeps out of its cleanup
+  const CACHE = 'chess-vision-1'; // build.cjs gives sw.js this name, which it keeps out of its cleanup
   const SIZE = 644, MAX_SIDE = 2048, UNSURE = 0.8, MB = 56, MIN_BOX = 0.05;
   const WHOLE = { x0: 0, y0: 0, x1: 1, y1: 1 };
 
