@@ -377,3 +377,20 @@ test('fmtLen floors to whole seconds, so a length never reads 1:60', () => {
   assert.equal(CC.fmtLen(-3), '0:00');
   assert.equal(CC.fmtLen(605.2), '10:05');
 });
+
+test('settledAt: a move settles before the next starts, the start before the first move, the last before the end card', () => {
+  const fx = (f) => require('fs').readFileSync(require('path').join(__dirname, 'fixtures', f), 'utf8');
+  const M = CC.buildGame({ pgn: fx('byrne-fischer.pgn'), analysis: fx('byrne-fischer_analysis.json') });
+  const TM = CC.timing(M, { secondsPerMove: 1.6, keyHold: 1.5 });
+  const CUES = CC.cues(TM.scenes), S = CC.schedule(M, CUES, TM.d), N = S.N;
+  const at = (i) => CC.settledAt(S, CUES, i);
+  assert.ok(at(-1) > 0 && at(-1) < S.tp[0], 'the starting position: after the title card, before the first move');
+  for (let i = 0; i + 1 < N; i++) assert.ok(at(i) > S.tp[i] + S.md[i] && at(i) < S.tp[i + 1], `ply ${i} has settled before ply ${i + 1}`);
+  assert.ok(at(N - 1) > S.tp[N - 1] + S.md[N - 1] && at(N - 1) < CUES.Outro, 'the last move: settled, before the end card');
+  // a last move whose hold runs into the end card is capped just before it
+  const tight = { ...S, md: S.md.map((x, i) => (i === N - 1 ? CUES.Outro - S.tp[N - 1] : x)) };
+  assert.equal(CC.settledAt(tight, CUES, N - 1), CUES.Outro - 0.1);
+  // the export's clip ends where a jump to its last move lands
+  assert.equal(CC.clipRange(M, TM)(3, 7).end, at(7));
+  assert.equal(CC.clipRange(M, TM)(0, N - 1).end, at(N - 1));
+});

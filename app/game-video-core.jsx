@@ -1255,7 +1255,7 @@ function GameVideo({ M, tw, d, probe, queen, nav, scheme, sf, orient }) {
     if (!lineKey || !window.Openings) return null;
     try { return window.Openings.book().byPly(lineKey.split(' '), M.start.fen).pop() || null; } catch (e) { return null; }
   }, [lineKey, M.start.fen]);
-  const settled = (i) => (i < 0 ? S.tp[0] - 0.3 : i + 1 < S.N ? S.tp[i + 1] - 0.12 : Math.min(S.tp[i] + S.md[i] + 3, CUES.Outro - 0.1));
+  const settled = (i) => window.ChessCore.settledAt(S, CUES, i);
   const goTo = (i) => { setVline(null); tl.setPlaying(false); tl.setTime(settled(Math.max(-1, Math.min(S.N - 1, i)))); };
   // open on the starting position, paused, with every panel in place
   // (before the first paint, so the title card never flashes)
@@ -1306,7 +1306,7 @@ function GameVideo({ M, tw, d, probe, queen, nav, scheme, sf, orient }) {
     f = Math.max(f, MOTION.move(cl01((T - t0) / 0.7)) * (1 - MOTION.move(cl01((T - t1) / 0.7))));
   });
   const c = lastPly(T, S);
-  if (probe) probe.current = { S, c };
+  if (probe) probe.current = { S, CUES, c };
   const flash = video && tw.blunderGlow !== false && c >= 0 && (M.plies[c].cls === 'blunder' || M.plies[c].checkmate) ? Math.max(0, 1 - Math.abs(T - S.tp[c] - S.md[c] - 0.25) / 0.6) : 0;
   const cx = L.board.x + L.board.size / 2, cy = L.board.y + L.board.size / 2, sc = 1 + 0.1 * f;
   const fade = video ? 1 - cl01((T - (authoredTotal - 0.9)) / 0.8) : 1;

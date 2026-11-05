@@ -281,9 +281,9 @@ function QueenPanel({ M, Q, hf, probe, onClose, onOverlay, onSave, left }) {
   const seek = (t) => window.dispatchEvent(new CustomEvent('chess-video:seek', { detail: { time: t } }));
   // Show the board just after move i is played (its highlight and badge settled, before the next move starts)
   const seekAfter = (i) => {
-    const S = probe.current && probe.current.S;
+    const { S, CUES } = probe.current || {};
     if (!S || i >= S.N) return seek(undefined);
-    seek(i + 1 < S.N ? S.tp[i + 1] - 0.12 : S.tp[i] + S.md[i] + 3);
+    seek(window.ChessCore.settledAt(S, CUES, i));
   };
   const show = (at) => { setSel(at); const r = Q.resultAt(at); onOverlay(r ? { at, best: r.best } : null); };
   const markFailed = (at, bad) => setFailed((f) => (bad ? (f.includes(at) ? f : [...f, at]) : f.filter((x) => x !== at)));

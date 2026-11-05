@@ -488,10 +488,10 @@ function GameApp() {
     const ply = seekPly.current; seekPly.current = null;
     let tries = 0, id;
     const go = () => {
-      const S = probe.current && probe.current.S;
+      const { S, CUES } = probe.current || {};
       if (!S || S.N !== MV.plies.length) { if (++tries < 60) id = requestAnimationFrame(go); return; }
       const i = Math.min(ply, S.N) - 1;
-      window.dispatchEvent(new CustomEvent('chess-video:seek', { detail: { time: i < 0 ? 0 : i + 1 < S.N ? S.tp[i + 1] - 0.12 : S.tp[i] + S.md[i] + 3 } }));
+      window.dispatchEvent(new CustomEvent('chess-video:seek', { detail: { time: window.ChessCore.settledAt(S, CUES, i) } }));
     };
     id = requestAnimationFrame(go);
     return () => cancelAnimationFrame(id);

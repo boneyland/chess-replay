@@ -495,6 +495,10 @@
     scenes.forEach((s) => { if (!(s.name in table)) table[s.name] = Math.round(start * 1000) / 1000; start += s.dur; });
     return table;
   }
+  // The time at which ply i has settled on the board (its highlight and badge in place, before the next move starts): what
+  // a jump to a move shows. i = -1 is the starting position, just before the first move; the last move holds no later than
+  // just before the end card. S: schedule(), CUES: cues()
+  const settledAt = (S, CUES, i) => (i < 0 ? S.tp[0] - 0.3 : i + 1 < S.N ? S.tp[i + 1] - 0.12 : Math.min(S.tp[i] + S.md[i] + 3, CUES.Outro - 0.1));
   // Seconds of the video to export for plies from..to: from -1 starts on the title card, to N ends after the end card.
   // A move's clip starts just before it is played and ends once it has settled, as the player shows it on a jump.
   // Returns a function of (from, to), so that the schedule is worked out once.
@@ -502,7 +506,7 @@
     const CUES = cues(TM.scenes), S = schedule(M, CUES, TM.d), N = S.N;
     return (from, to) => {
       const start = from < 0 ? 0 : Math.max(0, S.tp[from] - 0.3);
-      const end = to >= N ? TM.total : to + 1 < N ? S.tp[to + 1] - 0.12 : Math.min(S.tp[to] + S.md[to] + 3, CUES.Outro - 0.1);
+      const end = to >= N ? TM.total : settledAt(S, CUES, to);
       return { start, end: Math.max(start, end) };
     };
   }
@@ -673,5 +677,5 @@
     for (let m = step; 2 * m - ply0 <= N; m += step) if (2 * (m - 1) - ply0 >= 0) ticks.push({ m, at: 2 * (m - 1) - ply0 });
     return ticks;
   }
-  window.ChessCore = { START_FEN, splitGames, fmtDate, fmtLen, hasLegal, inCheck, checkers, evalTicks, parseFen, fenAfter, moveNo, sqIndex: sqIdx, applySan, applyUci, stepFromUci, toFen, playLine, posFromFen, legalTargets, isPromotion, userMove, buildGame, withCommentary, commentarySources, classifyFile, plan, timing, schedule, cues, clipRange, winChance, plyCp, MARK_CLASS, annotatedPgn };
+  window.ChessCore = { START_FEN, splitGames, fmtDate, fmtLen, hasLegal, inCheck, checkers, evalTicks, parseFen, fenAfter, moveNo, sqIndex: sqIdx, applySan, applyUci, stepFromUci, toFen, playLine, posFromFen, legalTargets, isPromotion, userMove, buildGame, withCommentary, commentarySources, classifyFile, plan, timing, schedule, cues, settledAt, clipRange, winChance, plyCp, MARK_CLASS, annotatedPgn };
 })();
