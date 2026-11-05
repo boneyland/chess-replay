@@ -20,12 +20,7 @@ function useTweaks(defaults) {
 // tabs: [{ id, label, body }], falsy ones left out; tab is the open one's id (the first tab when it isn't shown). Every
 // layout gets the same panel: one column under a fixed grid of tabs, of one height whichever tab is open
 function TweaksPanel({ open, onClose, title = 'Settings', tabs, tab, onTab }) {
-  React.useEffect(() => {
-    if (!open) return;
-    const onKey = (e) => { if (e.key === 'Escape') onClose(); };
-    window.addEventListener('keydown', onKey);
-    return () => window.removeEventListener('keydown', onKey);
-  }, [open, onClose]);
+  useKeydown((e) => { if (e.key === 'Escape') { e.preventDefault(); onClose(); } }, { on: open, fields: true, overlay: true });
   const strip = React.useRef(null);
   if (!open) return null;
   const shown = tabs.filter(Boolean), cur = shown.find((x) => x.id === tab) || shown[0];

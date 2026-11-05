@@ -10,19 +10,9 @@ function FreeBar({ pos, side, a, clock, name }) {
   const left = (col, t) => pos.b.filter((p) => p === (col === 'w' ? t.toUpperCase() : t)).length;
   const lost = (col, t) => Math.max(0, FULL_SET[t] - left(col, t));
   const worth = (col) => Object.keys(FULL_SET).reduce((s, t) => s + left(col, t) * VALUE[t], 0);
-  const opp = side === 'w' ? 'b' : 'w', pts = worth(side) - worth(opp), shown = [];
-  Object.keys(FULL_SET).forEach((t) => {
-    for (let i = 0; i < lost(opp, t) - lost(side, t); i++) shown.push(<img key={t + i} src={img(opp, t)} alt="" style={{ width: tx(30), height: tx(30), flex: 'none', marginLeft: shown.length ? -tx(8) : 0, filter: opp === 'b' ? C.rim : 'none' }} />);
-  });
-  return (
-    <div style={{ ...barPlace(side), gap: tx(14), opacity: a }}>
-      <span style={{ width: tx(14), height: tx(14), borderRadius: 2, background: side === 'w' ? '#fff' : '#1c1613', border: `1.5px solid ${C.dim}`, flex: 'none' }} />
-      <span style={{ font: `600 ${tx(20)}px ${SANS}`, color: C.ink, whiteSpace: 'nowrap' }}>{name || (side === 'w' ? 'White' : 'Black')}</span>
-      <span style={{ display: 'flex', alignItems: 'center', marginLeft: tx(6) }}>{shown}</span>
-      {pts > 0 && <span style={{ font: `600 ${tx(16)}px ${MONO}`, color: C.dim, marginLeft: tx(8) }}>+{pts}</span>}
-      {clock && <span className="game-clock" style={{ marginLeft: 'auto', minWidth: tx(72), textAlign: 'center', padding: `${tx(1)}px ${tx(7)}px`, borderRadius: 3, font: `600 ${tx(17)}px ${MONO}`, background: clock.active ? (clock.s < 60 ? C.blunder : 'rgb(251, 247, 241)') : C.off, color: clock.active ? '#15100d' : C.dim, boxShadow: clock.active ? `0 0 0 1px ${C.line}` : 'none' }}>{fmtClock(clock.s)}</span>}
-    </div>
-  );
+  const opp = side === 'w' ? 'b' : 'w', taken = {};
+  Object.keys(FULL_SET).forEach((t) => { taken[t] = lost(opp, t) - lost(side, t); });
+  return <SideBar side={side} a={a} name={name || (side === 'w' ? 'White' : 'Black')} taken={taken} pts={worth(side) - worth(opp)} clock={clock} />;
 }
 
 // the book's name for the position on the board (the last named one on the way there, the start included), or null
@@ -66,7 +56,7 @@ function OpeningExplorer({ board, book, onPlay, onHover }) {
                 onMouseEnter={() => onHover(m.uci)} onMouseLeave={() => onHover(null)} onFocus={() => onHover(m.uci)} onBlur={() => onHover(null)}
                 onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') play(e, m.uci); }}
                 style={{ display: 'flex', alignItems: 'center', gap: tx(14), minWidth: 0, padding: `${tx(3)}px ${tx(6)}px`, borderRadius: 2, cursor: 'pointer' }}>
-                <span style={{ flex: 'none', minWidth: tx(58), boxSizing: 'border-box', textAlign: 'center', padding: `${tx(2)}px ${tx(8)}px`, borderRadius: 2, font: `600 ${tx(17)}px ${MONO}`, background: white ? '#f1ebe1' : '#2a2320', color: white ? '#15100d' : '#efe8de', border: `1px solid ${white ? 'rgba(60,40,20,0.22)' : 'rgba(255,236,214,0.22)'}` }}>{m.san}</span>
+                <span style={rowChip(white)}>{m.san}</span>
                 <span style={{ flex: '1 1 auto', minWidth: 0, font: `400 ${tx(17)}px ${SANS}`, color: C.dim, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{m.name || ''}</span>
               </div>
             ))}
@@ -415,20 +405,14 @@ function FreeBoard({ board, onChange, tw, setTweak, onLichess, sf, nav, orient, 
   React.useEffect(() => { if (nav && nav.listen) nav.listen(); }, [navSig]);
   const keyRef = React.useRef(null);
   keyRef.current = { go, upto, last, promo: input.promo, cancelPromo: input.cancelPromo };
-  React.useEffect(() => {
-    const onKey = (e) => {
-      const tag = e.target && e.target.tagName;
-      if (e.defaultPrevented || e.shiftKey || e.altKey || e.metaKey || e.ctrlKey || tag === 'INPUT' || tag === 'TEXTAREA' || tag === 'SELECT') return;
-      const k = keyRef.current;
-      if (e.code === 'Escape' && k.promo) { e.preventDefault(); k.cancelPromo(); return; }
-      const to = { ArrowLeft: k.upto - 1, ArrowRight: k.upto + 1, Home: -1, End: k.last }[e.code];
-      if (to == null) return;
-      e.preventDefault();
-      if (to >= -1 && to <= k.last && to !== k.upto) k.go(to);
-    };
-    window.addEventListener('keydown', onKey);
-    return () => window.removeEventListener('keydown', onKey);
-  }, []);
+  useKeydown((e) => {
+    if (e.shiftKey || hasModifier(e)) return;
+    if (e.code === 'Escape' && input.promo) { e.preventDefault(); input.cancelPromo(); return; }
+    const to = { ArrowLeft: upto - 1, ArrowRight: upto + 1, Home: -1, End: last }[e.code];
+    if (to == null) return;
+    e.preventDefault();
+    if (to >= -1 && to <= last && to !== upto) go(to);
+  });
   // MoveList draws a game at time T: one second a move, with T just short of the next, so the move shown is current and later ones dim
   const MV = React.useMemo(() => ({ ply0: board.start.ply0, plies: steps.map((s) => ({ san: s.san, cls: 'none', pos: s.pos })) }), [steps, board.start.ply0]);
   // the move after which the position is first dead, marked with a pill on the Moves list

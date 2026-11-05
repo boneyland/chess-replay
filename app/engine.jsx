@@ -19,6 +19,44 @@ const useTimeline = () => React.useContext(TimelineContext);
 const FrameContext = React.createContext({ w: 1440, h: 900, cols: 2, video: false, text: 1, dock: false, setContentH: () => {} });
 const useFrame = () => React.useContext(FrameContext);
 
+// ---------- keys ----------
+// a key pressed in a text field, a drop-down or an editable box is that control's, not a shortcut
+const isTypingTarget = (e) => { const t = e.target; return !!t && (t.tagName === 'INPUT' || t.tagName === 'TEXTAREA' || t.tagName === 'SELECT' || !!t.isContentEditable); };
+// Ctrl, Cmd or Alt with a key belongs to the browser (Ctrl+0, Alt+←), never to a shortcut
+const hasModifier = (e) => e.ctrlKey || e.metaKey || e.altKey;
+
+// A page shortcut: onKey(e) on each keydown while on, always the latest onKey (it may read props and state as they are).
+// A key another handler has already claimed (preventDefault) or one typed in a field never reaches it; fields: let the
+// field's keys through (Esc, which closes things from a field too). A handler that acts on a key claims it with
+// preventDefault, so no other shortcut acts on it as well. overlay: the Esc of something drawn over the board (Settings,
+// Queen's panel, the menus) listens on the document, whose listeners run before the window's where the views' keys are,
+// so Esc closes the overlay alone and not also a previewed line or the editor behind it. A dialog's keys stop in the
+// dialog (DialogBox) and reach neither. The keys are listed for the viewer in SHORTCUTS (free-board.jsx)
+function useKeydown(onKey, { on = true, fields = false, overlay = false } = {}) {
+  const ref = React.useRef(onKey);
+  ref.current = onKey;
+  React.useEffect(() => {
+    if (!on) return;
+    const at = overlay ? document : window;
+    const listen = (e) => { if (!e.defaultPrevented && !e.isComposing && (fields || !isTypingTarget(e))) ref.current(e); };
+    at.addEventListener('keydown', listen);
+    return () => at.removeEventListener('keydown', listen);
+  }, [on, fields, overlay]);
+}
+
+// A menu that closes, while open, on a press outside ref's element or on Esc (an overlay's, so Esc closes only the menu)
+function useDismiss(open, ref, close) {
+  const closeRef = React.useRef(close);
+  closeRef.current = close;
+  useKeydown((e) => { if (e.key === 'Escape') { e.preventDefault(); close(); } }, { on: open, fields: true, overlay: true });
+  React.useEffect(() => {
+    if (!open) return;
+    const away = (e) => { if (ref.current && !ref.current.contains(e.target)) closeRef.current(); };
+    document.addEventListener('pointerdown', away);
+    return () => document.removeEventListener('pointerdown', away);
+  }, [open]);
+}
+
 
 // still: a board without a timeline (the free board): no playing, no seeking keys, and a transport bar of moves only
 // top: an optional line above the frame (the page's Offline tag); the page lays out at the size of the room left
@@ -117,26 +155,21 @@ function Stage({ menu, top, onLayout, duration, background, playback, nav, still
 
   // Keyboard: space = play/pause, shift+arrows = seek 1 s (plain arrows are claimed by the views, which step moves), 0/Home = start,
   // , and . = pause and step one export frame (the times an export from 0:00 draws; from between two, to the one on that side)
-  React.useEffect(() => {
-    const frameStep = (d) => {
+  useKeydown((e) => {
+    if (hasModifier(e)) return;
+    // Space on a focused button, switch or link presses it rather than playing
+    if (e.code === 'Space' && e.target.closest && e.target.closest('button, a[href], summary, [role="button"], [role="switch"], [role="radio"], [role="checkbox"]')) return;
+    if (e.code === 'Space') { e.preventDefault(); togglePlay(); }
+    else if (e.code === 'ArrowLeft' && e.shiftKey) setTime((t) => clamp(t - 1, 0, duration));
+    else if (e.code === 'ArrowRight' && e.shiftKey) setTime((t) => clamp(t + 1, 0, duration));
+    else if (e.key === '0' || e.code === 'Home') setTime(0);
+    else if (e.key === ',' || e.key === '.') {
+      e.preventDefault();
+      const d = e.key === '.' ? 1 : -1;
       setPlaying(false);
       setTime((t) => clamp((d > 0 ? Math.floor(t * fps + 1e-6) + 1 : Math.ceil(t * fps - 1e-6) - 1) / fps, 0, duration));
-    };
-    if (still) return;
-    const onKey = (e) => {
-      const tag = e.target && e.target.tagName;
-      if (e.defaultPrevented || tag === 'INPUT' || tag === 'TEXTAREA' || tag === 'SELECT') return;
-      // Space on a focused button, switch or link presses it rather than playing
-      if (e.code === 'Space' && e.target.closest && e.target.closest('button, a[href], summary, [role="button"], [role="switch"], [role="radio"], [role="checkbox"]')) return;
-      if (e.code === 'Space') { e.preventDefault(); togglePlay(); }
-      else if (e.code === 'ArrowLeft' && e.shiftKey) setTime((t) => clamp(t - 1, 0, duration));
-      else if (e.code === 'ArrowRight' && e.shiftKey) setTime((t) => clamp(t + 1, 0, duration));
-      else if (e.key === '0' || e.code === 'Home') setTime(0);
-      else if ((e.key === ',' || e.key === '.') && !e.ctrlKey && !e.metaKey && !e.altKey) { e.preventDefault(); frameStep(e.key === '.' ? 1 : -1); }
-    };
-    window.addEventListener('keydown', onKey);
-    return () => window.removeEventListener('keydown', onKey);
-  }, [duration, still, fps]);
+    }
+  }, { on: !still });
 
   // Page controls outside the stage (Queen panel, video export) pause and seek through this event;
   // `sync` renders the new frame before dispatchEvent returns, so the export can draw it straight away
@@ -312,4 +345,4 @@ function CompositionStage({ menu, top, onLayout, scenes, playback, bg, nav, stil
   );
 }
 
-Object.assign(window, { Easing, clamp, CompositionStage, useComposition, useTimeline, useFrame });
+Object.assign(window, { Easing, clamp, CompositionStage, useComposition, useTimeline, useFrame, isTypingTarget, hasModifier, useKeydown, useDismiss });
