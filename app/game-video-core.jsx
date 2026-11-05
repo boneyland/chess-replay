@@ -172,7 +172,7 @@ function simulate(M) {
   const board = {}, pieces = [];
   M.start.pos.b.forEach((ch, i) => {
     if (!ch) return;
-    const sq = String.fromCharCode(97 + (i % 8)) + (8 - Math.floor(i / 8));
+    const sq = window.ChessCore.sqName(i);
     const p = { id: sq, color: ch === ch.toUpperCase() ? 'w' : 'b', type: ch.toLowerCase(), home: sq, track: [], captured: -1, promo: null };
     pieces.push(p); board[sq] = p;
   });

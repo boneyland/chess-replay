@@ -13,11 +13,7 @@
   // a ChessCore position as a full FEN: castling rights and en passant square from it (the tables need both) and half,
   // the plies since the last capture or pawn move, which the answer counts towards the fifty-move rule (a win with DTZ
   // 55 is a cursed win with 60 already gone)
-  function fenOf(pos, half = 0) {
-    const ep = pos.ep >= 0 ? String.fromCharCode(97 + (pos.ep % 8)) + (8 - Math.floor(pos.ep / 8)) : '-';
-    const castle = pos.castle == null ? 'KQkq' : pos.castle || '-';
-    return [window.ChessCore.toFen(pos), castle, ep, half, 1].join(' ');
-  }
+  const fenOf = (pos, half = 0) => window.ChessCore.fullFen(pos, { counters: [half, 1] });
   // the cache's key: the FEN without the move number, which doesn't change the answer (the fifty-move count does)
   const tbKey = (fen) => String(fen).trim().split(/\s+/).slice(0, 5).join(' ');
   const tablebaseUrl = (fen) => TB_URL + '?fen=' + encodeURIComponent(fen);

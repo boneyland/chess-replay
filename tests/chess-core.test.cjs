@@ -409,3 +409,25 @@ test('settledAt: a move settles before the next starts, the start before the fir
   assert.equal(CC.clipRange(M, TM)(3, 7).end, at(7));
   assert.equal(CC.clipRange(M, TM)(0, N - 1).end, at(N - 1));
 });
+
+test('fullFen: rights only where king and rook are home, the en passant square any or only where it can be taken', () => {
+  const pos = { ...CC.posFromFen('4k3/8/8/3pP3/8/8/8/4K2R w'), castle: 'KQ', ep: CC.sqIndex('d6') };
+  assert.equal(CC.fullFen(pos), '4k3/8/8/3pP3/8/8/8/4K2R w K d6');
+  assert.equal(CC.fullFen(pos, { ep: 'legal', counters: [0, 30] }), '4k3/8/8/3pP3/8/8/8/4K2R w K d6 0 30');
+  // no white pawn beside d5: the square stays out of a key
+  const none = { ...CC.posFromFen('4k3/8/8/3p4/8/8/8/4K2R w'), castle: 'K', ep: CC.sqIndex('d6') };
+  assert.equal(CC.fullFen(none, { ep: 'legal' }), '4k3/8/8/3p4/8/8/8/4K2R w K -');
+  assert.equal(CC.epCapturable(none), false);
+  // a pawn beside it, pinned to its king along the e-file: taking would leave the file, so not legal either
+  const pinned = { ...CC.posFromFen('4r1k1/8/8/3pP3/8/8/8/4K3 w'), castle: '', ep: CC.sqIndex('d6') };
+  assert.equal(CC.epCapturable(pinned), false);
+  assert.equal(CC.epCapturable(pos), true);
+});
+test('square names, and castling rights lost from the homes', () => {
+  assert.equal(CC.sqName(0), 'a8'); assert.equal(CC.sqName(63), 'h1'); assert.equal(CC.sqName(CC.sqIndex('e4')), 'e4');
+  let pos = CC.posFromFen(CC.START_FEN);
+  for (const u of ['h2h4', 'a7a5', 'h1h3', 'a8a6']) pos = CC.applyUci(pos, u).pos;
+  assert.equal(pos.castle, 'Qk');
+  for (const u of ['e2e3', 'e7e6', 'e1e2']) pos = CC.applyUci(pos, u).pos;
+  assert.equal(pos.castle, 'k');
+});

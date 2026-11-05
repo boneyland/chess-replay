@@ -49,7 +49,11 @@
     }
     return false;
   }
-  const CASTLE_LOSS = { 60: /[KQ]/g, 4: /[kq]/g, 63: /K/g, 56: /Q/g, 7: /k/g, 0: /q/g }; // e1 e8 h1 a1 h8 a8
+  // Each castling right's king and rook squares (e1/h1, e1/a1, e8/h8, e8/a8), the one place they are written; CASTLE_LOSS:
+  // the rights a move from or to each of those squares takes away
+  const CASTLE_HOME = { K: [60, 63], Q: [60, 56], k: [4, 7], q: [4, 0] };
+  const CASTLE_LOSS = {};
+  for (const [r, sqs] of Object.entries(CASTLE_HOME)) for (const sq of sqs) CASTLE_LOSS[sq] = (CASTLE_LOSS[sq] || '') + r;
   function applyMove(pos, from, to, promo) {
     const b = pos.b.slice(), p = b[from], t = p.toLowerCase(), color = colorOf(p);
     let ep = -1, epCap = -1;
@@ -62,7 +66,7 @@
     b[to] = promo ? (color === 'w' ? promo.toUpperCase() : promo.toLowerCase()) : p; b[from] = null;
     // castling rights go when the king or a rook leaves its square, or a rook is taken there
     let castle = pos.castle == null ? 'KQkq' : pos.castle;
-    for (const sq of [from, to]) castle = castle.replace(CASTLE_LOSS[sq] || /^$/, '');
+    for (const sq of [from, to]) if (CASTLE_LOSS[sq]) castle = castle.replace(new RegExp(`[${CASTLE_LOSS[sq]}]`, 'g'), '');
     return { b, ep, epCap, turn: color === 'w' ? 'b' : 'w', castle };
   }
   function toFen(pos) {
@@ -226,8 +230,6 @@
   // ---------- FEN and setups ----------
   // A setup is { b, turn, castle, ep, half, full }: b a board (64 squares, 0 = a8), castle the rights in KQkq order ('' for
   // none), ep a square index or -1. Any placement is a setup; setupProblems says what stops it being a position.
-  // Each castling right's king and rook squares: e1/h1, e1/a1, e8/h8, e8/a8
-  const CASTLE_HOME = { K: [60, 63], Q: [60, 56], k: [4, 7], q: [4, 0] };
   const canCastle = (b, r) => { const [k, rk] = CASTLE_HOME[r], w = r < 'a'; return b[k] === (w ? 'K' : 'k') && b[rk] === (w ? 'R' : 'r'); };
   // the en passant square stands if the pawn that just moved two is in front of it and the squares it crossed are empty
   function epFits(b, turn, ep) {
@@ -289,6 +291,27 @@
   const WIN_K = 0.00368208, WIN_DROP = { inaccuracy: 0.10, mistake: 0.20, blunder: 0.30 };
   const winChance = (cp) => 2 / (1 + Math.exp(-WIN_K * cp)) - 1;
 
+  // Can the side to move take en passant (a legal capture on pos.ep)? Only then does a position's key name the square
+  // (FIDE's repetition rule, python-chess's epd())
+  function epCapturable(pos) {
+    if (pos.ep < 0) return false;
+    // only a pawn beside the one that moved two, one rank behind the square, can take there
+    const pawn = pos.turn === 'w' ? 'P' : 'p', row = pos.turn === 'w' ? 8 : -8, x = pos.ep % 8;
+    for (const dx of [-1, 1]) {
+      const from = pos.ep + row + dx;
+      if (x + dx >= 0 && x + dx < 8 && pos.b[from] === pawn && legalTargets(pos, from).includes(pos.ep)) return true;
+    }
+    return false;
+  }
+  // A position's FEN: castling rights only where the king and rook are still at home ('KQkq' asked where pos records
+  // none), the en passant square pos records (ep: 'legal', only where a capture there is legal), then `counters`
+  // ([half, full]; none gives the four-field form a position's key uses)
+  function fullFen(pos, { ep = 'any', counters = [] } = {}) {
+    const asked = pos.castle == null ? 'KQkq' : pos.castle;
+    const castle = 'KQkq'.split('').filter((r) => asked.includes(r) && canCastle(pos.b, r)).join('') || '-';
+    const e = pos.ep >= 0 && (ep !== 'legal' || epCapturable(pos)) ? idxSq(pos.ep) : '-';
+    return [toFen(pos), castle, e, ...counters].join(' ');
+  }
   // a setup's six-field FEN
   const setupFen = (s) => [toFen({ b: s.b, turn: s.turn }), s.castle || '-', s.ep >= 0 ? idxSq(s.ep) : '-', s.half, s.full].join(' ');
 
@@ -315,8 +338,7 @@
     const s = parseFen(startFen);
     let half = +s.fen.split(' ')[4];
     for (const san of sans) half = /^[a-h]/.test(san) || san.includes('x') ? 0 : half + 1;
-    const castle = pos.castle == null ? 'KQkq' : pos.castle || '-';
-    return [toFen(pos), castle, pos.ep >= 0 ? idxSq(pos.ep) : '-', half, Math.floor((s.ply0 + sans.length) / 2) + 1].join(' ');
+    return fullFen(pos, { counters: [half, Math.floor((s.ply0 + sans.length) / 2) + 1] });
   }
 
   const ends = (N) => ({ intro: (N && N.intro) || '', conclusion: (N && (N.conclusion || N.result)) || '' });
@@ -733,5 +755,5 @@
     for (let m = step; 2 * m - ply0 <= N; m += step) if (2 * (m - 1) - ply0 >= 0) ticks.push({ m, at: 2 * (m - 1) - ply0 });
     return ticks;
   }
-  window.ChessCore = { START_FEN, splitGames, fmtDate, fmtLen, hasLegal, inCheck, checkers, evalTicks, CASTLE_HOME, canCastle, readFen, setupProblems, setupFen, parseFen, fenAfter, moveNo, sqIndex: sqIdx, applySan, applyUci, stepFromUci, toFen, playLine, posFromFen, legalTargets, isPromotion, userMove, buildGame, withCommentary, commentarySources, classifyFile, plan, timing, schedule, cues, settledAt, clipRange, MATE_CP, MATE_STEP, MATE_BAND, mateCp, isMateCp, mateIn, WIN_K, WIN_DROP, winChance, plyCp, MARK_CLASS, pgnClk, pgnMoveNo, pgnReopens, pgnText, annotatedPgn };
+  window.ChessCore = { START_FEN, splitGames, fmtDate, fmtLen, hasLegal, inCheck, checkers, evalTicks, sqName: idxSq, CASTLE_HOME, canCastle, readFen, setupProblems, setupFen, epCapturable, fullFen, parseFen, fenAfter, moveNo, sqIndex: sqIdx, applySan, applyUci, stepFromUci, toFen, playLine, posFromFen, legalTargets, isPromotion, userMove, buildGame, withCommentary, commentarySources, classifyFile, plan, timing, schedule, cues, settledAt, clipRange, MATE_CP, MATE_STEP, MATE_BAND, mateCp, isMateCp, mateIn, WIN_K, WIN_DROP, winChance, plyCp, MARK_CLASS, pgnClk, pgnMoveNo, pgnReopens, pgnText, annotatedPgn };
 })();

@@ -1,7 +1,7 @@
 const test = require('node:test');
 const assert = require('node:assert/strict');
 const { loadUnit } = require('./load.cjs');
-loadUnit('draw-core.js');
+loadUnit('chess-core.js'); loadUnit('draw-core.js');
 const D = window.DrawCore;
 
 test('the modifier held picks the brush', () => {
