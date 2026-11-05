@@ -57,6 +57,72 @@ const droppedFiles = (e) => {
 const GAMES = 'chess-video.games.v1';
 const readGames = () => { try { return window.GamesCore.read(localStorage.getItem(GAMES)); } catch (e) { return []; } };
 
+// The loaded game or board, as stored (STORE): files, the game they build (M; while a board shows, the last good game,
+// the sample on a fresh page, for the hooks that want one), the board restored from them, and the commits that store a
+// change and keep games in My games. stored: readStored()'s files to start from. setErr says what couldn't be stored; onCommit(keep) runs on each commit; clockRef
+// is the stage's { time }, the playhead a loaded game left for a board is kept at
+function useStoredFiles({ stored, setErr, onCommit, clockRef }) {
+  const [files, setFiles] = React.useState(stored);
+  const filesRef = React.useRef(files);
+  filesRef.current = files;
+  const lastGood = React.useRef(null);
+  const built = React.useMemo(() => {
+    if (files.board) return { M: lastGood.current || window.ChessCore.buildGame(SAMPLE) };
+    try { return { M: window.ChessCore.buildGame(files) }; } catch (e) { return { error: e.message }; }
+  }, [files]);
+  // the board's state, restored from its stored form (on a reload, a game's running clock charged for the time away); a
+  // board this page just committed is used as it is
+  const boardSaved = React.useRef(null);
+  const board = React.useMemo(() => (!files.board ? null : boardSaved.current && boardSaved.current.saved === files.board ? boardSaved.current.board : window.BoardCore.restore(files.board, Date.now())), [files.board]);
+  if (built.M) lastGood.current = built.M;
+  const M = built.M || lastGood.current || window.ChessCore.buildGame(SAMPLE);
+  // false when it couldn't be remembered (the error says so)
+  // keep: the editor stays open (an analysis finishing in the background isn't the viewer leaving it)
+  // The loaded game left for a board is kept in the board's place (lastGame: { files, at }, at its playhead) for Back to the
+  // loaded game; the board's own commits carry it, loading or replacing a game drops it
+  const commit = (next, keep) => {
+    if (!next.board) try { window.ChessCore.buildGame(next); } catch (e) { setErr(e.message); return false; }
+    const cur = filesRef.current;
+    let withLast = next;
+    if (next.board && !next.lastGame && !keep) {
+      const { lastGame, fromBoard, fromLastGame, ...game } = cur;
+      const last = cur.board ? lastGame : 'fromLastGame' in cur ? fromLastGame : cur.sample ? null : { files: game, at: clockRef.current ? clockRef.current.time : 0 };
+      if (last) withLast = { ...next, lastGame: last };
+    }
+    setErr(''); setFiles(withLast); onCommit(keep);
+    try {
+      if (next.sample && !next.evalSource) localStorage.removeItem(STORE);
+      else try { localStorage.setItem(STORE, JSON.stringify(withLast)); } catch (e) { if (withLast === next) throw e; setFiles(next); localStorage.setItem(STORE, JSON.stringify(next)); }
+    } catch (e) { setErr(next.board ? 'The board couldn’t be remembered after reload: the browser’s storage is full.' : 'Loaded, but the files are too large to remember after reload.'); return false; }
+    return true;
+  };
+  // a game is kept in My games as it goes; a full storage doesn't stop the board. The new list, or null when it couldn't
+  // be stored (with `fail` shown, unless null)
+  const updateGames = (fn, fail) => {
+    const next = fn(readGames());
+    try { localStorage.setItem(GAMES, JSON.stringify(next)); return next; } catch (e) { if (fail) setErr(fail); return null; }
+  };
+  // only a game that changed (a move, a takeback, its clocks or result) is kept again: stepping through it isn't, so a
+  // finished game deleted while on the board stays deleted. A board that couldn't be stored has said so already
+  const commitBoard = (b) => {
+    const saved = window.BoardCore.save(b), prev = board;
+    boardSaved.current = { saved, board: b };
+    const ok = commit({ board: saved });
+    if (b.game && !(prev && prev.game === b.game && prev.steps === b.steps)) updateGames((list) => window.GamesCore.keep(list, b, Date.now()), ok ? 'This game couldn’t be kept in My games: the browser’s storage is full.' : null);
+  };
+  // a game left (for another board, a loaded game, or by closing the page) is kept with its clock charged up to then, so
+  // Resume goes on from there; the stored board keeps its running clock, which a reload charges for the time away
+  const keepLeft = (b) => { if (b && window.PlayCore.inProgress(b) && window.PlayCore.played(b)) updateGames((list) => window.GamesCore.keep(list, window.PlayCore.pause(b, Date.now()), Date.now()), null); };
+  const boardRef = React.useRef(board);
+  boardRef.current = board;
+  React.useEffect(() => {
+    const hide = () => keepLeft(boardRef.current);
+    window.addEventListener('pagehide', hide);
+    return () => window.removeEventListener('pagehide', hide);
+  }, []);
+  return { files, filesRef, built, board, boardRef, M, commit, commitBoard, updateGames, keepLeft };
+}
+
 // Full screen hides the browser's bars, and the phone layouts grow into the space. The item shows only where the browser
 // says it works: older iPhone Safari had no element full screen (only <video>), iOS 26.5's has it (seen in the Simulator).
 // An installed copy opened full screen (the manifest) has no bars to hide
@@ -136,32 +202,12 @@ function useScheme(pref) {
   return mode;
 }
 
-// Share and export's copy button: an icon that turns to a tick for 1.5 s once the clipboard has taken text();
-// onFail(text) where the clipboard is refused
-function CopyButton({ label, text, onFail }) {
-  const [done, setDone] = React.useState(false);
-  React.useEffect(() => { if (done) { const id = setTimeout(() => setDone(false), 1500); return () => clearTimeout(id); } }, [done]);
-  const run = () => {
-    const v = text();
-    try { navigator.clipboard.writeText(v).then(() => setDone(true), () => onFail(v)); } catch (e) { onFail(v); }
-  };
-  return (
-    <button type="button" className={'twk-btn secondary xfer-copy' + (done ? ' done' : '')} aria-label={label} title={done ? 'Copied' : label} onClick={run}>
-      <svg width="16" height="16" viewBox="0 0 16 16" fill="none" aria-hidden="true"><path d={done ? TICK : COPY} stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round" /></svg>
-    </button>
-  );
-}
-
 function GameApp() {
   const [t, setTweak] = useTweaks(window.TWEAK_DEFAULTS);
-  const flipRef = React.useRef(false);
-  flipRef.current = !!t.flip;
-  const busyRef = React.useRef(false);
   const scheme = useScheme(t.scheme || 'Auto');
   setPalette(scheme);
-  const [files, setFiles] = React.useState(readStored);
-  const filesRef = React.useRef(files);
-  filesRef.current = files;
+  // the stored files are read first: reading them says (storedNote) when a kept game was dropped
+  const [stored] = React.useState(readStored);
   const [err, setErr] = React.useState(() => storedNote);
   const [drag, setDrag] = React.useState(false);
   const [panel, setPanel] = React.useState(false);
@@ -170,6 +216,7 @@ function GameApp() {
   const probe = React.useRef(null);
   const nav = React.useRef(null);
   const clockRef = React.useRef(null); // the stage's { time }, for the playhead a game is left at
+  const { files, filesRef, built, board, boardRef, M, commit, commitBoard, updateGames, keepLeft } = useStoredFiles({ stored, setErr, clockRef, onCommit: (keep) => { if (!keep) setEditing(null); } });
   const seekAfter = React.useRef(null); // the playhead a game just brought back opens at
   const fullscreen = useFullscreen();
   const net = useOnline();
@@ -213,36 +260,19 @@ function GameApp() {
   useDismiss(menu, dockRef, () => setMenu(false));
   // F turns the board round (not in a game, whose board turns by itself)
   useKeydown((e) => {
-    if (e.repeat || (e.key || '').toLowerCase() !== 'f' || hasModifier(e) || busyRef.current || gameRef.current) return;
-    setTweak('flip', !flipRef.current);
+    if (e.repeat || (e.key || '').toLowerCase() !== 'f' || hasModifier(e) || X.video.busy || (board && board.game)) return;
+    setTweak('flip', !t.flip);
   });
-  const lastGood = React.useRef(null);
-  // a free board keeps the last good game (the sample on a fresh page) for the hooks that want one
-  const built = React.useMemo(() => {
-    if (files.board) return { M: lastGood.current || window.ChessCore.buildGame(SAMPLE) };
-    try { return { M: window.ChessCore.buildGame(files) }; } catch (e) { return { error: e.message }; }
-  }, [files]);
-  // the board's state, restored from its stored form (on a reload, a game's running clock charged for the time away); a
-  // board this page just committed is used as it is
-  const boardSaved = React.useRef(null);
-  const board = React.useMemo(() => (!files.board ? null : boardSaved.current && boardSaved.current.saved === files.board ? boardSaved.current.board : window.BoardCore.restore(files.board, Date.now())), [files.board]);
-  if (built.M) lastGood.current = built.M;
-  const gameRef = React.useRef(false);
-  gameRef.current = !!(board && board.game);
   // a game with moves and no result yet is thrown away only after asking
   const playing = !!(board && window.PlayCore.inProgress(board) && window.PlayCore.played(board));
   // (a game left to open the editor was kept then, and isn't asked about again)
   const guard = (run) => { if (playing && !editing) setLeave({ run }); else run(); };
   const guardRef = React.useRef(guard);
   guardRef.current = guard;
-  const M = built.M || lastGood.current || window.ChessCore.buildGame(SAMPLE);
   const hf = useHfAuth();
   const Q = useQueen(M, hf);
   // the engine drop-down: Full runs once its download is kept; until then Lite does
   const full = useFullEngine();
-  // Remove the full engine asks first (getting it back is another 99 MB); any change to the download drops the question
-  const [askRemove, setAskRemove] = React.useState(false);
-  React.useEffect(() => setAskRemove(false), [full.state]);
   const sfKind = !SF_SIMD ? 'asm' : t.sfEngine === 'Full' && full.state === 'ready' ? 'full' : 'lite';
   // threads where the page allows them, lite or full
   const threading = useSfThreading();
@@ -278,50 +308,6 @@ function GameApp() {
   const closeOverlays = () => { setNewMenu(false); setMenu(false); setPanel(false); setQueenOpen(false); };
   React.useEffect(() => { setQueenArrow(null); }, [M]);
 
-  // false when it couldn't be remembered (the error says so)
-  // keep: the editor stays open (an analysis finishing in the background isn't the viewer leaving it)
-  // The loaded game left for a board is kept in the board's place (lastGame: { files, at }, at its playhead) for Back to the
-  // loaded game; the board's own commits carry it, loading or replacing a game drops it
-  const commit = (next, keep) => {
-    if (!next.board) try { window.ChessCore.buildGame(next); } catch (e) { setErr(e.message); return false; }
-    const cur = filesRef.current;
-    let withLast = next;
-    if (next.board && !next.lastGame && !keep) {
-      const { lastGame, fromBoard, fromLastGame, ...game } = cur;
-      const last = cur.board ? lastGame : 'fromLastGame' in cur ? fromLastGame : cur.sample ? null : { files: game, at: clockRef.current ? clockRef.current.time : 0 };
-      if (last) withLast = { ...next, lastGame: last };
-    }
-    setErr(''); setFiles(withLast); if (!keep) setEditing(null);
-    try {
-      if (next.sample && !next.evalSource) localStorage.removeItem(STORE);
-      else try { localStorage.setItem(STORE, JSON.stringify(withLast)); } catch (e) { if (withLast === next) throw e; setFiles(next); localStorage.setItem(STORE, JSON.stringify(next)); }
-    } catch (e) { setErr(next.board ? 'The board couldn’t be remembered after reload: the browser’s storage is full.' : 'Loaded, but the files are too large to remember after reload.'); return false; }
-    return true;
-  };
-  // a game is kept in My games as it goes; a full storage doesn't stop the board. The new list, or null when it couldn't
-  // be stored (with `fail` shown, unless null)
-  const updateGames = (fn, fail) => {
-    const next = fn(readGames());
-    try { localStorage.setItem(GAMES, JSON.stringify(next)); return next; } catch (e) { if (fail) setErr(fail); return null; }
-  };
-  // only a game that changed (a move, a takeback, its clocks or result) is kept again: stepping through it isn't, so a
-  // finished game deleted while on the board stays deleted. A board that couldn't be stored has said so already
-  const commitBoard = (b) => {
-    const saved = window.BoardCore.save(b), prev = board;
-    boardSaved.current = { saved, board: b };
-    const ok = commit({ board: saved });
-    if (b.game && !(prev && prev.game === b.game && prev.steps === b.steps)) updateGames((list) => window.GamesCore.keep(list, b, Date.now()), ok ? 'This game couldn’t be kept in My games: the browser’s storage is full.' : null);
-  };
-  // a game left (for another board, a loaded game, or by closing the page) is kept with its clock charged up to then, so
-  // Resume goes on from there; the stored board keeps its running clock, which a reload charges for the time away
-  const keepLeft = (b) => { if (b && window.PlayCore.inProgress(b) && window.PlayCore.played(b)) updateGames((list) => window.GamesCore.keep(list, window.PlayCore.pause(b, Date.now()), Date.now()), null); };
-  const boardRef = React.useRef(board);
-  boardRef.current = board;
-  React.useEffect(() => {
-    const hide = () => keepLeft(boardRef.current);
-    window.addEventListener('pagehide', hide);
-    return () => window.removeEventListener('pagehide', hide);
-  }, []);
   const newBoard = () => { closeOverlays(); guard(() => { commitBoard(window.BoardCore.fromFen()); }); };
   // the editor opens on the position on the board (empty when there is none); a game in progress is paused for it (and
   // kept, when it has moves, by guard's Leave). play: the Play dialog's { mode, tc, you } when its Set-up position opened
@@ -563,49 +549,15 @@ function GameApp() {
   React.useEffect(() => { setBook(null); const id = setTimeout(() => { try { setBook(window.Openings.book().byPly(M.plies.map((p) => p.uci), M.start.fen)); } catch (e) {} }, 50); return () => clearTimeout(id); }, [M]);
   const soundSet = window.Sfx.SETS.includes(t.soundSet) ? t.soundSet : window.Sfx.SETS[0];
   const soundVolume = Number.isFinite(+t.soundVolume) ? +t.soundVolume : 70;
-  const exportFps = EXPORT_FPS_OPTIONS.includes(+t.exportFps) ? +t.exportFps : 8;
-  const exportFormat = EXPORT_FORMATS.includes(t.exportFormat) ? t.exportFormat : EXPORT_FORMATS[0], webp = exportFormat === 'WebP';
-  // WebP widths, largest first: the page's own (0), half of it ('Half', the default) and fixed ones below the frame's
-  const halfW = Math.round(frameW / 2), wPx = (x) => (x === 'Half' ? halfW : x || frameW), webpPx = (x) => (x === 'Half' ? `${halfW} px (half)` : x ? x + ' px' : `${frameW} px (full)`);
-  const webpWidths = [0].concat(WEBP_WIDTHS.filter((x) => x < frameW && x !== halfW), 'Half').sort((a, b) => wPx(b) - wPx(a));
-  const webpWidth = webpWidths.includes(t.webpWidth) ? t.webpWidth : webpWidths.includes(+t.webpWidth) ? +t.webpWidth : 'Half';
-  // the old setting was a ratio, 'Full' or 'Half': carry it over once
   // the page's rem is 16 px × this, so the overlays (dock, bars, Settings, menus, dialogs) follow the Text size setting; the panels get it through Stage's text
   React.useLayoutEffect(() => { document.documentElement.style.setProperty('--text', String(LayoutCore.textScale(t.textSize))); }, [t.textSize]);
-  React.useEffect(() => { if (t.webpSize !== undefined) { setTweak('webpWidth', t.webpSize === 'Full' ? 0 : 'Half'); setTweak('webpSize', undefined); } }, []);
-  const webpQuality = Math.min(WEBP_QUALITY.max, Math.max(WEBP_QUALITY.min, +t.webpQuality || 75));
-  const mp4Quality = MP4_QUALITIES.includes(t.mp4Quality) ? t.mp4Quality : 'High';
-  const mp4Vfr = t.mp4Vfr === true;
-  const video = useVideoExport({ fps: exportFps, format: exportFormat, webp: { width: webpWidth, quality: webpQuality }, mp4Quality, mp4Vfr: mp4Vfr && !webp, stem: fileStem, save: (name, blob) => saveFile(name, blob, blob.type) });
-  busyRef.current = video.busy;
   const pieces = usePieceSet(t.pieceSet);
   const pieceSet = window.PieceSets.byId(t.pieceSet);
   const boardTheme = window.BoardThemes.byId(t.boardTheme);
   const boardAdj = window.BoardThemes.adjust({ brightness: t.boardBrightness, contrast: t.boardContrast, hue: t.boardHue });
+  const X = useExportSettings({ t, setTweak, M, MV, TM, frameW, stem: fileStem, saveFile, pieceSet, boardTheme, boardAdj, soundSet, soundVolume }), video = X.video;
   const boardLook = useBoardLook(boardTheme.id, boardAdj, video.busy);
-  // what an export would carry under a non-commercial licence (CC BY-NC-SA): such a video may not be used commercially
-  const ncParts = [window.PieceSets.NON_COMMERCIAL.includes(pieceSet.id) && `${pieceSet.name} pieces`, !webp && t.sound !== false && window.Sfx.NON_COMMERCIAL.includes(soundSet) && `${soundSet.replace(/^Lichess /, '')} sounds`].filter(Boolean);
-  const ncNote = ncParts.length ? `The ${ncParts.join(' and ')} are under a non-commercial licence (CC BY-NC-SA): a video made with ${ncParts.length > 1 ? 'them' : 'it'} may not be used commercially, on a monetised channel for one, and should credit ${ncParts.length > 1 ? 'them' : 'it'} (Settings › View and Sound name the authors). ` : '';
-  // the stretch to export, in plies: from -1 starts on the title card, to N (the ply count) ends after the end card
-  const [clip, setClip] = React.useState({ from: -1, to: Infinity });
-  React.useEffect(() => { setClip({ from: -1, to: Infinity }); }, [M]);
-  const NP = MV.plies.length, clipFrom = Math.min(clip.from, NP - 1), clipTo = Math.max(clipFrom, Math.min(clip.to, NP));
-  const clipOpts = React.useMemo(() => {
-    const at = window.ChessCore.clipRange(MV, TM), ply = MV.plies.map((p, i) => ({ i, l: label(MV, i), t: at(i, i) }));
-    return {
-      at, S: window.ChessCore.schedule(MV, window.ChessCore.cues(TM.scenes), TM.d),
-      from: [{ i: -1, s: 'Title card · 0:00' }].concat(ply.map((o) => ({ i: o.i, s: `${o.l} · ${fmtLen(o.t.start)}` }))),
-      to: ply.map((o) => ({ i: o.i, s: `${o.l} · ${fmtLen(o.t.end)}` })).concat([{ i: NP, s: `End card · ${fmtLen(TM.total)}` }]),
-    };
-  }, [MV, TM]);
-  const clipT = clipOpts.at(clipFrom, clipTo), clipFromOpts = clipOpts.from, clipToOpts = clipOpts.to.filter((o) => o.i >= clipFrom);
-  const plyTag = (i) => `${Math.floor((MV.ply0 + i) / 2) + 1}${(MV.ply0 + i) % 2 ? 'b' : 'w'}`;
-  const clipSuffix = clipFrom < 0 && clipTo >= NP ? '' : `_${clipFrom < 0 ? 'start' : plyTag(clipFrom)}-${clipTo >= NP ? 'end' : plyTag(clipTo)}`;
-  // a picture board is drawn through the sliders first: the export paints that picture, not the page's CSS filter
-  const exportVideo = () => { setShareOpen(null); setPanel(false); setQueenOpen(false); window.BoardThemes.render(boardTheme.id, boardAdj).catch(() => null).then(() => video.run({ start: clipT.start, end: clipT.end, suffix: clipSuffix, audio: t.sound === false || webp ? null
-    : () => window.Sfx.renderTrack(window.Sfx.fetchSound, soundSet, window.Sfx.track(MV, clipOpts.S, clipT.start, clipT.end), soundVolume, clipT.end - clipT.start) })); };
-  const depthText = (d) => (d == null ? 'No limit' : String(d)), SF_KEYS = ['sfDepth', 'sfTime', 'sfOwnDepth', 'sfOwnTime', 'sfLines', 'sfHash', 'sfThreads'];
-  const sfChanged = JSON.stringify(ES) !== JSON.stringify(window.AnalysisCore.engineSettings(window.TWEAK_DEFAULTS, sfKind, threading, hashChoices));
+  const exportVideo = () => { setShareOpen(null); setPanel(false); setQueenOpen(false); X.run(); };
   const askQueen = () => { setQueenOpen((q) => !q); setPanel(false); };
   // the Queen panel opens centred over its button in the transport bar, or over the menu button when the dock is folded
   // into a menu (a phone frame, or a window under 900 px), kept on screen
@@ -624,57 +576,10 @@ function GameApp() {
   }, [queenOpen, phone]);
   const sf = { engine, own: ES.own, game: ES.game, book, status: engine.status, why: engine.why, run: analysis, start: analysis.start, stop: analysis.stop, estimateMin: analysis.estimateMin };
 
-  // The Analysis panel's engine menu (EngineMenuContext): the Lite/Full choice in its title row, and these settings in
-  // the panel while the menu is open; the explanations sit behind ⓘ. A game has no engine menu.
-  const MB = sfMB(full.total), stopsAt = 'Each search stops at its depth or time limit, whichever comes first.';
-  const engineBody = <>
-    {!SF_SIMD && <div className="twk-note twk-err">{SF_ASM_NOTE}</div>}
-    {full.offered && <>
-      {t.sfEngine === 'Full' && full.state === 'absent' && <TweakButton label={`Download full Stockfish · ${MB} MB`} onClick={full.download}
-        info={`Full Stockfish 19 is stronger than Lite, with the big neural network. It is a ${MB} MB download from unpkg.com, kept in this browser for next time and offline. Until it is downloaded, Lite runs.`} />}
-      {full.state === 'downloading' && <>
-        <div className="twk-note" role="status">Downloading full Stockfish · {sfMB(full.got)} of {MB} MB</div>
-        <div className="twk-progress"><i style={{ width: `${(100 * full.got / full.total).toFixed(1)}%` }} /></div>
-        <TweakButton secondary label="Cancel the download" onClick={full.cancel} />
-      </>}
-      {full.err && <div className="twk-note twk-err">{full.err}</div>}
-      {full.state === 'ready' && (askRemove ? <>
-        <div className="twk-note" role="alert">Remove the full engine? You’d need to download {MB} MB again to use it.</div>
-        <div className="twk-pair">
-          <TweakButton danger label="Remove" onClick={full.remove} />
-          <TweakButton secondary label="Keep" onClick={() => setAskRemove(false)} />
-        </div>
-      </> : <TweakButton secondary label={`Remove the full engine download · ${MB} MB`} onClick={() => setAskRemove(true)}
-        info={`Full Stockfish is kept in this browser (${MB} MB) and takes a few seconds to start. It reaches less depth than Lite in the same time but judges positions better.`} />)}
-    </>}
-    {/* the game-analysis limits apply only to a loaded game; the own-move ones only on the free board and your own moves in a replay */}
-    {!board && <>
-      <TweakSlider id="tw-sf-depth" label="Game analysis: depth" value={ES.game.depth} stops={window.AnalysisCore.DEPTHS} format={depthText} onChange={(v) => setTweak('sfDepth', v)} info={`For “Analyse with Stockfish”. ${stopsAt}`} />
-      <TweakSlider id="tw-sf-time" label="Game analysis: time limit per position" value={ES.game.time_limit} stops={window.AnalysisCore.SECONDS} unit="s" onChange={(v) => setTweak('sfTime', v)} info={`For “Analyse with Stockfish”. ${stopsAt}`} />
-    </>}
-    <TweakSlider id="tw-sf-odepth" label="Your moves: depth" value={ES.own.depth} stops={window.AnalysisCore.DEPTHS} format={depthText} onChange={(v) => setTweak('sfOwnDepth', v)} info={`For the moves you play on the board${board ? ': on the free board every move is rated with these' : ''}. ${stopsAt}`} />
-    <TweakSlider id="tw-sf-otime" label="Your moves: time limit per position" value={ES.own.time_limit} stops={window.AnalysisCore.SECONDS} unit="s" onChange={(v) => setTweak('sfOwnTime', v)} info={`For the moves you play on the board. ${stopsAt}`} />
-    <TweakSelect id="tw-sf-lines" label="Your moves: lines" value={String(ES.own.lines)} options={window.AnalysisCore.LINES.map(String)} onChange={(v) => setTweak('sfLines', parseInt(v, 10))}
-      info="Above one, Stockfish shows that many best moves, with an arrow each. Every line takes its share of the search, so each one goes less deep in the same time." />
-    <TweakSelect id="tw-sf-hash" label="Hash table" value={ES.game.hash_mb + ' MB'} options={hashChoices.map((x) => x + ' MB')} onChange={(v) => { setHashNote(''); setTweak('sfHash', parseInt(v, 10)); }}
-      info={`Helps long searches${SF_HASH_CHOICES.length < window.AnalysisCore.HASH_MB.length ? '; larger sizes aren’t offered on this device, a touchscreen with no mouse or touchpad, or short of memory' : '; a big table on a device short of memory falls back to 64 MB'}.`} />
-    {hashNote && <div className="twk-note twk-err" role="status">{hashNote}</div>}
-    {/* sfThreads null (the default): half the cores, at most 4 */}
-    <TweakSelect id="tw-sf-threads" label="Threads" value={String(ES.game.threads)} options={window.AnalysisCore.threadChoices(threading.cores).map(String)} disabled={!threading.on} onChange={(v) => setTweak('sfThreads', parseInt(v, 10))}
-      info="How many of your processor’s threads Stockfish uses. More threads let it look at more positions in the same time, which helps most in sharp positions, but keep your computer busier." />
-    {!threading.on && <div className="twk-note">{threading.reason}</div>}
-    {sfChanged && <TweakButton secondary label="Reset engine settings" onClick={() => SF_KEYS.forEach((k) => setTweak(k, window.TWEAK_DEFAULTS[k]))} />}
-    {!board && (analysis.state === 'running'
-      ? <>
-        <div className="twk-note">Analysing {analysis.done} of {analysis.total} positions{analysis.etaSec != null ? ' · ' + fmtEta(analysis.etaSec) : ''}</div>
-        <TweakButton secondary label="Stop the analysis" onClick={analysis.stop} />
-      </>
-      : <TweakButton disabled={engine.status === 'unavailable'} label={`${analysis.resumeAt ? `Resume analysis from move ${Math.floor((MV.ply0 + analysis.resumeAt) / 2) + 1}` : files.analysis ? 'Analyse again' : 'Analyse with Stockfish'} · about ${analysis.estimateMin} min`} onClick={analysis.start}
-        info={`${engineLabel(ES.game.name)} runs in your browser. New settings apply to the next analysis${files.analysis ? ', which replaces this one' : ''}; a stopped analysis resumes with its original settings.`} />)}
-    {!board && analysis.err && <div className="twk-note twk-err">{analysis.err}</div>}
-    {!board && files.analysis && analysis.state !== 'running' && <TweakButton secondary label="Remove analysis" onClick={() => commit({ ...files, analysis: null, analysisName: null, evalSource: null })} />}
-    <div className="twk-note">Stockfish is free software under the GPL-3.0; <a href="https://github.com/nmrugg/stockfish.js" target="_blank" rel="noopener">source</a>.</div>
-  </>;
+  // the Analysis panel's engine menu (EngineMenuContext): the Lite/Full choice in its title row, and EngineSettings in the
+  // panel while the menu is open
+  const engineBody = <EngineSettings t={t} setTweak={setTweak} full={full} ES={ES} sfKind={sfKind} threading={threading} hash={{ choices: hashChoices, note: hashNote, clearNote: () => setHashNote('') }}
+    analysis={analysis} engine={engine} files={files} M={MV} board={board} onRemoveAnalysis={() => commit({ ...files, analysis: null, analysisName: null, evalSource: null })} />;
   // picking Full before it is downloaded opens the menu, where its Download button is
   const engineMenu = { name: engineLabel(ES.game.name), body: engineBody,
     pick: full.offered ? { value: t.sfEngine === 'Full' ? 'Full' : 'Lite', options: [{ value: 'Lite', label: engineLabel(window.AnalysisCore.ENGINE_NAMES.lite) }, { value: 'Full', label: engineLabel(window.AnalysisCore.ENGINE_NAMES.full) + ' full' }],
@@ -751,7 +656,7 @@ function GameApp() {
   return (
     <React.Fragment>
       <EngineMenuContext.Provider value={board && board.game ? null : engineMenu}>
-      <CompositionStage clock={clockRef} fps={exportFps} nav={nav} forceVideo={video.busy} text={LayoutCore.textScale(t.textSize)} top={!net.online && <span className="net-chip" role="status" title={OFFLINE_NOTE}>Offline</span>} menu={<React.Fragment>{!(phone && short) && <SoundButton on={t.sound !== false} onChange={(v) => setTweak('sound', v)} />}{phone ? menuEl : deskDock}</React.Fragment>} onLayout={onLayout} scenes={scenes} playback={PLAYBACK} bg={C.bg} still={!!board || !!editing}>
+      <CompositionStage clock={clockRef} fps={X.exportFps} nav={nav} forceVideo={video.busy} text={LayoutCore.textScale(t.textSize)} top={!net.online && <span className="net-chip" role="status" title={OFFLINE_NOTE}>Offline</span>} menu={<React.Fragment>{!(phone && short) && <SoundButton on={t.sound !== false} onChange={(v) => setTweak('sound', v)} />}{phone ? menuEl : deskDock}</React.Fragment>} onLayout={onLayout} scenes={scenes} playback={PLAYBACK} bg={C.bg} still={!!board || !!editing}>
         {editing
           ? <EditBoard setup={editing.setup} onChange={editTo} onDone={editDone} onCancel={editCancel} fenText={editing.text} onFenText={editText} fenMsg={editing.msg} doneLabel={editing.play ? 'Start game' : 'Done'} orient={t.flip ? 'b' : 'w'} nav={nav} overlay={panel || newMenu || menu || queenOpen}
             image={editing.image} onTurn={editTurn} onBackToCrop={backToCrop} />
@@ -792,185 +697,21 @@ function GameApp() {
       {playOpen && <PlayDialog key={playOpen} mode={playOpen} setUpFen={board && board.fen !== window.ChessCore.START_FEN ? board.fen : null} here={playHere} clock={t.playClock} side={t.playSide} initial={playInit} onStart={playStart} onSetUp={playSetUp} onFromImage={visionOk ? playFromImage : null} onClose={closePlay} />}
       {vision && <VisionDialog again={vision.again} onRead={visionRead} onClose={visionClose} />}
       {keysOpen && <ShortcutsDialog onClose={closeKeys} />}
-      {shareOpen && (
-        <DialogBox label="Share and export" className="xfer-box" onClose={closeShare}>
-          <TweakSection label="FEN">
-            <div className="xfer-row">
-              <input className="xfer-field" type="text" readOnly value={shareOpen.fen} aria-label="FEN" spellCheck={false} onFocus={(e) => e.target.select()} />
-              <CopyButton label="Copy FEN" text={() => shareOpen.fen} onFail={copyFailed('FEN')} />
-            </div>
-          </TweakSection>
-          <TweakSection label="PGN">
-            {board ? (
-              <div className="xfer-row">
-                <TweakButton secondary label="Download" onClick={saveBoardPgn} />
-                <CopyButton label="Copy PGN" text={boardPgn} onFail={copyFailed('PGN')} />
-              </div>
-            ) : <>
-              <div className="xfer-row">
-                <TweakButton secondary label="Download annotated" onClick={savePgn} />
-                <CopyButton label="Copy annotated PGN" text={annotatedPgn} onFail={copyFailed('PGN')} />
-              </div>
-              <div className="xfer-row">
-                <TweakButton secondary label="Download raw" onClick={saveRawPgn} />
-                <CopyButton label="Copy raw PGN" text={rawPgn} onFail={copyFailed('PGN')} />
-              </div>
-              <div className="twk-note">Annotated: the marks, evals, clocks, commentary, Queen’s answers and better lines. Raw: the tags and the moves alone.</div>
-            </>}
-          </TweakSection>
-          {!board && browserAnalysis && <TweakSection label="Analysis">
-            <TweakButton secondary label="Download analysis" onClick={saveAnalysis} />
-          </TweakSection>}
-          {!board ? <TweakSection label="Export video">
-        <TweakRadio id="tw-format" label="Export as" value={exportFormat} options={EXPORT_FORMATS} onChange={(v) => setTweak('exportFormat', v)} />
-        {webp && <>
-          <TweakSelect id="tw-webp-width" label="WebP width" value={webpPx(webpWidth)} options={webpWidths.map(webpPx)} onChange={(v) => setTweak('webpWidth', webpWidths.find((x) => webpPx(x) === v))} />
-          <TweakSlider id="tw-webp-q" label="WebP quality" value={webpQuality} min={WEBP_QUALITY.min} max={WEBP_QUALITY.max} step={WEBP_QUALITY.step} format={(v) => (v >= 100 ? 'Lossless' : v)} onChange={(v) => setTweak('webpQuality', v)} />
-        </>}
-        {!webp && <TweakSelect id="tw-mp4-q" label="MP4 quality" value={mp4Quality} options={MP4_QUALITIES} onChange={(v) => setTweak('mp4Quality', v)} />}
-        {!webp && <TweakToggle id="tw-mp4-vfr" label="Variable frame rate" info="A frame that doesn’t change (a pause, the title and end cards) isn’t encoded: the frame before is held for its time. The frame rate is then the most frames a second a move’s animation gets. Some players and editors seek a variable-rate video less smoothly." value={mp4Vfr} onChange={(v) => setTweak('mp4Vfr', v)} />}
-        <TweakSelect id="tw-fps" label={!webp && mp4Vfr ? 'Export frame rate (at most)' : 'Export frame rate'} value={exportFps + ' fps'} options={EXPORT_FPS_OPTIONS.map((f) => f + ' fps')} onChange={(v) => setTweak('exportFps', parseInt(v, 10))} />
-        <div className="twk-pair">
-          <TweakSelect id="tw-clip-from" label="From" aria="Export from" value={clipFromOpts.find((o) => o.i === clipFrom).s} options={clipFromOpts.map((o) => o.s)} onChange={(v) => setClip((c) => ({ ...c, from: clipFromOpts.find((o) => o.s === v).i }))} />
-          <TweakSelect id="tw-clip-to" label="To" aria="Export to" value={clipToOpts.find((o) => o.i === clipTo).s} options={clipToOpts.map((o) => o.s)} onChange={(v) => setClip((c) => ({ ...c, to: clipToOpts.find((o) => o.s === v).i }))} />
-        </div>
-        <TweakButton label={`${webp ? 'Export animated WebP (' : 'Export video (MP4, '}${!webp && mp4Vfr ? 'up to ' : ''}${exportFps} fps${!webp && mp4Vfr ? ', variable' : ''}, ${fmtLen(clipT.end - clipT.start)})`} disabled={video.busy} onClick={exportVideo} />
-        <div className="twk-note">Renders every frame in this tab: about {fmtLen(Math.ceil((clipT.end - clipT.start) * exportFps * 0.04))} for {clipSuffix ? 'these moves' : 'this game'}, longer on a phone. Higher frame rates are smoother but slower. Each move’s clip runs from just before it until the board settles. {ncNote}{webp ? 'No sound, and it loops; a smaller width or quality makes a smaller file, and Lossless a much larger one.' : 'Includes move sounds when on; a lower quality makes a smaller file.'}</div>
-          </TweakSection> : !window.PlayCore.inProgress(board) && <TweakSection label="Export video">
-            <div className="twk-note">{board.steps.length ? 'A video or WebP is made from a loaded game: replay these moves as one, then export it here.' : 'Play some moves first; then they can be replayed as a game and exported as a video.'}</div>
-            {board.steps.length > 0 && <TweakButton label="Replay these moves as a game" onClick={() => { setShareOpen(null); boardAsGame(); }} />}
-          </TweakSection>}
-          <div className="fen-btns"><button type="button" className="twk-btn secondary" data-autofocus onClick={closeShare}>Close</button></div>
-        </DialogBox>
-      )}
+      {shareOpen && <ShareDialog fen={shareOpen.fen} board={board} x={X} setTweak={setTweak} onFail={copyFailed} onClose={closeShare} onExport={exportVideo}
+        onReplay={() => { setShareOpen(null); boardAsGame(); }}
+        pgn={{ board: boardPgn, saveBoard: saveBoardPgn, annotated: annotatedPgn, saveAnnotated: savePgn, raw: rawPgn, saveRaw: saveRawPgn, saveAnalysis: browserAnalysis ? saveAnalysis : null }} />}
       {gamesOpen && <MyGamesDialog games={gamesOpen} current={board && window.PlayCore.inProgress(board) ? board.game.id : null} onReplay={replayGame} onResume={resumeGame} onDelete={deleteGame} onClose={closeGames} />}
       {leave && <LeaveDialog onStay={() => setLeave(null)} onLeave={() => { const run = leave.run; setLeave(null); keepLeft(board); run(); }} />}
       {queenOpen && !board && <QueenPanel M={M} Q={Q} hf={hf} probe={probe} onClose={closeQueen} onOverlay={setQueenArrow} onSave={saveQueen} left={queenLeft} />}
       <TweaksPanel open={panel} onClose={closePanel} tab={panelTab} onTab={setPanelTab} tabs={[
-        { id: 'game', label: 'Game', body: <>
-          <div className={shownErr ? 'twk-note twk-err' : 'twk-note'}>{shownErr || status}</div>
-          <TweakButton label="Import game" onClick={importGame} />
-          {board && board.game && <div className="twk-note">{board.game.mode === 'stockfish' ? 'Stockfish 19 plays the other side at full strength (there is no strength setting) and quietly rates your moves; Analyse on the free board shows its eval once the game ends.' : 'Stockfish is off during a game; Analyse on the free board brings it back once the game ends.'}</div>}
-          {!board && <div className="twk-note">Uses the PGN’s own evals (Lichess [%eval] or cutechess +0.25/20). Without them, run “Analyse with Stockfish” from the Analysis panel’s ☰ menu. Saved analysis, notes and Queen files load here too.</div>}
-          {board && !window.PlayCore.inProgress(board) && <TweakButton label="Replay these moves as a game" disabled={!board.steps.length} onClick={boardAsGame} />}
-          {board && !window.PlayCore.inProgress(board) && <div className="twk-note">{board.steps.length ? 'Opens every move on the board as a game: watch it, analyse it with Stockfish, and export it as a video or WebP. The board comes back with “Back to the free board”.' : 'Play some moves first; then they can be replayed and exported as a video.'}</div>}
-          {board && files.lastGame && <TweakButton secondary label="Back to the loaded game" onClick={backToGame} />}
-          {!board && files.fromBoard && <TweakButton secondary label="Back to the free board" onClick={() => { const b = window.BoardCore.restore(files.fromBoard); if (b) commitBoard(b); }} />}
-          {!files.sample && <TweakButton secondary label="Back to sample game" onClick={() => guard(() => commit(SAMPLE))} />}
-          {!board && M.canChooseSource && (
-            <TweakRadio id="tw-source" label="Evaluations from" value={M.evalSource === 'pgn' ? 'PGN' : 'Analysis'} options={['Analysis', 'PGN']} onChange={(v) => commit({ ...files, evalSource: v === 'PGN' ? 'pgn' : 'analysis' })} />
-          )}
-          {!board && M.gameCount > 1 && (
-            <TweakSelect id="tw-game" label="Game in PGN" value={String((files.gameIndex || 0) + 1)} options={Array.from({ length: M.gameCount }, (_, i) => String(i + 1))} onChange={(v) => commit({ ...files, gameIndex: +v - 1, analysis: null, analysisName: null })} />
-          )}
-          <TweakSection label="About">
-            <div className="twk-note">This player is free software under the GPL-3.0-or-later; <a href="https://github.com/boneyland/chess-replay" target="_blank" rel="noopener">source on GitHub</a>. Some parts aren’t covered by the GPL: the piece sets other than Cburnett have their own licences, some of them non-commercial (see View › Pieces), and so do the lisp move sounds (see the Sound tab) and the board reader’s model (Position from image, <code>vision/</code>), <a href="https://github.com/JSeytre/chessqueries" target="_blank" rel="noopener">ChessQueries</a>’ ChessQ Lite by Joël Seytre, under <a href="https://polyformproject.org/licenses/noncommercial/1.0.0/" target="_blank" rel="noopener">PolyForm Noncommercial 1.0.0</a>: non-commercial use only (Required Notice: Copyright (c) 2026 Joël Seytre). It is built on Meta AI’s <a href="https://github.com/facebookresearch/dinov2" target="_blank" rel="noopener">DINOv2</a> (Copyright (c) Meta Platforms, Inc. and affiliates), under the <a href="https://www.apache.org/licenses/LICENSE-2.0" target="_blank" rel="noopener">Apache License 2.0</a>.</div>
-          </TweakSection>
-          {/* every setting back to its default; the kept games, the loaded game, Queen's answers, sign-ins and the engine download stay, and so does the engine choice */}
-          <TweakButton danger label="Reset all settings" onClick={() => setResetOpen(true)} />
-        </> },
-        { id: 'view', label: 'View', body: <>
-          <TweakSection label="Appearance">
-            <TweakRadio id="tw-scheme" label="Theme" value={t.scheme || 'Auto'} options={['Auto', 'Light', 'Dark']} onChange={(v) => setTweak('scheme', v)} />
-            <TweakRadio id="tw-text-size" label="Text size" value={t.textSize || 'Default'} options={Object.keys(LayoutCore.TEXT_SIZES)} onChange={(v) => setTweak('textSize', v)} />
-            <PiecePicker value={pieceSet.id} onChange={(id) => setTweak('pieceSet', id)} />
-            <div className="twk-note">{pieceSet.name} by {pieceSet.home ? <a href={pieceSet.home} target="_blank" rel="noopener">{pieceSet.by}</a> : pieceSet.by}, under <a href={pieceSet.licenceUrl} target="_blank" rel="noopener">{pieceSet.licence}</a>{pieceSet.id === window.PieceSets.DEFAULT ? '' : <>, from <a href="https://github.com/lichess-org/lila" target="_blank" rel="noopener">Lichess’s source</a></>}{window.PieceSets.NON_COMMERCIAL.includes(pieceSet.id) ? ' (non-commercial: a video exported with it may not be used commercially)' : ''}.{pieces.failed ? ' Couldn’t load it (offline?): the board keeps the pieces it had.' : ''}</div>
-            {/* the note stays under the grid, not carried to the next column */}
-            <div className="twk-keep">
-              <BoardPicker value={boardTheme.id} adj={boardAdj} onChange={(id) => setTweak('boardTheme', id)} />
-              <div className="twk-note">{boardTheme.name}{boardTheme.id === window.BoardThemes.DEFAULT ? '' : <>, from <a href="https://github.com/lichess-org/lila" target="_blank" rel="noopener">Lichess’s source</a>, by the lila authors and <a href="https://lichess.org/@/pirouetti" target="_blank" rel="noopener">pirouetti</a> under <a href="https://www.gnu.org/licenses/agpl-3.0.html" target="_blank" rel="noopener">AGPL-3.0-or-later</a></>}. The sliders change the board’s colours, in exports too.{boardLook.failed ? ' Couldn’t load it (offline?): the board keeps the one it had.' : ''}</div>
-            </div>
-            <TweakSlider id="tw-board-brightness" label="Brightness" value={boardAdj.brightness} min={window.BoardThemes.SLIDERS.brightness.min} max={window.BoardThemes.SLIDERS.brightness.max} step={window.BoardThemes.SLIDERS.brightness.step} unit="%" onChange={(v) => setTweak('boardBrightness', v)} />
-            <TweakSlider id="tw-board-contrast" label="Contrast" value={boardAdj.contrast} min={window.BoardThemes.SLIDERS.contrast.min} max={window.BoardThemes.SLIDERS.contrast.max} step={window.BoardThemes.SLIDERS.contrast.step} unit="%" onChange={(v) => setTweak('boardContrast', v)} />
-            <TweakSlider id="tw-board-hue" label="Hue" value={boardAdj.hue} min={window.BoardThemes.SLIDERS.hue.min} max={window.BoardThemes.SLIDERS.hue.max} step={window.BoardThemes.SLIDERS.hue.step} format={(v) => `+ ${Math.round(v * 3.6)}°`} onChange={(v) => setTweak('boardHue', v)} />
-            {!window.BoardThemes.isDefault(boardAdj) && <TweakButton secondary label="Reset colours to default" onClick={() => { setTweak('boardBrightness', 100); setTweak('boardContrast', 100); setTweak('boardHue', 0); }} />}
-          </TweakSection>
-          {!(board && board.game) && <TweakSection label="Board">
-            {board ? <TweakToggle id="tw-flip" label="Flip board" value={!!t.flip} onChange={(v) => setTweak('flip', v)} /> : <>
-              <TweakToggle id="tw-flip" label="Flip board" value={!!t.flip} onChange={(v) => setTweak('flip', v)} />
-              <TweakToggle id="tw-arrows" label="Best-move arrows" value={t.bestArrows} onChange={(v) => setTweak('bestArrows', v)} />
-              <TweakToggle id="tw-push" label="Camera push on blunders" value={t.cameraPush} onChange={(v) => setTweak('cameraPush', v)} />
-              <TweakToggle id="tw-glow" label="Red glow on blunders and mates" value={t.blunderGlow !== false} onChange={(v) => setTweak('blunderGlow', v)} />
-              <TweakToggle id="tw-queen" label="Queen in the video" info="Shows Queen’s comments and lines on the moves it has analysed; those moves stay on screen longer." value={queenInVideo} onChange={(v) => setTweak('queenInVideo', v)} />
-            </>}
-          </TweakSection>}
-          {!board && <TweakSection label="Pace">
-            <div className="twk-note">Video length {fmtLen(TM.total)}{TM.capped ? ' (capped at 5:00)' : ''}</div>
-            <TweakSlider id="tw-spm" label="Seconds per move" value={t.secondsPerMove} min={0.5} max={4} step={0.1} unit="s" onChange={(v) => setTweak('secondsPerMove', v)} />
-            <TweakSlider id="tw-hold" label="Extra hold on !/? moves and uncommented mates" value={t.keyHold} min={0} max={6} step={0.5} unit="s" onChange={(v) => setTweak('keyHold', v)} />
-            <TweakToggle id="tw-fast" label="Faster opening" value={t.fastOpening} onChange={(v) => setTweak('fastOpening', v)} />
-          </TweakSection>}
-        </> },
-        { id: 'online', label: 'Online', body: <>
-          <TweakToggle id="tw-tablebase" label="Endgame tablebase (7 pieces or fewer)" info="Positions with 7 pieces or fewer go to Lichess’s tablebase (tablebase.lichess.ovh) for the result with best play and every move ranked by it: in the Analysis panel and the eval bar (tagged TB), while the replay is paused and on the free board, never during a game. “Analyse with Stockfish” takes them from it too, and rates those moves by whether they keep the win or the draw. Nothing is sent with this off." value={t.tablebase !== false} onChange={(v) => setTweak('tablebase', v)} />
-          <div className="twk-keep">
-            <TweakToggle id="tw-cloud" label="Lichess cloud evaluation" info="The positions Stockfish searches for your moves (the free board, moves you try in the replay) also go to Lichess’s cloud (lichess.org/api/cloud-eval), which has deep evaluations of many positions: whichever answer comes first shows, the deeper one replacing it, labelled “cloud depth”; Go deeper on a move of a loaded analysis asks it too. Never for “Analyse with Stockfish” or in a game. Nothing is sent with this off." value={t.cloudEval === true} onChange={(v) => setTweak('cloudEval', v)} />
-            {t.cloudEval === true && <TweakToggle id="tw-cloud-prefer" label="Prefer cloud" info={`Skips the search in your browser where the cloud is at least as deep as its depth limit (${sfKind === 'asm' ? 'at most 22 with the slow engine this device runs' : '35 with No limit'}).`} value={t.cloudPrefer === true} onChange={(v) => setTweak('cloudPrefer', v)} />}
-          </div>
-          <ExplorerSettings t={t} setTweak={setTweak} />
-        </> },
-        !board && { id: 'commentary', label: 'Commentary', body: <>
-          <TweakToggle id="tw-comm" label="Show commentary" value={showCommentary} onChange={(v) => setTweak('commentary', v)} />
-          {showCommentary && <>
-            {sources.includes('pgn') && <TweakToggle id="tw-comm-pgn" label="From the PGN" value={sayFrom.pgn} onChange={(v) => setTweak('commentPgn', v)} />}
-            {sources.includes('notes') && <TweakToggle id="tw-comm-notes" label={files.sample && !files.notes ? 'From the sample notes' : 'From the notes file'} value={sayFrom.notes} onChange={(v) => setTweak('commentNotes', v)} />}
-            {queenSays && <TweakToggle id="tw-comm-queen" label="From Queen" value={sayFrom.queen} onChange={(v) => setTweak('commentQueen', v)} />}
-            {sources.length + (queenSays ? 1 : 0) > 1 && <div className="twk-note">Where several comment on a move, the first one on wins: notes file, then the PGN; Queen’s sentence follows.</div>}
-          </>}
-        </> },
-        { id: 'sound', label: 'Sound', body: <>
-          <TweakToggle id="tw-sound" label="Move sounds" value={t.sound !== false} onChange={(v) => setTweak('sound', v)} />
-          <TweakSelect id="tw-sset" label="Sound set" value={soundSet} options={window.Sfx.SETS} onChange={(v) => { setTweak('soundSet', v); sfxPlayer.play(v, ['move'], soundVolume); }} />
-          <TweakSlider id="tw-vol" label="Volume" value={soundVolume} min={0} max={100} step={5} unit="%" onChange={(v) => { setTweak('soundVolume', v); sfxPlayer.play(soundSet, ['move'], v); }} />
-          <div className="twk-note">The Lichess sets are from <a href="https://github.com/lichess-org/lila" target="_blank" rel="noopener">Lichess’s source</a>, unchanged: lisp by <a href="https://lichess.org/@/EdinburghCollective" target="_blank" rel="noopener">EdinburghCollective</a> under <a href="https://creativecommons.org/licenses/by-nc-sa/4.0/" target="_blank" rel="noopener">CC BY-NC-SA 4.0</a> (non-commercial: a video exported with it may not be used commercially), the others by <a href="https://github.com/Enigmahack" target="_blank" rel="noopener">Enigmahack</a> under the AGPL-3.0-or-later. Wood is made in your browser.</div>
-        </> },
+        { id: 'game', label: 'Game', body: <GameSettings M={M} files={files} board={board} status={status} err={shownErr} commit={commit}
+          go={{ importGame, boardAsGame, backToGame, backToBoard: () => { const b = window.BoardCore.restore(files.fromBoard); if (b) commitBoard(b); }, backToSample: () => guard(() => commit(SAMPLE)), reset: () => setResetOpen(true) }} /> },
+        { id: 'view', label: 'View', body: <ViewSettings t={t} setTweak={setTweak} board={board} TM={TM} pieceSet={pieceSet} pieces={pieces} boardTheme={boardTheme} boardAdj={boardAdj} boardLook={boardLook} /> },
+        { id: 'online', label: 'Online', body: <OnlineSettings t={t} setTweak={setTweak} sfKind={sfKind} /> },
+        !board && { id: 'commentary', label: 'Commentary', body: <CommentarySettings t={t} setTweak={setTweak} files={files} sources={sources} queenSays={queenSays} /> },
+        { id: 'sound', label: 'Sound', body: <SoundSettings t={t} setTweak={setTweak} soundSet={soundSet} soundVolume={soundVolume} /> },
       ]} />
     </React.Fragment>
-  );
-}
-
-// A picker tile's picture (a knight, a board), asked for again a little later when it fails: right after a deploy Render's CDN can answer a
-// file with a 404 it then keeps for a few minutes (seen 2026-11-04). The query only makes the browser ask afresh; the
-// CDN's copy is shared whatever the query, so the later tries are what outlast it
-const TILE_RETRY_S = [5, 15, 30, 60, 120];
-function TileImage({ src, style }) {
-  const [tries, setTries] = React.useState(0);
-  const timer = React.useRef(null);
-  React.useEffect(() => () => clearTimeout(timer.current), []);
-  const retry = () => { if (tries < TILE_RETRY_S.length) timer.current = setTimeout(() => setTries((n) => n + 1), TILE_RETRY_S[tries] * 1000); };
-  return <img src={tries ? `${src}?retry=${tries}` : src} alt="" draggable={false} loading="lazy" style={style} onError={retry} />;
-}
-
-// Settings › View › Pieces: each set's white knight on a light square (Lichess's way), its name on hover and to a
-// screen reader. The knights are fetched when the View tab first shows them, one small file a set
-function PiecePicker({ value, onChange }) {
-  return (
-    <TweakRow label="Pieces">
-      <div className="piece-picker" role="group" aria-label="Pieces">
-        {window.PieceSets.SETS.map((s) => (
-          <button key={s.id} type="button" className="piece-tile" title={s.name} aria-label={s.name} aria-pressed={s.id === value} onClick={() => onChange(s.id)}>
-            <TileImage src={window.PieceSets.url(s.id, 'wN')} />
-          </button>
-        ))}
-      </div>
-    </TweakRow>
-  );
-}
-
-// Settings › View › Board: each board's two squares (lila's thumbnails) through the sliders, as Lichess shows them; its
-// name on hover and to a screen reader. The CSS filter is close to the board's own (BoardThemes.filter), not exact
-function BoardPicker({ value, adj, onChange }) {
-  const BT = window.BoardThemes, filter = BT.css(adj);
-  return (
-    <TweakRow label="Board">
-      <div className="board-picker" role="group" aria-label="Board">
-        {BT.THEMES.map((b) => (
-          <button key={b.id} type="button" className="board-tile" title={b.name} aria-label={b.name} aria-pressed={b.id === value} onClick={() => onChange(b.id)}>
-            {BT.thumb(b.id) ? <TileImage src={BT.thumb(b.id)} style={{ filter }} /> : <i style={{ backgroundImage: `url(${BT.url(b.id)})`, filter }} />}
-          </button>
-        ))}
-      </div>
-    </TweakRow>
   );
 }
 

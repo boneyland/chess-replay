@@ -4,7 +4,7 @@ What each part of the repo is, with the pinned SHA-256 of every vendored file. B
 
 - `app/`: page sources
   - `shell.html`: the page shell, its CSS and the settings defaults (`window.TWEAK_DEFAULTS`)
-  - `game-app.jsx`: the app (loading games, the dock and menus, the Settings panel's contents); `tweaks.jsx` the Settings controls
+  - `game-app.jsx`: the app (the stored game or board, loading games, the dock and menus, the dialogs); `settings-tabs.jsx` the Settings panel's tabs and the engine settings; `share-dialog.jsx` Share and export and the export settings; `tweaks.jsx` the Settings controls
   - `engine.jsx`: the animation engine (the replay is one element tree drawn as a function of time); `game-video-core.jsx` the replay's scenes, the board's scaled space (`BoardSpace`) and text sizing (`tx()`)
   - `layout-core.js`: the page's layout (`LayoutCore`: one or two columns, the boxes for the board and panels, the export scale)
   - `chess-core.js`: PGN, analysis and notes turned into the game model the replay draws
