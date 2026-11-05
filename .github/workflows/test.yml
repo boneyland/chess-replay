@@ -57,8 +57,36 @@ jobs:
         run: google-chrome --version && echo "CHROMIUM_CHANNEL=chrome" >> "$GITHUB_ENV"
       - if: matrix.browser == 'firefox'
         run: firefox --version && echo "FIREFOX_PATH=$(readlink -f "$(command -v firefox)")" >> "$GITHUB_ENV"
+      # WebKit's system packages (~180 debs, 114 MB) come from the runner's Ubuntu mirror, which once crawled at ~20 KB/s
+      # and ran a job out of its 30 minutes (2026-11-05), so the .debs are cached. apt checks each cached .deb against
+      # the package index it has just fetched, so a stale or changed one is downloaded again, never used. The key moves
+      # with the runner image (weekly) and Playwright; a new key starts from the newest older cache
       - if: matrix.browser == 'webkit'
-        run: npx playwright install --with-deps webkit
+        id: apt-key
+        run: echo "key=apt-webkit-pw1.63.0-$ImageOS-$ImageVersion" >> "$GITHUB_OUTPUT"
+      - if: matrix.browser == 'webkit'
+        id: apt-cache
+        uses: actions/cache/restore@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+        with:
+          path: ~/apt-debs
+          key: ${{ steps.apt-key.outputs.key }}
+          restore-keys: apt-webkit-pw1.63.0-
+      - if: matrix.browser == 'webkit'
+        name: Install WebKit and its system packages (from the cached .debs where they still match)
+        run: |
+          echo 'APT::Keep-Downloaded-Packages "true"; Binary::apt::APT::Keep-Downloaded-Packages "true";' | sudo tee /etc/apt/apt.conf.d/99keep-debs
+          sudo rm -f /etc/apt/apt.conf.d/docker-clean
+          if ls ~/apt-debs/*.deb >/dev/null 2>&1; then sudo cp ~/apt-debs/*.deb /var/cache/apt/archives/; fi
+          npx playwright install --with-deps webkit
+          # autoclean drops the .debs the index no longer offers (superseded versions), so the cache doesn't grow with them
+          sudo apt-get autoclean -qq
+          rm -rf ~/apt-debs && mkdir ~/apt-debs && cp /var/cache/apt/archives/*.deb ~/apt-debs/ 2>/dev/null || true
+          echo "$(ls ~/apt-debs | wc -l) .debs, $(du -sh ~/apt-debs | cut -f1)"
+      - if: matrix.browser == 'webkit' && steps.apt-cache.outputs.cache-hit != 'true'
+        uses: actions/cache/save@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+        with:
+          path: ~/apt-debs
+          key: ${{ steps.apt-key.outputs.key }}
       - if: matrix.part == 'engine'
         run: echo "LIVE_ONLY=$ENGINE_TESTS" >> "$GITHUB_ENV"
       - if: matrix.part == 'heavy'
