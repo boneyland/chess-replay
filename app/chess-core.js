@@ -223,40 +223,78 @@
   // "12." for White's ply, "12…" for Black's; absPly counts half-moves from the standard start (Black's first move is 1)
   const moveNo = (absPly) => Math.floor(absPly / 2) + 1 + (absPly % 2 ? '…' : '.');
 
-  // A FEN → { pos, ply0, fen }: fen is the six-field form, ply0 the half-moves before the position (so the move
-  // number of the next move is moveNo(ply0)). Throws an Error a reader can act on.
-  function parseFen(fen) {
-    const f = String(fen).trim().split(/\s+/);
-    const bad = () => new Error(`That isn't a FEN: ${String(fen).trim().slice(0, 80)}`);
-    const ranks = f[0].split('/');
-    const width = (r) => [...r].reduce((s, c) => s + (/\d/.test(c) ? +c : 1), 0);
-    if (f.length > 6 || ranks.length !== 8 || !ranks.every((r) => /^[pnbrqkPNBRQK1-8]+$/.test(r) && width(r) === 8)) throw bad();
+  // ---------- FEN and setups ----------
+  // A setup is { b, turn, castle, ep, half, full }: b a board (64 squares, 0 = a8), castle the rights in KQkq order ('' for
+  // none), ep a square index or -1. Any placement is a setup; setupProblems says what stops it being a position.
+  // Each castling right's king and rook squares: e1/h1, e1/a1, e8/h8, e8/a8
+  const CASTLE_HOME = { K: [60, 63], Q: [60, 56], k: [4, 7], q: [4, 0] };
+  const canCastle = (b, r) => { const [k, rk] = CASTLE_HOME[r], w = r < 'a'; return b[k] === (w ? 'K' : 'k') && b[rk] === (w ? 'R' : 'r'); };
+  // the en passant square stands if the pawn that just moved two is in front of it and the squares it crossed are empty
+  function epFits(b, turn, ep) {
+    const dir = turn === 'w' ? 1 : -1;
+    return Math.floor(ep / 8) === (turn === 'w' ? 2 : 5) && !b[ep] && !b[ep - 8 * dir] && b[ep + 8 * dir] === (turn === 'w' ? 'p' : 'P');
+  }
+
+  // A FEN's text as a setup: the fields after the board optional, rights in any order. Only malformed text is an error
+  // ({ error }); castling rights or an en passant square the pieces don't support are left out of the setup and named in
+  // dropped: { castle: the rights left out, ep: whether the square was }
+  function readFen(text) {
+    const t = String(text == null ? '' : text).trim(), f = t.split(/\s+/), bad = { error: `That isn't a FEN: ${t.slice(0, 80)}` };
+    const ranks = f[0].split('/'), width = (r) => [...r].reduce((n, c) => n + (/\d/.test(c) ? +c : 1), 0);
+    if (f.length > 6 || ranks.length !== 8 || !ranks.every((r) => /^[pnbrqkPNBRQK1-8]+$/.test(r) && width(r) === 8)) return bad;
     const turn = f[1] || 'w', castle = f[2] || '-', ep = f[3] || '-', half = f[4] || '0', full = f[5] || '1';
-    if (!/^[wb]$/.test(turn) || !/^\d+$/.test(half) || !/^\d+$/.test(full) || !/^(-|[a-h][1-8])$/.test(ep)) throw bad();
-    const b = fromFen(f[0]);
-    const count = (ch) => b.filter((p) => p === ch).length;
-    if (count('K') !== 1 || count('k') !== 1) throw new Error('A position needs one king of each colour');
-    if (b.some((p, i) => (p === 'P' || p === 'p') && (i < 8 || i > 55))) throw new Error("A pawn can't stand on the first or last rank");
-    if (inCheck(b, turn === 'w' ? 'b' : 'w')) throw new Error('The side not to move is in check');
-    if (/[A-Ha-h]/.test(castle)) throw new Error("Chess960 positions aren't supported yet");
-    if (castle !== '-' && !/^K?Q?k?q?$/.test(castle)) throw new Error("Castling rights don't match the pieces");
-    const rights = castle === '-' ? '' : castle;
-    for (const [r, king, rook] of [['K', 60, 63], ['Q', 60, 56], ['k', 4, 7], ['q', 4, 0]]) {
-      const white = r === r.toUpperCase();
-      if (rights.includes(r) && !(b[king] === (white ? 'K' : 'k') && b[rook] === (white ? 'R' : 'r'))) throw new Error("Castling rights don't match the pieces");
-    }
-    let epIdx = -1;
-    if (ep !== '-') {
-      epIdx = sqIdx(ep);
-      // the pawn that just moved two stands in front of the square, and the square it left behind is empty
-      const dir = turn === 'w' ? 1 : -1;
-      if (+ep[1] !== (turn === 'w' ? 6 : 3) || b[epIdx] || b[epIdx - 8 * dir] || b[epIdx + 8 * dir] !== (turn === 'w' ? 'p' : 'P')) throw new Error("The en passant square doesn't match the pieces");
-    }
-    const fullmove = Math.max(1, +full);
+    if (!/^[wb]$/.test(turn) || !/^\d+$/.test(half) || !/^\d+$/.test(full) || !/^(-|[a-h][1-8])$/.test(ep)) return bad;
+    if (/[A-Ha-h]/.test(castle)) return { error: "Chess960 positions aren't supported yet" };
+    if (castle !== '-' && !/^[KQkq]{1,4}$/.test(castle)) return bad;
+    const b = fromFen(f[0]), asked = castle === '-' ? '' : castle, epIdx = ep === '-' ? -1 : sqIdx(ep);
+    const rights = 'KQkq'.split('').filter((r) => asked.includes(r));
+    const kept = rights.filter((r) => canCastle(b, r)).join(''), epOk = epIdx >= 0 && epFits(b, turn, epIdx);
     return {
-      pos: { b, ep: epIdx, turn, castle: rights },
-      ply0: (fullmove - 1) * 2 + (turn === 'b' ? 1 : 0),
-      fen: [f[0], turn, castle, ep, +half, fullmove].join(' '),
+      setup: { b, turn, castle: kept, ep: epOk ? epIdx : -1, half: +half, full: Math.max(1, +full) },
+      dropped: { castle: rights.filter((r) => !kept.includes(r)).join(''), ep: epIdx >= 0 && !epOk },
+    };
+  }
+
+  // two pieces on one rank, file or diagonal with the king: no single move gives both checks
+  function inLine(a, c, k) {
+    const dx = (k % 8) - (a % 8), dy = Math.floor(k / 8) - Math.floor(a / 8), ex = (c % 8) - (a % 8), ey = Math.floor(c / 8) - Math.floor(a / 8);
+    const line = ex === 0 || ey === 0 || Math.abs(ex) === Math.abs(ey);
+    return line && dx * ey === dy * ex;
+  }
+  const SIDE_NAME = { w: 'White', b: 'Black' };
+  // What stops the setup being a position, in plain words, each a sentence; [] when it is one
+  function setupProblems(s) {
+    const out = [], count = (p) => s.b.filter((x) => x === p).length;
+    for (const [side, K] of [['w', 'K'], ['b', 'k']]) {
+      const n = count(K);
+      if (n === 0) out.push(`${SIDE_NAME[side]} has no king.`); else if (n > 1) out.push(`${SIDE_NAME[side]} has ${n} kings.`);
+    }
+    s.b.forEach((p, i) => { if ((p === 'P' || p === 'p') && (i < 8 || i > 55)) out.push(`The pawn on ${idxSq(i)} can't stand on the first or last rank.`); });
+    if (count('K') !== 1 || count('k') !== 1) return out;
+    const other = s.turn === 'w' ? 'b' : 'w';
+    if (inCheck(s.b, other)) out.push(`${SIDE_NAME[other]} is in check, but it's ${SIDE_NAME[s.turn]}'s turn.`);
+    const ch = checkers(s.b, s.turn), k = s.b.indexOf(s.turn === 'w' ? 'K' : 'k');
+    if (ch.length > 2) out.push(`${SIDE_NAME[s.turn]} is in check from ${ch.length} pieces, which no move can give.`);
+    else if (ch.length === 2 && inLine(ch[0], ch[1], k)) out.push(`${SIDE_NAME[s.turn]} is in check from two pieces in a line, which no move can give.`);
+    return out;
+  }
+  // a setup's six-field FEN
+  const setupFen = (s) => [toFen({ b: s.b, turn: s.turn }), s.castle || '-', s.ep >= 0 ? idxSq(s.ep) : '-', s.half, s.full].join(' ');
+
+  // A FEN → { pos, ply0, fen }: fen is the six-field form, ply0 the half-moves before the position (so the move
+  // number of the next move is moveNo(ply0)). Throws an Error a reader can act on: unlike readFen, rights or an en
+  // passant square the pieces don't support are refused, not dropped
+  function parseFen(fen) {
+    const r = readFen(fen);
+    if (r.error) throw new Error(r.error);
+    const s = r.setup, problems = setupProblems(s);
+    if (problems.length) throw new Error(problems[0]);
+    if (r.dropped.castle) throw new Error("Castling rights don't match the pieces");
+    if (r.dropped.ep) throw new Error("The en passant square doesn't match the pieces");
+    return {
+      pos: { b: s.b, ep: s.ep, turn: s.turn, castle: s.castle },
+      ply0: (s.full - 1) * 2 + (s.turn === 'b' ? 1 : 0),
+      fen: setupFen(s),
     };
   }
 
@@ -677,5 +715,5 @@
     for (let m = step; 2 * m - ply0 <= N; m += step) if (2 * (m - 1) - ply0 >= 0) ticks.push({ m, at: 2 * (m - 1) - ply0 });
     return ticks;
   }
-  window.ChessCore = { START_FEN, splitGames, fmtDate, fmtLen, hasLegal, inCheck, checkers, evalTicks, parseFen, fenAfter, moveNo, sqIndex: sqIdx, applySan, applyUci, stepFromUci, toFen, playLine, posFromFen, legalTargets, isPromotion, userMove, buildGame, withCommentary, commentarySources, classifyFile, plan, timing, schedule, cues, settledAt, clipRange, winChance, plyCp, MARK_CLASS, annotatedPgn };
+  window.ChessCore = { START_FEN, splitGames, fmtDate, fmtLen, hasLegal, inCheck, checkers, evalTicks, CASTLE_HOME, canCastle, readFen, setupProblems, setupFen, parseFen, fenAfter, moveNo, sqIndex: sqIdx, applySan, applyUci, stepFromUci, toFen, playLine, posFromFen, legalTargets, isPromotion, userMove, buildGame, withCommentary, commentarySources, classifyFile, plan, timing, schedule, cues, settledAt, clipRange, winChance, plyCp, MARK_CLASS, annotatedPgn };
 })();
