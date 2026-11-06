@@ -280,6 +280,8 @@ function VisionDialog({ again, onRead, onClose }) {
       if (!live.current.alive) return;
       setReading(false);
       setErr((e && e.message) || 'The board reader failed');
+      // a kept copy found incomplete is dropped by the reader: offer the download again
+      V.kept.present().then((has) => { if (!has && live.current.alive) setState('need'); });
     }
   };
   const onCropKey = (e) => { if (e.key === 'Enter') { e.preventDefault(); read(); } };

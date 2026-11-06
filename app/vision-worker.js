@@ -3,7 +3,7 @@
 // The runtime and the model are the vision/ files next to the page, loaded from the viewer's kept copy as Blob URLs (so
 // they don't depend on sw.js, which doesn't control a page after Shift+reload), else from the network.
 // In: { type: 'load', base, cache, files, threads } (base: the page's vision/ folder, absolute, the kept cache's key prefix;
-// cache: that cache's name; files: VisionCore.FILES' { name, type }), then
+// cache: that cache's name; files: VisionCore.FILES' { name, type, size }), then
 // { type: 'image', image } (an ImageBitmap, closed here after use). Out: { type: 'ready' } once loaded,
 // { type: 'logits', logits } (a Float32Array of 64 x 13, squares a8..h1, transferred), or { type: 'error', message }.
 const SIZE = 644; // the model's input side (VisionCore.SIZE)
@@ -15,13 +15,17 @@ self.onmessage = (e) => handle(e.data).catch((err) => self.postMessage({ type: '
 
 async function handle(msg) {
   if (msg.type === 'load') {
-    const url = await keptUrls(msg.base, msg.cache, msg.files || []);
-    ort = await import(url('ort.wasm.min.mjs'));
-    // threads need SharedArrayBuffer, which only a cross-origin isolated page has (render.yaml's COOP and COEP)
-    ort.env.wasm.numThreads = self.crossOriginIsolated && typeof SharedArrayBuffer === 'function' ? Math.max(1, msg.threads) : 1;
-    ort.env.wasm.proxy = false; // this is already a Worker
-    ort.env.wasm.wasmPaths = { wasm: url('ort-wasm-simd-threaded.wasm'), mjs: url('ort-wasm-simd-threaded.mjs') };
-    session = await ort.InferenceSession.create(url('chessq-lite-v4-int8.onnx'), { executionProviders: ['wasm'], graphOptimizationLevel: 'all' });
+    const kept = await keptUrls(msg.base, msg.cache, msg.files || []), url = kept.url;
+    try {
+      ort = await import(url('ort.wasm.min.mjs'));
+      // threads need SharedArrayBuffer, which only a cross-origin isolated page has (render.yaml's COOP and COEP)
+      ort.env.wasm.numThreads = self.crossOriginIsolated && typeof SharedArrayBuffer === 'function' ? Math.max(1, msg.threads) : 1;
+      ort.env.wasm.proxy = false; // this is already a Worker
+      ort.env.wasm.wasmPaths = { wasm: url('ort-wasm-simd-threaded.wasm'), mjs: url('ort-wasm-simd-threaded.mjs') };
+      session = await ort.InferenceSession.create(url('chessq-lite-v4-int8.onnx'), { executionProviders: ['wasm'], graphOptimizationLevel: 'all' });
+    } finally {
+      kept.revoke(); // read by now (the runtime imported, its threads started, the model loaded), or failed
+    }
     self.postMessage({ type: 'ready' });
     return;
   }
@@ -39,18 +43,27 @@ async function handle(msg) {
   self.postMessage({ type: 'logits', logits }, [logits.buffer]);
 }
 
-// The URL to load each file from, by name: a Blob URL of its kept copy (in cache, under base + name, typed as files
-// say, which a module import needs), else base + name from the network. The Blobs stay with the Cache Storage copy,
-// not read into memory here, and their URLs last as long as this Worker
+// Where to load each file from: url(name) is a Blob URL of its kept copy (in cache, under base + name, typed as files
+// say, which a module import needs), else base + name from the network; revoke() lets the Blobs go once loaded. A kept
+// copy of the wrong size (cut short, or from another version) is dropped from the cache with the rest, and refused, so
+// the dialog offers the download again rather than failing inside the runtime
 async function keptUrls(base, cache, files) {
   let c = null;
   try { if (cache && typeof caches !== 'undefined') c = await caches.open(cache); } catch (e) { c = null; }
   const out = {};
+  const revoke = () => { for (const u of Object.values(out)) URL.revokeObjectURL(u); };
   for (const f of files) {
     const r = c ? await c.match(base + f.name).catch(() => null) : null;
-    if (r) out[f.name] = URL.createObjectURL(new Blob([await r.blob()], { type: f.type }));
+    if (!r) continue;
+    const blob = await r.blob();
+    if (f.size != null && blob.size !== f.size) {
+      revoke();
+      for (const g of files) await c.delete(base + g.name).catch(() => {});
+      throw new Error('The kept board reader was incomplete, so it was removed: download it again.');
+    }
+    out[f.name] = URL.createObjectURL(new Blob([blob], { type: f.type }));
   }
-  return (name) => out[name] || base + name;
+  return { url: (name) => out[name] || base + name, revoke };
 }
 
 // The picture squashed to SIZE x SIZE (the crop is the board's square, whatever its aspect), as float32 NCHW RGB,

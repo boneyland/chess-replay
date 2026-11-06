@@ -31,7 +31,7 @@
     // a Worker whose script or module imports don't load says so only by an error event
     worker.onerror = (e) => { e.preventDefault(); settle((w) => w.no(new Error(e.message || 'The board reader did not start'))); stop(); };
     const got = answer('ready');
-    worker.postMessage({ type: 'load', base: BASE, cache: VC.CACHE, files: VC.FILES.map((f) => ({ name: f.name, type: f.type })), threads: Math.min(4, navigator.hardwareConcurrency || 1) });
+    worker.postMessage({ type: 'load', base: BASE, cache: VC.CACHE, files: VC.FILES.map((f) => ({ name: f.name, type: f.type, size: f.size })), threads: Math.min(4, navigator.hardwareConcurrency || 1) });
     loaded = got.catch((e) => { stop(); throw e; });
     return loaded;
   }
