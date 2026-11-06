@@ -8,7 +8,8 @@
 // hash: { choices, note, clearNote }, the hash sizes this device can give; analysis the game analysis (useGameAnalysis),
 // files the stored files and onRemoveAnalysis drops their analysis; board: a free board, which has no game analysis
 function EngineSettings({ t, setTweak, full, ES, sfKind, threading, hash, analysis, engine, files, M, board, onRemoveAnalysis }) {
-  // Remove the full engine asks first (getting it back is another 99 MB); any change to the download drops the question
+  // Remove the full engine asks first (getting it back is another 99 MB); answering it, or any change to the download,
+  // drops the question (a removal that fails leaves the engine kept, and says why)
   const [askRemove, setAskRemove] = React.useState(false);
   React.useEffect(() => setAskRemove(false), [full.state]);
   const depthText = (d) => (d == null ? 'No limit' : String(d)), SF_KEYS = ['sfDepth', 'sfTime', 'sfOwnDepth', 'sfOwnTime', 'sfLines', 'sfHash', 'sfThreads'];
@@ -28,7 +29,7 @@ function EngineSettings({ t, setTweak, full, ES, sfKind, threading, hash, analys
       {full.state === 'ready' && (askRemove ? <>
         <div className="twk-note" role="alert">Remove the full engine? You’d need to download {MB} MB again to use it.</div>
         <div className="twk-pair">
-          <TweakButton danger label="Remove" onClick={full.remove} />
+          <TweakButton danger label="Remove" onClick={() => { setAskRemove(false); full.remove(); }} />
           <TweakButton secondary label="Keep" onClick={() => setAskRemove(false)} />
         </div>
       </> : <TweakButton secondary label={`Remove the full engine download · ${MB} MB`} onClick={() => setAskRemove(true)}

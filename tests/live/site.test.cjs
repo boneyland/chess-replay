@@ -1700,6 +1700,32 @@ for (const name of BROWSERS) for (const site of SITES) {
       assert.equal(await p.evaluate((c) => caches.keys().then((k) => k.includes(c)), 'chess-vision-1'), false, 'the copy is gone');
       assert.deepEqual(ep.errors, []);
       await ep.ctx.close();
+      // a page the service worker doesn't control (Shift+reload): the read comes from the kept copy, every vision/ request
+      // failing after the download. Chromium only: in Firefox, serviceWorkers: 'block' and ctx.route leak into later
+      // contexts and break the offline test
+      if (browser.browserType().name() === 'chromium') {
+        const ns = await open(browser, { width: 1440, height: 900 }, { serviceWorkers: 'block' });
+        let cut = false, asked = 0;
+        await ns.ctx.route('**/vision/**', (r) => { if (!cut) return r.continue(); asked++; return r.abort(); });
+        const n = ns.page, nd = n.getByRole('dialog', { name: 'Position from image' });
+        await n.goto(base, { waitUntil: 'load' });
+        await loadedOn(n);
+        await n.getByRole('button', { name: 'Import game' }).click();
+        await n.getByRole('dialog', { name: 'Import game' }).getByRole('button', { name: /^Position from image/ }).click();
+        await nd.getByRole('button', { name: 'Download board reader · 56 MB' }).click();
+        await assert.doesNotReject(nd.getByRole('button', { name: 'Choose image' }).waitFor({ timeout: 120000 }));
+        cut = true;
+        assert.equal(await n.evaluate(() => !!navigator.serviceWorker.controller), false, 'no service worker in control');
+        const [fc] = await Promise.all([n.waitForEvent('filechooser'), nd.getByRole('button', { name: 'Choose image' }).click()]);
+        await fc.setFiles(fixture('vision-lichess.png', 'image/png'));
+        await nd.getByRole('group').waitFor({ timeout: 5000 });
+        await nd.getByRole('button', { name: 'Read board' }).click();
+        await nd.waitFor({ state: 'detached', timeout: 60000 });
+        assert.equal((await n.locator('input[aria-label="FEN"]').inputValue()).split(' ')[0], LICHESS, 'read from the kept copy');
+        assert.equal(asked, 0, 'no vision/ request after the download');
+        assert.deepEqual(ns.errors, []);
+        await ns.ctx.close();
+      }
       // offline in a context without the copy: the note, and Download waits
       const off = await open(browser, { width: 1440, height: 900 });
       await off.ctx.addInitScript(() => Object.defineProperty(Navigator.prototype, 'onLine', { get: () => false, configurable: true }));
