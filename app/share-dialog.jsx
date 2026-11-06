@@ -25,7 +25,9 @@ function CopyButton({ label, text, onFail }) {
 function useExportSettings({ t, setTweak, M, MV, TM, frameW, stem, saveFile, pieceSet, boardTheme, boardAdj, soundSet, soundVolume }) {
   const fmtLen = window.ChessCore.fmtLen;
   const exportFps = EXPORT_FPS_OPTIONS.includes(+t.exportFps) ? +t.exportFps : 8;
-  const exportFormat = EXPORT_FORMATS.includes(t.exportFormat) ? t.exportFormat : EXPORT_FORMATS[0], webp = exportFormat === 'WebP';
+  // the formats this browser can export (no MP4 without a video encoder); the stored choice is kept for another browser
+  const formats = MP4_EXPORT ? EXPORT_FORMATS : ['WebP'];
+  const exportFormat = formats.includes(t.exportFormat) ? t.exportFormat : formats[0], webp = exportFormat === 'WebP';
   // WebP widths, largest first: the page's own (0), half of it ('Half', the default) and fixed ones below the frame's
   const halfW = Math.round(frameW / 2), wPx = (x) => (x === 'Half' ? halfW : x || frameW), webpPx = (x) => (x === 'Half' ? `${halfW} px (half)` : x ? x + ' px' : `${frameW} px (full)`);
   const webpWidths = [0].concat(WEBP_WIDTHS.filter((x) => x < frameW && x !== halfW), 'Half').sort((a, b) => wPx(b) - wPx(a));
@@ -56,7 +58,7 @@ function useExportSettings({ t, setTweak, M, MV, TM, frameW, stem, saveFile, pie
   const clipSuffix = clipFrom < 0 && clipTo >= NP ? '' : `_${clipFrom < 0 ? 'start' : plyTag(clipFrom)}-${clipTo >= NP ? 'end' : plyTag(clipTo)}`;
   const run = () => window.BoardThemes.render(boardTheme.id, boardAdj).catch(() => null).then(() => video.run({ start: clipT.start, end: clipT.end, suffix: clipSuffix, audio: t.sound === false || webp ? null
     : () => window.Sfx.renderTrack(window.Sfx.fetchSound, soundSet, window.Sfx.track(MV, clipOpts.S, clipT.start, clipT.end), soundVolume, clipT.end - clipT.start) }));
-  return { video, exportFps, exportFormat, webp, webpWidths, webpWidth, webpPx, webpQuality, mp4Quality, mp4Vfr, ncNote,
+  return { video, exportFps, formats, exportFormat, webp, webpWidths, webpWidth, webpPx, webpQuality, mp4Quality, mp4Vfr, ncNote,
     clipFrom, clipTo, clipFromOpts, clipToOpts, setClip, clipT, clipSuffix, run };
 }
 
@@ -95,7 +97,8 @@ function ShareDialog({ fen, board, pgn, x, setTweak, onFail, onReplay, onExport,
         <TweakButton secondary label="Download analysis" onClick={pgn.saveAnalysis} />
       </TweakSection>}
       {!board ? <TweakSection label="Export video">
-        <TweakRadio id="tw-format" label="Export as" value={x.exportFormat} options={EXPORT_FORMATS} onChange={(v) => setTweak('exportFormat', v)} />
+        {x.formats.length > 1 ? <TweakRadio id="tw-format" label="Export as" value={x.exportFormat} options={x.formats} onChange={(v) => setTweak('exportFormat', v)} />
+          : <div className="twk-note">{EXPORT_NO_MP4}</div>}
         {x.webp && <>
           <TweakSelect id="tw-webp-width" label="WebP width" value={x.webpPx(x.webpWidth)} options={x.webpWidths.map(x.webpPx)} onChange={(v) => setTweak('webpWidth', x.webpWidths.find((w) => x.webpPx(w) === v))} />
           <TweakSlider id="tw-webp-q" label="WebP quality" value={x.webpQuality} min={WEBP_QUALITY.min} max={WEBP_QUALITY.max} step={WEBP_QUALITY.step} format={(v) => (v >= 100 ? 'Lossless' : v)} onChange={(v) => setTweak('webpQuality', v)} />

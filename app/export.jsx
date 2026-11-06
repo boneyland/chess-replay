@@ -14,6 +14,9 @@ const EXPORT_LIBS = {
   mediabunny: 'mediabunny.min.js',
 };
 const EXPORT_FORMATS = ['MP4', 'WebP'];
+// MP4 needs WebCodecs' VideoEncoder, which Firefox for Android lacks (2026-11): there only the WebP is offered
+const MP4_EXPORT = typeof VideoEncoder === 'function';
+const EXPORT_NO_MP4 = 'MP4 needs a video encoder this browser doesn’t have (Firefox for Android has none yet), so the export is an animated WebP.';
 // WebP widths offered besides the frame's own (the screen-sized page's width at the screen's density): 1676 fills GitHub's 838 px README
 // column on 2× screens. Quality is 50–95 (lossy), or 100: lossless. Encoded straight from the drawn frames, a WebP looks better than one
 // converted from the MP4, though it is larger than the MP4 of the same clip
@@ -100,7 +103,7 @@ async function mp4Encoder(cv, W, H, fps, audio, quality = 'High', vfr = false) {
   const MB = await loadMediabunny();
   const avc = await MB.canEncodeVideo('avc', { width: W, height: H });
   const codec = avc ? 'avc' : (await MB.canEncodeVideo('vp9', { width: W, height: H })) ? 'vp9' : null;
-  if (!codec) throw new Error('this browser cannot encode video. Try a recent Chrome, Edge or Firefox.');
+  if (!codec) throw new Error('this browser can’t encode the video (as H.264 or VP9, at this size). Export an animated WebP instead.');
   const output = new MB.Output({ format: avc ? new MB.Mp4OutputFormat() : new MB.WebMOutputFormat(), target: new MB.BufferTarget() });
   const hold = vfr ? Object.assign(document.createElement('canvas'), { width: W, height: H }) : null, hx = vfr ? hold.getContext('2d') : null;
   const src = new MB.CanvasSource(vfr ? hold : cv, { codec, bitrate: mp4Bitrate(MB, quality) });

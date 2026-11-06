@@ -3222,6 +3222,23 @@ for (const name of BROWSERS) for (const site of SITES) {
       for (const f of anmf) assert.ok(f.x + f.w <= got.w && f.y + f.h <= got.h, 'a frame inside the canvas');
       return { area, got };
     };
+    // a browser with no video encoder (Firefox for Android has no WebCodecs VideoEncoder) is offered only the WebP, and
+    // told why, rather than an MP4 that fails once the export starts
+    await t.test('desktop: without a video encoder, Share and export offers only the WebP and says why', async () => {
+      const ne = await open(browser, { width: 1440, height: 900 });
+      await ne.page.addInitScript(() => { delete window.VideoEncoder; });
+      await ne.page.goto(base, { waitUntil: 'load' });
+      await loadedOn(ne.page);
+      const dialog = await openShare(ne.page);
+      await assert.doesNotReject(dialog.getByText(/^MP4 needs a video encoder this browser doesn’t have/).waitFor({ timeout: 3000 }));
+      assert.equal(await dialog.getByRole('radio', { name: 'MP4' }).count(), 0, 'no MP4 to choose');
+      assert.equal(await dialog.getByRole('button', { name: /^Export video \(MP4/ }).count(), 0);
+      await assert.doesNotReject(dialog.getByRole('button', { name: /^Export animated WebP/ }).waitFor({ timeout: 3000 }));
+      await assert.doesNotReject(dialog.locator('#tw-webp-width').waitFor({ timeout: 3000 }));
+      assert.deepEqual(ne.errors, []);
+      await ne.ctx.close();
+    });
+
     await t.test('desktop: an export is the screen-sized page', { timeout: 180000 }, async () => {
       const dk = await open(browser, { width: 1440, height: 900 });
       await dk.page.goto(base, { waitUntil: 'load' });
