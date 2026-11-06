@@ -908,8 +908,10 @@ for (const name of BROWSERS) for (const site of SITES) {
         await p.goto(base, { waitUntil: 'load' });
         await loadedOn(p);
         const seen = await ownMoveRated(p);
-        // Firefox's own hang can add a try after the simulated ones
-        assert.ok(threadedOf(seen) >= hang + (hang === 3 ? 0 : 1) && threadedOf(seen) <= 3, seen.urls.join(' '));
+        // Firefox's own hang can add a try after the simulated ones, and WebKit's one more (CI, 2026-11-06: four threaded
+        // starts in WebKit)
+        const most = 3 + (browser.browserType().name() === 'webkit' ? 1 : 0);
+        assert.ok(threadedOf(seen) >= hang + (hang === 3 ? 0 : 1) && threadedOf(seen) <= most, seen.urls.join(' '));
         if (hang === 3) assert.equal(singleOf(seen), 1, seen.urls.join(' '));
         await p.getByRole('button', { name: 'Engine options' }).click();
         assert.equal(await p.locator('#tw-sf-threads').isDisabled(), singleOf(seen) > 0);
