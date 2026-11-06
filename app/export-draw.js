@@ -94,11 +94,12 @@
   }
   // a box-shadow list, first (topmost) shadow first; the commas inside rgba() don't split it
   const shadowsOf = (v) => v === 'none' ? [] : v.split(/,(?![^(]*\))/).map((x) => shadowOf(x.trim(), 'box-shadow'));
-  const dropShadowOf = (f) => {
-    if (!f || f === 'none') return null;
-    const m = f.match(/^drop-shadow\((.*)\)$/);
-    if (!m || /drop-shadow/.test(m[1])) no('filter ' + f);
-    return shadowOf(m[1].trim(), 'filter');
+  // a filter of drop-shadows, in the order they apply (the captured pieces' rim is two); [] for none
+  const dropShadowsOf = (f) => {
+    if (!f || f === 'none') return [];
+    const parts = f.match(/drop-shadow\((?:[^()]|\([^()]*\))*\)/g);
+    if (!parts || parts.join(' ') !== f.trim()) no('filter ' + f);
+    return parts.map((p) => shadowOf(p.slice(12, -1).trim(), 'filter'));
   };
   // radial-gradient(circle, <colour> <n>%, …): the check glow's, centred, to the farthest corner
   const gradientOf = (cx, v, b) => {
@@ -139,15 +140,18 @@
     a *= o;
     const m = matrixOf(s.transform);
     k *= m.k; rot += m.rot;
-    const own = dropShadowOf(s.filter);
-    if (own && shadow) no('nested filters');
-    shadow = own || shadow;
+    const own = dropShadowsOf(s.filter);
+    if (own.length && shadow) no('nested filters');
     const tag = node.tagName.toLowerCase();
+    // more than one drop-shadow only on a picture (the captured pieces' rim)
+    if (own.length > 1 && tag !== 'img') no('filter ' + s.filter);
+    shadow = own.length === 1 ? own[0] : shadow;
     if (tag === 'svg') return paintSvg(cx, node, place, dev, a, k, rot, shadow);
     if (tag === 'img') {
       if (rot) no('rotated image');
       if (!node.complete || !node.naturalWidth) no('image not loaded');
       const b = place(node);
+      if (own.length > 1) return paintShadowed(cx, node, b, a, k, dev, own);
       cx.save(); cx.globalAlpha = a;
       if (shadow) Object.assign(cx, { shadowColor: shadow.color, shadowOffsetX: shadow.x * k * dev, shadowOffsetY: shadow.y * k * dev, shadowBlur: shadow.blur * k * dev });
       cx.drawImage(node, b.x, b.y, b.w, b.h);
@@ -212,6 +216,62 @@
       else paint(cx, c, place, dev, a, k, rot, shadow, depth);
     }
     cx.restore();
+  }
+
+  // A picture under a chain of drop-shadows, as CSS applies them: each to the picture with the shadows before it. Drawn
+  // in device px on canvases of its size (with room for the shadows). Each shadow is worked out here rather than with
+  // the canvas's own (WebKit drew a canvas under its shadow see-through, the piece grey): the last picture's alpha in the
+  // shadow's colour, blurred by a Gaussian whose standard deviation is the drop-shadow's blur, moved by its offset and
+  // drawn under the picture
+  function paintShadowed(cx, img, b, a, k, dev, chain) {
+    const T = cx.getTransform();
+    if (T.b || T.c) no('rotated canvas');
+    const rgbs = chain.map((sh) => rgbaOf(sh.color) || no('shadow colour ' + sh.color));
+    const X = T.a * b.x + T.e, Y = T.d * b.y + T.f, w = T.a * b.w, h = T.d * b.h;
+    const pad = Math.ceil(chain.reduce((p, sh) => p + (Math.max(Math.abs(sh.x), Math.abs(sh.y)) + 3 * sh.blur) * k * dev, 0)) + 2;
+    const W = Math.max(1, Math.ceil(w + 2 * pad)), H = Math.max(1, Math.ceil(h + 2 * pad));
+    const canvas = () => { const c = document.createElement('canvas'); c.width = W; c.height = H; return c; };
+    let last = canvas(), shade = null;
+    try {
+      const g0 = last.getContext('2d'); g0.imageSmoothingQuality = 'high'; g0.drawImage(img, pad, pad, w, h);
+      chain.forEach((sh, i) => {
+        shade = canvas();
+        const s = shade.getContext('2d', { willReadFrequently: true });
+        s.drawImage(last, 0, 0);
+        const sigma = sh.blur * k * dev, rgb = rgbs[i], im = s.getImageData(0, 0, W, H), d = im.data;
+        const A = new Float32Array(W * H);
+        for (let p = 0; p < A.length; p++) A[p] = d[p * 4 + 3] * rgb[3];
+        if (sigma > 0) blurAlpha(A, W, H, sigma);
+        for (let p = 0; p < A.length; p++) { d[p * 4] = rgb[0]; d[p * 4 + 1] = rgb[1]; d[p * 4 + 2] = rgb[2]; d[p * 4 + 3] = A[p]; }
+        s.putImageData(im, 0, 0);
+        const c = canvas(), g = c.getContext('2d');
+        g.drawImage(shade, sh.x * k * dev, sh.y * k * dev);
+        g.drawImage(last, 0, 0);
+        free(shade); shade = null; free(last); last = c;
+      });
+      cx.save();
+      cx.setTransform(1, 0, 0, 1, 0, 0); cx.globalAlpha = a;
+      cx.drawImage(last, X - pad, Y - pad);
+      cx.restore();
+    } finally { free(shade); free(last); }
+  }
+  // a W × H alpha map blurred in place by a Gaussian of standard deviation sigma (px), across then down; outside is 0
+  function blurAlpha(A, W, H, sigma) {
+    const r = Math.ceil(3 * sigma), ker = new Float32Array(2 * r + 1);
+    let sum = 0;
+    for (let i = -r; i <= r; i++) sum += ker[i + r] = Math.exp(-(i * i) / (2 * sigma * sigma));
+    for (let i = 0; i < ker.length; i++) ker[i] /= sum;
+    const t = new Float32Array(W * H);
+    for (let y = 0; y < H; y++) for (let x = 0; x < W; x++) {
+      let v = 0;
+      for (let i = -r; i <= r; i++) { const xx = x + i; if (xx >= 0 && xx < W) v += A[y * W + xx] * ker[i + r]; }
+      t[y * W + x] = v;
+    }
+    for (let y = 0; y < H; y++) for (let x = 0; x < W; x++) {
+      let v = 0;
+      for (let i = -r; i <= r; i++) { const yy = y + i; if (yy >= 0 && yy < H) v += t[yy * W + x] * ker[i + r]; }
+      A[y * W + x] = v;
+    }
   }
 
   // whether node (shown, its opacity aside) draws two things or more, which then may overlap: its own box (background,
@@ -376,19 +436,34 @@
     cx.restore();
   }
 
-  // The stage's layers in paint order: a box that draws nothing itself (no background, border, shadow, opacity,
-  // transform, filter or clip, and no text of its own) is opened up into its children
+  // The stage's layers in paint order: a box that draws nothing itself (no background, border, shadow, transform,
+  // filter or clip, and no text of its own) is opened up into its children. A faded one too (the end of the video fades
+  // the whole stage): its layers are drawn together at its opacity by the compositor (fadeOf), as CSS fades it as one,
+  // rather than the box going whole to html2canvas when anything in it is something the painter can't draw
   function layersOf(node, out = []) {
     const kids = [...node.children].map((c, i) => ({ c, i, s: getComputedStyle(c) })).filter((x) => x.s.display !== 'none');
     const z = (x) => (x.s.position === 'static' ? 0 : parseInt(x.s.zIndex, 10) || 0);
     kids.sort((p, q) => z(p) - z(q) || p.i - q.i);
     for (const { c, s } of kids) {
       const plain = c.children.length && clear(s.backgroundColor) && s.backgroundImage === 'none' && s.boxShadow === 'none' && px(s.borderTopWidth) + px(s.borderRightWidth) + px(s.borderBottomWidth) + px(s.borderLeftWidth) === 0
-        && s.opacity === '1' && s.transform === 'none' && s.filter === 'none' && s.overflowX === 'visible' && s.overflowY === 'visible' && s.visibility === 'visible'
+        && s.transform === 'none' && s.filter === 'none' && s.overflowX === 'visible' && s.overflowY === 'visible' && s.visibility === 'visible'
         && ![...c.childNodes].some((t) => t.nodeType === 3 && t.data.trim());
       if (plain) layersOf(c, out); else out.push(c);
     }
     return out;
+  }
+  // the faded boxes layersOf opened round layer n, below root: the outermost one (top, its layers drawn on a canvas of
+  // their own and that drawn at its opacity, outer) and the product of the opacities of those inside it (inner, each
+  // layer's own alpha on that canvas). A faded box keeps its layers together in layersOf's order
+  function fadeOf(n, root) {
+    let top = null, outer = 1, inner = 1;
+    for (let e = n.parentElement; e && e !== root; e = e.parentElement) {
+      const o = px(getComputedStyle(e).opacity);
+      if (o >= 1) continue;
+      if (top) inner *= outer;
+      top = e; outer = o;
+    }
+    return { top, outer, inner };
   }
 
   // place(n): a box's place on the root stage in the stage's own (untransformed) CSS px, as the stage is now
@@ -472,7 +547,8 @@
       // (data-push="<scale> <x> <y>", round that point in the stage's CSS px), and its layers are drawn zoomed here, so
       // their bitmaps stay reusable
       const pushes = layers.map((n) => { const p = n.parentElement && n.parentElement.closest('[data-push]'); return p && root.contains(p) ? p.dataset.push : ''; });
-      const bg = getComputedStyle(root).backgroundColor, look = bg + '|' + pushes.join('|');
+      const fades = layers.map((n) => fadeOf(n, root));
+      const bg = getComputedStyle(root).backgroundColor, look = bg + '|' + pushes.join('|') + '|' + fades.map((f) => (f.top ? f.outer + '/' + f.inner : '')).join('|');
       const same = !changed && cx === last.cx && look === last.look && layers.length === last.layers.length && layers.every((n, i) => n === last.layers[i]);
       last = { cx, layers, look };
       if (same) return false;
@@ -482,13 +558,32 @@
       cx.imageSmoothingQuality = 'high';
       cx.fillStyle = '#ffffff'; cx.fillRect(0, 0, W, H);
       if (!clear(bg)) { cx.fillStyle = bg; cx.fillRect(0, 0, W, H); }
+      // a faded box's layers go on a canvas of their own, drawn at the box's opacity once its last layer is on it
+      let top = null, gc = null;
+      const flush = () => {
+        if (gc) { cx.globalAlpha = top.outer; cx.drawImage(gc.canvas, 0, 0); cx.globalAlpha = 1; free(gc.canvas); }
+        top = null; gc = null;
+      };
       layers.forEach((n, i) => {
-        const l = cache.get(n);
-        if (!l) return;
-        if (!pushes[i]) { cx.drawImage(l.bmp, Math.round(l.x), Math.round(l.y)); return; }
-        const [k, px0, py0] = pushes[i].split(' ').map(Number), ox = px0 * scale, oy = py0 * scale;
-        cx.drawImage(l.bmp, ox + k * (l.x - ox), oy + k * (l.y - oy), k * l.bmp.width, k * l.bmp.height);
+        const f = fades[i];
+        if (f.top !== (top && top.el)) {
+          flush();
+          if (f.top) {
+            top = { el: f.top, outer: f.outer };
+            if (f.outer > 0) { const c = document.createElement('canvas'); c.width = W; c.height = H; gc = c.getContext('2d'); gc.imageSmoothingQuality = 'high'; }
+          }
+        }
+        const g = f.top ? gc : cx, l = cache.get(n);
+        if (!g || !l) return;
+        g.globalAlpha = f.top ? f.inner : 1;
+        if (!pushes[i]) g.drawImage(l.bmp, Math.round(l.x), Math.round(l.y));
+        else {
+          const [k, px0, py0] = pushes[i].split(' ').map(Number), ox = px0 * scale, oy = py0 * scale;
+          g.drawImage(l.bmp, ox + k * (l.x - ox), oy + k * (l.y - oy), k * l.bmp.width, k * l.bmp.height);
+        }
+        g.globalAlpha = 1;
       });
+      flush();
       cx.restore();
       return true;
     };
