@@ -70,6 +70,13 @@
     started = {};
     return caches.delete(CACHE);
   }
+  // Remove, for the Remove button: { kept: { single, threads }, err }. A removal that fails says why (err), and kept is
+  // then what is still in the cache, so the page doesn't show the engine as gone while its 99 MB stay
+  async function removeKept() {
+    try { await remove(); return { kept: { single: false, threads: false }, err: '' }; } catch (e) {
+      return { kept: { single: await present('single'), threads: await present('threads') }, err: 'The full engine could not be removed: ' + ((e && e.message) || e) };
+    }
+  }
 
-  window.SFFull = { BASE, BUILDS, FILES, CACHE, TOTAL, total, limits, supported, present, download, start, remove };
+  window.SFFull = { BASE, BUILDS, FILES, CACHE, TOTAL, total, limits, supported, present, download, start, remove, removeKept };
 })();

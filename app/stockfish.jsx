@@ -179,7 +179,8 @@ function useFullEngine() {
     } finally { ctl.current = null; }
   };
   const cancel = () => { if (ctl.current) ctl.current.abort(); };
-  const remove = async () => { cancel(); await window.SFFull.remove().catch(() => {}); setKept({ single: false, threads: false }); setSt({ downloading: false, got: 0, err: '' }); };
+  // a removal that fails says why, and the state follows what is still kept
+  const remove = async () => { cancel(); const r = await window.SFFull.removeKept(); setKept(r.kept); setSt({ downloading: false, got: 0, err: r.err }); };
   const broken = React.useCallback(() => {
     setKept((k) => ({ ...k, [build]: false }));
     setSt({ downloading: false, got: 0, err: 'The downloaded engine was missing, so Lite is running. Download it again to use Full.' });

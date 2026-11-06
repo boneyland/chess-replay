@@ -164,6 +164,22 @@ test('remove: the copy goes', async () => {
   assert.equal(await F.present(), false);
 });
 
+// the Remove button: a removal that fails says why and leaves the engine shown as kept, as it still is
+test('removeKept: gone, or why not and what is still kept', async () => {
+  reset();
+  await F.download();
+  const real = caches.delete;
+  caches.delete = async () => { throw new Error('The operation is insecure.'); };
+  try {
+    const r = await F.removeKept();
+    assert.deepEqual(r.kept, { single: true, threads: false });
+    assert.match(r.err, /^The full engine could not be removed: The operation is insecure\.$/);
+    assert.equal(await F.present(), true, 'still kept');
+  } finally { caches.delete = real; }
+  assert.deepEqual(await F.removeKept(), { kept: { single: false, threads: false }, err: '' });
+  assert.equal(await F.present(), false);
+});
+
 test('the pinned threaded files are stockfish.js v19.0.1 full multi-threaded from unpkg, as LAYOUT.md pins them', () => {
   assert.equal(F.FILES, F.BUILDS.single);
   assert.deepEqual(REAL_THREADS.map((f) => [f.name, f.size]), [['stockfish-19.js', 33326], ['stockfish-19.wasm', 99076105]]);
