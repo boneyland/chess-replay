@@ -1164,20 +1164,11 @@ function useBoardInput({ pos, onPick, onMiss, onMove }) {
   return { sel, drag, promo, targets, handlers, cancelPromo, clear };
 }
 
-function GameVideo({ M, tw, d, probe, queen, nav, scheme, sf, orient }) {
-  const { T: T0, CUES, authoredTotal, playing: live } = useComposition();
-  // the export steps through a paused player; its frames look like playback (no paused-only hints or buttons)
-  const playing = live || !!tw.exporting;
-  const frame = useFrame(), video = frame.video;
-  setLayout(frame); // before the children render, which read the layout
-  // a paused one-column page is as tall as its panels; the stage scrolls it
-  const flowRef = React.useRef(null);
-  useFlowHeight(frame, flowRef);
-  setOrient(orient);
-  const S = useSchedule(M, CUES, d);
-  // When the schedule changes (a Queen answer lengthens a move's hold, a commentary source is turned off), keep the
-  // board on the same move. The time is moved in this render, not after it: the old time on the new schedule is
-  // another move, which the board would draw (and slide its pieces back from) for a frame
+// When the schedule changes (a Queen answer lengthens a move's hold, a commentary source is turned off), keep the board
+// on the same move: returns the time to draw, T0 itself or its place on the new schedule. The time is moved in this
+// render, not after it: the old time on the new schedule is another move, which the board would draw (and slide its
+// pieces back from) for a frame
+function useHeldSchedule(T0, S) {
   const tl = useTimeline();
   const prevS = React.useRef(S);
   const shift = React.useRef(null); // { S, from, to } until the timeline holds `to`
@@ -1191,76 +1182,147 @@ function GameVideo({ M, tw, d, probe, queen, nav, scheme, sf, orient }) {
     }
   }
   const sh = shift.current && shift.current.S === S && shift.current.from === T0 ? shift.current : null;
-  const T = sh ? sh.to : T0;
   React.useLayoutEffect(() => { if (sh && tl.setTime) tl.setTime(sh.to); }, [sh]);
-  const [vline, setVline] = React.useState(null); // { c, src, moves, upto } while a line is shown on the board
-  const cNow = lastPly(T, S);
+  return sh ? sh.to : T0;
+}
+
+// The line shown on the board in the game's place, and the one previewed under the mouse, both dropped when the game
+// moves on or plays. vline: { c, at, src, moves, upto, base } while a line is shown: c the game's ply it was shown
+// from, at the ply its first move stands in for (c: instead of the move on the board; c + 1: after it), src 'you' (the
+// viewer's own moves, from base) or the panel it was picked from. pv: the same shape, previewed until the mouse leaves
+function useShownLine(M, cNow, playing) {
+  const [vline, setVline] = React.useState(null);
   React.useEffect(() => { if (vline && (playing || cNow !== vline.c)) setVline(null); }, [playing, cNow]);
-  useMoveSounds(M, T, S, tw, playing, vline);
-  // the line under the mouse in the Analysis panel, shown on the board until it leaves (or the line is picked)
   const [pv, setPv] = React.useState(null);
   React.useEffect(() => { setPv(null); }, [playing, cNow]);
-  // at: the ply the line's first move stands in for (cNow: instead of the move on the board; cNow + 1: after it)
-  const onPreview = (src, moves, j, at = cNow) => setPv(j != null && j < moves.length ? { c: cNow, at, src, moves, upto: j } : null);
-  const onReplyHover = (steps) => setPv(steps && steps.length && vline ? { ...vline, moves: [...vline.moves.slice(0, vline.upto + 1), ...steps], upto: vline.upto + steps.length } : null);
-  const onLine = (src, moves, j, at = cNow) => { setPv(null); if (j < moves.length) { tl.setPlaying(false); input.clear(); setVline({ c: cNow, at, src, moves, upto: j }); } };
   // a line steps back to its first move (the viewer's own line back to its starting position), then closes
   const stepLine = (d) => setVline((v) => {
     if (!v) return v;
     const u = v.upto + d, min = v.src === 'you' ? -1 : 0;
     return u < min ? null : { ...v, upto: Math.min(v.moves.length - 1, u) };
   });
-  // ---- moves the viewer plays on the board ----
   const gamePos = (cc) => (cc < 0 ? M.start.pos : { ...window.ChessCore.posFromFen(M.plies[cc].fen), castle: M.plies[cc].castle, ep: M.plies[cc].ep });
-  const curPos = () => (vline ? (vline.upto >= 0 ? vline.moves[vline.upto].pos : vline.base) : gamePos(cNow));
   const newLine = () => ({ c: cNow, at: cNow + 1, src: 'you', moves: [], upto: -1, base: gamePos(cNow) });
-  const explore = () => { tl.setPlaying(false); if (!vline) setVline(newLine()); };
   const leaveIfEmpty = () => setVline((v) => (v && v.src === 'you' && v.upto < 0 ? null : v));
-  const touchPos = curPos();
-  const input = useBoardInput({
-    pos: touchPos, onPick: explore, onMiss: leaveIfEmpty,
-    onMove: (step) => playOwn(step),
+  const playOwn = (step) => setVline((v) => { const b = v || newLine(); const prefix = b.moves.slice(0, b.upto + 1); return { ...b, src: 'you', moves: [...prefix, step], upto: prefix.length }; });
+  return {
+    vline, setVline, pv, setPv, stepLine, gamePos, newLine, leaveIfEmpty, playOwn,
+    // the position on the board
+    pos: vline ? (vline.upto >= 0 ? vline.moves[vline.upto].pos : vline.base) : gamePos(cNow),
+    // the moves from the start to the position on the board: the game's up to the line's, then the line's
+    moves: () => (vline ? M.plies.slice(0, vline.at).concat(vline.moves.slice(0, vline.upto + 1)) : M.plies.slice(0, cNow + 1)),
+  };
+}
+
+// What the rules say about the position on the board (pos, null while nothing is asked): the endgame tablebase's
+// answer (tbOn: asked here at all; tablebase: the setting), chasolver's on a dead position (known: the position is dead
+// already, so it isn't asked) and the fifty-move rule's. fen() gives the position's full FEN, worked out once here
+function useBoardFacts({ pos, fen, tbOn, tablebase, known }) {
+  const f = pos ? fen() : null;
+  const tb = useTablebase(tbOn ? f : null, tablebase);
+  const dead = useDead(pos, known);
+  return { tb, dead, fifty: pos ? window.PlayCore.fiftyRule(f, pos) : null, fen: f };
+}
+
+// Stockfish on the viewer's own line (vline from useShownLine): the positions before and after its move on the board,
+// with the best move's SAN; null when no own move is shown
+function useOwnLineEval(M, line, sf, tw) {
+  const { vline, gamePos } = line;
+  const on = !!(sf && vline && vline.src === 'you' && vline.upto >= 0);
+  const before = on ? M.plies.slice(0, vline.at).map((p) => p.uci).concat(vline.moves.slice(0, vline.upto).map((m) => m.uci)) : null;
+  const after = on ? before.concat([vline.moves[vline.upto].uci]) : null;
+  const ev = useMoveEval(sf ? sf.engine : null, before, after, sf ? sf.own : window.AnalysisCore.engineSettings().own, M.start.fen, null, cloudSetting(tw));
+  if (!on) return null;
+  const posBefore = vline.upto > 0 ? vline.moves[vline.upto - 1].pos : vline.base || gamePos(vline.at - 1);
+  const bm = ev.before && ev.before.best ? window.ChessCore.applyUci(posBefore, ev.before.best) : null;
+  return { ...ev, bestSan: bm ? bm.san : null };
+}
+
+// Go deeper on a move of the loaded analysis, while paused on it (on): from its own search (else the game settings), the
+// eval it shows only (the ratings, graph and accuracy stay the analysis's). Not on a PGN's own evals, which have no
+// best lines for it to go with (those come from analysing the game), nor on a position the tablebase answered (its
+// result is final): on says when
+function useGoDeeper(M, c, on, sf, tw) {
+  const p = on ? M.plies[c] : null, settings = sf ? sf.game : window.AnalysisCore.ENGINE;
+  // name: the engine running keys Go deeper's results, so lite and full ones never mix
+  const base = { name: settings.name, depth: p && p.search ? p.search.depth : settings.depth, time_limit: settings.time_limit };
+  const moves = on ? M.plies.slice(0, c + 1).map((q) => q.uci) : null;
+  return useMoveEval(sf ? sf.engine : null, moves, moves, base, M.start.fen, on ? { cp: cpOf(M, c), depth: base.depth, pv: [], stored: true, src: M.engine } : null, cloudSetting(tw));
+}
+
+// The transport bar (nav: its label, buttons and Copy FEN) and the keys for the replay: ← → step through a shown line's
+// moves, else the game's (as the wheel over the board does: the step returned), End goes to the last move, Esc cancels
+// a promotion, then leaves a shown line. goTo(i): paused on ply i, settled; fen(): the position's FEN
+function useReplayNav({ nav, M, S, c, line, input, goTo, fen }) {
+  const { vline, stepLine, setVline, leaveIfEmpty } = line;
+  const step = (d) => { if (vline) stepLine(d); else goTo(c + d); };
+  if (nav) {
+    nav.current = vline ? {
+      label: vline.upto < 0 ? 'Your move' : (vline.src === 'you' ? 'You ' : 'Line ') + lineLabel(M, vline.at, vline.upto, vline.moves[vline.upto].san), color: lineAccent(vline.src),
+      hasPrev: true, hasNext: vline.upto < vline.moves.length - 1, prev: () => stepLine(-1), next: () => stepLine(1),
+      hasLast: true, last: () => goTo(S.N - 1),
+    } : {
+      label: c < 0 ? 'Start' : label(M, c), color: c >= 0 && M.plies[c].mark ? clsColor(M.plies[c].cls) : C.last,
+      hasPrev: c >= 0, hasNext: c < S.N - 1, prev: () => goTo(c - 1), next: () => goTo(c + 1),
+      hasLast: c < S.N - 1, last: () => goTo(S.N - 1),
+    };
+    // the position on the board as a FEN, for the menu's Copy FEN
+    nav.current.fen = fen;
+    // the moves to the position on the board, for the Play dialogs' This position
+    nav.current.line = () => ({ fen: M.start.fen, moves: line.moves().map((p) => p.uci) });
+  }
+  const navSig = nav && nav.current ? `${nav.current.label}|${nav.current.hasPrev}|${nav.current.hasNext}|${nav.current.hasLast}` : '';
+  React.useEffect(() => { if (nav && nav.listen) nav.listen(); }, [navSig]);
+  useKeydown((e) => {
+    if (e.shiftKey || hasModifier(e)) return;
+    if (e.code === 'Escape' && input.promo) { e.preventDefault(); input.cancelPromo(); leaveIfEmpty(); return; }
+    if (e.code === 'Escape' && vline) { e.preventDefault(); setVline(null); return; }
+    if (e.code !== 'ArrowLeft' && e.code !== 'ArrowRight' && e.code !== 'End') return;
+    e.preventDefault();
+    if (e.code === 'End') goTo(Infinity); else step(e.code === 'ArrowRight' ? 1 : -1);
   });
+  return step;
+}
+
+function GameVideo({ M, tw, d, probe, queen, nav, scheme, sf, orient }) {
+  const { T: T0, CUES, authoredTotal, playing: live } = useComposition();
+  // the export steps through a paused player; its frames look like playback (no paused-only hints or buttons)
+  const playing = live || !!tw.exporting;
+  const frame = useFrame(), video = frame.video;
+  setLayout(frame); // before the children render, which read the layout
+  // a paused one-column page is as tall as its panels; the stage scrolls it
+  const flowRef = React.useRef(null);
+  useFlowHeight(frame, flowRef);
+  setOrient(orient);
+  const S = useSchedule(M, CUES, d);
+  const tl = useTimeline();
+  const T = useHeldSchedule(T0, S);
+  const cNow = lastPly(T, S);
+  const line = useShownLine(M, cNow, playing), { vline, setVline, pv, setPv, playOwn } = line;
+  useMoveSounds(M, T, S, tw, playing, vline);
+  const onPreview = (src, moves, j, at = cNow) => setPv(j != null && j < moves.length ? { c: cNow, at, src, moves, upto: j } : null);
+  const onReplyHover = (steps) => setPv(steps && steps.length && vline ? { ...vline, moves: [...vline.moves.slice(0, vline.upto + 1), ...steps], upto: vline.upto + steps.length } : null);
+  const onLine = (src, moves, j, at = cNow) => { setPv(null); if (j < moves.length) { tl.setPlaying(false); input.clear(); setVline({ c: cNow, at, src, moves, upto: j }); } };
+  // ---- moves the viewer plays on the board ----
+  const explore = () => { tl.setPlaying(false); if (!vline) setVline(line.newLine()); };
+  const touchPos = line.pos;
+  const input = useBoardInput({ pos: touchPos, onPick: explore, onMiss: line.leaveIfEmpty, onMove: (step) => playOwn(step) });
   // the viewer's circles and arrows, until the position on the board changes
   const draw = useBoardDraw(touchPos.b.join() + touchPos.turn);
-  const playOwn = (step) => setVline((v) => { const b = v || newLine(); const prefix = b.moves.slice(0, b.upto + 1); return { ...b, src: 'you', moves: [...prefix, step], upto: prefix.length }; });
-  // the endgame tablebase for the position on the board, while paused (never in the video or its export)
-  const shownFen = () => window.ChessCore.fenAfter(M.start.fen, (vline ? M.plies.slice(0, vline.at).concat(vline.moves.slice(0, vline.upto + 1)) : M.plies.slice(0, cNow + 1)).map((p) => p.san), touchPos);
-  const tb = useTablebase(playing ? null : shownFen(), tw.tablebase !== false);
-  // the move after which the game's position is first dead; and chasolver on the position on the board, while paused,
-  // unasked from there on (a line branches from the position after ply at − 1)
+  const shownFen = () => window.ChessCore.fenAfter(M.start.fen, line.moves().map((p) => p.san), touchPos);
+  // the move after which the game's position is first dead (a line branches from the position after ply at − 1); the
+  // tablebase, chasolver and the fifty-move rule on the position on the board, while paused (never in the video or its export)
   const deadAt = useFirstDead(M), pastDead = deadAt != null && (vline ? vline.at - 1 : cNow) >= deadAt;
-  const dead = useDead(playing ? null : touchPos, pastDead);
-  // the fifty-move rule for the position on the board, while paused
-  const fifty = playing ? null : window.PlayCore.fiftyRule(shownFen(), touchPos);
+  const { tb, dead, fifty } = useBoardFacts({ pos: playing ? null : touchPos, fen: shownFen, tbOn: true, tablebase: tw.tablebase !== false, known: pastDead });
   // the result after the last move: the PGN's, with the final position's own end where it gives that result
-  const end = M.plies.length ? window.PlayCore.ending({ pos: gamePos(M.plies.length - 1), dead: deadAt != null, pgn: { result: M.result, termination: M.headers && M.headers.Termination } }) : null;
+  const end = M.plies.length ? window.PlayCore.ending({ pos: line.gamePos(M.plies.length - 1), dead: deadAt != null, pgn: { result: M.result, termination: M.headers && M.headers.Termination } }) : null;
   const onTb = (uci) => { const step = window.ChessCore.stepFromUci(touchPos, uci); if (step) { tl.setPlaying(false); input.clear(); playOwn(step); } };
   React.useEffect(() => { if (!vline) input.clear(); }, [vline]);
-  // Stockfish on the viewer's line: the positions before and after the move on the board, as move lists from the start
-  const ownOn = !!(sf && vline && vline.src === 'you' && vline.upto >= 0);
-  const ownBefore = ownOn ? M.plies.slice(0, vline.at).map((p) => p.uci).concat(vline.moves.slice(0, vline.upto).map((m) => m.uci)) : null;
-  const ownAfter = ownOn ? ownBefore.concat([vline.moves[vline.upto].uci]) : null;
-  const ownEval = useMoveEval(sf ? sf.engine : null, ownBefore, ownAfter, sf ? sf.own : window.AnalysisCore.engineSettings().own, M.start.fen, null, cloudSetting(tw));
-  // Go deeper on a move of the loaded analysis, while paused on it: from its own search (else the game settings), the
-  // eval it shows only (the ratings, graph and accuracy stay the analysis's). Not on a PGN's own evals, which have no
-  // best lines for it to go with: those come from analysing the game
-  // (not on a position the tablebase answered: its result is final)
-  const gameOn = !!(sf && M.evalSource === 'analysis' && !playing && cNow >= 0 && !M.plies[cNow].tb && !(vline && vline.src === 'you'));
-  const gameP = gameOn ? M.plies[cNow] : null, gameSettings = sf ? sf.game : window.AnalysisCore.ENGINE;
-  // name: the engine running keys Go deeper's results, so lite and full ones never mix
-  const gameBase = { name: gameSettings.name, depth: gameP && gameP.search ? gameP.search.depth : gameSettings.depth, time_limit: gameSettings.time_limit };
-  const gameMoves = gameOn ? M.plies.slice(0, cNow + 1).map((p) => p.uci) : null;
-  const gameEval = useMoveEval(sf ? sf.engine : null, gameMoves, gameMoves, gameBase, M.start.fen, gameOn ? { cp: cpOf(M, cNow), depth: gameBase.depth, pv: [], stored: true, src: M.engine } : null, cloudSetting(tw));
-  let own = null;
-  if (ownOn) {
-    const posBefore = vline.upto > 0 ? vline.moves[vline.upto - 1].pos : vline.base || gamePos(vline.at - 1);
-    const bm = ownEval.before && ownEval.before.best ? window.ChessCore.applyUci(posBefore, ownEval.before.best) : null;
-    own = { ...ownEval, bestSan: bm ? bm.san : null };
-  }
+  const own = useOwnLineEval(M, line, sf, tw);
+  const gameEval = useGoDeeper(M, cNow, !!(sf && M.evalSource === 'analysis' && !playing && cNow >= 0 && !M.plies[cNow].tb && !(vline && vline.src === 'you')), sf, tw);
   const onReply = (steps) => { setPv(null); setVline((v) => v && { ...v, moves: [...v.moves.slice(0, v.upto + 1), ...steps], upto: v.upto + steps.length }); };
   // the book name of the position on the board while a line is shown (it can reach openings the game never played)
-  const lineKey = vline && vline.upto >= 0 ? M.plies.slice(0, vline.at).map((p) => p.uci).concat(vline.moves.slice(0, vline.upto + 1).map((m) => m.uci)).join(' ') : null;
+  const lineKey = vline && vline.upto >= 0 ? line.moves().map((p) => p.uci).join(' ') : null;
   const lineBook = React.useMemo(() => {
     if (!lineKey || !window.Openings) return null;
     try { return window.Openings.book().byPly(lineKey.split(' '), M.start.fen).pop() || null; } catch (e) { return null; }
@@ -1270,37 +1332,7 @@ function GameVideo({ M, tw, d, probe, queen, nav, scheme, sf, orient }) {
   // open on the starting position, paused, with every panel in place
   // (before the first paint, so the title card never flashes)
   React.useLayoutEffect(() => { if (tl.setStart) tl.setStart(settled(-1)); }, []);
-  const navRef = React.useRef(null);
-  // ← →, and the wheel over the board: a shown line's moves, else the game's
-  const stepBy = (d) => { const n = navRef.current; if (n.vline) n.stepLine(d); else n.goTo(n.c + d); };
-  navRef.current = { c: lastPly(T, S), goTo, step: stepBy, vline, stepLine, setVline, promo: input.promo, cancelPromo: input.cancelPromo, leaveIfEmpty };
-  if (nav) {
-    const cc = navRef.current.c;
-    nav.current = vline ? {
-      label: vline.upto < 0 ? 'Your move' : (vline.src === 'you' ? 'You ' : 'Line ') + lineLabel(M, vline.at, vline.upto, vline.moves[vline.upto].san), color: lineAccent(vline.src),
-      hasPrev: true, hasNext: vline.upto < vline.moves.length - 1, prev: () => stepLine(-1), next: () => stepLine(1),
-      hasLast: true, last: () => goTo(S.N - 1),
-    } : {
-      label: cc < 0 ? 'Start' : label(M, cc), color: cc >= 0 && M.plies[cc].mark ? clsColor(M.plies[cc].cls) : C.last,
-      hasPrev: cc >= 0, hasNext: cc < S.N - 1, prev: () => goTo(cc - 1), next: () => goTo(cc + 1),
-      hasLast: cc < S.N - 1, last: () => goTo(S.N - 1),
-    };
-    // the position on the board as a FEN, for the menu's Copy FEN
-    nav.current.fen = shownFen;
-    // the moves to the position on the board (a shown line's after the game's before it), for the Play dialogs' This position
-    nav.current.line = () => ({ fen: M.start.fen, moves: (vline ? M.plies.slice(0, vline.at).concat(vline.moves.slice(0, vline.upto + 1)) : M.plies.slice(0, cNow + 1)).map((p) => p.uci) });
-  }
-  const navSig = nav && nav.current ? `${nav.current.label}|${nav.current.hasPrev}|${nav.current.hasNext}|${nav.current.hasLast}` : '';
-  React.useEffect(() => { if (nav && nav.listen) nav.listen(); }, [navSig]);
-  useKeydown((e) => {
-    if (e.shiftKey || hasModifier(e)) return;
-    const n = navRef.current;
-    if (e.code === 'Escape' && n.promo) { e.preventDefault(); n.cancelPromo(); n.leaveIfEmpty(); return; }
-    if (e.code === 'Escape' && n.vline) { e.preventDefault(); n.setVline(null); return; }
-    if (e.code !== 'ArrowLeft' && e.code !== 'ArrowRight' && e.code !== 'End') return;
-    e.preventDefault();
-    if (e.code === 'End') n.goTo(Infinity); else n.step(e.code === 'ArrowRight' ? 1 : -1);
-  });
+  const stepBy = useReplayNav({ nav, M, S, c: cNow, line, input, goTo, fen: shownFen });
   const pieces = React.useMemo(() => simulate(M), [M]);
   // the video touches (panels fading in, the camera push, the blunder glow, the final fade, the title and end cards)
   // only while playing or exporting: stepping, exploring and analysing show a still page
