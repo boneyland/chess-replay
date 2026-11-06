@@ -122,15 +122,21 @@
   // Draws node (an element of the stage) and what's in it. cx's transform maps the stage's own CSS px (place()) to the
   // canvas; dev is the canvas's px per stage px, for the shadows, which canvas draws in device pixels.
   // a: the opacity so far; k: the scale of the transforms so far; rot: their rotation; shadow: a drop-shadow filter
-  function paint(cx, node, place, dev, a = 1, k = 1, rot = 0, shadow = null) {
+  // depth: how many faded groups (see group) it is drawn inside; grouped: its opacity is already drawn by its group
+  function paint(cx, node, place, dev, a = 1, k = 1, rot = 0, shadow = null, depth = 0, grouped = false) {
     const s = getComputedStyle(node);
     if (s.display === 'none' || s.visibility === 'hidden' || s.visibility === 'collapse') return;
     if (s.maskImage && s.maskImage !== 'none') no('mask');
     if (s.webkitMaskImage && s.webkitMaskImage !== 'none') no('mask');
     if (s.clipPath && s.clipPath !== 'none') no('clip-path');
     if (s.mixBlendMode && s.mixBlendMode !== 'normal') no('blend');
-    a *= px(s.opacity);
-    if (a <= 0) return;
+    const o = grouped ? 1 : px(s.opacity);
+    if (a * o <= 0) return;
+    // CSS fades a box and what's in it as one picture: where they overlap (a chip and its text), fading each apart lets
+    // the chip show through the text. So a faded box drawing two things or more is drawn opaque on a scratch canvas, which
+    // is then drawn here at its opacity
+    if (o < 1 && drawsTwo(node)) return group(cx, node, place, dev, a * o, k, rot, shadow, depth);
+    a *= o;
     const m = matrixOf(s.transform);
     k *= m.k; rot += m.rot;
     const own = dropShadowOf(s.filter);
@@ -203,11 +209,69 @@
     const kids = [...placed.filter((p) => p.z < 0).map((p) => p.c), ...flow, ...placed.filter((p) => p.z >= 0).map((p) => p.c)];
     for (const c of kids) {
       if (c.nodeType === 3) paintText(cx, c, s, place, a, k, rot, shadow);
-      else paint(cx, c, place, dev, a, k, rot, shadow);
+      else paint(cx, c, place, dev, a, k, rot, shadow, depth);
     }
     cx.restore();
   }
 
+  // whether node (shown, its opacity aside) draws two things or more, which then may overlap: its own box (background,
+  // border or shadow), lines of text, pictures, an svg (which may hold several shapes)
+  function drawsTwo(node) {
+    let n = 0;
+    const count = (el) => {
+      const s = getComputedStyle(el);
+      if (s.display === 'none' || px(s.opacity) <= 0) return false;
+      const tag = el.tagName.toLowerCase();
+      if (tag === 'svg') return (n += 2) >= 2;
+      if (s.visibility === 'visible') {
+        if (tag === 'img') return ++n >= 2;
+        const box = !clear(s.backgroundColor) || s.backgroundImage !== 'none' || s.boxShadow !== 'none'
+          || [s.borderTopWidth, s.borderRightWidth, s.borderBottomWidth, s.borderLeftWidth].some((w) => px(w) > 0);
+        if (box && ++n >= 2) return true;
+      }
+      for (const c of el.childNodes) {
+        if (c.nodeType === 3 ? s.visibility === 'visible' && c.data.trim() && ++n >= 2 : c.nodeType === 1 && count(c)) return true;
+      }
+      return false;
+    };
+    return count(node);
+  }
+
+  // Scratch canvases for the faded groups, one per depth of nesting, kept from one group to the next (the Moves list
+  // has dozens of faded chips a frame) and let go with the compositor
+  const scratch = [];
+  function group(cx, node, place, dev, a, k, rot, shadow, depth) {
+    // what it covers, on cx's canvas in device px: the box and everything in it (with MARGIN round each for shadows),
+    // no more than the canvas
+    const T = cx.getTransform();
+    if (T.b || T.c) no('rotated canvas');
+    let x0 = Infinity, y0 = Infinity, x1 = -Infinity, y1 = -Infinity;
+    for (const e of [node, ...node.querySelectorAll('*')]) {
+      const b = place(e);
+      if (!b.w && !b.h) continue;
+      x0 = Math.min(x0, b.x - MARGIN); y0 = Math.min(y0, b.y - MARGIN); x1 = Math.max(x1, b.x + b.w + MARGIN); y1 = Math.max(y1, b.y + b.h + MARGIN);
+    }
+    const X0 = Math.max(0, Math.floor(T.a * x0 + T.e)), Y0 = Math.max(0, Math.floor(T.d * y0 + T.f));
+    const X1 = Math.min(cx.canvas.width, Math.ceil(T.a * x1 + T.e)), Y1 = Math.min(cx.canvas.height, Math.ceil(T.d * y1 + T.f));
+    if (X1 <= X0 || Y1 <= Y0) return;
+    const w = X1 - X0, h = Y1 - Y0;
+    let cv = scratch[depth];
+    if (!cv) cv = scratch[depth] = document.createElement('canvas');
+    // grown to fit, never shrunk (a resize clears it anyway); otherwise cleared where this group goes
+    if (cv.width < w || cv.height < h) { cv.width = Math.max(cv.width, w); cv.height = Math.max(cv.height, h); }
+    const g = cv.getContext('2d');
+    g.setTransform(1, 0, 0, 1, 0, 0); g.clearRect(0, 0, w, h);
+    g.save();
+    g.beginPath(); g.rect(0, 0, w, h); g.clip();
+    g.imageSmoothingQuality = 'high';
+    g.setTransform(T.a, 0, 0, T.d, T.e - X0, T.f - Y0);
+    // its own opacity is the group's
+    try { paint(g, node, place, dev, 1, k, rot, shadow, depth + 1, true); } finally { g.restore(); }
+    cx.save();
+    cx.setTransform(1, 0, 0, 1, 0, 0); cx.globalAlpha = a;
+    cx.drawImage(cv, 0, 0, w, h, X0, Y0, w, h);
+    cx.restore();
+  }
   // a text node: one line of it, in its parent's font
   function paintText(cx, t, s, place, a, k, rot, shadow) {
     const collapse = !/^(pre|pre-wrap|break-spaces)$/.test(s.whiteSpace);
@@ -430,7 +494,7 @@
       cx.restore();
       return true;
     };
-    return { draw, stats, done: () => { root.removeAttribute('data-export-root'); for (const l of cache.values()) free(l.bmp); cache = new Map(); for (const c of blurs.values()) free(c); blurs.clear(); } };
+    return { draw, stats, done: () => { root.removeAttribute('data-export-root'); for (const l of cache.values()) free(l.bmp); cache = new Map(); for (const c of blurs.values()) free(c); blurs.clear(); for (const c of scratch.splice(0)) free(c); } };
   }
 
   // for the tests: one layer drawn here, with margin CSS px round it (for its shadows), or Unsupported's reason
