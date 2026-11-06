@@ -28,10 +28,10 @@ function useExportSettings({ t, setTweak, M, MV, TM, frameW, stem, saveFile, pie
   // the formats this browser can export (no MP4 without a video encoder); the stored choice is kept for another browser
   const formats = MP4_EXPORT ? EXPORT_FORMATS : ['WebP'];
   const exportFormat = formats.includes(t.exportFormat) ? t.exportFormat : formats[0], webp = exportFormat === 'WebP';
-  // WebP widths, largest first: the page's own (0), half of it ('Half', the default) and fixed ones below the frame's
+  // WebP widths, largest first: the page's own (0, the default), half of it ('Half') and fixed ones below the frame's
   const halfW = Math.round(frameW / 2), wPx = (x) => (x === 'Half' ? halfW : x || frameW), webpPx = (x) => (x === 'Half' ? `${halfW} px (half)` : x ? x + ' px' : `${frameW} px (full)`);
   const webpWidths = [0].concat(WEBP_WIDTHS.filter((x) => x < frameW && x !== halfW), 'Half').sort((a, b) => wPx(b) - wPx(a));
-  const webpWidth = webpWidths.includes(t.webpWidth) ? t.webpWidth : webpWidths.includes(+t.webpWidth) ? +t.webpWidth : 'Half';
+  const webpWidth = webpWidths.includes(t.webpWidth) ? t.webpWidth : webpWidths.includes(+t.webpWidth) ? +t.webpWidth : 0;
   // the old setting was a ratio, 'Full' or 'Half': carry it over once
   React.useEffect(() => { if (t.webpSize !== undefined) { setTweak('webpWidth', t.webpSize === 'Full' ? 0 : 'Half'); setTweak('webpSize', undefined); } }, []);
   const webpQuality = Math.min(WEBP_QUALITY.max, Math.max(WEBP_QUALITY.min, +t.webpQuality || 75));
