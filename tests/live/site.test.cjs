@@ -3445,6 +3445,94 @@ for (const name of BROWSERS) for (const site of SITES) {
       await dk.ctx.close();
     });
 
+    // a blurred box-shadow (the dark theme's halo) is worked out by the painter, not by the canvas's shadowBlur, which
+    // Firefox for Android draws about three times too strong and cut off short (measured 2026-11-06): the halo then lit
+    // up the board and left bands in the panels. Against the browser's own CSS halo, outward from the box's edge
+    await t.test('desktop: the export paints a halo as CSS draws it, without the canvas\'s shadow blur', async () => {
+      const dk = await open(browser, { width: 600, height: 400 });
+      await dk.page.goto(base, { waitUntil: 'load' });
+      await loadedOn(dk.page);
+      const HALO = 'box-shadow:0 0 3px rgba(255,236,214,0.3),0 0 14px rgba(255,236,214,0.14),0 0 36px rgba(255,236,214,0.1)';
+      await dk.page.evaluate((halo) => {
+        const back = document.createElement('div');
+        back.id = 'halo-test';
+        back.style.cssText = 'position:fixed;inset:0;z-index:2147483647;background:rgb(20,17,16)';
+        back.innerHTML = `<div style="position:absolute;left:100px;top:100px;width:200px;height:120px;background:rgb(27,23,21);${halo}"></div>`;
+        document.body.appendChild(back);
+      }, HALO);
+      // CSS's halo: the row through the box's middle, leftwards from its left edge (x 100), 1 to 49 px out
+      const shot = await dk.page.screenshot({ clip: { x: 0, y: 160, width: 100, height: 1 } });
+      const css = await dk.page.evaluate(async (b64) => {
+        const im = new Image(); im.src = 'data:image/png;base64,' + b64; await im.decode();
+        const c = document.createElement('canvas'); c.width = im.width; c.height = 1; c.getContext('2d').drawImage(im, 0, 0);
+        const d = c.getContext('2d').getImageData(0, 0, im.width, 1).data;
+        return Array.from({ length: 49 }, (_, k) => d[(99 - k) * 4]);
+      }, shot.toString('base64'));
+      // the painter's, over the same backdrop, with the canvas's shadowBlur watched
+      const got = await dk.page.evaluate(() => {
+        const back = document.getElementById('halo-test'), box = back.firstElementChild, P = CanvasRenderingContext2D.prototype;
+        const d0 = Object.getOwnPropertyDescriptor(P, 'shadowBlur');
+        let blurred = 0;
+        Object.defineProperty(P, 'shadowBlur', { configurable: true, get: d0.get, set(v) { if (v > 0) blurred++; d0.set.call(this, v); } });
+        let cv;
+        try { cv = window.ExportDraw.paintLayer(back, box, 1, 60); } finally { Object.defineProperty(P, 'shadowBlur', d0); }
+        back.remove();
+        if (typeof cv === 'string') return { why: cv };
+        const out = document.createElement('canvas'); out.width = cv.width; out.height = cv.height;
+        const ox = out.getContext('2d'); ox.fillStyle = 'rgb(20,17,16)'; ox.fillRect(0, 0, out.width, out.height); ox.drawImage(cv, 0, 0);
+        // the box's left edge is at x 60 in the canvas, its middle at y 60 + 60
+        const d = ox.getImageData(0, 120, 60, 1).data;
+        return { blurred, row: Array.from({ length: 49 }, (_, k) => d[(59 - k) * 4]) };
+      });
+      assert.equal(got.why, undefined, `painted (${got.why})`);
+      assert.equal(got.blurred, 0, 'no canvas shadowBlur for a box-shadow');
+      const off = got.row.map((v, k) => Math.abs(v - css[k])), worst = Math.max(...off);
+      assert.ok(worst <= 8, `the halo's red channel 1–49 px out: painted ${got.row.join(' ')}, CSS ${css.join(' ')}`);
+      assert.deepEqual(dk.errors, []);
+      await dk.ctx.close();
+    });
+
+    // a panel html2canvas draws (something in it the painter can't: a mask, a scrolled list, wrapped text) keeps its
+    // halo: html2canvas draws the box but not its box-shadow outside it, which the compositor draws under the capture.
+    // At phone size the Moves panel (scrolled) and Commentary (its mask, two-line comments) fell back on most frames
+    await t.test('desktop: a panel html2canvas draws keeps its halo', { timeout: 120000 }, async () => {
+      const dk = await open(browser, { width: 600, height: 400 });
+      await dk.page.goto(base, { waitUntil: 'load' });
+      await loadedOn(dk.page);
+      await dk.page.addScriptTag({ url: 'https://cdn.jsdelivr.net/npm/html2canvas-pro@2.5.0/dist/html2canvas-pro.min.js' });
+      const HALO = 'box-shadow:0 0 3px rgba(255,236,214,0.3),0 0 14px rgba(255,236,214,0.14),0 0 36px rgba(255,236,214,0.1)';
+      await dk.page.evaluate((halo) => {
+        const back = document.createElement('div');
+        back.id = 'halo-test';
+        back.style.cssText = 'position:fixed;left:0;top:0;width:600px;height:400px;z-index:2147483647;background:rgb(20,17,16)';
+        back.innerHTML = `<div style="position:absolute;left:100px;top:100px;width:200px;height:120px;background:rgb(27,23,21);${halo}"><div style="height:40px;background:#888;mask-image:linear-gradient(#000,transparent);-webkit-mask-image:linear-gradient(#000,transparent)"></div></div>`;
+        document.body.appendChild(back);
+      }, HALO);
+      const shot = await dk.page.screenshot({ clip: { x: 0, y: 160, width: 100, height: 1 } });
+      const css = await dk.page.evaluate(async (b64) => {
+        const im = new Image(); im.src = 'data:image/png;base64,' + b64; await im.decode();
+        const c = document.createElement('canvas'); c.width = im.width; c.height = 1; c.getContext('2d').drawImage(im, 0, 0);
+        const d = c.getContext('2d').getImageData(0, 0, im.width, 1).data;
+        return Array.from({ length: 49 }, (_, k) => d[(99 - k) * 4]);
+      }, shot.toString('base64'));
+      const got = await dk.page.evaluate(async () => {
+        const back = document.getElementById('halo-test');
+        const skip = (target) => (n) => n.tagName === 'SCRIPT' || (!(n.tagName === 'STYLE' || n.tagName === 'LINK' || n.closest('head')) && n !== target && !n.contains(target) && !target.contains(n));
+        const st = window.ExportDraw.compositor(back, { W: 600, H: 400, scale: 1, html2canvas, skip });
+        const cv = document.createElement('canvas'); cv.width = 600; cv.height = 400;
+        await st.draw(cv.getContext('2d'));
+        st.done();
+        back.remove();
+        const d = cv.getContext('2d').getImageData(0, 160, 100, 1).data;
+        return { stats: st.stats, row: Array.from({ length: 49 }, (_, k) => d[(99 - k) * 4]) };
+      });
+      assert.equal(got.stats.captured, 1, `the panel went to html2canvas (${JSON.stringify(got.stats)})`);
+      const worst = Math.max(...got.row.map((v, k) => Math.abs(v - css[k])));
+      assert.ok(worst <= 8, `the halo's red channel 1–49 px out: drawn ${got.row.join(' ')}, CSS ${css.join(' ')}`);
+      assert.deepEqual(dk.errors, []);
+      await dk.ctx.close();
+    });
+
     // a picture board through the sliders (Settings › View) lies under the squares as one picture: on the page lila's
     // file through a CSS filter, which follows a slider at once; in an export the picture worked out through the
     // sliders, which the export paints itself (it can't paint a filter). The coordinates follow the sliders too

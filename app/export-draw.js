@@ -29,6 +29,69 @@
     if (!m) no(what + ' ' + v);
     return { color: m[1], x: +m[2], y: +m[3], blur: +(m[4] || 0), spread: +(m[5] || 0) };
   };
+  // A blurred box-shadow, worked out here rather than by the canvas's shadowBlur: Firefox for Android draws that about
+  // three times too strong and cuts it off short (measured 2026-11-06), so the dark theme's halo lit up the board and
+  // left bands in the panels. The shadow of a rectangle blurred by a Gaussian (sigma: half the blur, as CSS has it) is
+  // the colour's alpha times the product of two erf differences, one across and one down. It is worked out at no more
+  // than a CSS px a pixel (finer for a small blur), scaled up where drawn, and kept for the next box of its size
+  // (the round corners, a few px, are left square)
+  const erf = (x) => {
+    // Abramowitz and Stegun 7.1.26, within 1.5e-7
+    const s = Math.sign(x), t = 1 / (1 + 0.3275911 * Math.abs(x));
+    return s * (1 - ((((1.061405429 * t - 1.453152027) * t + 1.421413741) * t - 0.284496736) * t + 0.254829592) * t * Math.exp(-x * x));
+  };
+  const rgbaOf = (c) => { const m = c.match(/^rgba?\(\s*([\d.]+)[,\s]+([\d.]+)[,\s]+([\d.]+)(?:[,\s/]+([\d.]+))?\s*\)$/); return m && [+m[1], +m[2], +m[3], m[4] == null ? 1 : +m[4]]; };
+  // A canvas no longer needed, emptied so its memory goes now rather than when it is collected: where canvases are drawn
+  // on the GPU (Firefox for Android), an export's discarded layer bitmaps took Firefox's GPU process from 0.3 to 1.8 GB
+  // (measured 2026-11-06), and a page short of memory reloaded mid-export
+  const free = (cv) => { if (cv && cv.width) { cv.width = 0; cv.height = 0; } };
+  const BLURS_KEPT = 48;
+  const blurs = new Map();
+  // false where the colour isn't one this reads (the canvas's own shadow is drawn then)
+  function blurredBox(cx, x, y, w, h, blur, color) {
+    const rgba = rgbaOf(color);
+    if (!rgba) return false;
+    const sigma = blur / 2, pad = Math.ceil(3 * sigma), W = w + 2 * pad, H = h + 2 * pad;
+    const key = [w, h, blur, color].join('|');
+    let bmp = blurs.get(key);
+    if (!bmp) {
+      const step = Math.min(1, sigma / 2), cw = Math.max(1, Math.ceil(W / step)), ch = Math.max(1, Math.ceil(H / step));
+      // how much of the box a Gaussian centred at each pixel covers, along one side
+      const cover = (n, size, len) => Float32Array.from({ length: n }, (_, i) => {
+        const u = ((i + 0.5) * size) / n - pad, r = sigma * Math.SQRT2;
+        return 0.5 * (erf(u / r) - erf((u - len) / r));
+      });
+      const fx = cover(cw, W, w), fy = cover(ch, H, h);
+      bmp = document.createElement('canvas'); bmp.width = cw; bmp.height = ch;
+      const g = bmp.getContext('2d'), im = g.createImageData(cw, ch), d = im.data, A = rgba[3] * 255;
+      for (let j = 0, k = 0; j < ch; j++) for (let i = 0; i < cw; i++, k += 4) { d[k] = rgba[0]; d[k + 1] = rgba[1]; d[k + 2] = rgba[2]; d[k + 3] = A * fx[i] * fy[j]; }
+      g.putImageData(im, 0, 0);
+      if (blurs.size >= BLURS_KEPT) { for (const c of blurs.values()) free(c); blurs.clear(); }
+      blurs.set(key, bmp);
+    }
+    cx.save();
+    cx.imageSmoothingEnabled = true; cx.imageSmoothingQuality = 'high';
+    cx.drawImage(bmp, x - pad, y - pad, W, H);
+    cx.restore();
+    return true;
+  }
+  // A box's shadows (shadowsOf's list, topmost first) for box b (radius r, scale k), drawn bottom first: blurred ones
+  // by blurredBox, others filled
+  function boxShadows(cx, bs, b, r, k, dev) {
+    for (const sh of bs.slice().reverse()) {
+      const sp = sh.spread * k;
+      if (sh.blur > 0 && blurredBox(cx, b.x + sh.x * k - sp, b.y + sh.y * k - sp, b.w + 2 * sp, b.h + 2 * sp, sh.blur * k, sh.color)) continue;
+      if (sh.blur > 0) {
+        // the shadow alone: the shape is drawn far off the canvas and its shadow moved back
+        const far = 1e4;
+        Object.assign(cx, { shadowColor: sh.color, shadowOffsetX: (sh.x * k + far) * dev, shadowOffsetY: sh.y * k * dev, shadowBlur: sh.blur * k * dev, fillStyle: '#000' });
+        roundRect(cx, b.x - sp - far, b.y - sp, b.w + 2 * sp, b.h + 2 * sp, r + sp); cx.fill();
+        Object.assign(cx, { shadowColor: 'transparent', shadowBlur: 0, shadowOffsetX: 0, shadowOffsetY: 0 });
+      } else {
+        cx.fillStyle = sh.color; roundRect(cx, b.x + sh.x * k - sp, b.y + sh.y * k - sp, b.w + 2 * sp, b.h + 2 * sp, r + sp); cx.fill();
+      }
+    }
+  }
   // a box-shadow list, first (topmost) shadow first; the commas inside rgba() don't split it
   const shadowsOf = (v) => v === 'none' ? [] : v.split(/,(?![^(]*\))/).map((x) => shadowOf(x.trim(), 'box-shadow'));
   const dropShadowOf = (f) => {
@@ -101,18 +164,7 @@
     if ((bg || img || border || bs.length) && (rot || shadow)) no('box under a rotation or filter');
     if (s.outlineStyle !== 'none' && px(s.outlineWidth) > 0) no('outline');
     cx.save(); cx.globalAlpha = a;
-    for (const sh of bs.slice().reverse()) {
-      const sp = sh.spread * k;
-      if (sh.blur > 0) {
-        // the shadow alone: the shape is drawn far off the canvas and its shadow moved back
-        const far = 1e4;
-        Object.assign(cx, { shadowColor: sh.color, shadowOffsetX: (sh.x * k + far) * dev, shadowOffsetY: sh.y * k * dev, shadowBlur: sh.blur * k * dev, fillStyle: '#000' });
-        roundRect(cx, b.x - sp - far, b.y - sp, b.w + 2 * sp, b.h + 2 * sp, r + sp); cx.fill();
-        Object.assign(cx, { shadowColor: 'transparent', shadowBlur: 0, shadowOffsetX: 0, shadowOffsetY: 0 });
-      } else {
-        cx.fillStyle = sh.color; roundRect(cx, b.x + sh.x * k - sp, b.y + sh.y * k - sp, b.w + 2 * sp, b.h + 2 * sp, r + sp); cx.fill();
-      }
-    }
+    boxShadows(cx, bs, b, r, k, dev);
     if (bg) { cx.fillStyle = s.backgroundColor; roundRect(cx, b.x, b.y, b.w, b.h, r); cx.fill(); }
     if (img) { cx.fillStyle = gradientOf(cx, s.backgroundImage, b); roundRect(cx, b.x, b.y, b.w, b.h, r); cx.fill(); }
     if (even) {
@@ -293,10 +345,25 @@
     const stats = { painted: 0, captured: 0, reused: 0, why: {} };
     root.setAttribute('data-export-root', '');
     const onclone = (doc) => { const r = doc.querySelector('[data-export-root]'); if (r) r.style.transform = 'none'; };
+    // html2canvas draws the box but not its box-shadow outside it (the dark theme's halo): that is drawn here, under
+    // the capture, where the layer's own shadow is one the painter reads and it isn't transformed
     const capture = async (n, place) => {
       const b = place(n);
       const c = await html2canvas(n, { scale, backgroundColor: null, logging: false, ignoreElements: skip(n), onclone });
-      return { bmp: c, x: b.x * scale, y: b.y * scale };
+      let bs = [];
+      const s = getComputedStyle(n);
+      try { if (s.transform === 'none') bs = shadowsOf(s.boxShadow); } catch (e) { if (!(e instanceof Unsupported)) throw e; }
+      if (!bs.length) return { bmp: c, x: b.x * scale, y: b.y * scale };
+      const x0 = b.x - MARGIN, y0 = b.y - MARGIN, cv = document.createElement('canvas');
+      cv.width = Math.max(1, Math.ceil((b.w + 2 * MARGIN) * scale)); cv.height = Math.max(1, Math.ceil((b.h + 2 * MARGIN) * scale));
+      const cx = cv.getContext('2d');
+      cx.setTransform(scale, 0, 0, scale, -x0 * scale, -y0 * scale);
+      cx.globalAlpha = px(s.opacity);
+      boxShadows(cx, bs, b, radiusOf(s), 1, scale);
+      cx.setTransform(1, 0, 0, 1, 0, 0); cx.globalAlpha = 1;
+      cx.drawImage(c, Math.round(MARGIN * scale), Math.round(MARGIN * scale));
+      free(c);
+      return { bmp: cv, x: x0 * scale, y: y0 * scale };
     };
     const render = (n, place) => {
       const b = place(n), x0 = b.x - MARGIN, y0 = b.y - MARGIN;
@@ -328,6 +395,8 @@
         }
         next.set(n, { key, ...got });
       }
+      // the bitmaps no longer used, let go at once (see free)
+      for (const [n, l] of cache) if (next.get(n) !== l) free(l.bmp);
       cache = next;
       // the camera push: the page stays still while exporting and names the zoom on the box it would have transformed
       // (data-push="<scale> <x> <y>", round that point in the stage's CSS px), and its layers are drawn zoomed here, so
@@ -353,16 +422,16 @@
       cx.restore();
       return true;
     };
-    return { draw, stats, done: () => root.removeAttribute('data-export-root') };
+    return { draw, stats, done: () => { root.removeAttribute('data-export-root'); for (const l of cache.values()) free(l.bmp); cache = new Map(); for (const c of blurs.values()) free(c); blurs.clear(); } };
   }
 
-  // for the tests: one layer drawn here, or Unsupported's reason
-  function paintLayer(root, n, scale) {
+  // for the tests: one layer drawn here, with margin CSS px round it (for its shadows), or Unsupported's reason
+  function paintLayer(root, n, scale, margin = 0) {
     const place = placer(root);
     const b = place(n), cv = document.createElement('canvas');
-    cv.width = Math.max(1, Math.round(b.w * scale)); cv.height = Math.max(1, Math.round(b.h * scale));
+    cv.width = Math.max(1, Math.round((b.w + 2 * margin) * scale)); cv.height = Math.max(1, Math.round((b.h + 2 * margin) * scale));
     const cx = cv.getContext('2d');
-    cx.setTransform(scale, 0, 0, scale, -b.x * scale, -b.y * scale);
+    cx.setTransform(scale, 0, 0, scale, (margin - b.x) * scale, (margin - b.y) * scale);
     try { paint(cx, n, place, scale); } catch (e) { if (e instanceof Unsupported) return e.message; throw e; }
     return cv;
   }
