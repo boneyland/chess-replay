@@ -30,7 +30,6 @@ function visionGrid(bitmap) {
 // the upload arrow of the drop tile and the drop area
 const VisionUpIcon = () => <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 15.5V5m-4.5 4.5L12 5l4.5 4.5M5 19h14" /></svg>;
 const VISION_BAD_FILE = 'That file isn’t an image this browser can open.';
-const visionMB = (bytes) => Math.round(bytes / 1e6);
 // the crop box's handles: which edges each pulls, where it sits on the box (fractions of its width and height), its cursor
 const CROP_HANDLES = [
   ['n', 0.5, 0, 'ns-resize'], ['s', 0.5, 1, 'ns-resize'], ['w', 0, 0.5, 'ew-resize'], ['e', 1, 0.5, 'ew-resize'],
@@ -98,18 +97,17 @@ function VisionDialog({ again, onRead, onClose }) {
   // (Back to crop hands them back as they were: nothing found again)
   const [pic, setPic] = React.useState(again ? { bitmap: again.bitmap, grey: again.grey, found: again.found } : null);
   const [box, setBox] = React.useState(again ? again.box : VC.WHOLE);
-  const [dl, setDl] = React.useState({ on: false, got: 0 }), [err, setErr] = React.useState('');
+  const dl = useKeptDownload(), [err, setErr] = React.useState('');
   const [askRemove, setAskRemove] = React.useState(false), [reading, setReading] = React.useState(false);
   const [online, setOnline] = React.useState(navigator.onLine !== false);
   const [size, setSize] = React.useState({ w: 0, h: 0 });
-  const wrap = React.useRef(null), stage = React.useRef(null), file = React.useRef(null), ctl = React.useRef(null);
+  const wrap = React.useRef(null), stage = React.useRef(null), file = React.useRef(null);
   // what unmounting must tidy, set as things happen (not from a render): own, the bitmap the dialog decoded and hasn't
-  // handed on; a download; a read under way
+  // handed on; a read under way (useKeptDownload stops a download)
   const live = React.useRef({ alive: true, own: null, reading: false });
   React.useEffect(() => () => {
     const l = live.current;
     l.alive = false;
-    if (ctl.current) ctl.current.abort();
     if (l.reading) V.stop(); // Cancel while reading stops the read, so the next one isn't refused as Already reading
     if (l.own) l.own.close();
   }, []);
@@ -135,25 +133,11 @@ function VisionDialog({ again, onRead, onClose }) {
   };
   React.useEffect(focusFirst, [state, askRemove, size.w > 0, dl.on, online]);
 
+  // (a failed download's message is dl.err, shown with the dialog's own)
   const download = async () => {
-    const c = new AbortController();
-    ctl.current = c;
     setErr('');
-    setDl({ on: true, got: 0 });
-    try {
-      await V.kept.download({ signal: c.signal, onProgress: (got) => setDl((s) => (visionMB(got) === visionMB(s.got) ? s : { ...s, got })) });
-      if (!live.current.alive) return;
-      setDl({ on: false, got: 0 });
-      setState('pick');
-    } catch (e) {
-      if (!live.current.alive) return;
-      setDl({ on: false, got: 0 });
-      setErr(c.signal.aborted ? '' : 'Download failed: ' + ((e && e.message) || e));
-    } finally {
-      if (ctl.current === c) ctl.current = null;
-    }
+    if ((await dl.start((o) => V.kept.download(o))) && live.current.alive) setState('pick');
   };
-  const cancelDownload = () => { if (ctl.current) ctl.current.abort(); };
   // Paste image: the first image on the clipboard, read when asked (the browser may ask first); Ctrl+V / ⌘V works too
   const pasteImage = async () => {
     setErr('');
@@ -171,10 +155,8 @@ function VisionDialog({ again, onRead, onClose }) {
   // a removal that fails says why, and the dialog follows what is kept now
   const remove = async () => {
     setAskRemove(false);
-    let why = '';
-    try { await V.kept.remove(); } catch (e) { why = 'The board reader could not be removed: ' + ((e && e.message) || e); }
-    const has = why ? await V.kept.present() : false;
-    if (live.current.alive) { setErr(why); setState(has ? 'pick' : 'need'); }
+    const r = await V.kept.removeKept();
+    if (live.current.alive) { setErr(r.err); setState(r.kept ? 'pick' : 'need'); }
   };
 
   // A picked or pasted file decoded (its EXIF orientation applied); the picture before it goes, if it was the dialog's
@@ -286,12 +268,12 @@ function VisionDialog({ again, onRead, onClose }) {
   };
   const onCropKey = (e) => { if (e.key === 'Enter') { e.preventDefault(); read(); } };
 
-  const MB = visionMB(V.kept.total());
+  const total = V.kept.total(), MB = keptMB(total);
   const supported = V.supported();
   const canPaste = !!(navigator.clipboard && navigator.clipboard.read);
   const coarse = !!(window.matchMedia && window.matchMedia('(pointer: coarse)').matches); // a touch screen: nothing to drag from
   const cancelBtn = <button type="button" className="twk-btn secondary" onClick={onClose}>Cancel</button>;
-  const msg = err && <div className="fen-msg" role="alert">{err}</div>;
+  const msg = (err || dl.err) && <div className="fen-msg" role="alert">{err || dl.err}</div>;
   let body;
   if (state === 'checking') body = <div className="fen-btns"><button type="button" className="twk-btn secondary" data-autofocus onClick={onClose}>Cancel</button></div>;
   else if (state === 'need') {
@@ -300,13 +282,10 @@ function VisionDialog({ again, onRead, onClose }) {
       <div className="fen-note">The model is <a href="https://github.com/JSeytre/chessqueries" target="_blank" rel="noopener">ChessQ Lite by Joël Seytre (ChessQueries)</a>, under <a href="https://polyformproject.org/licenses/noncommercial/1.0.0/" target="_blank" rel="noopener">PolyForm Noncommercial 1.0.0</a>. Required Notice: Copyright (c) 2026 Joël Seytre. It is built on Meta AI’s <a href="https://github.com/facebookresearch/dinov2" target="_blank" rel="noopener">DINOv2</a> (Copyright (c) Meta Platforms, Inc. and affiliates), under the <a href="https://www.apache.org/licenses/LICENSE-2.0" target="_blank" rel="noopener">Apache License 2.0</a>.</div>
       {!supported ? <div className="twk-note twk-err">This browser can’t run the board reader.</div>
         : !online && !dl.on && <div className="fen-note" role="status">The board reader downloads once; you’re offline.</div>}
-      {dl.on ? <>
-        <div className="twk-note" role="status">Downloading board reader · {visionMB(dl.got)} of {MB} MB</div>
-        <div className="twk-progress"><i style={{ width: `${(100 * dl.got / V.kept.total()).toFixed(1)}%` }} /></div>
-      </> : null}
+      {dl.on && <KeptProgress what="board reader" got={dl.got} total={total} />}
       {msg}
       <div className="fen-btns">
-        {dl.on ? <button type="button" className="twk-btn secondary" data-autofocus onClick={cancelDownload}>Cancel the download</button> : cancelBtn}
+        {dl.on ? <button type="button" className="twk-btn secondary" data-autofocus onClick={dl.cancel}>Cancel the download</button> : cancelBtn}
         {!dl.on && <button type="button" className="twk-btn" data-autofocus disabled={!online || !supported} onClick={download}>Download board reader · {MB} MB</button>}
       </div>
     </>;
@@ -331,7 +310,7 @@ function VisionDialog({ again, onRead, onClose }) {
       </div>
       {msg}
       {askRemove ? <>
-        <div className="twk-note" role="alert">Remove the board reader? You’d need to download {MB} MB again to use it.</div>
+        <KeptRemoveAsk what="board reader" total={total} />
         <div className="fen-btns">
           <button type="button" className="twk-btn danger" onClick={remove}>Remove</button>
           <button type="button" className="twk-btn secondary" data-autofocus onClick={() => setAskRemove(false)}>Keep</button>

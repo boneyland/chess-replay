@@ -14,20 +14,19 @@ function EngineSettings({ t, setTweak, full, ES, sfKind, threading, hash, analys
   React.useEffect(() => setAskRemove(false), [full.state]);
   const depthText = (d) => (d == null ? 'No limit' : String(d)), SF_KEYS = ['sfDepth', 'sfTime', 'sfOwnDepth', 'sfOwnTime', 'sfLines', 'sfHash', 'sfThreads'];
   const sfChanged = JSON.stringify(ES) !== JSON.stringify(window.AnalysisCore.engineSettings(window.TWEAK_DEFAULTS, sfKind, threading, hash.choices));
-  const MB = sfMB(full.total), stopsAt = 'Each search stops at its depth or time limit, whichever comes first.';
+  const MB = keptMB(full.total), stopsAt = 'Each search stops at its depth or time limit, whichever comes first.';
   return <>
     {!SF_SIMD && <div className="twk-note twk-err">{SF_ASM_NOTE}</div>}
     {full.offered && <>
       {t.sfEngine === 'Full' && full.state === 'absent' && <TweakButton label={`Download full Stockfish · ${MB} MB`} onClick={full.download}
         info={`Full Stockfish 19 is stronger than Lite, with the big neural network. It is a ${MB} MB download from unpkg.com, kept in this browser for next time and offline. Until it is downloaded, Lite runs.`} />}
       {full.state === 'downloading' && <>
-        <div className="twk-note" role="status">Downloading full Stockfish · {sfMB(full.got)} of {MB} MB</div>
-        <div className="twk-progress"><i style={{ width: `${(100 * full.got / full.total).toFixed(1)}%` }} /></div>
+        <KeptProgress what="full Stockfish" got={full.got} total={full.total} />
         <TweakButton secondary label="Cancel the download" onClick={full.cancel} />
       </>}
       {full.err && <div className="twk-note twk-err">{full.err}</div>}
       {full.state === 'ready' && (askRemove ? <>
-        <div className="twk-note" role="alert">Remove the full engine? You’d need to download {MB} MB again to use it.</div>
+        <KeptRemoveAsk what="full engine" total={full.total} />
         <div className="twk-pair">
           <TweakButton danger label="Remove" onClick={() => { setAskRemove(false); full.remove(); }} />
           <TweakButton secondary label="Keep" onClick={() => setAskRemove(false)} />
