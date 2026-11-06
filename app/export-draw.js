@@ -180,9 +180,9 @@
       }
     }
     cx.restore();
-    // what's in it, clipped to it where it hides its overflow
+    // what's in it, clipped to its padding box where it hides its overflow; a scrolled box needs nothing more, as place()
+    // reads where each child is now, scrolled with it
     const clip = s.overflowX !== 'visible' || s.overflowY !== 'visible';
-    if (clip && (node.scrollTop || node.scrollLeft)) no('scrolled box');
     cx.save();
     if (clip) {
       if (rot) no('rotated clip');
@@ -330,6 +330,14 @@
   }
 
   // place(n): a box's place on the root stage in the stage's own (untransformed) CSS px, as the stage is now
+  // the scroll offsets in a layer, which its markup doesn't hold: the Moves list slides to each new move with the
+  // same markup, frame after frame
+  function scrollsOf(n) {
+    let out = '';
+    [n, ...n.querySelectorAll('*')].forEach((e, i) => { if (e.scrollTop || e.scrollLeft) out += ` ${i}:${e.scrollLeft},${e.scrollTop}`; });
+    return out;
+  }
+
   function placer(root) {
     const R = root.getBoundingClientRect(), Z = R.width / root.offsetWidth || 1;
     return (n) => { const r = n.getBoundingClientRect(); return { x: (r.left - R.left) / Z, y: (r.top - R.top) / Z, w: r.width / Z, h: r.height / Z }; };
@@ -384,7 +392,7 @@
       const next = new Map(), layers = layersOf(root);
       let changed = false;
       for (const n of layers) {
-        const key = n.outerHTML, had = cache.get(n);
+        const key = n.outerHTML + scrollsOf(n), had = cache.get(n);
         if (had && had.key === key) { next.set(n, had); stats.reused++; continue; }
         changed = true;
         let got;
