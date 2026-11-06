@@ -29,6 +29,48 @@
     if (!m) no(what + ' ' + v);
     return { color: m[1], x: +m[2], y: +m[3], blur: +(m[4] || 0), spread: +(m[5] || 0) };
   };
+  // A blurred box-shadow, worked out here rather than by the canvas's shadowBlur: Firefox for Android draws that about
+  // three times too strong and cuts it off short (measured 2026-11-06), so the dark theme's halo lit up the board and
+  // left bands in the panels. The shadow of a rectangle blurred by a Gaussian (sigma: half the blur, as CSS has it) is
+  // the colour's alpha times the product of two erf differences, one across and one down. It is worked out at no more
+  // than a CSS px a pixel (finer for a small blur), scaled up where drawn, and kept for the next box of its size
+  // (the round corners, a few px, are left square)
+  const erf = (x) => {
+    // Abramowitz and Stegun 7.1.26, within 1.5e-7
+    const s = Math.sign(x), t = 1 / (1 + 0.3275911 * Math.abs(x));
+    return s * (1 - ((((1.061405429 * t - 1.453152027) * t + 1.421413741) * t - 0.284496736) * t + 0.254829592) * t * Math.exp(-x * x));
+  };
+  const rgbaOf = (c) => { const m = c.match(/^rgba?\(\s*([\d.]+)[,\s]+([\d.]+)[,\s]+([\d.]+)(?:[,\s/]+([\d.]+))?\s*\)$/); return m && [+m[1], +m[2], +m[3], m[4] == null ? 1 : +m[4]]; };
+  const BLURS_KEPT = 48;
+  const blurs = new Map();
+  // false where the colour isn't one this reads (the canvas's own shadow is drawn then)
+  function blurredBox(cx, x, y, w, h, blur, color) {
+    const rgba = rgbaOf(color);
+    if (!rgba) return false;
+    const sigma = blur / 2, pad = Math.ceil(3 * sigma), W = w + 2 * pad, H = h + 2 * pad;
+    const key = [w, h, blur, color].join('|');
+    let bmp = blurs.get(key);
+    if (!bmp) {
+      const step = Math.min(1, sigma / 2), cw = Math.max(1, Math.ceil(W / step)), ch = Math.max(1, Math.ceil(H / step));
+      // how much of the box a Gaussian centred at each pixel covers, along one side
+      const cover = (n, size, len) => Float32Array.from({ length: n }, (_, i) => {
+        const u = ((i + 0.5) * size) / n - pad, r = sigma * Math.SQRT2;
+        return 0.5 * (erf(u / r) - erf((u - len) / r));
+      });
+      const fx = cover(cw, W, w), fy = cover(ch, H, h);
+      bmp = document.createElement('canvas'); bmp.width = cw; bmp.height = ch;
+      const g = bmp.getContext('2d'), im = g.createImageData(cw, ch), d = im.data, A = rgba[3] * 255;
+      for (let j = 0, k = 0; j < ch; j++) for (let i = 0; i < cw; i++, k += 4) { d[k] = rgba[0]; d[k + 1] = rgba[1]; d[k + 2] = rgba[2]; d[k + 3] = A * fx[i] * fy[j]; }
+      g.putImageData(im, 0, 0);
+      if (blurs.size >= BLURS_KEPT) blurs.clear();
+      blurs.set(key, bmp);
+    }
+    cx.save();
+    cx.imageSmoothingEnabled = true; cx.imageSmoothingQuality = 'high';
+    cx.drawImage(bmp, x - pad, y - pad, W, H);
+    cx.restore();
+    return true;
+  }
   // a box-shadow list, first (topmost) shadow first; the commas inside rgba() don't split it
   const shadowsOf = (v) => v === 'none' ? [] : v.split(/,(?![^(]*\))/).map((x) => shadowOf(x.trim(), 'box-shadow'));
   const dropShadowOf = (f) => {
@@ -103,6 +145,7 @@
     cx.save(); cx.globalAlpha = a;
     for (const sh of bs.slice().reverse()) {
       const sp = sh.spread * k;
+      if (sh.blur > 0 && !rot && blurredBox(cx, b.x + sh.x * k - sp, b.y + sh.y * k - sp, b.w + 2 * sp, b.h + 2 * sp, sh.blur * k, sh.color)) continue;
       if (sh.blur > 0) {
         // the shadow alone: the shape is drawn far off the canvas and its shadow moved back
         const far = 1e4;
@@ -356,13 +399,13 @@
     return { draw, stats, done: () => root.removeAttribute('data-export-root') };
   }
 
-  // for the tests: one layer drawn here, or Unsupported's reason
-  function paintLayer(root, n, scale) {
+  // for the tests: one layer drawn here, with margin CSS px round it (for its shadows), or Unsupported's reason
+  function paintLayer(root, n, scale, margin = 0) {
     const place = placer(root);
     const b = place(n), cv = document.createElement('canvas');
-    cv.width = Math.max(1, Math.round(b.w * scale)); cv.height = Math.max(1, Math.round(b.h * scale));
+    cv.width = Math.max(1, Math.round((b.w + 2 * margin) * scale)); cv.height = Math.max(1, Math.round((b.h + 2 * margin) * scale));
     const cx = cv.getContext('2d');
-    cx.setTransform(scale, 0, 0, scale, -b.x * scale, -b.y * scale);
+    cx.setTransform(scale, 0, 0, scale, (margin - b.x) * scale, (margin - b.y) * scale);
     try { paint(cx, n, place, scale); } catch (e) { if (e instanceof Unsupported) return e.message; throw e; }
     return cv;
   }
