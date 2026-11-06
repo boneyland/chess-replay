@@ -21,12 +21,13 @@
 
   // The generic part (download, check, keep) is KeptFiles', one per build over the same cache
   const KEPT = {};
-  for (const b of Object.keys(BUILDS)) KEPT[b] = window.KeptFiles.make({ cache: CACHE, base: BASE, files: BUILDS[b], host: 'unpkg.com', what: 'engine' });
+  // removing the copy lets the engines' Blob URLs go too (the cache is one, so either build's remove() empties it)
+  const forget = () => { blobs.forEach((u) => URL.revokeObjectURL(u)); blobs = []; started = {}; };
+  for (const b of Object.keys(BUILDS)) KEPT[b] = window.KeptFiles.make({ cache: CACHE, base: BASE, files: BUILDS[b], host: 'unpkg.com', what: 'full engine', onRemove: forget });
   // one stall limit for both builds
   const limits = {};
   Object.defineProperty(limits, 'stallMs', { enumerable: true, get: () => KEPT.single.limits.stallMs, set: (v) => { for (const b in KEPT) KEPT[b].limits.stallMs = v; } });
   const supported = () => KEPT.single.supported() && typeof Worker !== 'undefined';
-  const urlOf = (f) => BASE + f.name;
 
   // Both files of a build kept (checked when downloaded)
   const present = async (build = 'single') => supported() && KEPT[build].present();
@@ -35,47 +36,27 @@
   // Keeping one build drops the other: only one of them runs on a page, and the other's 99 MB would count against the
   // storage check with no way to remove it.
   async function download({ build = 'single', onProgress, signal } = {}) {
-    if (!supported()) throw new Error('This browser can’t keep the engine');
+    if (!supported()) throw new Error('This browser can’t keep the full engine');
     for (const b of Object.keys(BUILDS)) if (b !== build) await KEPT[b].drop();
     return KEPT[build].download({ onProgress, signal });
   }
 
-  // The kept copy → a makeWorker for SFEngine.create. It was checked when downloaded, so it is trusted now: only its sizes
-  // are compared (a missing or cut-short copy is dropped), and its Blobs are passed on without reading the 99 MB into the
-  // page. Once per page and build: an engine started again (a dead one, a new hash size) reuses the Blob URLs
+  // The kept copy (KeptFiles' Blob URLs; a missing or cut-short copy is dropped and refused) → a makeWorker for
+  // SFEngine.create. Once per page and build: an engine started again (a dead one, a new hash size) reuses the Blob URLs
   let started = {}, blobs = [];
   const start = (build = 'single') => started[build] || (started[build] = load(build).catch((e) => { delete started[build]; throw e; }));
   async function load(build) {
-    const FILES = BUILDS[build], kept = KEPT[build];
-    const cache = await caches.open(CACHE);
-    const urls = [];
-    for (const f of FILES) {
-      const r = await cache.match(urlOf(f));
-      const blob = r && await r.blob();
-      if (!blob || blob.size !== f.size) {
-        urls.forEach((u) => URL.revokeObjectURL(u));
-        await kept.drop(cache);
-        throw new Error('The downloaded engine is missing');
-      }
-      urls.push(URL.createObjectURL(blob.type === f.type ? blob : new Blob([blob], { type: f.type })));
-    }
-    blobs = blobs.concat(urls);
-    const [glue, wasm] = urls;
+    const kept = await KEPT[build].blobUrls(), [glue, wasm] = BUILDS[build].map((f) => kept.url(f.name));
+    blobs.push(glue, wasm);
     return () => new Worker(glue + '#' + encodeURIComponent(wasm));
   }
 
-  function remove() {
-    blobs.forEach((u) => URL.revokeObjectURL(u));
-    blobs = [];
-    started = {};
-    return caches.delete(CACHE);
-  }
+  const remove = () => KEPT.single.remove();
   // Remove, for the Remove button: { kept: { single, threads }, err }. A removal that fails says why (err), and kept is
   // then what is still in the cache, so the page doesn't show the engine as gone while its 99 MB stay
   async function removeKept() {
-    try { await remove(); return { kept: { single: false, threads: false }, err: '' }; } catch (e) {
-      return { kept: { single: await present('single'), threads: await present('threads') }, err: 'The full engine could not be removed: ' + ((e && e.message) || e) };
-    }
+    const r = await KEPT.single.removeKept();
+    return { kept: { single: r.kept, threads: r.err ? await present('threads') : false }, err: r.err };
   }
 
   window.SFFull = { BASE, BUILDS, FILES, CACHE, TOTAL, total, limits, supported, present, download, start, remove, removeKept };

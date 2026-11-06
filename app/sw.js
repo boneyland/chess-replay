@@ -9,7 +9,7 @@ const PAGE = 'chess-game-video.html';
 const CACHE = 'chess-replay-' + VERSION;
 // hosts whose files are kept as they're used (the fonts' stylesheet names font files by the browser that asks)
 const KEEP_HOSTS = __KEEP_HOSTS__; // build.cjs's CDN_HOSTS, which the page's CSP allows
-// The board reader's model and runtime (vision/, 55 MB) are kept only by viewers who ask for them, in a cache of their own
+// The board reader's model and runtime (vision/, 56 MB) are kept only by viewers who ask for them, in a cache of their own
 // that no deploy replaces (kept-files.js fills it under these same URLs): VisionCore's CACHE, which a model update bumps
 const VISION_CACHE = '__VISION_CACHE__';
 // a page that hasn't answered by then comes from the copy (a connection that is up but not getting through)
