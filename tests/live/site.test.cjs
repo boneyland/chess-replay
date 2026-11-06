@@ -2833,8 +2833,9 @@ for (const name of BROWSERS) for (const site of SITES) {
       const p = g.page, label = p.locator('.plabel');
       // the engine's depths and bestmoves, when each came (ms since the page began): what the move is rated from
       await p.addInitScript(() => {
-        const out = window.__sfOut = [], W = window.Worker;
+        const out = window.__sfOut = [], W = window.Worker, made = window.__sfWorkers = [];
         window.Worker = class extends W {
+          constructor(url, o) { super(url, o); made.push([Math.round(performance.now()), String(url).split('#')[0].split('/').pop()]); }
           get onmessage() { return super.onmessage; }
           set onmessage(f) { super.onmessage = f && ((e) => { const m = typeof e.data === 'string' && e.data.match(/^(bestmove \S+|info depth \d+)/); if (m) out.push([Math.round(performance.now()), m[1]]); return f(e); }); }
         };
@@ -2858,7 +2859,13 @@ for (const name of BROWSERS) for (const site of SITES) {
       // mate (Qe8#) at once, so wait for its bestmove, however long the engine takes to start (a move made before it had
       // started went unrated after a fixed 5 s in WebKit on GitHub, 2026-11-01; 30 s ran out there on 2026-11-03)
       const t0 = await p.evaluate(() => performance.now());
-      await assert.doesNotReject(p.waitForFunction((t0) => window.__sfOut.some(([t, m]) => t > t0 && m.startsWith('bestmove')), t0, { timeout: 60000 }), 'the search before the move ends');
+      // where none comes, what the engine said and when (ms from t0), and the Workers the page started, to tell an engine
+      // that never started from one that searched and was stopped
+      const before = await p.waitForFunction((t0) => window.__sfOut.some(([t, m]) => t > t0 && m.startsWith('bestmove')), t0, { timeout: 60000 }).then(() => null, (e) => e);
+      if (before) {
+        const said = await p.evaluate((t0) => ({ out: window.__sfOut.map(([t, m]) => `${t - Math.round(t0)} ms ${m}`).slice(-30), workers: window.__sfWorkers, status: document.body.innerText.match(/Stockfish[^\n]*/g) }), t0);
+        assert.fail(`the search before the move ends (${before.message.split('\n')[0]})\nengine: ${said.out.join('; ')}\nworkers: ${JSON.stringify(said.workers)}\npage: ${JSON.stringify(said.status)}\nerrors: ${JSON.stringify(g.errors)}`);
+      }
       const f = square(b, 'e2'), tt = square(b, 'c4');
       await p.mouse.move(f.x, f.y);
       await p.mouse.down();
