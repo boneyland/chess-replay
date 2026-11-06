@@ -89,9 +89,14 @@
     // the box: its shadow, background and border
     const b = place(node), r = radiusOf(s) * k;
     const bg = !clear(s.backgroundColor), img = s.backgroundImage !== 'none';
+    // the border's sides (top, right, bottom, left) that show: solid ones only, all alike (round corners allowed), or on
+    // square corners any of them (a divider's border-top)
     const bw = [s.borderTopWidth, s.borderRightWidth, s.borderBottomWidth, s.borderLeftWidth].map(px);
-    const border = bw[0] > 0 && !clear(s.borderTopColor);
-    if (new Set(bw).size > 1 || (border && (s.borderTopStyle !== 'solid' || new Set([s.borderTopColor, s.borderRightColor, s.borderBottomColor, s.borderLeftColor]).size > 1))) no('border');
+    const bc = [s.borderTopColor, s.borderRightColor, s.borderBottomColor, s.borderLeftColor];
+    const bst = [s.borderTopStyle, s.borderRightStyle, s.borderBottomStyle, s.borderLeftStyle];
+    const sides = [0, 1, 2, 3].filter((i) => bw[i] > 0 && !clear(bc[i]));
+    const border = sides.length > 0, even = sides.length === 4 && new Set(bw).size === 1 && new Set(bc).size === 1;
+    if (sides.some((i) => bst[i] !== 'solid') || (border && !even && r > 0)) no('border');
     const bs = shadowsOf(s.boxShadow);
     if ((bg || img || border || bs.length) && (rot || shadow)) no('box under a rotation or filter');
     if (s.outlineStyle !== 'none' && px(s.outlineWidth) > 0) no('outline');
@@ -110,10 +115,17 @@
     }
     if (bg) { cx.fillStyle = s.backgroundColor; roundRect(cx, b.x, b.y, b.w, b.h, r); cx.fill(); }
     if (img) { cx.fillStyle = gradientOf(cx, s.backgroundImage, b); roundRect(cx, b.x, b.y, b.w, b.h, r); cx.fill(); }
-    if (border) {
+    if (even) {
       const w = bw[0] * k;
-      cx.strokeStyle = s.borderTopColor; cx.lineWidth = w;
+      cx.strokeStyle = bc[0]; cx.lineWidth = w;
       roundRect(cx, b.x + w / 2, b.y + w / 2, b.w - w, b.h - w, Math.max(0, r - w / 2)); cx.stroke();
+    } else {
+      // each side a strip along its edge of the box
+      for (const i of sides) {
+        const w = bw[i] * k;
+        cx.fillStyle = bc[i];
+        cx.fillRect(i === 1 ? b.x + b.w - w : b.x, i === 2 ? b.y + b.h - w : b.y, i % 2 ? w : b.w, i % 2 ? b.h : w);
+      }
     }
     cx.restore();
     // what's in it, clipped to it where it hides its overflow
@@ -122,8 +134,8 @@
     cx.save();
     if (clip) {
       if (rot) no('rotated clip');
-      const w = border ? bw[0] * k : 0;
-      roundRect(cx, b.x + w, b.y + w, b.w - 2 * w, b.h - 2 * w, Math.max(0, r - w)); cx.clip();
+      const [t, rt, bt, l] = [0, 1, 2, 3].map((i) => (sides.includes(i) ? bw[i] * k : 0));
+      roundRect(cx, b.x + l, b.y + t, b.w - l - rt, b.h - t - bt, Math.max(0, r - t)); cx.clip();
     }
     // the paint order: the box's own flow (text and unpositioned children, in order), then the positioned children by z-index
     const flow = [], placed = [];
