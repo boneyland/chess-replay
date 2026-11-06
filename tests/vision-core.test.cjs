@@ -82,3 +82,25 @@ test('dragBox: move keeps size, edges keep 5% minimum, all inside the picture', 
   near(V.dragBox(b, 'n', 0, .6).y0, .45); near(V.dragBox(b, 's', 0, -.6).y1, .15); near(V.dragBox(b, 'e', -.6, 0).x1, .15);
   assert.equal(V.dragBox(b, 'e', .1, 0).y0, .1);
 });
+
+// The board reader's Worker loads its files from the kept copy as Blob URLs, typed as FILES says (a module import needs
+// text/javascript), so it doesn't rely on sw.js (which doesn't control a page after Shift+reload) to answer vision/ from
+// it; a file not kept, or no Cache Storage, comes from the network
+test('vision-worker: kept files load as typed Blob URLs, others from base', async () => {
+  const src = require('fs').readFileSync(require('path').join(__dirname, '..', 'app', 'vision-worker.js'), 'utf8');
+  const base = 'https://site.test/vision/', made = [];
+  const kept = new Map([[base + 'ort.wasm.min.mjs', 'js'], [base + 'chessq-lite-v4-int8.onnx', 'model']]);
+  const caches = { open: async (name) => (name !== V.CACHE ? { match: async () => undefined } : { match: async (u) => (kept.has(u) ? new Response(kept.get(u)) : undefined) }) };
+  const FakeURL = { createObjectURL: (b) => { made.push(b); return 'blob:' + made.length; } };
+  const keptUrls = new Function('self', 'caches', 'URL', src + '\nreturn keptUrls;')({}, caches, FakeURL);
+  const files = V.FILES.map((f) => ({ name: f.name, type: f.type }));
+  const url = await keptUrls(base, V.CACHE, files);
+  const blobOf = (name) => { const u = url(name); assert.match(u, /^blob:\d+$/, name); return made[+u.slice(5) - 1]; };
+  assert.equal(blobOf('ort.wasm.min.mjs').type, 'text/javascript');
+  assert.equal(await blobOf('ort.wasm.min.mjs').text(), 'js');
+  assert.equal(await blobOf('chessq-lite-v4-int8.onnx').text(), 'model');
+  assert.equal(made.length, 2);
+  assert.equal(url('ort-wasm-simd-threaded.wasm'), base + 'ort-wasm-simd-threaded.wasm', 'not kept: from the network');
+  const none = await new Function('self', 'caches', 'URL', src + '\nreturn keptUrls;')({}, undefined, FakeURL)(base, V.CACHE, files);
+  assert.equal(none('ort.wasm.min.mjs'), base + 'ort.wasm.min.mjs', 'no Cache Storage: from the network');
+});

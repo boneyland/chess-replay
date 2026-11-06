@@ -1,10 +1,10 @@
 // The board reader on the page: its kept files (the vision/ folder next to the page, downloaded only on the viewer's
-// click, kept by KeptFiles in VisionCore.CACHE, which sw.js serves them from) and the Worker that runs it
-// (vision-worker.js). read(bitmap) gives the model's logits for a cropped picture; VisionCore.read turns them into a board.
+// click, kept by KeptFiles in VisionCore.CACHE, which the Worker loads them from as Blob URLs, with or without sw.js)
+// and the Worker that runs it (vision-worker.js). read(bitmap) gives the model's logits for a cropped picture; VisionCore.read turns them into a board.
 // Nothing here draws or touches the DOM, and the picture never leaves the device.
 (function () {
   const VC = window.VisionCore;
-  // the same prefix the kept cache's keys use, so sw.js finds the Worker's requests there
+  // the same prefix the kept cache's keys use, so the Worker (and sw.js) find the files there
   const BASE = new URL('vision/', location.href).href;
   const made = window.KeptFiles.make({ cache: VC.CACHE, base: BASE, files: VC.FILES, host: 'the site', what: 'board reader' });
   // removing the files also stops a Worker that has them loaded
@@ -31,7 +31,7 @@
     // a Worker whose script or module imports don't load says so only by an error event
     worker.onerror = (e) => { e.preventDefault(); settle((w) => w.no(new Error(e.message || 'The board reader did not start'))); stop(); };
     const got = answer('ready');
-    worker.postMessage({ type: 'load', base: BASE, threads: Math.min(4, navigator.hardwareConcurrency || 1) });
+    worker.postMessage({ type: 'load', base: BASE, cache: VC.CACHE, files: VC.FILES.map((f) => ({ name: f.name, type: f.type })), threads: Math.min(4, navigator.hardwareConcurrency || 1) });
     loaded = got.catch((e) => { stop(); throw e; });
     return loaded;
   }
