@@ -159,19 +159,13 @@ function EditBoard({ setup, onChange, onDone, onCancel, fenText, onFenText, fenM
   if (nav) nav.current = { label: 'Edit position', color: C.last, hasPrev: false, hasNext: false, hasLast: false, hasFirst: false, prev: () => {}, next: () => {}, last: () => {}, first: () => {}, fen: () => E.toFen(setup) };
   React.useEffect(() => { if (nav && nav.listen) nav.listen(); }, []);
   const input = useEditInput({ setup, onChange }), { held, drag } = input;
-  // Esc lets a held tray piece go, else cancels (from the FEN field too); not while it closes something over the editor
-  // (overlay: Settings, a menu, Queen's panel), whose own handlers may run before or after this one
-  const keyRef = React.useRef(null);
-  keyRef.current = { onCancel, held, dropHeld: input.dropHeld, overlay };
-  React.useEffect(() => {
-    const onKey = (e) => {
-      if (e.key !== 'Escape' || e.isComposing || e.defaultPrevented || keyRef.current.overlay || document.querySelector('[role="dialog"]')) return;
-      e.preventDefault();
-      if (keyRef.current.held) keyRef.current.dropHeld(); else keyRef.current.onCancel();
-    };
-    window.addEventListener('keydown', onKey);
-    return () => window.removeEventListener('keydown', onKey);
-  }, []);
+  // Esc lets a held tray piece go, else cancels (from the FEN field too); not while something is open over the editor
+  // (overlay: Settings, a menu, Queen's panel, whose Esc claims the key first; or a dialog)
+  useKeydown((e) => {
+    if (e.key !== 'Escape' || overlay || document.querySelector('[role="dialog"]')) return;
+    e.preventDefault();
+    if (held) input.dropHeld(); else onCancel();
+  }, { fields: true });
   const trayHandlers = input.trayHandlers, H = input.handlers;
   // the keyboard's square shows while the board has the focus from the keyboard
   const [kbFocus, setKbFocus] = React.useState(false);

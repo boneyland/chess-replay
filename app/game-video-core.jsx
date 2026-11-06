@@ -31,6 +31,12 @@ const clsColor = (cls) => C[cls] || C.ink;
 // The board looks the same in both themes: what's drawn on it (highlights, badges, arrows, check glow) uses these
 const BOARD = PALETTES.dark;
 const boardCls = (cls) => BOARD[cls] || BOARD.last;
+// A move's SAN chip, light for White's moves and dark for Black's in both themes (like the board's squares): the move
+// list's and a line's at 16 px; rowChip, the explorers' rows, at 17 px and one width, so their columns line up. extra
+// overrides any part (a flagged move's border, the current move's weight)
+const chipEdge = (white) => `1px solid ${white ? 'rgba(60,40,20,0.22)' : 'rgba(255,236,214,0.22)'}`;
+const moveChip = (white, extra) => ({ padding: `${tx(2)}px ${tx(8)}px`, borderRadius: 2, font: `600 ${tx(16)}px ${MONO}`, background: white ? '#f1ebe1' : '#2a2320', color: white ? '#15100d' : '#efe8de', border: chipEdge(white), ...extra });
+const rowChip = (white, extra) => moveChip(white, { flex: 'none', minWidth: tx(58), boxSizing: 'border-box', textAlign: 'center', font: `600 ${tx(17)}px ${MONO}`, ...extra });
 const LAST_MOVE = 'rgba(155,199,0,0.41)'; // Lichess's last-move tint, clear on both square colours
 // the selected piece's square (a board index, or null), in the last move's tint under the pieces
 const selSquare = (sel) => (sel == null ? null : <div key="sel" data-sel style={{ position: 'absolute', left: idxXY(sel)[0] * SQ, top: idxXY(sel)[1] * SQ, width: SQ, height: SQ, background: LAST_MOVE }} />);
@@ -606,7 +612,7 @@ function LineChips({ name, nameColor, accent, moves, ply0, c, legal, sel, onPick
               onClick={ok ? (e) => { e.stopPropagation(); onPick(j); } : undefined}
               onPointerEnter={ok && onHover ? (e) => { if (e.pointerType === 'mouse') onHover(j); } : undefined} tabIndex={ok ? 0 : undefined}
               onKeyDown={ok ? (e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); e.stopPropagation(); onPick(j); } } : undefined}
-              style={{ cursor: ok ? 'pointer' : 'default', opacity: ok ? 1 : 0.4, padding: `${tx(2)}px ${tx(8)}px`, borderRadius: 2, font: `${j === 0 || on ? 700 : 600} ${tx(16)}px ${MONO}`, background: white ? '#f1ebe1' : '#2a2320', color: white ? '#15100d' : '#efe8de', boxShadow: on ? `0 0 0 3px ${C.last}` : 'none', border: j === 0 ? `2px solid ${accent}` : `1px solid ${white ? 'rgba(60,40,20,0.22)' : 'rgba(255,236,214,0.22)'}` }}>{m}</span>
+              style={moveChip(white, { cursor: ok ? 'pointer' : 'default', opacity: ok ? 1 : 0.4, font: `${j === 0 || on ? 700 : 600} ${tx(16)}px ${MONO}`, boxShadow: on ? `0 0 0 3px ${C.last}` : 'none', ...(j === 0 && { border: `2px solid ${accent}` }) })}>{m}</span>
           </span>
         );
       })}
@@ -661,26 +667,30 @@ const barPlace = (side) => ({
   position: 'absolute', left: barLeft(), width: barWidth(), height: L.bars.h, display: 'flex', alignItems: 'center',
   top: side === ORIENT ? L.board.y + L.board.size + L.bars.gap : L.board.y - L.bars.gap - L.bars.h,
 });
+// A game's player bar: the captures counted from the pieces taken by time T, the clock from the clocks in the PGN
 function PlayerBar({ M, T, S, side, a, pieces }) {
   const P = side === 'w' ? M.white : M.black;
   const cap = { w: {}, b: {} };
   pieces.forEach((p) => { if (p.captured >= 0 && T >= S.tp[p.captured] + S.md[p.captured] * 0.6) cap[p.color][p.type] = (cap[p.color][p.type] || 0) + 1; });
-  const opp = side === 'w' ? 'b' : 'w';
-  const shown = []; let pts = 0;
+  const opp = side === 'w' ? 'b' : 'w', taken = {};
+  let pts = 0;
+  ['q', 'r', 'b', 'n', 'p'].forEach((t) => { taken[t] = (cap[opp][t] || 0) - (cap[side][t] || 0); pts += taken[t] * VALUE[t]; });
+  return <SideBar side={side} a={a} name={P.name} rating={[P.title, P.elo].filter(Boolean).join(' ')} taken={taken} pts={pts} clock={M.hasClock ? clockOf(M, side, T, S) : null} />;
+}
+
+// A player bar, the replay's and the free board's: the side's mark, the name and rating, the pieces it has taken (taken:
+// a count by type, more of the opponent's than of its own; none drawn where it's less) and its material edge pts, and
+// the clock ({ s, active }, or null) at the right. The full name, title and rating always; where the bar is too narrow
+// (a phone's) their text gets smaller, down to 0.6 of its size, then the captures go, then the name ends in an ellipsis
+function SideBar({ side, a, name, rating, taken, pts, clock }) {
+  const opp = side === 'w' ? 'b' : 'w', shown = [];
   ['q', 'r', 'b', 'n', 'p'].forEach((t) => {
-    const n = (cap[opp][t] || 0) - (cap[side][t] || 0);
-    pts += n * VALUE[t];
     // black pieces get a light rim so they read on the dark frame
-    for (let i = 0; i < n; i++) shown.push(<img key={t + i} src={img(opp, t)} alt="" style={{ width: tx(30), height: tx(30), flex: 'none', marginLeft: shown.length ? -tx(8) : 0, filter: opp === 'b' ? C.rim : 'none' }} />);
+    for (let i = 0; i < (taken[t] || 0); i++) shown.push(<img key={t + i} src={img(opp, t)} alt="" style={{ width: tx(30), height: tx(30), flex: 'none', marginLeft: shown.length ? -tx(8) : 0, filter: opp === 'b' ? C.rim : 'none' }} />);
   });
-  const clk = M.hasClock ? clockOf(M, side, T, S) : null;
-  const low = clk && clk.s < 60;
-  // the full name, title and rating always; where the bar is too narrow (a phone's) their text gets smaller, down to 0.6
-  // of its size, then the captures go, then the name ends in an ellipsis
-  const rating = [P.title, P.elo].filter(Boolean).join(' ');
   const capsW = shown.length ? tx(6) + tx(30) + (shown.length - 1) * tx(22) + (pts > 0 ? tx(8) + textWidth('+' + pts, `600 ${tx(16)}px ${MONO}`) : 0) : 0;
-  const fixedW = tx(14) + (clk ? tx(72) + tx(14) + 2 * tx(7) : 0);
-  const needW = textWidth(P.name, `600 ${tx(20)}px ${SANS}`) + (rating ? tx(10) + textWidth(rating, `500 ${tx(16)}px ${MONO}`) : 0) + tx(14);
+  const fixedW = tx(14) + (clock ? tx(72) + tx(14) + 2 * tx(7) : 0);
+  const needW = textWidth(name, `600 ${tx(20)}px ${SANS}`) + (rating ? tx(10) + textWidth(rating, `500 ${tx(16)}px ${MONO}`) : 0) + tx(14);
   const fit = (caps) => Math.min(1, (barWidth() - fixedW - (caps ? capsW + tx(14) : 0)) / needW);
   const caps = fit(true) >= 0.6 || !shown.length;
   const k = Math.max(0.6, fit(caps));
@@ -688,12 +698,12 @@ function PlayerBar({ M, T, S, side, a, pieces }) {
     <div style={{ ...barPlace(side), gap: tx(14), opacity: a }}>
       <span style={{ width: tx(14), height: tx(14), borderRadius: 2, background: side === 'w' ? '#fff' : '#1c1613', border: `1.5px solid ${C.dim}`, flex: 'none' }} />
       <span style={{ display: 'flex', alignItems: 'baseline', gap: tx(10) * k, minWidth: 0, whiteSpace: 'nowrap' }}>
-        <span title={P.name} style={{ font: `600 ${tx(20) * k}px ${SANS}`, color: C.ink, overflow: 'hidden', textOverflow: 'ellipsis', minWidth: 0 }}>{P.name}</span>
+        <span title={name} style={{ font: `600 ${tx(20) * k}px ${SANS}`, color: C.ink, overflow: 'hidden', textOverflow: 'ellipsis', minWidth: 0 }}>{name}</span>
         {rating && <span style={{ flex: 'none', font: `500 ${tx(16) * k}px ${MONO}`, color: C.dim }}>{rating}</span>}
       </span>
       {caps && <span style={{ display: 'flex', alignItems: 'center', marginLeft: tx(6) }}>{shown}</span>}
       {caps && pts > 0 && <span style={{ font: `600 ${tx(16)}px ${MONO}`, color: C.dim, marginLeft: tx(8) }}>+{pts}</span>}
-      {clk && <span style={{ marginLeft: 'auto', minWidth: tx(72), textAlign: 'center', padding: `${tx(1)}px ${tx(7)}px`, borderRadius: 3, font: `600 ${tx(17)}px ${MONO}`, background: clk.active ? (low ? C.blunder : 'rgb(251, 247, 241)') : C.off, color: clk.active ? '#15100d' : C.dim, boxShadow: clk.active ? `0 0 0 1px ${C.line}` : 'none' }}>{fmtClock(clk.s)}</span>}
+      {clock && <span className="game-clock" style={{ marginLeft: 'auto', minWidth: tx(72), textAlign: 'center', padding: `${tx(1)}px ${tx(7)}px`, borderRadius: 3, font: `600 ${tx(17)}px ${MONO}`, background: clock.active ? (clock.s < 60 ? C.blunder : 'rgb(251, 247, 241)') : C.off, color: clock.active ? '#15100d' : C.dim, boxShadow: clock.active ? `0 0 0 1px ${C.line}` : 'none' }}>{fmtClock(clock.s)}</span>}
     </div>
   );
 }
@@ -777,14 +787,14 @@ function MoveList({ M, T, S, a, paused, onPick, deadAt, end, startAt }) {
     // but readable, while paused; a flagged move's chip (not a best one: most are) is edged in its class colour
     const P = M.plies[i], cur = i === c, ahead = T < S.tp[i], white = (M.ply0 + i) % 2 === 0;
     const shown = paused ? 1 : cl01((T - S.tp[i]) / 0.15);
-    const edge = P.cls !== 'none' && P.cls !== 'best' ? `2px solid ${clsColor(P.cls)}` : `1px solid ${white ? 'rgba(60,40,20,0.22)' : 'rgba(255,236,214,0.22)'}`;
+    const edge = P.cls !== 'none' && P.cls !== 'best' ? `2px solid ${clsColor(P.cls)}` : chipEdge(white);
     moves.push(
       <span key={i} style={{ display: 'flex', alignItems: 'center', gap: tx(5), opacity: shown }}>
         {startAt > 0 && i === startAt && <StartPill />}
         {(white || i === 0 || i === startAt) && <span style={{ color: i <= c ? C.ink : C.dim, marginLeft: i ? tx(6) : 0, font: `500 ${tx(15)}px ${MONO}` }}>{window.ChessCore.moveNo(M.ply0 + i)}</span>}
         <span className="mv" role="button" data-ply={i} tabIndex={i === focusPly ? 0 : -1} title={`Go to ${label(M, i)}`} onClick={(e) => { e.stopPropagation(); onPick(i); }}
           onKeyDown={(e) => moveKey(e, i)}
-          style={{ opacity: ahead ? 0.5 : 1, height: CHIP, boxSizing: 'border-box', display: 'flex', alignItems: 'center', padding: `0 ${tx(8)}px`, borderRadius: 2, cursor: 'pointer', font: `${cur ? 700 : 600} ${tx(16)}px ${MONO}`, background: white ? '#f1ebe1' : '#2a2320', color: white ? '#15100d' : '#efe8de', border: edge, boxShadow: cur ? `0 0 0 3px ${C.last}` : 'none' }}>{P.san}{P.mark || ''}</span>
+          style={moveChip(white, { opacity: ahead ? 0.5 : 1, height: CHIP, boxSizing: 'border-box', display: 'flex', alignItems: 'center', padding: `0 ${tx(8)}px`, cursor: 'pointer', font: `${cur ? 700 : 600} ${tx(16)}px ${MONO}`, border: edge, boxShadow: cur ? `0 0 0 3px ${C.last}` : 'none' })}>{P.san}{P.mark || ''}</span>
         {paused && i === deadAt && !(end && i === S.N - 1) && <DeadPill />}
       </span>
     );
@@ -1282,20 +1292,15 @@ function GameVideo({ M, tw, d, probe, queen, nav, scheme, sf, orient }) {
   }
   const navSig = nav && nav.current ? `${nav.current.label}|${nav.current.hasPrev}|${nav.current.hasNext}|${nav.current.hasLast}` : '';
   React.useEffect(() => { if (nav && nav.listen) nav.listen(); }, [navSig]);
-  React.useEffect(() => {
-    const onKey = (e) => {
-      const tag = e.target && e.target.tagName;
-      if (e.shiftKey || e.altKey || e.metaKey || e.ctrlKey || tag === 'INPUT' || tag === 'TEXTAREA' || tag === 'SELECT') return;
-      const n = navRef.current;
-      if (e.code === 'Escape' && n.promo) { e.preventDefault(); n.cancelPromo(); n.leaveIfEmpty(); return; }
-      if (e.code === 'Escape' && n.vline) { e.preventDefault(); n.setVline(null); return; }
-      if (e.code !== 'ArrowLeft' && e.code !== 'ArrowRight' && e.code !== 'End') return;
-      e.preventDefault(); // claims the key before the stage's own scrub handler
-      if (e.code === 'End') n.goTo(Infinity); else n.step(e.code === 'ArrowRight' ? 1 : -1);
-    };
-    window.addEventListener('keydown', onKey);
-    return () => window.removeEventListener('keydown', onKey);
-  }, []);
+  useKeydown((e) => {
+    if (e.shiftKey || hasModifier(e)) return;
+    const n = navRef.current;
+    if (e.code === 'Escape' && n.promo) { e.preventDefault(); n.cancelPromo(); n.leaveIfEmpty(); return; }
+    if (e.code === 'Escape' && n.vline) { e.preventDefault(); n.setVline(null); return; }
+    if (e.code !== 'ArrowLeft' && e.code !== 'ArrowRight' && e.code !== 'End') return;
+    e.preventDefault();
+    if (e.code === 'End') n.goTo(Infinity); else n.step(e.code === 'ArrowRight' ? 1 : -1);
+  });
   const pieces = React.useMemo(() => simulate(M), [M]);
   // the video touches (panels fading in, the camera push, the blunder glow, the final fade, the title and end cards)
   // only while playing or exporting: stepping, exploring and analysing show a still page

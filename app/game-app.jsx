@@ -207,34 +207,15 @@ function GameApp() {
   // leaving a game in progress asks first: { run } is what waits on the answer
   const [leave, setLeave] = React.useState(null);
   const newRef = React.useRef(null);
-  React.useEffect(() => {
-    if (!newMenu) return;
-    const away = (e) => { if (newRef.current && !newRef.current.contains(e.target)) setNewMenu(false); };
-    const esc = (e) => { if (e.key === 'Escape') setNewMenu(false); };
-    document.addEventListener('pointerdown', away);
-    window.addEventListener('keydown', esc);
-    return () => { document.removeEventListener('pointerdown', away); window.removeEventListener('keydown', esc); };
-  }, [newMenu]);
+  useDismiss(newMenu, newRef, () => setNewMenu(false));
   React.useEffect(() => { if (phone) setNewMenu(false); }, [phone]);
   const dockRef = React.useRef(null);
-  React.useEffect(() => {
-    if (!menu) return;
-    const away = (e) => { if (dockRef.current && !dockRef.current.contains(e.target)) setMenu(false); };
-    const esc = (e) => { if (e.key === 'Escape') setMenu(false); };
-    document.addEventListener('pointerdown', away);
-    window.addEventListener('keydown', esc);
-    return () => { document.removeEventListener('pointerdown', away); window.removeEventListener('keydown', esc); };
-  }, [menu]);
-  // F turns the board round (not in a field, not in a game, whose board turns by itself, not with a modifier, which belongs to the browser)
-  React.useEffect(() => {
-    const onF = (e) => {
-      const tag = e.target && e.target.tagName;
-      if (e.defaultPrevented || e.repeat || (e.key || '').toLowerCase() !== 'f' || e.ctrlKey || e.metaKey || e.altKey || tag === 'INPUT' || tag === 'TEXTAREA' || tag === 'SELECT' || (e.target && e.target.isContentEditable) || busyRef.current || gameRef.current) return;
-      setTweak('flip', !flipRef.current);
-    };
-    window.addEventListener('keydown', onF);
-    return () => window.removeEventListener('keydown', onF);
-  }, []);
+  useDismiss(menu, dockRef, () => setMenu(false));
+  // F turns the board round (not in a game, whose board turns by itself)
+  useKeydown((e) => {
+    if (e.repeat || (e.key || '').toLowerCase() !== 'f' || hasModifier(e) || busyRef.current || gameRef.current) return;
+    setTweak('flip', !flipRef.current);
+  });
   const lastGood = React.useRef(null);
   // a free board keeps the last good game (the sample on a fresh page) for the hooks that want one
   const built = React.useMemo(() => {
@@ -293,6 +274,8 @@ function GameApp() {
   const fmtLen = window.ChessCore.fmtLen;
   const closePanel = React.useCallback(() => setPanel(false), []);
   const closeQueen = React.useCallback(() => setQueenOpen(false), []);
+  // a menu item closes what is open over the board first: both menus, Settings and Queen's panel
+  const closeOverlays = () => { setNewMenu(false); setMenu(false); setPanel(false); setQueenOpen(false); };
   React.useEffect(() => { setQueenArrow(null); }, [M]);
 
   // false when it couldn't be remembered (the error says so)
@@ -339,7 +322,7 @@ function GameApp() {
     window.addEventListener('pagehide', hide);
     return () => window.removeEventListener('pagehide', hide);
   }, []);
-  const newBoard = () => { setNewMenu(false); setMenu(false); guard(() => { setQueenOpen(false); commitBoard(window.BoardCore.fromFen()); }); };
+  const newBoard = () => { closeOverlays(); guard(() => { commitBoard(window.BoardCore.fromFen()); }); };
   // the editor opens on the position on the board (empty when there is none); a game in progress is paused for it (and
   // kept, when it has moves, by guard's Leave). play: the Play dialog's { mode, tc, you } when its Set-up position opened
   // the editor, whose Done starts that game
@@ -354,7 +337,7 @@ function GameApp() {
     const setup = read ? read.setup : s;
     setQueenOpen(false); setEditing({ setup, text: E.toFen(setup), msg: '', resume, play: play || null, image: read ? read.image : null, back: read && read.back != null ? read.back : null });
   };
-  const editPosition = () => { setNewMenu(false); setMenu(false); setPanel(false); guard(() => openEditor()); };
+  const editPosition = () => { closeOverlays(); guard(() => openEditor()); };
   // a square the reader was unsure of stops being outlined once its piece changes, however it was edited
   const sureOf = (e, setup) => {
     const im = e.image;
@@ -417,7 +400,7 @@ function GameApp() {
     if (r) commitBoard(window.PlayCore.runClock(r, Date.now()));
     if (play) { setPlayInit({ from: image ? 'image' : 'setup', tc: play.tc, you: play.you }); setPlayOpen(play.mode); }
   };
-  const importGame = () => { setNewMenu(false); setMenu(false); setPanel(false); guard(() => setImportOpen({ text: '' })); };
+  const importGame = () => { closeOverlays(); guard(() => setImportOpen({ text: '' })); };
   // where the clipboard is refused, Share and export closes and the note shows the text to select
   const copyFailed = (what) => (text) => { setShareOpen(null); setFenNote({ fen: text, ok: false, what }); };
   React.useEffect(() => { if (fenNote && fenNote.ok) { const id = setTimeout(() => setFenNote(null), 4000); return () => clearTimeout(id); } }, [fenNote]);
@@ -427,7 +410,7 @@ function GameApp() {
   const [playHere, setPlayHere] = React.useState(null);
   const playIn = (mode) => () => {
     const here = editing ? null : (nav.current && nav.current.line && nav.current.line()) || null;
-    setNewMenu(false); setMenu(false); setPanel(false); guard(() => { setPlayInit(null); setPlayHere(here); setPlayOpen(mode); });
+    closeOverlays(); guard(() => { setPlayInit(null); setPlayHere(here); setPlayOpen(mode); });
   };
   const playHuman = playIn('human'), playSf = playIn('stockfish');
   // against Stockfish the side is remembered as picked, and Random resolved here, for this game
@@ -445,12 +428,12 @@ function GameApp() {
   // Start from › From image: the picture's dialog, keeping the Play dialog's choices for the editor it opens
   const playFromImage = ({ tc, you }) => { const mode = playOpen; setPlayOpen(null); setVision({ play: { mode, tc, you }, again: null }); };
   const closePlay = React.useCallback(() => setPlayOpen(null), []);
-  const myGames = () => { setNewMenu(false); setMenu(false); setPanel(false); setGamesOpen(readGames()); };
+  const myGames = () => { closeOverlays(); setGamesOpen(readGames()); };
   const closeGames = React.useCallback(() => setGamesOpen(null), []);
-  const openKeys = () => { setNewMenu(false); setMenu(false); setPanel(false); setQueenOpen(false); setKeysOpen(true); };
+  const openKeys = () => { closeOverlays(); setKeysOpen(true); };
   const closeKeys = React.useCallback(() => setKeysOpen(false), []);
   // the dialog shows the FEN of the position on the board, whichever view it's in, as it was when opened
-  const openShare = () => { setNewMenu(false); setMenu(false); setPanel(false); setQueenOpen(false); setShareOpen({ fen: (nav.current && nav.current.fen && nav.current.fen()) || '' }); };
+  const openShare = () => { closeOverlays(); setShareOpen({ fen: (nav.current && nav.current.fen && nav.current.fen()) || '' }); };
   const closeShare = React.useCallback(() => setShareOpen(null), []);
   // a finished game replays as a loaded game; one in progress goes back on the board, the side to move's clock running
   // from now (the time away isn't charged)
@@ -470,7 +453,7 @@ function GameApp() {
     if (!commit({ pgn: text, pgnName: link ? `lichess-${link.id}.pgn` : 'pasted.pgn', gameIndex: 0 })) seekPly.current = null;
   };
   // the explorer's games (Open games: Here): Import game on the game's link, fetched at once
-  const openLichess = (url) => guard(() => { setNewMenu(false); setMenu(false); setPanel(false); setImportOpen({ text: url, auto: true }); });
+  const openLichess = (url) => guard(() => { closeOverlays(); setImportOpen({ text: url, auto: true }); });
   // a pasted FEN: a legal position on the free board, else Edit position on it, saying what's wrong
   const fenLoad = (setup, text) => {
     setImportOpen(false);

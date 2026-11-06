@@ -265,11 +265,7 @@ function QueenPanel({ M, Q, hf, probe, onClose, onOverlay, onSave, left }) {
   const [diag, setDiag] = React.useState('');
   const [failed, setFailed] = React.useState([]); // positions (at) whose last try failed
   // Esc closes the panel, as it does Settings
-  React.useEffect(() => {
-    const onKey = (e) => { if (e.key === 'Escape') onClose(); };
-    window.addEventListener('keydown', onKey);
-    return () => window.removeEventListener('keydown', onKey);
-  }, [onClose]);
+  useKeydown((e) => { if (e.key === 'Escape') { e.preventDefault(); onClose(); } }, { fields: true, overlay: true });
   const fail = (e) => {
     Q.setErr(queenError(e));
     setDiag(e && e.code === 'bad_answer' ? queenDiagnose(e) : '');
