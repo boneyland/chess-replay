@@ -1,14 +1,15 @@
 // Files downloaded only when the viewer asks, checked against pinned SHA-256s and kept in a cache of their own, which sw.js
-// never clears on a deploy (Full Stockfish's engine, the board reader's model). make({ cache, base, files, host, what }):
-// files are { name, size, type, sha256 }, fetched from base + name; host and what ('engine') word the error messages.
-// The files array is read at call time, not copied.
+// never clears on a deploy (Full Stockfish's engine, the board reader's model). make({ cache, base, files, host, what, onRemove }):
+// files are { name, size, type, sha256 }, fetched from base + name; host and what ('full engine') word the messages;
+// onRemove() runs before the cache is deleted (whatever holds the files lets them go). The files array is read at call
+// time, not copied.
 (function () {
   // the browser's room for the copy: the files, plus a margin for the cache's own records
   const ROOM_FACTOR = 1.1;
   const supported = () => typeof caches !== 'undefined' && typeof crypto !== 'undefined' && !!crypto.subtle;
   const sha256 = async (bytes) => [...new Uint8Array(await crypto.subtle.digest('SHA-256', bytes))].map((b) => b.toString(16).padStart(2, '0')).join('');
 
-  function make({ cache: CACHE, base, files, host, what }) {
+  function make({ cache: CACHE, base, files, host, what, onRemove }) {
     const urlOf = (f) => base + f.name;
     const total = () => files.reduce((s, f) => s + f.size, 0);
 
@@ -85,9 +86,36 @@
       if (navigator.storage && navigator.storage.persist) navigator.storage.persist().catch(() => {});
     }
 
-    const remove = () => caches.delete(CACHE);
+    // The kept copy as Blob URLs, typed as files say (a module import or a Worker needs the type): { url(name), revoke() }.
+    // It was checked when downloaded, so it is trusted now: only the sizes are compared, and the Blobs are passed on
+    // without reading the files into the page. A file missing or of the wrong size (cut short, or from another version)
+    // drops the whole copy and is refused, so the page offers the download again
+    async function blobUrls() {
+      const cache = await caches.open(CACHE), out = {};
+      const revoke = () => { for (const u of Object.values(out)) URL.revokeObjectURL(u); };
+      for (const f of files) {
+        const r = await cache.match(urlOf(f)).catch(() => null);
+        const blob = r && await r.blob();
+        if (!blob || blob.size !== f.size) {
+          revoke();
+          await drop(cache);
+          throw new Error(`The kept ${what} was missing or incomplete, so it was removed: download it again.`);
+        }
+        out[f.name] = URL.createObjectURL(blob.type === f.type ? blob : new Blob([blob], { type: f.type }));
+      }
+      return { url: (name) => out[name], revoke };
+    }
 
-    return { files, cache: CACHE, urlOf, total, supported, present, download, remove, drop, limits };
+    const remove = async () => { if (onRemove) onRemove(); return caches.delete(CACHE); };
+    // Remove, for a Remove button: { kept, err }. A removal that fails says why (err), and kept is then whether the copy
+    // is still there, so the page doesn't show it gone while it stays
+    async function removeKept() {
+      try { await remove(); return { kept: false, err: '' }; } catch (e) {
+        return { kept: await present(), err: `The ${what} could not be removed: ` + ((e && e.message) || e) };
+      }
+    }
+
+    return { files, cache: CACHE, urlOf, total, supported, present, download, blobUrls, remove, removeKept, drop, limits };
   }
 
   window.KeptFiles = { make };

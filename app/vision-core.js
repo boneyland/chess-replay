@@ -11,7 +11,7 @@
     { name: 'ort-wasm-simd-threaded.wasm', size: 14239897, type: 'application/wasm', sha256: '3398c10d07d229bd91b364548e130e0e51a8e5704b88c7c083ebbeb78842dee2' },
   ];
   const CACHE = 'chess-vision-1'; // build.cjs gives sw.js this name, which it keeps out of its cleanup
-  const SIZE = 644, MAX_SIDE = 2048, UNSURE = 0.8, MB = 56, MIN_BOX = 0.05;
+  const SIZE = 644, MAX_SIDE = 2048, UNSURE = 0.8, MIN_BOX = 0.05; // SIZE: the model's input side, which the Worker is sent
   const WHOLE = { x0: 0, y0: 0, x1: 1, y1: 1 };
 
   // logits [64 x 13], squares a8..h1 (a ChessCore board). Per square: the class with the highest logit (the first on a
@@ -68,5 +68,5 @@
     return { x0, y0, x1, y1 };
   }
 
-  window.VisionCore = { FILES, CACHE, SIZE, MAX_SIDE, UNSURE, MB, WHOLE, read, unsure, setupFrom, turn, turnSquares, cropRect, dragBox };
+  window.VisionCore = { FILES, CACHE, SIZE, MAX_SIDE, UNSURE, WHOLE, read, unsure, setupFrom, turn, turnSquares, cropRect, dragBox };
 })();

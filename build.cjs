@@ -41,7 +41,7 @@ const units = [
   ['sample-analysis.js', read(path.join(app, 'sample-analysis.js'))],
   ['engine.jsx', jsx(read(path.join(app, 'engine.jsx')), 'engine.jsx')],
   ['tweaks.jsx', jsx(read(path.join(app, 'tweaks.jsx')), 'tweaks.jsx')],
-  ['game-video.jsx', jsx(read(path.join(app, 'game-video-core.jsx')) + '\n' + read(path.join(app, 'queen.jsx')) + '\n' + read(path.join(app, 'stockfish.jsx')) + '\n' + read(path.join(app, 'tablebase.jsx')) + '\n' + read(path.join(app, 'dead.jsx')) + '\n' + read(path.join(app, 'explorer.jsx')) + '\n' + read(path.join(app, 'free-board.jsx')) + '\n' + read(path.join(app, 'edit-board.jsx')) + '\n' + read(path.join(app, 'sfx.jsx')) + '\n' + read(path.join(app, 'export.jsx')) + '\n' + read(path.join(app, 'vision.jsx')) + '\n' + read(path.join(app, 'settings-tabs.jsx')) + '\n' + read(path.join(app, 'share-dialog.jsx')) + '\n' + read(path.join(app, 'game-app.jsx')), 'game-video.jsx')],
+  ['game-video.jsx', jsx(read(path.join(app, 'game-video-core.jsx')) + '\n' + read(path.join(app, 'queen.jsx')) + '\n' + read(path.join(app, 'kept-download.jsx')) + '\n' + read(path.join(app, 'stockfish.jsx')) + '\n' + read(path.join(app, 'tablebase.jsx')) + '\n' + read(path.join(app, 'dead.jsx')) + '\n' + read(path.join(app, 'explorer.jsx')) + '\n' + read(path.join(app, 'free-board.jsx')) + '\n' + read(path.join(app, 'edit-board.jsx')) + '\n' + read(path.join(app, 'sfx.jsx')) + '\n' + read(path.join(app, 'export.jsx')) + '\n' + read(path.join(app, 'vision.jsx')) + '\n' + read(path.join(app, 'settings-tabs.jsx')) + '\n' + read(path.join(app, 'share-dialog.jsx')) + '\n' + read(path.join(app, 'game-app.jsx')), 'game-video.jsx')],
 ];
 const scripts = units.map(([name, code]) => {
   if (/<\/script/i.test(code)) throw new Error(name + ' contains </script');
@@ -146,7 +146,7 @@ for (const f of VENDOR) put(f, path.join(dir, 'vendor', f), { keep: true });
 put('dead-worker.js', path.join(app, 'dead-worker.js'), { keep: true });
 // the board reader's Worker (small, kept with the page; the model and runtime it loads are in vision/, kept only on request)
 put('vision-worker.js', path.join(app, 'vision-worker.js'), { keep: true });
-// the board reader's model and runtime (vision/, 55 MB), served next to the page for the viewer who asks to keep them
+// the board reader's model and runtime (vision/, 56 MB), served next to the page for the viewer who asks to keep them
 // (sw.js answers them from VISION_CACHE, never from its own copy); the licence texts stay in the repo
 for (const f of filesIn(path.join(dir, 'vision'))) if (!/LICENSE$|^NOTICE$/.test(f)) put('vision/' + f, path.join(dir, 'vision', f));
 // the piece sets other than cburnett (which is in the page), served as pieces/<set>/<piece>.svg (PieceSets.url); the service

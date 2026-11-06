@@ -123,3 +123,46 @@ test('present is true only with both files; remove empties the cache', async () 
   assert.equal(await K.remove(), true);
   assert.equal(await K.present(), false);
 });
+
+// The kept copy as Blob URLs (Full Stockfish's engine and the board reader's Worker load from these, with or without
+// sw.js): typed as the files say, let go by revoke(); a missing or wrong-sized file drops the whole copy and is refused
+test('blobUrls: the kept copy as typed Blob URLs; a missing or cut-short file drops the copy', async () => {
+  reset();
+  await K.download();
+  const made = [], revoked = [], real = { create: URL.createObjectURL, revoke: URL.revokeObjectURL };
+  URL.createObjectURL = (b) => { made.push(b); return 'blob:' + made.length; };
+  URL.revokeObjectURL = (u) => revoked.push(u);
+  try {
+    const typed = window.KeptFiles.make({ cache: 'kept-test', base: BASE, files: files.map((f, i) => ({ ...f, type: i ? 'application/wasm' : 'text/javascript' })), host: 'the site', what: 'board reader' });
+    const k = await typed.blobUrls();
+    assert.deepEqual([k.url('a.bin'), k.url('b.bin')], ['blob:1', 'blob:2']);
+    assert.deepEqual(made.map((b) => b.type), ['text/javascript', 'application/wasm']);
+    assert.deepEqual(new Uint8Array(await made[1].arrayBuffer()), B);
+    k.revoke();
+    assert.deepEqual(revoked, ['blob:1', 'blob:2']);
+    // b.bin cut short: refused, both files dropped, a.bin's Blob URL let go
+    revoked.length = 0;
+    await (await caches.open('kept-test')).put(BASE + 'b.bin', new Response(B.slice(0, 4000)));
+    await assert.rejects(K.blobUrls(), /^Error: The kept board reader was missing or incomplete, so it was removed: download it again\.$/);
+    assert.equal(store.get('kept-test').size, 0, 'the copy dropped');
+    assert.deepEqual(revoked, ['blob:3']);
+    await assert.rejects(K.blobUrls(), /missing or incomplete/, 'not kept at all');
+  } finally { URL.createObjectURL = real.create; URL.revokeObjectURL = real.revoke; }
+});
+
+// the Remove button: onRemove first (whatever holds the files lets them go), and a removal that fails says why and
+// whether the copy is still kept
+test('removeKept: gone, or why not and whether it is still kept; onRemove runs first', async () => {
+  reset();
+  let told = 0;
+  const R = window.KeptFiles.make({ cache: 'kept-test', base: BASE, files, host: 'the site', what: 'board reader', onRemove: () => told++ });
+  await R.download();
+  const real = caches.delete;
+  caches.delete = async () => { throw new Error('The operation is insecure.'); };
+  try {
+    assert.deepEqual(await R.removeKept(), { kept: true, err: 'The board reader could not be removed: The operation is insecure.' });
+  } finally { caches.delete = real; }
+  assert.deepEqual(await R.removeKept(), { kept: false, err: '' });
+  assert.equal(await R.present(), false);
+  assert.equal(told, 2);
+});

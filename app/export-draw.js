@@ -265,11 +265,19 @@
     return out;
   }
 
+  // place(n): a box's place on the root stage in the stage's own (untransformed) CSS px, as the stage is now
+  function placer(root) {
+    const R = root.getBoundingClientRect(), Z = R.width / root.offsetWidth || 1;
+    return (n) => { const r = n.getBoundingClientRect(); return { x: (r.left - R.left) / Z, y: (r.top - R.top) / Z, w: r.width / Z, h: r.height / Z }; };
+  }
+
   // compositor(root, { W, H, scale, html2canvas, skip }) gives draw(cx), which paints the stage as it is now into cx
-  // (W × H, the stage's CSS px times scale), reusing every layer whose markup hasn't changed. skip(target) is
-  // html2canvas's ignoreElements for a capture of target. stats counts the layers drawn each way.
+  // (W × H, the stage's CSS px times scale), reusing every layer whose markup hasn't changed, and resolves whether it
+  // painted: when the layers, their order, their camera push and the stage's colour are all as the last draw into
+  // this cx left them, cx is left as it is (false), so a held frame costs one look at the layers. skip(target) is html2canvas's
+  // ignoreElements for a capture of target. stats counts the layers drawn each way.
   function compositor(root, { W, H, scale, html2canvas, skip }) {
-    let cache = new Map();
+    let cache = new Map(), last = { cx: null, layers: [], look: null };
     const stats = { painted: 0, captured: 0, reused: 0, why: {} };
     root.setAttribute('data-export-root', '');
     const onclone = (doc) => { const r = doc.querySelector('[data-export-root]'); if (r) r.style.transform = 'none'; };
@@ -293,13 +301,13 @@
       // html2canvas's first capture in a page lays text out wrongly in WebKit (stray gaps between words, the Moves
       // highlights missing); one thrown-away capture of the stage first, at the export's scale, and the rest come out right
       if (!warm) { await html2canvas(root, { scale, backgroundColor: null, logging: false, ignoreElements: skip(root), onclone }); warm = true; }
-      const R = root.getBoundingClientRect(), Z = R.width / root.offsetWidth || 1;
-      // a box's place on the stage in its own (untransformed) CSS px
-      const place = (n) => { const r = n.getBoundingClientRect(); return { x: (r.left - R.left) / Z, y: (r.top - R.top) / Z, w: r.width / Z, h: r.height / Z }; };
+      const place = placer(root);
       const next = new Map(), layers = layersOf(root);
+      let changed = false;
       for (const n of layers) {
         const key = n.outerHTML, had = cache.get(n);
         if (had && had.key === key) { next.set(n, had); stats.reused++; continue; }
+        changed = true;
         let got;
         try { got = render(n, place); stats.painted++; } catch (e) {
           if (!(e instanceof Unsupported)) throw e;
@@ -309,33 +317,36 @@
         next.set(n, { key, ...got });
       }
       cache = next;
+      // the camera push: the page stays still while exporting and names the zoom on the box it would have transformed
+      // (data-push="<scale> <x> <y>", round that point in the stage's CSS px), and its layers are drawn zoomed here, so
+      // their bitmaps stay reusable
+      const pushes = layers.map((n) => { const p = n.parentElement && n.parentElement.closest('[data-push]'); return p && root.contains(p) ? p.dataset.push : ''; });
+      const bg = getComputedStyle(root).backgroundColor, look = bg + '|' + pushes.join('|');
+      const same = !changed && cx === last.cx && look === last.look && layers.length === last.layers.length && layers.every((n, i) => n === last.layers[i]);
+      last = { cx, layers, look };
+      if (same) return false;
       // as html2canvas drew the whole stage: on white, then the stage's own box, then its layers
       cx.save();
       cx.setTransform(1, 0, 0, 1, 0, 0);
       cx.imageSmoothingQuality = 'high';
       cx.fillStyle = '#ffffff'; cx.fillRect(0, 0, W, H);
-      const rs = getComputedStyle(root);
-      if (!clear(rs.backgroundColor)) { cx.fillStyle = rs.backgroundColor; cx.fillRect(0, 0, W, H); }
-      // the camera push: the page stays still while exporting and names the zoom on the box it would have transformed
-      // (data-push="<scale> <x> <y>", round that point in the stage's CSS px), and its layers are drawn zoomed here, so
-      // their bitmaps stay reusable
-      for (const n of layers) {
+      if (!clear(bg)) { cx.fillStyle = bg; cx.fillRect(0, 0, W, H); }
+      layers.forEach((n, i) => {
         const l = cache.get(n);
-        if (!l) continue;
-        const p = n.parentElement && n.parentElement.closest('[data-push]');
-        if (!p || !root.contains(p)) { cx.drawImage(l.bmp, Math.round(l.x), Math.round(l.y)); continue; }
-        const [k, px0, py0] = p.dataset.push.split(' ').map(Number), ox = px0 * scale, oy = py0 * scale;
+        if (!l) return;
+        if (!pushes[i]) { cx.drawImage(l.bmp, Math.round(l.x), Math.round(l.y)); return; }
+        const [k, px0, py0] = pushes[i].split(' ').map(Number), ox = px0 * scale, oy = py0 * scale;
         cx.drawImage(l.bmp, ox + k * (l.x - ox), oy + k * (l.y - oy), k * l.bmp.width, k * l.bmp.height);
-      }
+      });
       cx.restore();
+      return true;
     };
     return { draw, stats, done: () => root.removeAttribute('data-export-root') };
   }
 
   // for the tests: one layer drawn here, or Unsupported's reason
   function paintLayer(root, n, scale) {
-    const R = root.getBoundingClientRect(), Z = R.width / root.offsetWidth || 1;
-    const place = (x) => { const r = x.getBoundingClientRect(); return { x: (r.left - R.left) / Z, y: (r.top - R.top) / Z, w: r.width / Z, h: r.height / Z }; };
+    const place = placer(root);
     const b = place(n), cv = document.createElement('canvas');
     cv.width = Math.max(1, Math.round(b.w * scale)); cv.height = Math.max(1, Math.round(b.h * scale));
     const cx = cv.getContext('2d');

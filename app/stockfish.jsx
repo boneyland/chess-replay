@@ -143,9 +143,8 @@ function useEngine(hashMB, threads, kind = 'lite', onBroken, onHashFail) {
 }
 
 // The full engine's download (the Analysis panel's engine drop-down and menu).
-// state: 'checking', 'absent', 'downloading' (got: bytes so far) or 'ready'; err: why the last download or start failed
+// state: 'checking', 'absent', 'downloading' (got: bytes so far) or 'ready'; err: why the last download, start or removal failed
 const SF_FULL_OFFERED = SF_SIMD && !!(window.SFFull && window.SFFull.supported());
-const sfMB = (bytes) => Math.round(bytes / 1e6);
 // build: the threaded one where the page allows threads. Which builds are kept is checked once, so the state follows the
 // build at once when threads turn off (the threaded engine wouldn't run): Full stays where its single-thread copy is
 // kept, else the viewer is back on Lite (a state passing through 'checking' would switch engines twice, quitting the
@@ -153,39 +152,28 @@ const sfMB = (bytes) => Math.round(bytes / 1e6);
 function useFullEngine() {
   const threading = useSfThreading(), build = threading.on ? 'threads' : 'single';
   const [kept, setKept] = React.useState(null); // { single, threads } once checked
-  const [st, setSt] = React.useState({ downloading: false, got: 0, err: '' });
-  const ctl = React.useRef(null), wasReady = React.useRef(false);
+  const dl = useKeptDownload(), wasReady = React.useRef(false);
   React.useEffect(() => {
     if (SF_FULL_OFFERED) Promise.all([window.SFFull.present('single'), window.SFFull.present('threads')]).then(([single, threads]) => setKept((k) => k || { single, threads }));
   }, []);
-  const state = !SF_FULL_OFFERED ? 'absent' : st.downloading ? 'downloading' : !kept ? 'checking' : kept[build] ? 'ready' : 'absent';
+  const state = !SF_FULL_OFFERED ? 'absent' : dl.on ? 'downloading' : !kept ? 'checking' : kept[build] ? 'ready' : 'absent';
   // (this runs before the next effect, so wasReady is still the last build's)
   React.useEffect(() => {
-    if (state === 'absent' && wasReady.current) setSt((s) => ({ ...s, err: 'Full’s threaded build didn’t run here, so Lite is running. Download Full again to use it.' }));
+    if (state === 'absent' && wasReady.current) dl.setErr('Full’s threaded build didn’t run here, so Lite is running. Download Full again to use it.');
   }, [build]);
   React.useEffect(() => { if (state !== 'checking') wasReady.current = state === 'ready'; }, [state]);
   const download = async () => {
-    if (ctl.current) return;
-    const c = ctl.current = new AbortController(), b = build;
-    setSt({ downloading: true, got: 0, err: '' });
-    try {
-      // a render per megabyte, not per chunk
-      await window.SFFull.download({ build: b, signal: c.signal, onProgress: (got) => setSt((s) => (sfMB(got) === sfMB(s.got) ? s : { ...s, got })) });
-      setKept({ single: b === 'single', threads: b === 'threads' }); // a download replaces the other build
-      setSt({ downloading: false, got: 0, err: '' });
-    } catch (e) {
-      setKept({ single: false, threads: false }); // the other build went before the download began
-      setSt({ downloading: false, got: 0, err: c.signal.aborted ? '' : 'Download failed: ' + ((e && e.message) || e) });
-    } finally { ctl.current = null; }
+    const b = build, ok = await dl.start((o) => window.SFFull.download({ build: b, ...o }));
+    // a download replaces the other build, which went before it began, whether or not it ended kept
+    if (ok !== null) setKept({ single: ok && b === 'single', threads: ok && b === 'threads' });
   };
-  const cancel = () => { if (ctl.current) ctl.current.abort(); };
   // a removal that fails says why, and the state follows what is still kept
-  const remove = async () => { cancel(); const r = await window.SFFull.removeKept(); setKept(r.kept); setSt({ downloading: false, got: 0, err: r.err }); };
+  const remove = async () => { dl.cancel(); const r = await window.SFFull.removeKept(); setKept(r.kept); dl.setErr(r.err); };
   const broken = React.useCallback(() => {
     setKept((k) => ({ ...k, [build]: false }));
-    setSt({ downloading: false, got: 0, err: 'The downloaded engine was missing, so Lite is running. Download it again to use Full.' });
+    dl.setErr('The downloaded engine was missing, so Lite is running. Download it again to use Full.');
   }, [build]);
-  return { offered: SF_FULL_OFFERED, state, got: st.got, err: st.err, build, total: window.SFFull ? window.SFFull.total(build) : 0, download, cancel, remove, broken };
+  return { offered: SF_FULL_OFFERED, state, got: dl.got, err: dl.err, build, total: window.SFFull ? window.SFFull.total(build) : 0, download, cancel: dl.cancel, remove, broken };
 }
 
 const sfIsBrowserAnalysis = (analysis) => {
