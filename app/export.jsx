@@ -218,14 +218,20 @@ function useVideoExport({ fps, format, webp, mp4Quality, mp4Vfr = false, save, s
       const skip = (target) => (n) => n.tagName === 'SCRIPT' || (!keep(n) && n !== target && !n.contains(target) && !target.contains(n));
       // the stage drawn layer by layer, each redrawn only when its markup changes (export-draw.js)
       stage = window.ExportDraw.compositor(el, { W, H, scale: W / cssW, html2canvas, skip });
+      // loading is over: the first frame, which draws every layer, is the slowest and counts as drawing
+      setState({ phase: 'render', done: 0, N });
       const t0 = performance.now();
+      let shown = t0;
       for (let i = 0; i < N; i++) {
         if (stopRef.current) { await enc.cancel(); stage.done(); setState(null); return; }
         seekStage(start + i / fps);
         // a frame whose layers all match the last one's (holds, the title and end cards) leaves the canvas as it is
         await enc.frame(await stage.draw(cx));
-        const per = (performance.now() - t0) / (i + 1);
+        const now = performance.now(), per = (now - t0) / (i + 1);
         setState({ phase: 'render', done: i + 1, N, eta: per * (N - i - 1) / 1000 });
+        // frames that need no new capture finish in microtasks, which never let React render or the browser paint:
+        // give it a turn a few times a second, so the count moves (and Cancel answers) on a fast export too
+        if (now - shown > 100) { shown = now; await new Promise((ok) => setTimeout(ok, 0)); }
       }
       stage.done();
       setState({ phase: 'save', done: N, N });
@@ -258,7 +264,7 @@ function ExportOverlay({ x }) {
   const left = s.eta != null ? Math.ceil(s.eta) : 0, eta = `${Math.floor(left / 60)}:${String(left % 60).padStart(2, '0')}`;
   const line = s.phase === 'load' ? 'Loading the encoder…'
     : s.phase === 'save' ? 'Finishing the file…'
-    : `Frame ${s.done} of ${s.N} · about ${eta} left`;
+    : `Frame ${s.done} of ${s.N}` + (s.eta != null ? ` · about ${eta} left` : '');
   return (
     <div className="export" role="dialog" aria-label="Exporting">
       <div className="export-box">
