@@ -237,9 +237,10 @@
     return count(node);
   }
 
-  // Scratch canvases for the faded groups, one per depth of nesting, kept from one group to the next (the Moves list
-  // has dozens of faded chips a frame) and let go with the compositor
-  const scratch = [];
+  // Each faded group is drawn on a canvas of its own, let go once drawn. A scratch canvas kept from one group to the
+  // next (one per depth of nesting) left Firefox for Android drawing the last group's picture under the next: a new
+  // move's chip, fading in, came with the corner of the Moves panel, which had faded in on the same canvas at the same
+  // offset (seen 2026-11-06), though the part used had been cleared
   function group(cx, node, place, dev, a, k, rot, shadow, depth) {
     // what it covers, on cx's canvas in device px: the box and everything in it (with MARGIN round each for shadows),
     // no more than the canvas
@@ -255,22 +256,19 @@
     const X1 = Math.min(cx.canvas.width, Math.ceil(T.a * x1 + T.e)), Y1 = Math.min(cx.canvas.height, Math.ceil(T.d * y1 + T.f));
     if (X1 <= X0 || Y1 <= Y0) return;
     const w = X1 - X0, h = Y1 - Y0;
-    let cv = scratch[depth];
-    if (!cv) cv = scratch[depth] = document.createElement('canvas');
-    // grown to fit, never shrunk (a resize clears it anyway); otherwise cleared where this group goes
-    if (cv.width < w || cv.height < h) { cv.width = Math.max(cv.width, w); cv.height = Math.max(cv.height, h); }
-    const g = cv.getContext('2d');
-    g.setTransform(1, 0, 0, 1, 0, 0); g.clearRect(0, 0, w, h);
-    g.save();
-    g.beginPath(); g.rect(0, 0, w, h); g.clip();
-    g.imageSmoothingQuality = 'high';
-    g.setTransform(T.a, 0, 0, T.d, T.e - X0, T.f - Y0);
-    // its own opacity is the group's
-    try { paint(g, node, place, dev, 1, k, rot, shadow, depth + 1, true); } finally { g.restore(); }
-    cx.save();
-    cx.setTransform(1, 0, 0, 1, 0, 0); cx.globalAlpha = a;
-    cx.drawImage(cv, 0, 0, w, h, X0, Y0, w, h);
-    cx.restore();
+    const cv = document.createElement('canvas');
+    cv.width = w; cv.height = h;
+    try {
+      const g = cv.getContext('2d');
+      g.imageSmoothingQuality = 'high';
+      g.setTransform(T.a, 0, 0, T.d, T.e - X0, T.f - Y0);
+      // its own opacity is the group's
+      paint(g, node, place, dev, 1, k, rot, shadow, depth + 1, true);
+      cx.save();
+      cx.setTransform(1, 0, 0, 1, 0, 0); cx.globalAlpha = a;
+      cx.drawImage(cv, X0, Y0);
+      cx.restore();
+    } finally { free(cv); }
   }
   // a text node: one line of it, in its parent's font
   function paintText(cx, t, s, place, a, k, rot, shadow) {
@@ -494,7 +492,7 @@
       cx.restore();
       return true;
     };
-    return { draw, stats, done: () => { root.removeAttribute('data-export-root'); for (const l of cache.values()) free(l.bmp); cache = new Map(); for (const c of blurs.values()) free(c); blurs.clear(); for (const c of scratch.splice(0)) free(c); } };
+    return { draw, stats, done: () => { root.removeAttribute('data-export-root'); for (const l of cache.values()) free(l.bmp); cache = new Map(); for (const c of blurs.values()) free(c); blurs.clear(); } };
   }
 
   // for the tests: one layer drawn here, with margin CSS px round it (for its shadows), or Unsupported's reason
