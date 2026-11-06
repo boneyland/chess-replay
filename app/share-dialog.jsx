@@ -101,7 +101,7 @@ function ShareDialog({ fen, board, pgn, x, setTweak, onFail, onReplay, onExport,
       </TweakSection>}
       {!board ? <TweakSection label="Export video">
         {x.formats.length > 1 ? <TweakRadio id="tw-format" label="Export as" value={x.exportFormat} options={x.formats} onChange={(v) => setTweak('exportFormat', v)} />
-          : <div className="twk-note">{EXPORT_NO_VIDEO}</div>}
+          : <div className="twk-note twk-err">{EXPORT_NO_VIDEO}</div>}
         {x.webp && <>
           <TweakSelect id="tw-webp-width" label="WebP width" value={x.webpPx(x.webpWidth)} options={x.webpWidths.map(x.webpPx)} onChange={(v) => setTweak('webpWidth', x.webpWidths.find((w) => x.webpPx(w) === v))} />
           <TweakSlider id="tw-webp-q" label="WebP quality" value={x.webpQuality} min={WEBP_QUALITY.min} max={WEBP_QUALITY.max} step={WEBP_QUALITY.step} format={(v) => (v >= 100 ? 'Lossless' : v)} onChange={(v) => setTweak('webpQuality', v)} />
