@@ -3239,8 +3239,9 @@ for (const name of BROWSERS) for (const site of SITES) {
       await ne.page.goto(base, { waitUntil: 'load' });
       await loadedOn(ne.page);
       const dialog = await openShare(ne.page);
-      await assert.doesNotReject(dialog.getByText(/^MP4 needs a video encoder this browser doesn’t have/).waitFor({ timeout: 3000 }));
+      await assert.doesNotReject(dialog.getByText(/^MP4 and WebM need a video encoder this browser doesn’t have/).waitFor({ timeout: 3000 }));
       assert.equal(await dialog.getByRole('radio', { name: 'MP4' }).count(), 0, 'no MP4 to choose');
+      assert.equal(await dialog.getByRole('radio', { name: 'WebM' }).count(), 0, 'no WebM to choose');
       assert.equal(await dialog.getByRole('button', { name: /^Export video \(MP4/ }).count(), 0);
       await assert.doesNotReject(dialog.getByRole('button', { name: /^Export animated WebP/ }).waitFor({ timeout: 3000 }));
       await assert.doesNotReject(dialog.locator('#tw-webp-width').waitFor({ timeout: 3000 }));
@@ -3339,6 +3340,35 @@ for (const name of BROWSERS) for (const site of SITES) {
         assert.ok(vfr.out.length > 1, 'uneven sample lengths');
         assert.ok(Math.abs(vfr.ticks / vfr.count - cfr.ticks / cfr.count) > 0, 'a longer average sample');
       }
+      assert.deepEqual(dk.errors, []);
+      await dk.ctx.close();
+    });
+
+    // WebM export: VP9 video and Opus sound in a WebM, with the MP4's quality setting. Offered where the encoder takes VP9
+    // (Chromium and Firefox on the desktop; WebKit's may not, and then the choice isn't there)
+    await t.test('desktop: a WebM export is VP9 with Opus sound', { timeout: 240000 }, async () => {
+      const dk = await open(browser, { width: 1440, height: 900 });
+      await dk.page.goto(base, { waitUntil: 'load' });
+      await loadedOn(dk.page);
+      const p = dk.page, dialog = await openShare(p), radio = dialog.getByRole('radio', { name: 'WebM' });
+      const offered = await radio.waitFor({ timeout: 5000 }).then(() => true, () => false);
+      if (!offered && name === 'webkit') { await dk.ctx.close(); return; }
+      assert.ok(offered, 'WebM offered');
+      await radio.click();
+      await assert.doesNotReject(dialog.getByRole('combobox', { name: 'WebM quality' }).waitFor({ timeout: 3000 }));
+      await p.locator('#tw-fps').selectOption('8 fps');
+      await p.locator('#tw-clip-from').selectOption({ index: 0 });
+      await p.locator('#tw-clip-to').selectOption({ index: 1 });
+      const [dl] = await Promise.all([p.waitForEvent('download', { timeout: 200000 }), p.getByRole('button', { name: /^Export video \(WebM, 8 fps/ }).click()]);
+      assert.match(dl.suggestedFilename(), /\.webm$/);
+      const file = path.join(OUT, `${host}-export.webm`);
+      await dl.saveAs(file);
+      await p.getByRole('dialog', { name: 'Exporting' }).waitFor({ state: 'detached', timeout: 5000 });
+      const buf = fs.readFileSync(file), head = buf.subarray(0, 4096).toString('latin1');
+      assert.equal(buf.readUInt32BE(0), 0x1a45dfa3, 'an EBML file');
+      assert.ok(head.includes('webm'), 'its DocType is webm');
+      assert.ok(head.includes('V_VP9'), 'a VP9 track');
+      assert.ok(head.includes('A_OPUS'), 'an Opus track (the move sounds are on by default)');
       assert.deepEqual(dk.errors, []);
       await dk.ctx.close();
     });
