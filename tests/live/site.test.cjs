@@ -3702,6 +3702,50 @@ for (const name of BROWSERS) for (const site of SITES) {
       await dk.ctx.close();
     });
 
+    // the captured pieces in a player bar have a light rim, two drop-shadows (C.rim): the painter draws it, against the
+    // browser's own picture of it, so a player bar with a captured black piece isn't handed to html2canvas
+    await t.test('desktop: the export paints a captured piece\'s rim of two drop-shadows', async () => {
+      const dk = await open(browser, { width: 600, height: 400 });
+      await dk.page.goto(base, { waitUntil: 'load' });
+      await loadedOn(dk.page);
+      const RIM = 'drop-shadow(0 0 1px rgba(239,232,222,0.95)) drop-shadow(0 0 1px rgba(239,232,222,0.6))';
+      await dk.page.evaluate(async (rim) => {
+        const src = window.PieceSets.url(window.PieceSets.DEFAULT, 'bQ');
+        const back = document.createElement('div');
+        back.id = 'rim-test';
+        back.style.cssText = 'position:fixed;left:0;top:0;width:600px;height:400px;z-index:2147483647;background:rgb(20,17,16)';
+        back.innerHTML = `<div style="position:absolute;left:100px;top:100px;width:80px;height:80px"><img src="${src}" style="display:block;width:60px;height:60px;margin:10px;filter:${rim}"></div>`;
+        document.body.appendChild(back);
+        await back.querySelector('img').decode();
+      }, RIM);
+      const shot = await dk.page.screenshot({ clip: { x: 100, y: 100, width: 80, height: 80 } });
+      const got = await dk.page.evaluate(async (b64) => {
+        const back = document.getElementById('rim-test'), box = back.firstElementChild;
+        const cv = window.ExportDraw.paintLayer(back, box, 1);
+        back.remove();
+        if (typeof cv === 'string') return { why: cv };
+        const out = document.createElement('canvas'); out.width = 80; out.height = 80;
+        const ox = out.getContext('2d'); ox.fillStyle = 'rgb(20,17,16)'; ox.fillRect(0, 0, 80, 80); ox.drawImage(cv, 0, 0);
+        const im = new Image(); im.src = 'data:image/png;base64,' + b64; await im.decode();
+        const ref = document.createElement('canvas'); ref.width = 80; ref.height = 80; ref.getContext('2d').drawImage(im, 0, 0);
+        const A = ox.getImageData(0, 0, 80, 80).data, B = ref.getContext('2d').getImageData(0, 0, 80, 80).data;
+        // the rim alone: where the browser's picture is lighter than the backdrop and the piece is dark
+        let rim = 0, drawn = 0, s = 0, n = 0;
+        for (let i = 0; i < A.length; i += 4) {
+          for (let c = 0; c < 3; c++) { s += (A[i + c] - B[i + c]) ** 2; n++; }
+          if (B[i] > 60 && B[i] < 230) { rim++; if (A[i] > 60) drawn++; }
+        }
+        return { psnr: 10 * Math.log10((255 * 255 * n) / s), rim, drawn, png: ox.canvas.toDataURL() };
+      }, shot.toString('base64'));
+      if (got.png) fs.writeFileSync(path.join(OUT, `${host}-export-rim.png`), Buffer.from(got.png.split(',')[1], 'base64'));
+      fs.writeFileSync(path.join(OUT, `${host}-export-rim-css.png`), shot);
+      assert.equal(got.why, undefined, `painted here, not by html2canvas (${got.why})`);
+      assert.ok(got.drawn >= got.rim * 0.8, `the rim is drawn (${got.drawn} of ${got.rim} px lit)`);
+      assert.ok(got.psnr > 28, `the piece and its rim match the browser's (${got.psnr.toFixed(2)} dB)`);
+      assert.deepEqual(dk.errors, []);
+      await dk.ctx.close();
+    });
+
     // a panel html2canvas draws (something in it the painter can't: a mask, a scrolled list, wrapped text) keeps its
     // halo: html2canvas draws the box but not its box-shadow outside it, which the compositor draws under the capture.
     // At phone size the Moves panel (scrolled) and Commentary (its mask, two-line comments) fell back on most frames

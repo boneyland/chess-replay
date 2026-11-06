@@ -94,11 +94,12 @@
   }
   // a box-shadow list, first (topmost) shadow first; the commas inside rgba() don't split it
   const shadowsOf = (v) => v === 'none' ? [] : v.split(/,(?![^(]*\))/).map((x) => shadowOf(x.trim(), 'box-shadow'));
-  const dropShadowOf = (f) => {
-    if (!f || f === 'none') return null;
-    const m = f.match(/^drop-shadow\((.*)\)$/);
-    if (!m || /drop-shadow/.test(m[1])) no('filter ' + f);
-    return shadowOf(m[1].trim(), 'filter');
+  // a filter of drop-shadows, in the order they apply (the captured pieces' rim is two); [] for none
+  const dropShadowsOf = (f) => {
+    if (!f || f === 'none') return [];
+    const parts = f.match(/drop-shadow\((?:[^()]|\([^()]*\))*\)/g);
+    if (!parts || parts.join(' ') !== f.trim()) no('filter ' + f);
+    return parts.map((p) => shadowOf(p.slice(12, -1).trim(), 'filter'));
   };
   // radial-gradient(circle, <colour> <n>%, …): the check glow's, centred, to the farthest corner
   const gradientOf = (cx, v, b) => {
@@ -139,15 +140,18 @@
     a *= o;
     const m = matrixOf(s.transform);
     k *= m.k; rot += m.rot;
-    const own = dropShadowOf(s.filter);
-    if (own && shadow) no('nested filters');
-    shadow = own || shadow;
+    const own = dropShadowsOf(s.filter);
+    if (own.length && shadow) no('nested filters');
     const tag = node.tagName.toLowerCase();
+    // more than one drop-shadow only on a picture (the captured pieces' rim)
+    if (own.length > 1 && tag !== 'img') no('filter ' + s.filter);
+    shadow = own.length === 1 ? own[0] : shadow;
     if (tag === 'svg') return paintSvg(cx, node, place, dev, a, k, rot, shadow);
     if (tag === 'img') {
       if (rot) no('rotated image');
       if (!node.complete || !node.naturalWidth) no('image not loaded');
       const b = place(node);
+      if (own.length > 1) return paintShadowed(cx, node, b, a, k, dev, own);
       cx.save(); cx.globalAlpha = a;
       if (shadow) Object.assign(cx, { shadowColor: shadow.color, shadowOffsetX: shadow.x * k * dev, shadowOffsetY: shadow.y * k * dev, shadowBlur: shadow.blur * k * dev });
       cx.drawImage(node, b.x, b.y, b.w, b.h);
@@ -212,6 +216,32 @@
       else paint(cx, c, place, dev, a, k, rot, shadow, depth);
     }
     cx.restore();
+  }
+
+  // A picture under a chain of drop-shadows, as CSS applies them: each to the picture with the shadows before it. Drawn
+  // in device px on canvases of its size (with room for the shadows), each step the last one drawn with the next shadow.
+  // A drop-shadow's blur is the Gaussian's standard deviation, and the canvas's shadowBlur twice that
+  function paintShadowed(cx, img, b, a, k, dev, chain) {
+    const T = cx.getTransform();
+    if (T.b || T.c) no('rotated canvas');
+    const X = T.a * b.x + T.e, Y = T.d * b.y + T.f, w = T.a * b.w, h = T.d * b.h;
+    const pad = Math.ceil(chain.reduce((p, sh) => p + (Math.max(Math.abs(sh.x), Math.abs(sh.y)) + 2 * sh.blur) * k * dev, 0)) + 2;
+    const W = Math.max(1, Math.ceil(w + 2 * pad)), H = Math.max(1, Math.ceil(h + 2 * pad));
+    let last = null;
+    try {
+      for (const sh of chain) {
+        const c = document.createElement('canvas'); c.width = W; c.height = H;
+        const g = c.getContext('2d');
+        g.imageSmoothingQuality = 'high';
+        Object.assign(g, { shadowColor: sh.color, shadowOffsetX: sh.x * k * dev, shadowOffsetY: sh.y * k * dev, shadowBlur: 2 * sh.blur * k * dev });
+        if (last) g.drawImage(last, 0, 0); else g.drawImage(img, pad, pad, w, h);
+        free(last); last = c;
+      }
+      cx.save();
+      cx.setTransform(1, 0, 0, 1, 0, 0); cx.globalAlpha = a;
+      cx.drawImage(last, X - pad, Y - pad);
+      cx.restore();
+    } finally { free(last); }
   }
 
   // whether node (shown, its opacity aside) draws two things or more, which then may overlap: its own box (background,
