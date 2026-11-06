@@ -41,6 +41,10 @@
     return s * (1 - ((((1.061405429 * t - 1.453152027) * t + 1.421413741) * t - 0.284496736) * t + 0.254829592) * t * Math.exp(-x * x));
   };
   const rgbaOf = (c) => { const m = c.match(/^rgba?\(\s*([\d.]+)[,\s]+([\d.]+)[,\s]+([\d.]+)(?:[,\s/]+([\d.]+))?\s*\)$/); return m && [+m[1], +m[2], +m[3], m[4] == null ? 1 : +m[4]]; };
+  // A canvas no longer needed, emptied so its memory goes now rather than when it is collected: where canvases are drawn
+  // on the GPU (Firefox for Android), an export's discarded layer bitmaps took Firefox's GPU process from 0.3 to 1.8 GB
+  // (measured 2026-11-06), and a page short of memory reloaded mid-export
+  const free = (cv) => { if (cv && cv.width) { cv.width = 0; cv.height = 0; } };
   const BLURS_KEPT = 48;
   const blurs = new Map();
   // false where the colour isn't one this reads (the canvas's own shadow is drawn then)
@@ -62,7 +66,7 @@
       const g = bmp.getContext('2d'), im = g.createImageData(cw, ch), d = im.data, A = rgba[3] * 255;
       for (let j = 0, k = 0; j < ch; j++) for (let i = 0; i < cw; i++, k += 4) { d[k] = rgba[0]; d[k + 1] = rgba[1]; d[k + 2] = rgba[2]; d[k + 3] = A * fx[i] * fy[j]; }
       g.putImageData(im, 0, 0);
-      if (blurs.size >= BLURS_KEPT) blurs.clear();
+      if (blurs.size >= BLURS_KEPT) { for (const c of blurs.values()) free(c); blurs.clear(); }
       blurs.set(key, bmp);
     }
     cx.save();
@@ -358,6 +362,7 @@
       boxShadows(cx, bs, b, radiusOf(s), 1, scale);
       cx.setTransform(1, 0, 0, 1, 0, 0); cx.globalAlpha = 1;
       cx.drawImage(c, Math.round(MARGIN * scale), Math.round(MARGIN * scale));
+      free(c);
       return { bmp: cv, x: x0 * scale, y: y0 * scale };
     };
     const render = (n, place) => {
@@ -390,6 +395,8 @@
         }
         next.set(n, { key, ...got });
       }
+      // the bitmaps no longer used, let go at once (see free)
+      for (const [n, l] of cache) if (next.get(n) !== l) free(l.bmp);
       cache = next;
       // the camera push: the page stays still while exporting and names the zoom on the box it would have transformed
       // (data-push="<scale> <x> <y>", round that point in the stage's CSS px), and its layers are drawn zoomed here, so
@@ -415,7 +422,7 @@
       cx.restore();
       return true;
     };
-    return { draw, stats, done: () => root.removeAttribute('data-export-root') };
+    return { draw, stats, done: () => { root.removeAttribute('data-export-root'); for (const l of cache.values()) free(l.bmp); cache = new Map(); for (const c of blurs.values()) free(c); blurs.clear(); } };
   }
 
   // for the tests: one layer drawn here, with margin CSS px round it (for its shadows), or Unsupported's reason
