@@ -7,7 +7,7 @@
     WIN_CHANCES_K: CC.WIN_K, BEST_MAX_LOSS_CP: 5,
     WIN_DROP_INACCURACY: CC.WIN_DROP.inaccuracy, WIN_DROP_MISTAKE: CC.WIN_DROP.mistake, WIN_DROP_BLUNDER: CC.WIN_DROP.blunder,
     MAX_EVAL_LOSS_FOR_ACCURACY: 1500,
-    MATE_SCORE_CP: CC.MATE_CP, MATE_STEP_CP: CC.MATE_STEP, MATE_BAND_CP: CC.MATE_CP - CC.MATE_BAND,
+    MATE_SCORE_CP: CC.MATE_CP, MATE_STEP_CP: CC.MATE_STEP, MATE_BAND_CP: CC.MATE_CP - CC.MATE_MIN, // Python's: the width of the band of mate scores below MATE_SCORE_CP
     MATE_INACCURACY_CP: 999, MATE_MISTAKE_CP: 700,
     MATE_CREATED: 'Checkmate is now unavoidable', MATE_LOST: 'Lost forced checkmate sequence', MATE_DELAYED: 'Not the best checkmate sequence',
     MATE_LINE_MAX_PLIES: 9, BEST_LINE_MAX_PLIES: 12,
@@ -45,7 +45,7 @@
   // Lichess's mate rules from the mover's point of view → [classification or null, advice]
   function mateAdvice(bestEval, currentEval, isWhite) {
     const sign = isWhite ? 1 : -1, before = sign * bestEval, after = sign * currentEval;
-    const zone = C.MATE_SCORE_CP - C.MATE_BAND_CP;
+    const zone = CC.MATE_MIN;
     const hadMate = before >= zone, hasMate = after >= zone, wasMated = before <= -zone, isMated = after <= -zone;
     if (hadMate && !hasMate) return [after > C.MATE_INACCURACY_CP ? 'inaccuracy' : after > C.MATE_MISTAKE_CP ? 'mistake' : 'blunder', C.MATE_LOST];
     if (isMated && !(hadMate || wasMated)) return [before < -C.MATE_INACCURACY_CP ? 'inaccuracy' : before < -C.MATE_MISTAKE_CP ? 'mistake' : 'blunder', C.MATE_CREATED];
@@ -57,7 +57,7 @@
   function rateMove({ bestEval, currentEval, isWhite, playedIsBest, isCheckmate }) {
     const sign = isWhite ? 1 : -1;
     let bestAfter = bestEval;
-    if (sign * bestEval >= C.MATE_SCORE_CP - C.MATE_BAND_CP) bestAfter += sign * C.MATE_STEP_CP;
+    if (sign * bestEval >= CC.MATE_MIN) bestAfter += sign * C.MATE_STEP_CP;
     let raw = Math.max(0, isWhite ? bestAfter - currentEval : currentEval - bestAfter);
     if (playedIsBest) raw = 0;
     const evalLoss = Math.min(raw, C.MAX_EVAL_LOSS_FOR_ACCURACY);

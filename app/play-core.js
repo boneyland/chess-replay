@@ -456,7 +456,7 @@
     const more = [];
     if (t) more.push(['TimeControl', `${t.base / 1000}+${t.inc / 1000}`]);
     if (g.result) more.push(['Termination', g.result.reason === 'time' ? 'time forfeit' : 'normal']);
-    // clk has the game's own moves, from step `from` on, in ms; written as Lichess does (tenths under 10 s: ChessCore.pgnClk)
+    // clk has the game's own moves, from step `from` on, in ms; written as an annotated game's are (ChessCore.pgnClk: tenths kept wherever the clock has them)
     const f = fromOf(b), has = (j) => !!t && j >= f && g.clock.clk[j - f] != null;
     return B().pgnOf(b, tags, res, { more, after: (j) => (has(j) ? `{[%clk ${window.ChessCore.pgnClk(Math.max(0, g.clock.clk[j - f]) / 1000)}]}` : '') });
   }

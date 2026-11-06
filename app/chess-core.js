@@ -241,7 +241,7 @@
   // ({ error }); castling rights or an en passant square the pieces don't support are left out of the setup and named in
   // dropped: { castle: the rights left out, ep: whether the square was }
   function readFen(text) {
-    const t = String(text == null ? '' : text).trim(), f = t.split(/\s+/), bad = { error: `That isn't a FEN: ${t.slice(0, 80)}` };
+    const t = String(text == null ? '' : text).trim(), f = t.split(/\s+/), bad = { error: `That isn't a FEN: ${t.replace(/\s+/g, ' ').slice(0, 80)}` };
     const ranks = f[0].split('/'), width = (r) => [...r].reduce((n, c) => n + (/\d/.test(c) ? +c : 1), 0);
     if (f.length > 6 || ranks.length !== 8 || !ranks.every((r) => /^[pnbrqkPNBRQK1-8]+$/.test(r) && width(r) === 8)) return bad;
     const turn = f[1] || 'w', castle = f[2] || '-', ep = f[3] || '-', half = f[4] || '0', full = f[5] || '1';
@@ -282,10 +282,10 @@
   }
   // ---------- evals ----------
   // Evals are centipawns from White's point of view. A mate in N is ±(MATE_CP − MATE_STEP·N), as in Python's _eval_to_cp
-  // (a checkmate on the board ±MATE_CP); any eval at least MATE_BAND from zero is a mate score
-  const MATE_CP = 10000, MATE_STEP = 10, MATE_BAND = 9000;
+  // (a checkmate on the board ±MATE_CP); any eval at least MATE_MIN from zero is a mate score (Python calls MATE_CP − MATE_MIN its MATE_BAND_CP)
+  const MATE_CP = 10000, MATE_STEP = 10, MATE_MIN = 9000;
   const mateCp = (n) => (n > 0 ? 1 : -1) * (MATE_CP - MATE_STEP * Math.abs(n)); // n > 0: White mates
-  const isMateCp = (cp) => Math.abs(cp) >= MATE_BAND;
+  const isMateCp = (cp) => Math.abs(cp) >= MATE_MIN;
   const mateIn = (cp) => Math.round((MATE_CP - Math.abs(cp)) / MATE_STEP); // the N of a mate score (0 for a checkmate)
   // Lichess's win chances (−1 to 1) and the drops in them, for the mover, that make a move ?!, ? or ??
   const WIN_K = 0.00368208, WIN_DROP = { inaccuracy: 0.10, mistake: 0.20, blunder: 0.30 };
@@ -755,5 +755,5 @@
     for (let m = step; 2 * m - ply0 <= N; m += step) if (2 * (m - 1) - ply0 >= 0) ticks.push({ m, at: 2 * (m - 1) - ply0 });
     return ticks;
   }
-  window.ChessCore = { START_FEN, splitGames, fmtDate, fmtLen, hasLegal, inCheck, checkers, evalTicks, sqName: idxSq, CASTLE_HOME, canCastle, readFen, setupProblems, setupFen, epCapturable, fullFen, parseFen, fenAfter, moveNo, sqIndex: sqIdx, applySan, applyUci, stepFromUci, toFen, playLine, posFromFen, legalTargets, isPromotion, userMove, buildGame, withCommentary, commentarySources, classifyFile, plan, timing, schedule, cues, settledAt, clipRange, MATE_CP, MATE_STEP, MATE_BAND, mateCp, isMateCp, mateIn, WIN_K, WIN_DROP, winChance, plyCp, MARK_CLASS, pgnClk, pgnMoveNo, pgnReopens, pgnText, annotatedPgn };
+  window.ChessCore = { START_FEN, splitGames, fmtDate, fmtLen, hasLegal, inCheck, checkers, evalTicks, sqName: idxSq, CASTLE_HOME, canCastle, readFen, setupProblems, setupFen, epCapturable, fullFen, parseFen, fenAfter, moveNo, sqIndex: sqIdx, applySan, applyUci, stepFromUci, toFen, playLine, posFromFen, legalTargets, isPromotion, userMove, buildGame, withCommentary, commentarySources, classifyFile, plan, timing, schedule, cues, settledAt, clipRange, MATE_CP, MATE_STEP, MATE_MIN, mateCp, isMateCp, mateIn, WIN_K, WIN_DROP, winChance, plyCp, MARK_CLASS, pgnClk, pgnMoveNo, pgnReopens, pgnText, annotatedPgn };
 })();
