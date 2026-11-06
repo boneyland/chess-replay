@@ -166,7 +166,7 @@ function useEngineOpponent(board, onChange, sf) {
       const j = n - 1, played = b.steps[j], best = bf && A.bestOf(bf);
       const cls = played && best ? P.rateMove({ before: bf, after: r, you, playedIsBest: played.uci === best, isCheckmate: played.san.endsWith('#') }) : null;
       if (cls) {
-        const mated = (you === 'w' ? r.cp : -r.cp) <= -(A.C.MATE_SCORE_CP - A.C.MATE_BAND_CP);
+        const mated = (you === 'w' ? r.cp : -r.cp) <= -window.ChessCore.MATE_MIN;
         if (FLAGGED.includes(cls)) next = P.addCritique(next, { j, cls, best, text: P.critiqueText(played.pos, r.pv, you, cls, mated) });
       }
       set(P.move(next, step, Date.now()));
@@ -402,15 +402,15 @@ function FreeBoard({ board, onChange, tw, setTweak, onLichess, sf, nav, orient, 
   if (nav) nav.current.line = () => ({ fen: board.fen, moves: B.ucis(board) });
   const navSig = nav && nav.current ? `${nav.current.label}|${upto}|${last}|${live}` : '';
   React.useEffect(() => { if (nav && nav.listen) nav.listen(); }, [navSig]);
-  const keyRef = React.useRef(null);
-  keyRef.current = { go, upto, last, promo: input.promo, cancelPromo: input.cancelPromo };
+  // to a move (-1: the start), where there is one and it isn't the one shown: the keys and the wheel over the board
+  const goIf = (to) => { if (to >= -1 && to <= last && to !== upto) go(to); };
   useKeydown((e) => {
     if (e.shiftKey || hasModifier(e)) return;
     if (e.code === 'Escape' && input.promo) { e.preventDefault(); input.cancelPromo(); return; }
     const to = { ArrowLeft: upto - 1, ArrowRight: upto + 1, Home: -1, End: last }[e.code];
     if (to == null) return;
     e.preventDefault();
-    if (to >= -1 && to <= last && to !== upto) go(to);
+    goIf(to);
   });
   // MoveList draws a game at time T: one second a move, with T just short of the next, so the move shown is current and later ones dim
   const MV = React.useMemo(() => ({ ply0: board.start.ply0, plies: steps.map((s) => ({ san: s.san, cls: 'none', pos: s.pos })) }), [steps, board.start.ply0]);
@@ -431,7 +431,7 @@ function FreeBoard({ board, onChange, tw, setTweak, onLichess, sf, nav, orient, 
     <div ref={flowRef} style={{ position: 'absolute', inset: 0, background: C.bg, overflow: 'hidden', ...flowStyle() }}>
       {!G && (deadv || tbv ? <EvalBarView cp={(deadv || tbv).cp} txt={(deadv || tbv).txt} a={1} /> : <EvalBarView cp={cp == null ? 0 : cp} txt={cp == null ? (down ? '' : '…') : fmtSf(cp)} a={1} />)}
       <FreeBar pos={pos} side="b" a={1} clock={clockOf('b')} name={G ? playerName(G, 'b') : null} />
-      <BoardSpace onStep={!steps.length ? null : (d) => { const k = keyRef.current; if (k.upto + d >= -1 && k.upto + d <= k.last) k.go(k.upto + d); }}>
+      <BoardSpace onStep={!steps.length ? null : (d) => goIf(upto + d)}>
         <LineBoard a={1} sq={boardSquares()} v={pv && pv.length ? { upto: upto + pv.length, moves: [...steps.slice(0, upto + 1), ...pv], base: board.start.pos, src: 'you' } : { upto, moves: steps, base: board.start.pos, src: 'you' }} hide={input.drag && input.drag.moved ? input.drag.from : null} arrows={hovArrows(!G && tw.bestArrows !== false ? lineArrows(ev.after) : null, hov)} sel={input.sel} />
         <BoardDraw draw={draw} hidden={!!(pv && pv.length)}>
           <BoardTouch pos={pos} targets={input.targets} drag={input.drag} promo={input.promo} {...(still ? stillInput : input.handlers)} />

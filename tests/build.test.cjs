@@ -330,3 +330,14 @@ test('without isolation headers in render.yaml, the service worker adds none', (
   assert.equal(isolated(r), r);
   assert.throws(() => RH.headers('headers:\n  - path: /app/*\n    name: X\n    value: y\n'), /only \/\* is read/);
 });
+
+// an entry written another way (keys in another order, a comment inside, a quoted value) is read, not skipped; one
+// missing a key is refused
+test('render-headers reads every header entry, however its keys are written', () => {
+  const RH = require('../render-headers.cjs');
+  const yaml = 'x:\n    headers:\n      - path: /*\n        name: A\n        value: 1\n      - name: B\n        path: /*\n        value: two words\n'
+    + '      - path: /*\n        # a note\n        name: C\n        value: "3"\n    routes:\n      - path: /x\n';
+  assert.deepEqual(RH.headers(yaml), { A: '1', B: 'two words', C: '3' });
+  assert.throws(() => RH.headers('headers:\n  - path: /*\n    name: X\n'), /without path, name and value/);
+  assert.equal(Object.keys(RH.headers()).length, 7, "render.yaml's seven headers");
+});

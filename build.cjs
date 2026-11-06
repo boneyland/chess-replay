@@ -109,7 +109,8 @@ const CDN_HOSTS = ['cdnjs.cloudflare.com', 'cdn.jsdelivr.net', 'fonts.googleapis
 // games), the full engine's download (unpkg, kept in a cache of its own)
 const API_HOSTS = ['huggingface.co', 'boneyland-queen-pawn-8.hf.space', 'tablebase.lichess.ovh', 'explorer.lichess.ovh', 'lichess.org', 'unpkg.com'];
 const hostRe = new RegExp(`https://(?:${CDN_HOSTS.map((h) => h.replace(/\./g, '\\.')).join('|')})/[^'"\\s\`]+`, 'g');
-const SW_REMOTE = [...new Set([read(path.join(app, 'shell.html')), read(path.join(app, 'export.jsx'))].join('\n').match(hostRe))];
+// (a folder URL, such as a preconnect's or a note's, names no file: cache.addAll would fail the worker's install on it)
+const SW_REMOTE = [...new Set([read(path.join(app, 'shell.html')), read(path.join(app, 'export.jsx'))].join('\n').match(hostRe))].filter((u) => !/\/$/.test(u));
 const CDN_SCRIPTS = SW_REMOTE.filter((u) => /\.js$/.test(u));
 const inlineHashes = [...site.matchAll(/<script>([\s\S]*?)<\/script>/g)].map((m) => `'sha256-${require('crypto').createHash('sha256').update(m[1]).digest('base64')}'`);
 const CSP = [

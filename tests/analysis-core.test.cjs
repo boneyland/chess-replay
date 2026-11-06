@@ -314,7 +314,7 @@ test('the mate-score encoding and win chances are ChessCore\'s, and AnalysisCore
   assert.equal(CC.mateCp(3), 9970); assert.equal(CC.mateCp(-1), -9990); assert.equal(CC.mateCp(0), -10000);
   assert.equal(CC.mateIn(9970), 3); assert.equal(CC.mateIn(-9990), 1); assert.equal(CC.mateIn(10000), 0);
   assert.ok(CC.isMateCp(9000) && CC.isMateCp(-9990) && !CC.isMateCp(8999));
-  assert.equal(C.MATE_SCORE_CP - C.MATE_BAND_CP, CC.MATE_BAND);
+  assert.equal(C.MATE_SCORE_CP - C.MATE_BAND_CP, CC.MATE_MIN);
   assert.equal(C.WIN_CHANCES_K, CC.WIN_K);
   assert.deepEqual([C.WIN_DROP_INACCURACY, C.WIN_DROP_MISTAKE, C.WIN_DROP_BLUNDER], [CC.WIN_DROP.inaccuracy, CC.WIN_DROP.mistake, CC.WIN_DROP.blunder]);
   assert.equal(window.AnalysisCore.infoToScore('info depth 20 score mate 2 pv e2e4', 'w').cp, CC.mateCp(2));
