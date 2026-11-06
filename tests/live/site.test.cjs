@@ -3420,6 +3420,78 @@ for (const name of BROWSERS) for (const site of SITES) {
 
     // a scrolled box (the Moves list, scrolled to the move playing) is painted here, not handed to html2canvas, which
     // clones the whole page for each capture: a phone-size export scrolls that list on nearly every frame
+    // CSS fades a box with its contents as one (group opacity): the paused Moves panel's chips still to come (opacity
+    // 0.5) show white text on a faded chip, where fading the chip and its text apart left the text grey. Checked against
+    // the browser's own picture of the panel (its screenshot, on the page under it), not html2canvas's
+    await t.test('desktop: the export fades a box and what is in it as one', { timeout: 120000 }, async () => {
+      const dk = await open(browser, { width: 1440, height: 900 });
+      await dk.page.goto(base, { waitUntil: 'load' });
+      await loadedOn(dk.page);
+      await dk.page.addScriptTag({ url: 'https://cdn.jsdelivr.net/npm/html2canvas-pro@2.5.0/dist/html2canvas-pro.min.js' });
+      for (let i = 0; i < 12; i++) await dk.page.keyboard.press('ArrowRight');
+      await dk.page.mouse.move(0, 0);
+      await dk.page.waitForTimeout(800);
+      const clip = await dk.page.evaluate(async () => {
+        await document.fonts.ready;
+        const el = document.querySelector('.stage-frame > div'), list = document.querySelector('.moves-list');
+        const layer = window.ExportDraw.layersOf(el).find((n) => n.contains(list));
+        layer.setAttribute('data-test-layer', '');
+        // the info button is html2canvas's (the painter draws no buttons); without it, both draw the same panel
+        for (const b of layer.querySelectorAll('button')) b.style.display = 'none';
+        const r = layer.getBoundingClientRect(), lr = list.getBoundingClientRect();
+        // the faded chips the list shows whole
+        return { x: Math.floor(r.left), y: Math.floor(r.top), width: Math.ceil(r.right) - Math.floor(r.left), height: Math.ceil(r.bottom) - Math.floor(r.top), faded: [...list.querySelectorAll('[data-ply]')].filter((m) => getComputedStyle(m).opacity === '0.5').map((m) => m.getBoundingClientRect()).filter((q) => q.top >= lr.top && q.bottom <= lr.bottom).map((q) => [q.left, q.top, q.right, q.bottom]) };
+      });
+      const { faded, ...box } = clip;
+      assert.ok(faded.length > 0, 'the paused Moves list shows moves still to come, faded');
+      const shot = (await dk.page.screenshot({ clip: box })).toString('base64');
+      await dk.page.evaluate(() => { document.querySelector('[data-test-layer]').style.visibility = 'hidden'; });
+      const under = (await dk.page.screenshot({ clip: box })).toString('base64');
+      await dk.page.evaluate(() => { document.querySelector('[data-test-layer]').style.visibility = ''; });
+      const got = await dk.page.evaluate(async ({ clip, faded, shot, under }) => {
+        const img = async (b64) => { const i = new Image(); i.src = 'data:image/png;base64,' + b64; await i.decode(); return i; };
+        const [A, U] = await Promise.all([img(shot), img(under)]);
+        const W = A.naturalWidth, H = A.naturalHeight, dpr = W / clip.width;
+        const el = document.querySelector('.stage-frame > div'), layer = document.querySelector('[data-test-layer]');
+        const R = el.getBoundingClientRect(), r = layer.getBoundingClientRect(), Z = R.width / el.offsetWidth || 1;
+        // the layer drawn over the page under it, at (dx, dy) in the clip
+        const over = (cv, dx, dy) => { const c = document.createElement('canvas'); c.width = W; c.height = H; const cx = c.getContext('2d'); cx.drawImage(U, 0, 0); cx.drawImage(cv, dx, dy); return cx.getImageData(0, 0, W, H).data; };
+        const a = document.createElement('canvas'); a.width = W; a.height = H; a.getContext('2d').drawImage(A, 0, 0);
+        const P = a.getContext('2d').getImageData(0, 0, W, H).data;
+        // over the faded chips only, where the two ways of fading differ
+        const psnr = (B) => {
+          let s = 0, n = 0;
+          for (const [l, t, rr, bb] of faded) for (let y = Math.ceil((t - clip.y) * dpr); y < Math.floor((bb - clip.y) * dpr); y++) for (let x = Math.ceil((l - clip.x) * dpr); x < Math.floor((rr - clip.x) * dpr); x++) {
+            const i = (y * W + x) * 4;
+            for (let k = 0; k < 3; k++) s += (P[i + k] - B[i + k]) ** 2;
+            n += 3;
+          }
+          return s ? 10 * Math.log10((255 * 255 * n) / s) : Infinity;
+        };
+        const cv = window.ExportDraw.paintLayer(el, layer, dpr * Z);
+        if (typeof cv === 'string') return { why: cv };
+        const dx = Math.round((r.left - clip.x) * dpr), dy = Math.round((r.top - clip.y) * dpr);
+        const drawn = over(cv, dx, dy);
+        el.setAttribute('data-export-root', '');
+        const skip = (target) => (n) => n.tagName === 'SCRIPT' || (!(n.tagName === 'STYLE' || n.tagName === 'LINK' || n.closest('head')) && n !== target && !n.contains(target) && !target.contains(n));
+        const h2c = await html2canvas(layer, { scale: dpr * Z, backgroundColor: null, logging: false, ignoreElements: skip(layer), onclone: (doc) => { doc.querySelector('[data-export-root]').style.transform = 'none'; } });
+        el.removeAttribute('data-export-root');
+        const theirs = over(h2c, dx, dy);
+        const png = (d) => { const c = document.createElement('canvas'); c.width = W; c.height = H; c.getContext('2d').putImageData(new ImageData(d, W, H), 0, 0); return c.toDataURL('image/png'); };
+        return { drawn: psnr(drawn), h2c: psnr(theirs), neu: png(drawn) };
+      }, { clip: box, faded, shot, under });
+      assert.ok(!got.why, `the Moves panel is painted here (${got.why})`);
+      fs.writeFileSync(path.join(OUT, `${host}-export-faded-moves-shot.png`), Buffer.from(shot, 'base64'));
+      fs.writeFileSync(path.join(OUT, `${host}-export-faded-moves-drawn.png`), Buffer.from(got.neu.split(',')[1], 'base64'));
+      console.log(`  ${name}: faded Moves chips against the screenshot: drawn ${got.drawn.toFixed(2)} dB, html2canvas ${got.h2c.toFixed(2)} dB`);
+      // faded apart, the chips came to 27 dB in both browsers (2026-11-06); as a group, 39.6 in Chromium and 36.3 in
+      // Firefox, a little above html2canvas
+      assert.ok(got.drawn > 33, `the faded chips match the screenshot (${got.drawn.toFixed(2)} dB)`);
+      assert.ok(got.drawn > got.h2c - 1, `the faded chips match the screenshot (${got.drawn.toFixed(2)} dB) as well as html2canvas's (${got.h2c.toFixed(2)} dB)`);
+      assert.deepEqual(dk.errors, []);
+      await dk.ctx.close();
+    });
+
     await t.test('desktop: the export draws a scrolled Moves list itself', { timeout: 120000 }, async () => {
       const dk = await open(browser, { width: 1440, height: 900 });
       await dk.page.goto(base, { waitUntil: 'load' });
@@ -3436,10 +3508,8 @@ for (const name of BROWSERS) for (const site of SITES) {
         // a scroll that isn't a whole line, so the top line is cut by the clip
         list.scrollTop = Math.max(33, list.scrollTop - 13);
         const layer = window.ExportDraw.layersOf(el).find((n) => n.contains(list));
-        // as a playing (or exporting) stage shows it: no info button, and the moves still to come hidden (paused, they
-        // are faded chips, whose text the painter draws too dim: it fades a chip and its text apart, not as one)
+        // no info button, as a playing (or exporting) stage shows it
         for (const b of layer.querySelectorAll('button')) b.style.display = 'none';
-        for (const m of list.querySelectorAll('[data-ply]')) if (m.style.opacity === '0.5') m.parentElement.style.opacity = '0';
         const one = window.ExportDraw.paintLayer(el, layer, 1);
         if (typeof one === 'string') return { why: one, scroll: list.scrollTop };
         const stage = window.ExportDraw.compositor(el, { W, H, scale: 1, html2canvas, skip });
