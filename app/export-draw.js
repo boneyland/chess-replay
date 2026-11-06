@@ -219,29 +219,59 @@
   }
 
   // A picture under a chain of drop-shadows, as CSS applies them: each to the picture with the shadows before it. Drawn
-  // in device px on canvases of its size (with room for the shadows), each step the last one drawn with the next shadow.
-  // A drop-shadow's blur is the Gaussian's standard deviation, and the canvas's shadowBlur twice that
+  // in device px on canvases of its size (with room for the shadows). Each shadow is worked out here rather than with
+  // the canvas's own (WebKit drew a canvas under its shadow see-through, the piece grey): the last picture's alpha in the
+  // shadow's colour, blurred by a Gaussian whose standard deviation is the drop-shadow's blur, moved by its offset and
+  // drawn under the picture
   function paintShadowed(cx, img, b, a, k, dev, chain) {
     const T = cx.getTransform();
     if (T.b || T.c) no('rotated canvas');
+    const rgbs = chain.map((sh) => rgbaOf(sh.color) || no('shadow colour ' + sh.color));
     const X = T.a * b.x + T.e, Y = T.d * b.y + T.f, w = T.a * b.w, h = T.d * b.h;
-    const pad = Math.ceil(chain.reduce((p, sh) => p + (Math.max(Math.abs(sh.x), Math.abs(sh.y)) + 2 * sh.blur) * k * dev, 0)) + 2;
+    const pad = Math.ceil(chain.reduce((p, sh) => p + (Math.max(Math.abs(sh.x), Math.abs(sh.y)) + 3 * sh.blur) * k * dev, 0)) + 2;
     const W = Math.max(1, Math.ceil(w + 2 * pad)), H = Math.max(1, Math.ceil(h + 2 * pad));
-    let last = null;
+    const canvas = () => { const c = document.createElement('canvas'); c.width = W; c.height = H; return c; };
+    let last = canvas(), shade = null;
     try {
-      for (const sh of chain) {
-        const c = document.createElement('canvas'); c.width = W; c.height = H;
-        const g = c.getContext('2d');
-        g.imageSmoothingQuality = 'high';
-        Object.assign(g, { shadowColor: sh.color, shadowOffsetX: sh.x * k * dev, shadowOffsetY: sh.y * k * dev, shadowBlur: 2 * sh.blur * k * dev });
-        if (last) g.drawImage(last, 0, 0); else g.drawImage(img, pad, pad, w, h);
-        free(last); last = c;
-      }
+      const g0 = last.getContext('2d'); g0.imageSmoothingQuality = 'high'; g0.drawImage(img, pad, pad, w, h);
+      chain.forEach((sh, i) => {
+        shade = canvas();
+        const s = shade.getContext('2d', { willReadFrequently: true });
+        s.drawImage(last, 0, 0);
+        const sigma = sh.blur * k * dev, rgb = rgbs[i], im = s.getImageData(0, 0, W, H), d = im.data;
+        const A = new Float32Array(W * H);
+        for (let p = 0; p < A.length; p++) A[p] = d[p * 4 + 3] * rgb[3];
+        if (sigma > 0) blurAlpha(A, W, H, sigma);
+        for (let p = 0; p < A.length; p++) { d[p * 4] = rgb[0]; d[p * 4 + 1] = rgb[1]; d[p * 4 + 2] = rgb[2]; d[p * 4 + 3] = A[p]; }
+        s.putImageData(im, 0, 0);
+        const c = canvas(), g = c.getContext('2d');
+        g.drawImage(shade, sh.x * k * dev, sh.y * k * dev);
+        g.drawImage(last, 0, 0);
+        free(shade); shade = null; free(last); last = c;
+      });
       cx.save();
       cx.setTransform(1, 0, 0, 1, 0, 0); cx.globalAlpha = a;
       cx.drawImage(last, X - pad, Y - pad);
       cx.restore();
-    } finally { free(last); }
+    } finally { free(shade); free(last); }
+  }
+  // a W × H alpha map blurred in place by a Gaussian of standard deviation sigma (px), across then down; outside is 0
+  function blurAlpha(A, W, H, sigma) {
+    const r = Math.ceil(3 * sigma), ker = new Float32Array(2 * r + 1);
+    let sum = 0;
+    for (let i = -r; i <= r; i++) sum += ker[i + r] = Math.exp(-(i * i) / (2 * sigma * sigma));
+    for (let i = 0; i < ker.length; i++) ker[i] /= sum;
+    const t = new Float32Array(W * H);
+    for (let y = 0; y < H; y++) for (let x = 0; x < W; x++) {
+      let v = 0;
+      for (let i = -r; i <= r; i++) { const xx = x + i; if (xx >= 0 && xx < W) v += A[y * W + xx] * ker[i + r]; }
+      t[y * W + x] = v;
+    }
+    for (let y = 0; y < H; y++) for (let x = 0; x < W; x++) {
+      let v = 0;
+      for (let i = -r; i <= r; i++) { const yy = y + i; if (yy >= 0 && yy < H) v += t[yy * W + x] * ker[i + r]; }
+      A[y * W + x] = v;
+    }
   }
 
   // whether node (shown, its opacity aside) draws two things or more, which then may overlap: its own box (background,
