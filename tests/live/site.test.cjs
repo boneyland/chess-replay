@@ -3415,10 +3415,11 @@ for (const name of BROWSERS) for (const site of SITES) {
           const st = C(...a), draw = st.draw;
           // and the frame's colour at a6's middle (a light square): wood4's light square turned 108° is greener than red
           st.draw = async (cx) => {
-            await draw(cx);
+            const painted = await draw(cx); // whether it painted, which the export goes by
             const im = document.querySelector('.stage-frame img[src^="blob:"], .stage-frame img[src^="boards/"]'), R = a[0].getBoundingClientRect(), r = im.getBoundingClientRect(), k = cx.canvas.width / R.width;
             const [red, green] = cx.getImageData(Math.round((r.left - R.left + r.width / 16) * k), Math.round((r.top - R.top + r.height * 5 / 16) * k), 1, 1).data;
             window.__frames.push({ src: im.getAttribute('src'), why: { ...st.stats.why }, red, green });
+            return painted;
           };
           return st;
         };

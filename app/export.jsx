@@ -140,8 +140,10 @@ async function mp4Encoder(cv, W, H, fps, audio, quality = 'High', vfr = false) {
 // Each frame is drawn at the WebP's width (width 0: the frame's own), compared with the last one pixel by pixel, and
 // only the rectangle that changed is encoded, straight from the drawn pixels: nothing is encoded twice, so quality
 // doesn't drift. A picture that didn't change lengthens the frame before: isNew false says so without reading the
-// pixels (pauses, the title and end cards), and the comparison catches a new markup that draws the same picture.
-async function webpEncoder(cv, W, H, fps, { width = 0, quality = 75 } = {}) {
+// pixels (no layer changed: pauses, the title and end cards), and the comparison catches a changed layer that draws the
+// same picture.
+// frames: how many the export draws, for their durations
+async function webpEncoder(cv, W, H, fps, frames, { width = 0, quality = 75 } = {}) {
   const scale = width && width < W ? width / W : 1;
   const w = Math.round(W * scale), h = Math.round(H * scale);
   let codec;
@@ -151,13 +153,13 @@ async function webpEncoder(cv, W, H, fps, { width = 0, quality = 75 } = {}) {
   const ox = out.getContext('2d', { willReadFrequently: true });
   ox.imageSmoothingQuality = 'high';
   const config = { ...WEBP_CONFIG, quality, ...(quality >= WEBP_QUALITY.max && WEBP_LOSSLESS) };
-  const frames = [];
+  // whole milliseconds that add up to the clip, so the file keeps time
+  const durs = window.WebPAnim.durations(frames, fps), stills = [];
   let i = 0, prev = null;
-  // frame i ends at round((i + 1) * 1000 / fps) ms, so the whole file keeps time (see WebPAnim.durations)
-  const end = (k) => Math.round((k * 1000) / fps);
   return {
     frame: async (isNew) => {
-      const last = frames[frames.length - 1], dur = end(i + 1) - end(i);
+      if (i >= durs.length) throw new Error('more frames than the export said');
+      const last = stills[stills.length - 1], dur = durs[i];
       i++;
       if (!isNew && last) { last.duration += dur; return; }
       if (out !== cv) { ox.clearRect(0, 0, w, h); ox.drawImage(cv, 0, 0, w, h); }
@@ -169,9 +171,9 @@ async function webpEncoder(cv, W, H, fps, { width = 0, quality = 75 } = {}) {
       const still = codec.encode(part, box.w, box.h, config);
       if (!still) throw new Error('the WebP encoder failed on frame ' + i);
       const { offset, alpha } = window.WebPAnim.stillImage(still);
-      frames.push({ data: new Blob([still.subarray(offset)]), size: still.length - offset, duration: dur, alpha, ...box });
+      stills.push({ data: new Blob([still.subarray(offset)]), size: still.length - offset, duration: dur, alpha, ...box });
     },
-    finish: async () => ({ blob: new Blob(window.WebPAnim.mux(frames, { width: w, height: h }), { type: 'image/webp' }), ext: '.webp' }),
+    finish: async () => ({ blob: new Blob(window.WebPAnim.mux(stills, { width: w, height: h }), { type: 'image/webp' }), ext: '.webp' }),
     cancel: async () => {},
   };
 }
@@ -205,22 +207,20 @@ function useVideoExport({ fps, format, webp, mp4Quality, mp4Vfr = false, save, s
       const cx = cv.getContext('2d', { willReadFrequently: format === 'WebP' }); // the WebP encoder reads every frame back
       // Full (0) and Half are taken against the canvas drawn now, whatever Settings' widths were worked out from
       const wpx = webp.width === 'Half' ? Math.round(W / 2) : webp.width;
-      enc = format === 'WebP' ? await webpEncoder(cv, W, H, fps, { ...webp, width: wpx }) : await mp4Encoder(cv, W, H, fps, audio, mp4Quality, mp4Vfr);
+      const N = Math.floor((end - start) * fps) + 1;
+      enc = format === 'WebP' ? await webpEncoder(cv, W, H, fps, N, { ...webp, width: wpx }) : await mp4Encoder(cv, W, H, fps, audio, mp4Quality, mp4Vfr);
       // html2canvas copies the whole document every frame: leave out the scripts (the page inlines its
       // opening tables) and the page around the stage, but keep the head and every stylesheet (fonts and base styles)
       const keep = (n) => n.tagName === 'STYLE' || n.tagName === 'LINK' || n.tagName === 'HEAD' || n.closest('head');
       const skip = (target) => (n) => n.tagName === 'SCRIPT' || (!keep(n) && n !== target && !n.contains(target) && !target.contains(n));
       // the stage drawn layer by layer, each redrawn only when its markup changes (export-draw.js)
       stage = window.ExportDraw.compositor(el, { W, H, scale: W / cssW, html2canvas, skip });
-      const N = Math.floor((end - start) * fps) + 1, t0 = performance.now();
-      let prev = null;
+      const t0 = performance.now();
       for (let i = 0; i < N; i++) {
         if (stopRef.current) { await enc.cancel(); stage.done(); setState(null); return; }
         seekStage(start + i / fps);
-        // a frame whose markup matches the last one (holds, the title and end cards) reuses the canvas as it is
-        const html = el.innerHTML, isNew = html !== prev;
-        if (isNew) { await stage.draw(cx); prev = html; }
-        await enc.frame(isNew);
+        // a frame whose layers all match the last one's (holds, the title and end cards) leaves the canvas as it is
+        await enc.frame(await stage.draw(cx));
         const per = (performance.now() - t0) / (i + 1);
         setState({ phase: 'render', done: i + 1, N, eta: per * (N - i - 1) / 1000 });
       }
