@@ -3394,6 +3394,33 @@ for (const name of BROWSERS) for (const site of SITES) {
       await dk.ctx.close();
     });
 
+    // a box with a border on some sides only (the best line's divider in a panel) is painted here, not handed to
+    // html2canvas: a panel html2canvas draws loses its halo (a box-shadow outside the box), which in the dark theme blinked
+    // on and off in a WebP export as the best line came and went
+    await t.test('desktop: the export paints a one-sided border, so its panel keeps its halo', async () => {
+      const dk = await open(browser, { width: 1440, height: 900 });
+      await dk.page.goto(base, { waitUntil: 'load' });
+      await loadedOn(dk.page);
+      const got = await dk.page.evaluate(() => {
+        const root = document.querySelector('.stage-frame > div'), panel = document.createElement('div');
+        panel.style.cssText = 'position:absolute;left:20px;top:20px;width:200px;height:100px;box-sizing:border-box;padding:10px;background:rgb(20,20,20);border:1px solid rgb(60,60,60);box-shadow:0 0 14px rgba(255,236,214,0.5)';
+        panel.innerHTML = '<div style="height:30px;border-top:4px solid rgb(255,0,0);border-left:2px solid rgb(0,0,255)"></div>';
+        root.appendChild(panel);
+        const cv = window.ExportDraw.paintLayer(root, panel, 1);
+        panel.remove();
+        if (typeof cv === 'string') return { why: cv };
+        // the divider's box is at (11, 11) in the panel (its border, then its padding), 178 px wide
+        const px = (x, y) => [...cv.getContext('2d').getImageData(x, y, 1, 1).data.slice(0, 3)];
+        return { top: px(100, 12), left: px(11, 25), inside: px(100, 25) };
+      });
+      assert.equal(got.why, undefined, `painted here, not by html2canvas (${got.why})`);
+      assert.deepEqual(got.top, [255, 0, 0], 'the top border');
+      assert.deepEqual(got.left, [0, 0, 255], 'the left border');
+      assert.deepEqual(got.inside, [20, 20, 20], 'no border inside');
+      assert.deepEqual(dk.errors, []);
+      await dk.ctx.close();
+    });
+
     // a picture board through the sliders (Settings › View) lies under the squares as one picture: on the page lila's
     // file through a CSS filter, which follows a slider at once; in an export the picture worked out through the
     // sliders, which the export paints itself (it can't paint a filter). The coordinates follow the sliders too
