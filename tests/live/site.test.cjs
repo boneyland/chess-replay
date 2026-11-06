@@ -3657,6 +3657,51 @@ for (const name of BROWSERS) for (const site of SITES) {
       await dk.ctx.close();
     });
 
+    // The video's last 0.8 s fades the whole stage: a box of no picture of its own at an opacity below 1. Its layers are
+    // still drawn apart (the board by the painter) and the stage composited at that opacity as one picture. Taken whole,
+    // it had gone to html2canvas (the captured pieces' rim is a filter the painter couldn't draw), which in Firefox drew
+    // a piece set whose SVGs have only a viewBox (Firi) at about 40% of its size on the last frames
+    await t.test('desktop: a faded stage keeps its layers, faded as one', { timeout: 120000 }, async () => {
+      const dk = await open(browser, { width: 1440, height: 900 });
+      await dk.page.goto(base, { waitUntil: 'load' });
+      await loadedOn(dk.page);
+      await dk.page.addScriptTag({ url: 'https://cdn.jsdelivr.net/npm/html2canvas-pro@2.5.0/dist/html2canvas-pro.min.js' });
+      const got = await dk.page.evaluate(async () => {
+        await document.fonts.ready;
+        const el = document.querySelector('.stage-frame > div'), W = el.offsetWidth, H = el.offsetHeight;
+        const skip = (target) => (n) => n.tagName === 'SCRIPT' || (!(n.tagName === 'STYLE' || n.tagName === 'LINK' || n.closest('head')) && n !== target && !n.contains(target) && !target.contains(n));
+        window.dispatchEvent(new CustomEvent('chess-video:seek', { detail: { time: 20.4, sync: true } }));
+        const bd = window.ExportDraw.layersOf(el).find((n) => n.querySelectorAll('img').length >= 20);
+        // the box the end of the video fades (in playback it is drawn at opacity 1)
+        let wrap = bd.parentElement;
+        while (wrap && wrap !== el && !(wrap.style.opacity === '1' && wrap.style.inset === '0px')) wrap = wrap.parentElement;
+        if (!wrap || wrap === el) return { why: 'no fading box round the board' };
+        const stage = window.ExportDraw.compositor(el, { W, H, scale: 1, html2canvas, skip });
+        const frame = async (o) => {
+          wrap.style.opacity = String(o);
+          const c = document.createElement('canvas'); c.width = W; c.height = H; await stage.draw(c.getContext('2d'));
+          return c.getContext('2d').getImageData(0, 0, W, H).data;
+        };
+        const F1 = await frame(1), F0 = await frame(0), captured = stage.stats.captured;
+        wrap.style.opacity = '0.5';
+        const split = window.ExportDraw.layersOf(el).includes(bd);
+        const Fh = await frame(0.5);
+        const recaptured = stage.stats.captured - captured;
+        wrap.style.opacity = '1';
+        stage.done();
+        // group opacity: half of the unfaded frame over what is under the box
+        let s = 0, n = 0;
+        for (let i = 0; i < Fh.length; i += 4) for (let c = 0; c < 3; c++) { s += (Fh[i + c] - (F1[i + c] + F0[i + c]) / 2) ** 2; n++; }
+        return { split, recaptured, psnr: s ? 10 * Math.log10((255 * 255 * n) / s) : Infinity };
+      });
+      assert.equal(got.why, undefined, got.why);
+      assert.ok(got.split, 'the board is still a layer of its own in the faded stage');
+      assert.equal(got.recaptured, 0, 'fading the stage hands nothing more to html2canvas (the layers are reused)');
+      assert.ok(got.psnr > 40, `the faded frame is half the unfaded one over what is under it (${got.psnr.toFixed(2)} dB)`);
+      assert.deepEqual(dk.errors, []);
+      await dk.ctx.close();
+    });
+
     // a panel html2canvas draws (something in it the painter can't: a mask, a scrolled list, wrapped text) keeps its
     // halo: html2canvas draws the box but not its box-shadow outside it, which the compositor draws under the capture.
     // At phone size the Moves panel (scrolled) and Commentary (its mask, two-line comments) fell back on most frames

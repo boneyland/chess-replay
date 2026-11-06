@@ -376,19 +376,34 @@
     cx.restore();
   }
 
-  // The stage's layers in paint order: a box that draws nothing itself (no background, border, shadow, opacity,
-  // transform, filter or clip, and no text of its own) is opened up into its children
+  // The stage's layers in paint order: a box that draws nothing itself (no background, border, shadow, transform,
+  // filter or clip, and no text of its own) is opened up into its children. A faded one too (the end of the video fades
+  // the whole stage): its layers are drawn together at its opacity by the compositor (fadeOf), as CSS fades it as one,
+  // rather than the box going whole to html2canvas when anything in it is something the painter can't draw
   function layersOf(node, out = []) {
     const kids = [...node.children].map((c, i) => ({ c, i, s: getComputedStyle(c) })).filter((x) => x.s.display !== 'none');
     const z = (x) => (x.s.position === 'static' ? 0 : parseInt(x.s.zIndex, 10) || 0);
     kids.sort((p, q) => z(p) - z(q) || p.i - q.i);
     for (const { c, s } of kids) {
       const plain = c.children.length && clear(s.backgroundColor) && s.backgroundImage === 'none' && s.boxShadow === 'none' && px(s.borderTopWidth) + px(s.borderRightWidth) + px(s.borderBottomWidth) + px(s.borderLeftWidth) === 0
-        && s.opacity === '1' && s.transform === 'none' && s.filter === 'none' && s.overflowX === 'visible' && s.overflowY === 'visible' && s.visibility === 'visible'
+        && s.transform === 'none' && s.filter === 'none' && s.overflowX === 'visible' && s.overflowY === 'visible' && s.visibility === 'visible'
         && ![...c.childNodes].some((t) => t.nodeType === 3 && t.data.trim());
       if (plain) layersOf(c, out); else out.push(c);
     }
     return out;
+  }
+  // the faded boxes layersOf opened round layer n, below root: the outermost one (top, its layers drawn on a canvas of
+  // their own and that drawn at its opacity, outer) and the product of the opacities of those inside it (inner, each
+  // layer's own alpha on that canvas). A faded box keeps its layers together in layersOf's order
+  function fadeOf(n, root) {
+    let top = null, outer = 1, inner = 1;
+    for (let e = n.parentElement; e && e !== root; e = e.parentElement) {
+      const o = px(getComputedStyle(e).opacity);
+      if (o >= 1) continue;
+      if (top) inner *= outer;
+      top = e; outer = o;
+    }
+    return { top, outer, inner };
   }
 
   // place(n): a box's place on the root stage in the stage's own (untransformed) CSS px, as the stage is now
@@ -472,7 +487,8 @@
       // (data-push="<scale> <x> <y>", round that point in the stage's CSS px), and its layers are drawn zoomed here, so
       // their bitmaps stay reusable
       const pushes = layers.map((n) => { const p = n.parentElement && n.parentElement.closest('[data-push]'); return p && root.contains(p) ? p.dataset.push : ''; });
-      const bg = getComputedStyle(root).backgroundColor, look = bg + '|' + pushes.join('|');
+      const fades = layers.map((n) => fadeOf(n, root));
+      const bg = getComputedStyle(root).backgroundColor, look = bg + '|' + pushes.join('|') + '|' + fades.map((f) => (f.top ? f.outer + '/' + f.inner : '')).join('|');
       const same = !changed && cx === last.cx && look === last.look && layers.length === last.layers.length && layers.every((n, i) => n === last.layers[i]);
       last = { cx, layers, look };
       if (same) return false;
@@ -482,13 +498,32 @@
       cx.imageSmoothingQuality = 'high';
       cx.fillStyle = '#ffffff'; cx.fillRect(0, 0, W, H);
       if (!clear(bg)) { cx.fillStyle = bg; cx.fillRect(0, 0, W, H); }
+      // a faded box's layers go on a canvas of their own, drawn at the box's opacity once its last layer is on it
+      let top = null, gc = null;
+      const flush = () => {
+        if (gc) { cx.globalAlpha = top.outer; cx.drawImage(gc.canvas, 0, 0); cx.globalAlpha = 1; free(gc.canvas); }
+        top = null; gc = null;
+      };
       layers.forEach((n, i) => {
-        const l = cache.get(n);
-        if (!l) return;
-        if (!pushes[i]) { cx.drawImage(l.bmp, Math.round(l.x), Math.round(l.y)); return; }
-        const [k, px0, py0] = pushes[i].split(' ').map(Number), ox = px0 * scale, oy = py0 * scale;
-        cx.drawImage(l.bmp, ox + k * (l.x - ox), oy + k * (l.y - oy), k * l.bmp.width, k * l.bmp.height);
+        const f = fades[i];
+        if (f.top !== (top && top.el)) {
+          flush();
+          if (f.top) {
+            top = { el: f.top, outer: f.outer };
+            if (f.outer > 0) { const c = document.createElement('canvas'); c.width = W; c.height = H; gc = c.getContext('2d'); gc.imageSmoothingQuality = 'high'; }
+          }
+        }
+        const g = f.top ? gc : cx, l = cache.get(n);
+        if (!g || !l) return;
+        g.globalAlpha = f.top ? f.inner : 1;
+        if (!pushes[i]) g.drawImage(l.bmp, Math.round(l.x), Math.round(l.y));
+        else {
+          const [k, px0, py0] = pushes[i].split(' ').map(Number), ox = px0 * scale, oy = py0 * scale;
+          g.drawImage(l.bmp, ox + k * (l.x - ox), oy + k * (l.y - oy), k * l.bmp.width, k * l.bmp.height);
+        }
+        g.globalAlpha = 1;
       });
+      flush();
       cx.restore();
       return true;
     };
