@@ -25,8 +25,11 @@ function CopyButton({ label, text, onFail }) {
 function useExportSettings({ t, setTweak, M, MV, TM, frameW, stem, saveFile, pieceSet, boardTheme, boardAdj, soundSet, soundVolume }) {
   const fmtLen = window.ChessCore.fmtLen;
   const exportFps = EXPORT_FPS_OPTIONS.includes(+t.exportFps) ? +t.exportFps : 8;
-  // the formats this browser can export (no MP4 without a video encoder); the stored choice is kept for another browser
-  const formats = MP4_EXPORT ? EXPORT_FORMATS : ['WebP'];
+  // the formats this browser can export (no MP4 or WebM without a video encoder, no WebM without VP9); the stored
+  // choice is kept for another browser
+  const [webmOk, setWebmOk] = React.useState(WEBM_OK);
+  React.useEffect(() => { let on = true; WEBM_EXPORT.then((ok) => on && setWebmOk(ok)); return () => { on = false; }; }, []);
+  const formats = VIDEO_EXPORT ? EXPORT_FORMATS.filter((f) => f !== 'WebM' || webmOk) : ['WebP'];
   const exportFormat = formats.includes(t.exportFormat) ? t.exportFormat : formats[0], webp = exportFormat === 'WebP';
   // WebP widths, largest first: the page's own (0, the default), half of it ('Half') and fixed ones below the frame's
   const halfW = Math.round(frameW / 2), wPx = (x) => (x === 'Half' ? halfW : x || frameW), webpPx = (x) => (x === 'Half' ? `${halfW} px (half)` : x ? x + ' px' : `${frameW} px (full)`);
@@ -98,20 +101,20 @@ function ShareDialog({ fen, board, pgn, x, setTweak, onFail, onReplay, onExport,
       </TweakSection>}
       {!board ? <TweakSection label="Export video">
         {x.formats.length > 1 ? <TweakRadio id="tw-format" label="Export as" value={x.exportFormat} options={x.formats} onChange={(v) => setTweak('exportFormat', v)} />
-          : <div className="twk-note">{EXPORT_NO_MP4}</div>}
+          : <div className="twk-note twk-err">{EXPORT_NO_VIDEO}</div>}
         {x.webp && <>
           <TweakSelect id="tw-webp-width" label="WebP width" value={x.webpPx(x.webpWidth)} options={x.webpWidths.map(x.webpPx)} onChange={(v) => setTweak('webpWidth', x.webpWidths.find((w) => x.webpPx(w) === v))} />
           <TweakSlider id="tw-webp-q" label="WebP quality" value={x.webpQuality} min={WEBP_QUALITY.min} max={WEBP_QUALITY.max} step={WEBP_QUALITY.step} format={(v) => (v >= 100 ? 'Lossless' : v)} onChange={(v) => setTweak('webpQuality', v)} />
         </>}
-        {!x.webp && <TweakSelect id="tw-mp4-q" label="MP4 quality" value={x.mp4Quality} options={MP4_QUALITIES} onChange={(v) => setTweak('mp4Quality', v)} />}
+        {!x.webp && <TweakSelect id="tw-mp4-q" label={`${x.exportFormat} quality`} value={x.mp4Quality} options={MP4_QUALITIES} onChange={(v) => setTweak('mp4Quality', v)} />}
         {!x.webp && <TweakToggle id="tw-mp4-vfr" label="Variable frame rate" info="A frame that doesn’t change (a pause, the title and end cards) isn’t encoded: the frame before is held for its time. The frame rate is then the most frames a second a move’s animation gets. Some players and editors seek a variable-rate video less smoothly." value={x.mp4Vfr} onChange={(v) => setTweak('mp4Vfr', v)} />}
         <TweakSelect id="tw-fps" label={!x.webp && x.mp4Vfr ? 'Export frame rate (at most)' : 'Export frame rate'} value={x.exportFps + ' fps'} options={EXPORT_FPS_OPTIONS.map((f) => f + ' fps')} onChange={(v) => setTweak('exportFps', parseInt(v, 10))} />
         <div className="twk-pair">
           <TweakSelect id="tw-clip-from" label="From" aria="Export from" value={x.clipFromOpts.find((o) => o.i === x.clipFrom).s} options={x.clipFromOpts.map((o) => o.s)} onChange={(v) => x.setClip((c) => ({ ...c, from: x.clipFromOpts.find((o) => o.s === v).i }))} />
           <TweakSelect id="tw-clip-to" label="To" aria="Export to" value={x.clipToOpts.find((o) => o.i === x.clipTo).s} options={x.clipToOpts.map((o) => o.s)} onChange={(v) => x.setClip((c) => ({ ...c, to: x.clipToOpts.find((o) => o.s === v).i }))} />
         </div>
-        <TweakButton label={`${x.webp ? 'Export animated WebP (' : 'Export video (MP4, '}${!x.webp && x.mp4Vfr ? 'up to ' : ''}${x.exportFps} fps${!x.webp && x.mp4Vfr ? ', variable' : ''}, ${window.ChessCore.fmtLen(x.clipT.end - x.clipT.start)})`} disabled={x.video.busy} onClick={onExport} />
-        <div className="twk-note">Renders every frame in this tab: about {window.ChessCore.fmtLen(Math.ceil((x.clipT.end - x.clipT.start) * x.exportFps * 0.04))} for {x.clipSuffix ? 'these moves' : 'this game'}, longer on a phone. Higher frame rates are smoother but slower. Each move’s clip runs from just before it until the board settles. {x.ncNote}{x.webp ? 'No sound, and it loops; a smaller width or quality makes a smaller file, and Lossless a much larger one.' : 'Includes move sounds when on; a lower quality makes a smaller file.'}</div>
+        <TweakButton label={`${x.webp ? 'Export animated WebP (' : `Export video (${x.exportFormat}, `}${!x.webp && x.mp4Vfr ? 'up to ' : ''}${x.exportFps} fps${!x.webp && x.mp4Vfr ? ', variable' : ''}, ${window.ChessCore.fmtLen(x.clipT.end - x.clipT.start)})`} disabled={x.video.busy} onClick={onExport} />
+        <div className="twk-note">Renders every frame in this tab: about {window.ChessCore.fmtLen(Math.ceil((x.clipT.end - x.clipT.start) * x.exportFps * 0.04))} for {x.clipSuffix ? 'these moves' : 'this game'}, longer on a phone. Higher frame rates are smoother but slower. Each move’s clip runs from just before it until the board settles. {x.ncNote}{x.webp ? 'No sound, and it loops; a smaller width or quality makes a smaller file, and Lossless a much larger one.' : `Includes move sounds when on; a lower quality makes a smaller file.${x.exportFormat === 'WebM' ? ' In Firefox, a WebM export takes about three times as long as an MP4 export.' : ''}`}</div>
       </TweakSection> : !window.PlayCore.inProgress(board) && <TweakSection label="Export video">
         <div className="twk-note">{board.steps.length ? 'A video or WebP is made from a loaded game: replay these moves as one, then export it here.' : 'Play some moves first; then they can be replayed as a game and exported as a video.'}</div>
         {board.steps.length > 0 && <TweakButton label="Replay these moves as a game" onClick={onReplay} />}
