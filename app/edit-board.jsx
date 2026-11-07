@@ -46,14 +46,16 @@ function CastleBox({ setup, right, label, onChange }) {
   );
 }
 
-// A FEN counter (half-move clock, move number) typed as text: the field keeps what's typed while it isn't a number
-// (cleared to type another), the setup takes it once it is one, and leaving the field shows the setup's again
-function CountField({ value, label, set, setup, onChange }) {
-  const [text, setText] = React.useState(null);
+// A FEN counter (half-move clock, move number) typed as text. The field shows what's typed (text; null for the setup's
+// value), and the setup takes it once it is a whole number in range (EditCore.count); text it can't take is outlined
+// in red, the setup (and so the FEN field and Done) keeping the old value, and EditBoard says so under the row
+function CountField({ value, label, min, text, onText, msgId, set, setup, onChange }) {
+  const bad = text != null && window.EditCore.count(text, min) == null;
   return (
-    <input type="text" inputMode="numeric" aria-label={label} spellCheck={false} autoComplete="off" value={text == null ? String(value) : text}
-      onChange={(e) => { setText(e.target.value); const next = set(setup, e.target.value); if (next !== setup) onChange(next); }}
-      onBlur={() => setText(null)} style={{ ...editField(), width: tx(96) }} />
+    <input type="text" inputMode="numeric" aria-label={label} aria-invalid={bad} aria-describedby={bad ? msgId : undefined} spellCheck={false} autoComplete="off"
+      value={text == null ? String(value) : text} onBlur={() => onText(null)}
+      onChange={(e) => { onText(e.target.value); const next = set(setup, e.target.value); if (next !== setup) onChange(next); }}
+      style={{ ...editField(), width: tx(96), ...(bad && { borderColor: C.blunder, boxShadow: `inset 0 0 0 1px ${C.blunder}` }) }} />
   );
 }
 
@@ -181,6 +183,18 @@ function EditBoard({ setup, onChange, onDone, onCancel, fenText, onFenText, fenM
   // the keyboard's square shows while the board has the focus from the keyboard
   const [kbFocus, setKbFocus] = React.useState(false);
   const ring = (i, color, inset) => { const [x, y] = idxXY(i); return <div style={{ position: 'absolute', left: x * SQ, top: y * SQ, width: SQ, height: SQ, boxShadow: `inset 0 0 0 ${inset}px ${color}`, pointerEvents: 'none' }} />; };
+  // the counters' typed text (null: the setup's value shows), cleared when the field is left; a value changed from
+  // elsewhere (Start, Back to crop, the en passant choice) replaces text that doesn't stand for it
+  const [typed, setTyped] = React.useState({ half: null, full: null });
+  const typedFor = (k) => (t) => setTyped((d) => ({ ...d, [k]: t }));
+  React.useEffect(() => {
+    setTyped((d) => {
+      const keep = (k, min) => (d[k] != null && E.count(d[k], min) !== setup[k] ? null : d[k]);
+      const n = { half: keep('half', 0), full: keep('full', 1) };
+      return n.half === d.half && n.full === d.full ? d : n;
+    });
+  }, [setup.half, setup.full]);
+  const badCount = [['half', 0, 'the clock'], ['full', 1, 'the move']].find(([k, min]) => typed[k] != null && E.count(typed[k], min) == null);
   const [showPic, setShowPic] = React.useState(false);
   const unsure = image ? image.unsure || [] : [];
   const oneCol = !!L.tray; // the tray under the board is the portrait frame's layout
@@ -188,7 +202,8 @@ function EditBoard({ setup, onChange, onDone, onCancel, fenText, onFenText, fenM
   // beside the board, the picture's box is reserved before it decodes (no jump) and is what gives way when the panel's
   // contents outgrow it (the unsure line, problems, a FEN message), so Cancel and Done stay in the panel
   const side = image && !oneCol ? Math.round(P.h * 0.35) : 0, fill = side ? { display: 'flex', flexDirection: 'column' } : null;
-  const label = (t) => <div style={{ font: `600 ${tx(13)}px ${MONO}`, letterSpacing: '0.1em', textTransform: 'uppercase', color: C.dim, marginBottom: tx(6) }}>{t}</div>;
+  // a span, not a div: it also heads the fields inside a <label>, which may hold only phrasing content
+  const label = (t) => <span style={{ display: 'block', font: `600 ${tx(13)}px ${MONO}`, letterSpacing: '0.1em', textTransform: 'uppercase', color: C.dim, marginBottom: tx(6) }}>{t}</span>;
   return (
     <div ref={flowRef} style={{ position: 'absolute', inset: 0, background: C.bg, overflow: 'hidden', ...flowStyle() }}>
       <BoardSpace>
@@ -251,24 +266,28 @@ function EditBoard({ setup, onChange, onDone, onCancel, fenText, onFenText, fenM
             ))}
           </div>
           {/* the FEN's last three fields: the en passant square (only those the pieces allow), the half-move clock, the move number */}
-          <div style={{ display: 'flex', flexWrap: 'wrap', columnGap: tx(24), rowGap: tx(10) }}>
+          <div style={{ display: 'flex', flexWrap: 'wrap', alignItems: 'flex-start', columnGap: tx(24), rowGap: tx(10) }}>
             <label style={{ display: 'block' }}>
               {label('En passant')}
-              <select aria-label="En passant square" value={setup.ep} disabled={!epList.length} onChange={(e) => onChange(E.setEp(setup, +e.target.value))}
-                title={epList.length ? null : 'No pawn of the other side could just have moved two'} style={{ ...editField(), width: 'auto', minWidth: tx(110), color: epList.length ? C.ink : C.dim }}>
+              <select aria-label="En passant square" value={setup.ep} disabled={!epList.length}
+                onChange={(e) => onChange(E.setEp(setup, +e.target.value))}
+                title={epList.length ? 'Setting a square sets the half-move clock to 0' : 'No pawn of the other side could just have moved two'}
+                style={{ ...editField(), width: 'auto', minWidth: tx(110), color: epList.length ? C.ink : C.dim }}>
                 <option value={-1}>None</option>
                 {epList.map((i) => <option key={i} value={i}>{squareName(i)}</option>)}
               </select>
             </label>
             <label style={{ display: 'block' }}>
               {label('Half-moves')}
-              <CountField value={setup.half} label="Half-move clock" set={E.setHalf} setup={setup} onChange={onChange} />
+              <CountField value={setup.half} label="Half-move clock" min={0} text={typed.half} onText={typedFor('half')} msgId="edit-count-msg" set={E.setHalf} setup={setup} onChange={onChange} />
             </label>
             <label style={{ display: 'block' }}>
               {label('Move')}
-              <CountField value={setup.full} label="Move number" set={E.setFull} setup={setup} onChange={onChange} />
+              <CountField value={setup.full} label="Move number" min={1} text={typed.full} onText={typedFor('full')} msgId="edit-count-msg" set={E.setFull} setup={setup} onChange={onChange} />
             </label>
           </div>
+          {badCount && <div id="edit-count-msg" role="alert" style={{ marginTop: tx(-6), font: `500 ${tx(14)}px ${MONO}`, color: C.blunder }}>
+            {`Type a whole number from ${badCount[1]} to ${E.MAX_COUNT}: ${badCount[2]} stays ${setup[badCount[0]]} until then.`}</div>}
           {!L.tray && <Tray size={Math.min(84, Math.floor((P.w - 60) / 6))} held={held} trayHandlers={trayHandlers} style={{ borderTop: `1px solid ${C.line}`, paddingTop: tx(14) }} />}
           <div role="status" style={{ display: 'flex', flexDirection: 'column', gap: 4, font: `500 ${tx(15)}px ${MONO}`, minHeight: tx(22) }}>
             {empty ? <span style={{ color: C.dim }}>{EDIT_HINT}</span> : problems.map((t) => <span key={t} style={{ color: C.blunder }}>{t}</span>)}

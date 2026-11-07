@@ -12,7 +12,11 @@
   const keepRights = (s, rights) => 'KQkq'.split('').filter((r) => rights.includes(r) && canCastle(s, r)).join('');
   // the en passant squares the pieces allow for the side to move: behind a pawn of the other side's that could just
   // have moved two (ChessCore.epFits), in file order
-  const epSquares = (s) => { const r = s.turn === 'w' ? 2 : 5, out = []; for (let i = r * 8; i < r * 8 + 8; i++) if (CC().epFits(s.b, s.turn, i)) out.push(i); return out; };
+  function epSquares(s) {
+    const r = s.turn === 'w' ? 2 : 5, out = [];
+    for (let i = r * 8; i < r * 8 + 8; i++) if (CC().epFits(s.b, s.turn, i)) out.push(i);
+    return out;
+  }
   const keepEp = (s) => (s.ep >= 0 && CC().epFits(s.b, s.turn, s.ep) ? s : { ...s, ep: -1 });
   // after any change to the pieces or the side to move: rights whose king or rook left home go, and so does an en
   // passant square the pieces no longer allow
@@ -38,10 +42,19 @@
     return settle({ ...s, b });
   }
   const setTurn = (s, turn) => keepEp({ ...s, turn });
-  const setEp = (s, ep) => (ep < 0 || CC().epFits(s.b, s.turn, ep) ? { ...s, ep: ep < 0 ? -1 : ep } : s);
-  // the counters as typed: whole numbers, the half-move clock from 0, the move number from 1; anything else keeps the old
-  const count = (v, min) => { const n = typeof v === 'number' ? v : /^\s*\d+\s*$/.test(String(v)) ? +v : NaN; return Number.isInteger(n) && n >= min && n <= 9999 ? n : null; };
-  const setHalf = (s, v) => { const n = count(v, 0); return n == null ? s : { ...s, half: n }; };
+  // A double pawn push resets the half-move clock, so an en passant square comes with a clock of 0: setting a square
+  // zeroes the clock, and a clock above 0 drops the square
+  function setEp(s, ep) {
+    if (ep < 0) return { ...s, ep: -1 };
+    return CC().epFits(s.b, s.turn, ep) ? { ...s, ep, half: 0 } : s;
+  }
+  // a counter as typed: a whole number from min up to MAX_COUNT, else null (and the setter keeps the old value)
+  const MAX_COUNT = 9999;
+  function count(v, min) {
+    const n = typeof v === 'number' ? v : /^\s*\d+\s*$/.test(String(v)) ? +v : NaN;
+    return Number.isInteger(n) && n >= min && n <= MAX_COUNT ? n : null;
+  }
+  const setHalf = (s, v) => { const n = count(v, 0); return n == null ? s : { ...s, half: n, ep: n > 0 ? -1 : s.ep }; };
   const setFull = (s, v) => { const n = count(v, 1); return n == null ? s : { ...s, full: n }; };
   function setCastle(s, r, on) {
     if (on && !canCastle(s, r)) return s;
@@ -53,5 +66,5 @@
   const problems = (s) => CC().setupProblems(s);
   const ok = (s) => problems(s).length === 0;
 
-  window.EditCore = { empty, start, fromFen, toFen, put, move, setTurn, epSquares, setEp, setHalf, setFull, canCastle, setCastle, isEmpty, problems, ok };
+  window.EditCore = { empty, start, fromFen, toFen, put, move, setTurn, epSquares, setEp, setHalf, setFull, count, MAX_COUNT, canCastle, setCastle, isEmpty, problems, ok };
 })();

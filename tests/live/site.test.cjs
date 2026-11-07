@@ -1203,17 +1203,25 @@ for (const name of BROWSERS) for (const site of SITES) {
       assert.equal(await epSel.isDisabled(), true, 'no square to take on from the start');
       await typeFen(field, '4k3/8/8/p2pP2p/8/8/8/4K3 w - - 0 1');
       assert.deepEqual(await epSel.locator('option').allInnerTexts(), ['None', 'a6', 'd6', 'h6']);
-      await epSel.selectOption({ label: 'd6' });
       const half = p.getByRole('textbox', { name: 'Half-move clock' }), full = p.getByRole('textbox', { name: 'Move number' });
       await half.click(); await half.press('ControlOrMeta+a'); await p.keyboard.press('Backspace');
       assert.equal(await half.inputValue(), '', 'a cleared field stays cleared while typing');
       await p.keyboard.type('12');
       await full.click(); await full.press('ControlOrMeta+a'); await p.keyboard.type('34');
-      assert.equal(await field.inputValue(), '4k3/8/8/p2pP2p/8/8/8/4K3 w - d6 12 34');
-      await full.press('ControlOrMeta+a'); await p.keyboard.type('0'); await half.click();
+      assert.equal(await field.inputValue(), '4k3/8/8/p2pP2p/8/8/8/4K3 w - - 12 34');
+      // a double push resets the clock: choosing a square sets it to 0
+      await epSel.selectOption({ label: 'd6' });
+      assert.equal(await half.inputValue(), '0');
+      assert.equal(await field.inputValue(), '4k3/8/8/p2pP2p/8/8/8/4K3 w - d6 0 34');
+      // text the setup can't take is marked and says what's kept
+      await full.click(); await full.press('ControlOrMeta+a'); await p.keyboard.type('0');
+      assert.equal(await full.getAttribute('aria-invalid'), 'true');
+      assert.match(await p.getByRole('alert').filter({ hasText: 'whole number' }).innerText(), /from 1 to 9999: the move stays 34/);
+      await half.click();
       assert.equal(await full.inputValue(), '34', 'move 0 refused, the setup\'s shown again');
+      assert.equal(await full.getAttribute('aria-invalid'), 'false');
       await p.getByRole('button', { name: 'Done', exact: true }).click();
-      assert.equal(await shareFen(p), '4k3/8/8/p2pP2p/8/8/8/4K3 w - d6 12 34');
+      assert.equal(await shareFen(p), '4k3/8/8/p2pP2p/8/8/8/4K3 w - d6 0 34');
       assert.deepEqual(ep.errors, []);
       await ep.ctx.close();
     });

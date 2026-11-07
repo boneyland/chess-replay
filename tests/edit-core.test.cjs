@@ -51,14 +51,18 @@ test('en passant squares, half-move clock and move number', () => {
   const b = setup('4k3/8/8/8/3Pp3/8/8/4K3 b - - 0 1');
   assert.deepEqual(E.epSquares(b).map(CC.sqName), ['d3']);
   assert.equal(E.toFen(E.setEp(b, sq('d3'))), '4k3/8/8/8/3Pp3/8/8/4K3 b - d3 0 1');
+  // a double push resets the clock: a square zeroes it, a clock above 0 drops the square
+  assert.equal(E.setEp(E.setHalf(s, 7), sq('d6')).half, 0);
+  assert.equal(E.setHalf(e, '0').ep, sq('d6'));
   const c = E.setFull(E.setHalf(e, '12'), 34);
-  assert.equal(E.toFen(c), '4k3/8/8/p2pP2p/8/8/8/4K3 w - d6 12 34');
+  assert.equal(E.toFen(c), '4k3/8/8/p2pP2p/8/8/8/4K3 w - - 12 34');
+  assert.equal(E.count(' 12 ', 0), 12); assert.equal(E.count('0', 1), null); assert.equal(E.count(E.MAX_COUNT + 1, 0), null);
   for (const v of ['', '-1', '1.5', 'x', 10000]) assert.equal(E.setHalf(c, v), c, `half ${v}`);
   for (const v of ['', '0', 0, 'x']) assert.equal(E.setFull(c, v), c, `full ${v}`);
   assert.equal(E.setHalf(c, '0').half, 0);
   // the FEN goes on to the free board and a game as set
-  const B = window.BoardCore.fromFen(E.toFen(c));
-  assert.equal(B.fen, '4k3/8/8/p2pP2p/8/8/8/4K3 w - d6 12 34');
+  const B = window.BoardCore.fromFen(E.toFen(E.setEp(E.setFull(e, 34), sq('d6'))));
+  assert.equal(B.fen, '4k3/8/8/p2pP2p/8/8/8/4K3 w - d6 0 34');
   assert.equal(B.start.pos.ep, sq('d6')); assert.equal(B.start.ply0, 66);
 });
 test('castling boxes', () => {
