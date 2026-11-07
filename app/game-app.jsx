@@ -705,10 +705,10 @@ function GameApp() {
       {queenOpen && !board && <QueenPanel M={M} Q={Q} hf={hf} probe={probe} onClose={closeQueen} onOverlay={setQueenArrow} onSave={saveQueen} left={queenLeft} />}
       <TweaksPanel open={panel} onClose={closePanel} tab={panelTab} onTab={setPanelTab} tabs={[
         { id: 'game', label: 'Game', body: <GameSettings M={M} files={files} board={board} status={status} err={shownErr} commit={commit}
+          commentary={!board && <CommentarySettings t={t} setTweak={setTweak} files={files} sources={sources} queenSays={queenSays} />}
           go={{ importGame, boardAsGame, backToGame, backToBoard: () => { const b = window.BoardCore.restore(files.fromBoard); if (b) commitBoard(b); }, backToSample: () => guard(() => commit(SAMPLE)), reset: () => setResetOpen(true) }} /> },
         { id: 'view', label: 'View', body: <ViewSettings t={t} setTweak={setTweak} board={board} TM={TM} pieceSet={pieceSet} pieces={pieces} boardTheme={boardTheme} boardAdj={boardAdj} boardLook={boardLook} /> },
         { id: 'online', label: 'Online', body: <OnlineSettings t={t} setTweak={setTweak} sfKind={sfKind} /> },
-        !board && { id: 'commentary', label: 'Commentary', body: <CommentarySettings t={t} setTweak={setTweak} files={files} sources={sources} queenSays={queenSays} /> },
         { id: 'sound', label: 'Sound', body: <SoundSettings t={t} setTweak={setTweak} soundSet={soundSet} soundVolume={soundVolume} /> },
       ]} />
     </React.Fragment>

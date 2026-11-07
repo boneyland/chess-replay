@@ -66,7 +66,7 @@ function EngineSettings({ t, setTweak, full, ES, sfKind, threading, hash, analys
 
 // Settings › Game: the loaded game or board (status, the error if any), where to go from it, and About.
 // go: { importGame, boardAsGame, backToGame, backToBoard, backToSample, reset }; commit stores a change of the files
-function GameSettings({ M, files, board, status, err, go, commit }) {
+function GameSettings({ M, files, board, status, err, go, commit, commentary }) {
   return <>
       <div className={err ? 'twk-note twk-err' : 'twk-note'}>{err || status}</div>
       <TweakButton label="Import game" onClick={go.importGame} />
@@ -83,6 +83,8 @@ function GameSettings({ M, files, board, status, err, go, commit }) {
       {!board && M.gameCount > 1 && (
         <TweakSelect id="tw-game" label="Game in PGN" value={String((files.gameIndex || 0) + 1)} options={Array.from({ length: M.gameCount }, (_, i) => String(i + 1))} onChange={(v) => commit({ ...files, gameIndex: +v - 1, analysis: null, analysisName: null })} />
       )}
+      {/* one block, never split between the panel's columns */}
+      {commentary && <TweakSection label="Commentary"><div className="twk-keep">{commentary}</div></TweakSection>}
       <TweakSection label="About">
         <div className="twk-note">This player is free software under the GPL-3.0-or-later; <a href="https://github.com/boneyland/chess-replay" target="_blank" rel="noopener">source on GitHub</a>. Some parts aren’t covered by the GPL: the piece sets other than Cburnett have their own licences, some of them non-commercial (see View › Pieces), and so do the lisp move sounds (see the Sound tab) and the board reader’s model (Position from image, <code>vision/</code>), <a href="https://github.com/JSeytre/chessqueries" target="_blank" rel="noopener">ChessQueries</a>’ ChessQ Lite by Joël Seytre, under <a href="https://polyformproject.org/licenses/noncommercial/1.0.0/" target="_blank" rel="noopener">PolyForm Noncommercial 1.0.0</a>: non-commercial use only (Required Notice: Copyright (c) 2026 Joël Seytre). It is built on Meta AI’s <a href="https://github.com/facebookresearch/dinov2" target="_blank" rel="noopener">DINOv2</a> (Copyright (c) Meta Platforms, Inc. and affiliates), under the <a href="https://www.apache.org/licenses/LICENSE-2.0" target="_blank" rel="noopener">Apache License 2.0</a>.</div>
       </TweakSection>
@@ -141,7 +143,7 @@ function OnlineSettings({ t, setTweak, sfKind }) {
   </>;
 }
 
-// Settings › Commentary (a loaded game): the sources the comments come from. sources: those the game has
+// Settings › Game › Commentary (a loaded game): the sources the comments come from. sources: those the game has
 // (ChessCore.commentarySources); queenSays: Queen has said something on a move in the video
 function CommentarySettings({ t, setTweak, files, sources, queenSays }) {
   const showCommentary = t.commentary !== false;

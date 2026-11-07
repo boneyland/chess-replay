@@ -316,7 +316,9 @@ for (const name of BROWSERS) for (const site of SITES) {
       await page.getByRole('button', { name: 'Settings' }).click();
       // the tabs, and the arrow keys moving between them
       const tabs = page.getByRole('tablist', { name: 'Settings' }).getByRole('tab');
-      assert.deepEqual(await tabs.allInnerTexts(), ['Game', 'View', 'Online', 'Commentary', 'Sound']);
+      assert.deepEqual(await tabs.allInnerTexts(), ['Game', 'View', 'Online', 'Sound']);
+      // the loaded game's commentary settings are a section of the Game tab
+      assert.equal(await page.getByRole('tabpanel').getByText('Show commentary').count() > 0, true);
       await tabs.first().focus();
       await page.keyboard.press('ArrowRight');
       assert.equal(await page.getByRole('tab', { name: 'View' }).getAttribute('aria-selected'), 'true');
@@ -1185,6 +1187,41 @@ for (const name of BROWSERS) for (const site of SITES) {
       assert.equal(await field.inputValue(), 'rnbqkbn1/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w Kkq - 0 1', 'the field keeps what was typed');
       await p.getByRole('button', { name: 'Empty', exact: true }).click();
       assert.equal(await field.inputValue(), '8/8/8/8/8/8/8/8 w - - 0 1');
+      assert.deepEqual(ep.errors, []);
+      await ep.ctx.close();
+    });
+    // the FEN's last three fields: en passant from the squares the pieces allow, the counters typed, all kept by Done
+    await t.test('desktop: Edit position sets en passant, the half-move clock and the move number', async () => {
+      const ep = await open(browser, { width: 1440, height: 900 });
+      const p = ep.page;
+      await p.goto(base, { waitUntil: 'load' });
+      await loadedOn(p);
+      await p.getByRole('button', { name: 'Menu', exact: true }).click();
+      await p.getByRole('button', { name: 'Edit position' }).click();
+      const field = p.getByRole('textbox', { name: 'FEN' }), epSel = p.getByRole('combobox', { name: 'En passant square' });
+      await p.getByRole('button', { name: 'Start', exact: true }).click();
+      assert.equal(await epSel.isDisabled(), true, 'no square to take on from the start');
+      await typeFen(field, '4k3/8/8/p2pP2p/8/8/8/4K3 w - - 0 1');
+      assert.deepEqual(await epSel.locator('option').allInnerTexts(), ['None', 'a6', 'd6', 'h6']);
+      const half = p.getByRole('textbox', { name: 'Half-move clock' }), full = p.getByRole('textbox', { name: 'Move number' });
+      await half.click(); await half.press('ControlOrMeta+a'); await p.keyboard.press('Backspace');
+      assert.equal(await half.inputValue(), '', 'a cleared field stays cleared while typing');
+      await p.keyboard.type('12');
+      await full.click(); await full.press('ControlOrMeta+a'); await p.keyboard.type('34');
+      assert.equal(await field.inputValue(), '4k3/8/8/p2pP2p/8/8/8/4K3 w - - 12 34');
+      // a double push resets the clock: choosing a square sets it to 0
+      await epSel.selectOption({ label: 'd6' });
+      assert.equal(await half.inputValue(), '0');
+      assert.equal(await field.inputValue(), '4k3/8/8/p2pP2p/8/8/8/4K3 w - d6 0 34');
+      // text the setup can't take is marked and says what's kept
+      await full.click(); await full.press('ControlOrMeta+a'); await p.keyboard.type('0');
+      assert.equal(await full.getAttribute('aria-invalid'), 'true');
+      assert.match(await p.getByRole('alert').filter({ hasText: 'whole number' }).innerText(), /from 1 to 9999: the move stays 34/);
+      await half.click();
+      assert.equal(await full.inputValue(), '34', 'move 0 refused, the setup\'s shown again');
+      assert.equal(await full.getAttribute('aria-invalid'), 'false');
+      await p.getByRole('button', { name: 'Done', exact: true }).click();
+      assert.equal(await shareFen(p), '4k3/8/8/p2pP2p/8/8/8/4K3 w - d6 0 34');
       assert.deepEqual(ep.errors, []);
       await ep.ctx.close();
     });
