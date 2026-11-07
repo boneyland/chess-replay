@@ -332,3 +332,20 @@ test('the phone tier starts under a 600 px wide or 500 px high viewport', () => 
   const css = require('fs').readFileSync(require('path').join(__dirname, '../app/shell.html'), 'utf8');
   assert.match(css, /@media \(max-width: 599px\), \(max-height: 499px\) \{\n  html \{ font-size/);
 });
+
+// Stage's measures, in order, as Firefox for Android (Firefox Beta on a Xiaomi 23090RA98G) reported them, loaded in
+// landscape (777×257, the address bar showing), turned to portrait and back: [area w, area h, viewport w, viewport h].
+// Mid-turn it reported innerWidth × innerHeight 763×1470 for the 366×705 viewport; offsets taken from that kept the
+// page in one column once turned back, where a reload gives two
+test('turning a phone to portrait and back to landscape gives two columns again', () => {
+  const off = {};
+  let was = null;
+  const step = (w, h, vw, vh) => (was = LC.pickColumns({ w, h, vw, vh, was, off }));
+  assert.equal(step(757, 194, 777, 257), 2);
+  assert.equal(step(769, 257, 777, 257), 2);
+  assert.equal(step(358, 705, 366, 705), 1);
+  assert.equal(step(358, 656, 366, 705), 1);
+  assert.equal(step(769, 209, 777, 257), 2);
+  assert.equal(step(769, 257, 777, 257), 2);
+  assert.equal(LC.pickColumns({ w: 769, h: 257, vw: 777, vh: 257, was: null }), 2, 'a reload at that size');
+});
