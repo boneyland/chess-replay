@@ -26,15 +26,40 @@ test('unsupported castling is dropped, not refused', () => {
   assert.equal(setup('4k3/8/8/8/8/8/8/4K3 w KQkq - 0 1').castle, '');
   assert.equal(setup('r3k3/8/8/8/8/8/8/4K2R w KQkq - 0 1').castle, 'Kq');
 });
-test('put and move drop rights and en passant', () => {
+test('put and move drop rights, and an en passant square the pieces no longer allow', () => {
   const s = E.start();
   assert.equal(E.put(s, sq('h1'), null).castle, 'Qkq');
   assert.equal(E.move(s, sq('e1'), sq('e2')).castle, 'kq');
   const e = setup('4k3/8/8/3pP3/8/8/8/4K3 w - d6 3 20');
   assert.equal(e.ep, 19);
   const p = E.put(e, sq('a1'), 'R');
-  assert.equal(p.ep, -1); assert.equal(p.half, 3); assert.equal(p.full, 20);
+  assert.equal(p.ep, 19); assert.equal(p.half, 3); assert.equal(p.full, 20);
+  assert.equal(E.put(e, sq('d5'), null).ep, -1);
+  assert.equal(E.put(e, sq('d7'), 'p').ep, -1);
+  assert.equal(E.move(e, sq('d5'), sq('c5')).ep, -1);
   assert.equal(E.setTurn(e, 'b').ep, -1);
+});
+test('en passant squares, half-move clock and move number', () => {
+  const s = setup('4k3/8/8/p2pP2p/8/8/8/4K3 w - - 0 1');
+  assert.deepEqual(E.epSquares(s).map(CC.sqName), ['a6', 'd6', 'h6']);
+  assert.deepEqual(E.epSquares(E.setTurn(s, 'b')), []);
+  assert.deepEqual(E.epSquares(E.start()), []);
+  const e = E.setEp(s, sq('d6'));
+  assert.equal(E.toFen(e), '4k3/8/8/p2pP2p/8/8/8/4K3 w - d6 0 1');
+  assert.equal(E.setEp(s, sq('c6')), s, 'no pawn in front of c6');
+  assert.equal(E.setEp(e, -1).ep, -1);
+  const b = setup('4k3/8/8/8/3Pp3/8/8/4K3 b - - 0 1');
+  assert.deepEqual(E.epSquares(b).map(CC.sqName), ['d3']);
+  assert.equal(E.toFen(E.setEp(b, sq('d3'))), '4k3/8/8/8/3Pp3/8/8/4K3 b - d3 0 1');
+  const c = E.setFull(E.setHalf(e, '12'), 34);
+  assert.equal(E.toFen(c), '4k3/8/8/p2pP2p/8/8/8/4K3 w - d6 12 34');
+  for (const v of ['', '-1', '1.5', 'x', 10000]) assert.equal(E.setHalf(c, v), c, `half ${v}`);
+  for (const v of ['', '0', 0, 'x']) assert.equal(E.setFull(c, v), c, `full ${v}`);
+  assert.equal(E.setHalf(c, '0').half, 0);
+  // the FEN goes on to the free board and a game as set
+  const B = window.BoardCore.fromFen(E.toFen(c));
+  assert.equal(B.fen, '4k3/8/8/p2pP2p/8/8/8/4K3 w - d6 12 34');
+  assert.equal(B.start.pos.ep, sq('d6')); assert.equal(B.start.ply0, 66);
 });
 test('castling boxes', () => {
   assert.equal(E.canCastle(E.empty(), 'K'), false);

@@ -10,8 +10,13 @@
 
   const canCastle = (s, r) => CC().canCastle(s.b, r);
   const keepRights = (s, rights) => 'KQkq'.split('').filter((r) => rights.includes(r) && canCastle(s, r)).join('');
-  // after any change to the pieces: rights whose king or rook left home go, and so does en passant
-  const settle = (s) => ({ ...s, castle: keepRights(s, s.castle), ep: -1 });
+  // the en passant squares the pieces allow for the side to move: behind a pawn of the other side's that could just
+  // have moved two (ChessCore.epFits), in file order
+  const epSquares = (s) => { const r = s.turn === 'w' ? 2 : 5, out = []; for (let i = r * 8; i < r * 8 + 8; i++) if (CC().epFits(s.b, s.turn, i)) out.push(i); return out; };
+  const keepEp = (s) => (s.ep >= 0 && CC().epFits(s.b, s.turn, s.ep) ? s : { ...s, ep: -1 });
+  // after any change to the pieces or the side to move: rights whose king or rook left home go, and so does an en
+  // passant square the pieces no longer allow
+  const settle = (s) => keepEp({ ...s, castle: keepRights(s, s.castle) });
 
   // Pasted text as a setup: a PGN tag [FEN "…"] unwrapped, the fields after the board optional. Only malformed text is
   // refused; castling rights or an en passant square the pieces don't support are dropped (ChessCore.readFen)
@@ -32,7 +37,12 @@
     const b = s.b.slice(); b[to] = b[from]; b[from] = null;
     return settle({ ...s, b });
   }
-  const setTurn = (s, turn) => ({ ...s, turn, ep: -1 });
+  const setTurn = (s, turn) => keepEp({ ...s, turn });
+  const setEp = (s, ep) => (ep < 0 || CC().epFits(s.b, s.turn, ep) ? { ...s, ep: ep < 0 ? -1 : ep } : s);
+  // the counters as typed: whole numbers, the half-move clock from 0, the move number from 1; anything else keeps the old
+  const count = (v, min) => { const n = typeof v === 'number' ? v : /^\s*\d+\s*$/.test(String(v)) ? +v : NaN; return Number.isInteger(n) && n >= min && n <= 9999 ? n : null; };
+  const setHalf = (s, v) => { const n = count(v, 0); return n == null ? s : { ...s, half: n }; };
+  const setFull = (s, v) => { const n = count(v, 1); return n == null ? s : { ...s, full: n }; };
   function setCastle(s, r, on) {
     if (on && !canCastle(s, r)) return s;
     return { ...s, castle: 'KQkq'.split('').filter((c) => (c === r ? on : s.castle.includes(c))).join('') };
@@ -43,5 +53,5 @@
   const problems = (s) => CC().setupProblems(s);
   const ok = (s) => problems(s).length === 0;
 
-  window.EditCore = { empty, start, fromFen, toFen, put, move, setTurn, canCastle, setCastle, isEmpty, problems, ok };
+  window.EditCore = { empty, start, fromFen, toFen, put, move, setTurn, epSquares, setEp, setHalf, setFull, canCastle, setCastle, isEmpty, problems, ok };
 })();

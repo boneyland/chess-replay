@@ -46,6 +46,17 @@ function CastleBox({ setup, right, label, onChange }) {
   );
 }
 
+// A FEN counter (half-move clock, move number) typed as text: the field keeps what's typed while it isn't a number
+// (cleared to type another), the setup takes it once it is one, and leaving the field shows the setup's again
+function CountField({ value, label, set, setup, onChange }) {
+  const [text, setText] = React.useState(null);
+  return (
+    <input type="text" inputMode="numeric" aria-label={label} spellCheck={false} autoComplete="off" value={text == null ? String(value) : text}
+      onChange={(e) => { setText(e.target.value); const next = set(setup, e.target.value); if (next !== setup) onChange(next); }}
+      onBlur={() => setText(null)} style={{ ...editField(), width: tx(96) }} />
+  );
+}
+
 // Editing by pointer: a tray piece dragged onto a square, or tapped (held) and then squares tapped to drop copies (a tap
 // on the same piece takes it off); a piece on the board dragged to another square, or off the board to take it away.
 // Pointer positions are board pixels, not clamped to the board: past its edge is off it. view() turns them into squares.
@@ -154,7 +165,7 @@ function EditBoard({ setup, onChange, onDone, onCancel, fenText, onFenText, fenM
   const flowRef = React.useRef(null);
   useFlowHeight(frame, flowRef);
   setOrient(orient);
-  const E = window.EditCore, problems = E.problems(setup), empty = E.isEmpty(setup), P = L.panel;
+  const E = window.EditCore, problems = E.problems(setup), empty = E.isEmpty(setup), P = L.panel, epList = E.epSquares(setup);
   // the transport bar has no moves to step through; Copy FEN copies the setup's FEN
   if (nav) nav.current = { label: 'Edit position', color: C.last, hasPrev: false, hasNext: false, hasLast: false, hasFirst: false, prev: () => {}, next: () => {}, last: () => {}, first: () => {}, fen: () => E.toFen(setup) };
   React.useEffect(() => { if (nav && nav.listen) nav.listen(); }, []);
@@ -238,6 +249,25 @@ function EditBoard({ setup, onChange, onDone, onCancel, fenText, onFenText, fenM
                 </div>
               </div>
             ))}
+          </div>
+          {/* the FEN's last three fields: the en passant square (only those the pieces allow), the half-move clock, the move number */}
+          <div style={{ display: 'flex', flexWrap: 'wrap', columnGap: tx(24), rowGap: tx(10) }}>
+            <label style={{ display: 'block' }}>
+              {label('En passant')}
+              <select aria-label="En passant square" value={setup.ep} disabled={!epList.length} onChange={(e) => onChange(E.setEp(setup, +e.target.value))}
+                title={epList.length ? null : 'No pawn of the other side could just have moved two'} style={{ ...editField(), width: 'auto', minWidth: tx(110), color: epList.length ? C.ink : C.dim }}>
+                <option value={-1}>None</option>
+                {epList.map((i) => <option key={i} value={i}>{squareName(i)}</option>)}
+              </select>
+            </label>
+            <label style={{ display: 'block' }}>
+              {label('Half-moves')}
+              <CountField value={setup.half} label="Half-move clock" set={E.setHalf} setup={setup} onChange={onChange} />
+            </label>
+            <label style={{ display: 'block' }}>
+              {label('Move')}
+              <CountField value={setup.full} label="Move number" set={E.setFull} setup={setup} onChange={onChange} />
+            </label>
           </div>
           {!L.tray && <Tray size={Math.min(84, Math.floor((P.w - 60) / 6))} held={held} trayHandlers={trayHandlers} style={{ borderTop: `1px solid ${C.line}`, paddingTop: tx(14) }} />}
           <div role="status" style={{ display: 'flex', flexDirection: 'column', gap: 4, font: `500 ${tx(15)}px ${MONO}`, minHeight: tx(22) }}>
