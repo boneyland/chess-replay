@@ -11,9 +11,15 @@ What each part of the repo is, with the pinned SHA-256 of every vendored file. B
   - `analysis-core.js`, `sf-engine.js`, `stockfish.jsx`: Stockfish in the browser (a Web Worker over UCI) and the move ratings, ported from chess-animator's Python
   - `sf-full.js`: the full engine the viewer can download (the Analysis panel's engine drop-down), checked and kept in the browser
   - `openings-core.js`: opening names and book continuations (the opening explorer)
+  - `lichess-core.js`: Lichess's public data (URLs, parsers, a polite client); `explorer.jsx` the Lichess opening explorer (Settings › Online); `tablebase.jsx` the endgame tablebase; `import-core.js` what Import game's paste box holds (a Lichess link, a FEN, a PGN)
   - `board-core.js`, `free-board.jsx`: the free board (Play/Explore); `play-core.js` its games (rules, clocks, takebacks, the end); `games-core.js` My games
+  - `edit-core.js`, `edit-board.jsx`: Edit position (its rules and its board)
+  - `draw-core.js`: the viewer's own circles and arrows on the board
+  - `dead-core.js`, `dead.jsx`, `dead-worker.js`: dead positions, proven by chasolver in a Worker
+  - `vision-core.js`, `vision.js`, `vision-worker.js`, `vision-grid.js`, `vision.jsx`: Position from image (the board reader's files, the reader and its Worker, the board auto-crop, the dialog)
+  - `kept-files.js`, `kept-download.jsx`: files downloaded only on the viewer's click and kept (Full Stockfish, the board reader), and their download UI
   - `queen-core.js`, `queen.jsx`: Ask Queen and its Hugging Face sign-in
-  - `export.jsx`, `webp-core.js`: MP4 and animated WebP export
+  - `export.jsx`, `webp-core.js`: MP4, WebM and animated WebP export; `export-draw.js` paints each export frame layer by layer, handing html2canvas only what it can't draw
   - `sfx-core.js`, `sfx.jsx`: the move sounds
   - `piece-sets.js`: the piece sets (Settings › View › Pieces): their credits, which are kept out of exports, and loading the chosen one
   - `board-themes.js`: the boards and their Brightness, Contrast and Hue sliders (Settings › View), and drawing a picture board through them
@@ -39,7 +45,7 @@ What each part of the repo is, with the pinned SHA-256 of every vendored file. B
 - `vendor/webp_enc_simd.*`: the WebP export's encoder, libwebp 1.1.0 (BSD-3-Clause, `webp_enc_simd.LICENSE`) built to WebAssembly by Squoosh, unchanged files from `codec/enc/` in @jsquash/webp 1.5.0 (Apache-2.0, https://github.com/jamsinclair/jSquash); the site serves them next to the page. `tests/fixtures/webp_dec.*` is the same package's decoder, used only by the tests
   - `webp_enc_simd.js` sha256 `3038e60ebba6252baba08c691e31d1efe5036a185435daa7b4afaef3cc9273f9`
   - `webp_enc_simd.wasm` sha256 `39c279269ec1163b987b6d69749458e3d5b03b9585f58b6ca5455b76b504a305`
-- `vendor/mediabunny.min.js`: the MP4 export's muxer, Mediabunny 1.61.0 (MPL-2.0, `mediabunny.LICENSE`, https://github.com/Vanilagy/mediabunny), the unchanged `dist/bundles/mediabunny.min.mjs` (an ES module, renamed `.js` so every host serves it as JavaScript); the site serves it next to the page
+- `vendor/mediabunny.min.js`: the MP4 and WebM exports' muxer, Mediabunny 1.61.0 (MPL-2.0, `mediabunny.LICENSE`, https://github.com/Vanilagy/mediabunny), the unchanged `dist/bundles/mediabunny.min.mjs` (an ES module, renamed `.js` so every host serves it as JavaScript); the site serves it next to the page
   - `mediabunny.min.js` sha256 `fa696c53494b6b09a8b310ec51e3c44a59e79513234fb832255a38c686162009`
 - `vendor/chasolver.wasm`: chasolver 3.0.0 (MIT, `chasolver.LICENSE`, https://github.com/miguel-ambrona/chasolver) built to WebAssembly by `tools/chasolver-wasm/build.sh` (a C-ABI wrapper crate, `Cargo.lock` committed; rustc 1.99.1, `cargo build --release --locked --target wasm32-unknown-unknown`), run by `app/dead-worker.js` to prove dead positions. Render never builds it; `tests/chasolver.test.cjs` checks the file against this pin
   - `chasolver.wasm` (1,034,217 bytes) sha256 `00326f5d1ad32be899cea39f0b17111269aec2c22dd9522f4ebdf50e96b27d40`
@@ -74,10 +80,12 @@ What each part of the repo is, with the pinned SHA-256 of every vendored file. B
 - `vendor/boards/`: Lichess's 2D boards, unchanged files from `public/images/board/` (and `svg/newspaper.svg`) at lila commit `9e780e9f2ce4b18a1c7991b9fe0b069c001459b8`, by the lila authors and pirouetti under the AGPL-3.0-or-later (lila's `COPYING.md`): the 20 picture boards and every board's 64×32 picker tile (`*.thumbnail.*`; newspaper has none). The five flat boards (brown, blue, green, ic, purple) are their two colours in `app/board-themes.js`, not files. The site serves them as `boards/<file>` (`BoardThemes.url`, `.thumb`); `sw.js` keeps one when it's first drawn. Left out: ncf-board (not in Lichess's list) and the 3D boards
   - all 44 board files: sha256 `c8c566fb2967370867e484f0def14ba5ed47f2a5b60a2f79c29226432202ca78` of `cd vendor/boards && sha256sum * | LC_ALL=C sort -k2` (checked by `tests/board-themes.test.cjs`)
 - `openings-data.cjs`: embeds `openings/*.tsv` (Lichess chess-openings, CC0; a copy of chess-animator's) into the page
+- `tools/chasolver-wasm/`: the crate and `build.sh` that build `vendor/chasolver.wasm` (Rust; run by hand, never by Render)
 - `render.yaml`: the Render static site's settings (a Blueprint: Render syncs them from this file); `render-headers.cjs` reads its headers for `build.cjs`, `tests/live/serve.cjs` and the tests
-- `docs/`: `spec.md`, the one spec (principles, what's built, roadmap, known gaps, decisions log), and `plans/`, the implementation plans of built features, kept as written (the oldest, browser Stockfish of 2026-10-16, was written when this was `artifact/` in chess-animator; its paths are now repo-root paths)
+- `docs/`: `spec.md`, the one spec (principles, what's built, roadmap, known gaps, decisions log), `audits/`, dated audit reports with their fix plans, and `plans/`, the implementation plans of built features, kept as written (the oldest, browser Stockfish of 2026-10-16, was written when this was `artifact/` in chess-animator; its paths are now repo-root paths)
 - `media/`: the README's pictures and video
   - `preview.webp`: the preview from the sample game (scaled to 1676 wide to fill GitHub's 838 px README column on 2× screens; 8 fps, WebP quality 80)
   - `demo.mp4`: the ~65 s showcase video (Byrne–Fischer 1956, `demo-game.pgn`), re-recorded by `record-demo.cjs`
 - `games/`: local PGNs (not committed)
+- `CLAUDE.md`, `.claude/skills/`: notes and skills for Claude Code (running the browser tests, verifying a change, PR screenshots, audits, the page's wording)
 - `tests/`: JS tests (`*.test.cjs`; `pins.test.cjs` checks every SHA-256 pinned here), the Python cross-check `check_browser_json.py` with its fixture generators (`make_rating_expected.py`, `make_openings_expected.py`), and `live/`, Playwright smoke tests of the site; see [Tests](README.md#tests)

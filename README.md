@@ -17,7 +17,7 @@ A browser app for replaying and playing chess games, at https://chess-replay.onr
 - **Play vs Stockfish**: a game against Stockfish at full strength, as White, Black or a random side, with Take back and optional clocks. Nothing hints at a move; Stockfish quietly flags inaccuracies, mistakes and blunders, and the better move shows once the game is over
 - **My games**: every game is kept in the browser from its first move; the 50 most recent are listed, to resume one in progress or replay a finished one like a loaded game (analysis, PGN and video export included)
 - **Ask Queen**: a commentary on the position from queen-pawn-8, a chess language model on a Hugging Face Space (needs a connection)
-- **Export**: any game, or a stretch of it, as an MP4 video (with the move sounds, in a chosen quality, optionally at a variable frame rate) or an animated WebP (a chosen width and quality, up to lossless), at 8 to 30 frames a second; it records the page as you see it, so the text size and layout carry over
+- **Export**: any game, or a stretch of it, as an MP4 or WebM video (with the move sounds, in a chosen quality, optionally at a variable frame rate) or an animated WebP (a chosen width and quality, up to lossless), at 8 to 30 frames a second; it records the page as you see it, so the text size and layout carry over
 - **Layouts for every screen**: one responsive page, a board with a sidebar on a wide window and one column on a narrow one, with a Text size setting; light or dark to match the system; full screen where the browser allows it, and Add to Home Screen opens it as an app
 - **Move sounds**: a synthesized Wood set and five of Lichess's sets
 - **Offline**: a service worker keeps the page, the engine and everything they load
@@ -62,7 +62,7 @@ Built into the page or served with it:
 - The futuristic, nes, piano and sfx move sounds by [Enigmahack](https://github.com/Enigmahack), from [Lichess's source](https://github.com/lichess-org/lila) (AGPL-3.0-or-later)
 - The lisp move sounds by [EdinburghCollective](https://lichess.org/@/EdinburghCollective), unchanged from [Lichess's source](https://github.com/lichess-org/lila) ([CC BY-NC-SA 4.0](https://creativecommons.org/licenses/by-nc-sa/4.0/)): non-commercial, so a video exported with them may not be used commercially, as the Share and export dialog says
 - [libwebp](https://chromium.googlesource.com/webm/libwebp) (BSD-3-Clause), built to WebAssembly by [Squoosh](https://github.com/GoogleChromeLabs/squoosh) and packaged by [jSquash](https://github.com/jamsinclair/jSquash) (Apache-2.0), for the WebP export
-- [Mediabunny](https://github.com/Vanilagy/mediabunny) 1.61.0 by Vanilagy (MPL-2.0), for the MP4 export
+- [Mediabunny](https://github.com/Vanilagy/mediabunny) 1.61.0 by Vanilagy (MPL-2.0), for the MP4 and WebM exports
 - [chasolver](https://github.com/miguel-ambrona/chasolver) 3.0.0 by Miguel Ambrona (MIT, `vendor/chasolver.LICENSE`), with the [chess](https://crates.io/crates/chess) crate (MIT), built to WebAssembly here (`tools/chasolver-wasm/`), which proves dead positions
 - ChessQ Lite V4 from [ChessQueries](https://github.com/JSeytre/chessqueries) by Joël Seytre (arXiv 2608.30762), the int8 ONNX export Lichess publishes in [its source](https://github.com/lichess-org/lila) ([PolyForm Noncommercial 1.0.0](https://polyformproject.org/licenses/noncommercial/1.0.0/), `vision/LICENSE` and `vision/NOTICE`), which reads a position from a picture
   - built on Meta AI's [DINOv2](https://github.com/facebookresearch/dinov2) encoder (Apache-2.0, `vision/dinov2.LICENSE`)
@@ -70,7 +70,7 @@ Built into the page or served with it:
 
 Loaded from CDNs when the page runs:
 - [React](https://react.dev/) 18.3.1 (MIT)
-- [html2canvas-pro](https://github.com/yorickshan/html2canvas-pro) 2.5.0 by yorickshan (MIT), which draws the panels of each export frame (the board, eval bar and graph are drawn by the page itself)
+- [html2canvas-pro](https://github.com/yorickshan/html2canvas-pro) 2.5.0 by yorickshan (MIT), which draws the parts of an export frame the page's own painter can't (most of each frame is painted by the page itself)
 - IBM Plex Sans, Instrument Serif, JetBrains Mono and Noto Sans Symbols 2, from Google Fonts (SIL Open Font License)
 
 Used to build it: [@babel/standalone](https://babeljs.io/docs/babel-standalone) 7.29.0 (MIT), which compiles the JSX.
