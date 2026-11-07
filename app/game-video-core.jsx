@@ -453,7 +453,7 @@ function AnalysisPanel({ box, a, depth, deep, paused, style, children }) {
   );
   return (
     <Panel box={shown && !box.flow ? { ...box, scroll: true } : box} a={a} style={style} tight head={head} progress={!shown && deep && deep.pending ? deep.progress || 0 : null}>
-      {shown ? <div className="an-engine" onClick={stopHere} onPointerDown={stopHere}><div className="twk-flow">{E.body}</div></div> : children}
+      {shown ? <div className="an-engine" onClick={stopHere} onPointerDown={stopHere}><div className="twk-flow">{E.body}</div></div> : <div className="an-lines" data-playing={paused ? undefined : '1'} style={{ display: 'contents' }}>{children}</div>}
     </Panel>
   );
 }
