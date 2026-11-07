@@ -246,7 +246,7 @@ function Panel({ box, title, info, right, extra, head, a, style, progress, tight
     <>
     <div style={{ ...place, background: C.panel, border: `1px solid ${C.line}`, boxShadow: `${C.halo}0 0 0 transparent`, padding: tight && tightAn() ? `${tx(L.pad[0] * 0.6)}px ${tx(L.pad[1])}px` : panelPad(), ...(box.scroll && { overflowY: 'auto', scrollbarWidth: 'thin' }), ...style }}>
       {(title || head) && (
-        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: tx(16), font: `600 ${tx(15)}px ${MONO}`, letterSpacing: '0.12em', textTransform: 'uppercase', color: C.dim, marginBottom: tight ? anGap(12) : tx(12) }}>
+        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: tx(16), font: `600 ${tx(16)}px ${MONO}`, letterSpacing: '0.12em', textTransform: 'uppercase', color: C.dim, marginBottom: tight ? anGap(12) : tx(12) }}>
           {head || <><span style={{ flex: '0 1 auto', minWidth: 0, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{title}</span>{info && <span style={{ flex: 'none', marginLeft: -tx(8) }}>{info}</span>}<SideScroll style={{ minWidth: 0, flex: 1, textAlign: 'right', letterSpacing: '0.04em' }}>{right}</SideScroll>{extra}</>}
         </div>
       )}
@@ -607,7 +607,7 @@ function LineChips({ name, nameColor, accent, moves, ply0, c, legal, sel, onPick
         const ply = ply0 + c + j, white = ply % 2 === 0, ok = j < legal, on = sel === j;
         return (
           <span key={j} style={{ display: 'flex', alignItems: 'center', gap: tx(5) }}>
-            {(white || j === 0) && <span style={{ color: C.dim, marginLeft: j ? tx(6) : 0, font: `500 ${tx(15)}px ${MONO}` }}>{window.ChessCore.moveNo(ply)}</span>}
+            {(white || j === 0) && <span style={{ color: C.dim, marginLeft: j ? tx(6) : 0, font: `500 ${tx(16)}px ${MONO}` }}>{window.ChessCore.moveNo(ply)}</span>}
             <span className={ok ? 'mv' : undefined} role={ok ? 'button' : undefined} title={ok ? `Show ${what} on the board up to ${m}` : 'Not a legal move in this line'}
               onClick={ok ? (e) => { e.stopPropagation(); onPick(j); } : undefined}
               onPointerEnter={ok && onHover ? (e) => { if (e.pointerType === 'mouse') onHover(j); } : undefined} tabIndex={ok ? 0 : undefined}
@@ -634,7 +634,7 @@ function EvalBarView({ cp, txt, a }) {
   const f = (winChance(cp) + 1) / 2;
   const flip = ORIENT === 'b', inWhite = cp >= 0, top = inWhite === flip; // the number sits in the part of the bar it favours
   if (!L.eval) return null;
-  const H = L.board.size, ef = Math.round(L.eval.w * (L.tier === 'phone' ? 0.62 : 0.75) * 10) / 10; // the number, sized to the bar's width: its digits a little over half of it (less on a phone's thin bar)
+  const H = L.board.size, ef = Math.round(L.eval.w * (L.tier === 'phone' ? 0.69 : 0.75) * 10) / 10; // the number, sized to the bar's width: its digits a little over half of it (less on a phone's thin bar)
   return (
     <div style={{ ...NO_SELECT, position: 'absolute', left: L.eval.x, top: L.board.y, width: L.eval.w, height: H, borderRadius: 2, overflow: 'hidden', background: '#2a2320', boxShadow: `0 0 0 1px ${C.line}, ${C.halo}0 0 0 transparent`, opacity: a }}>
       <div style={{ position: 'absolute', left: 0, right: 0, [flip ? 'top' : 'bottom']: 0, height: f * H, background: '#ffffff' }} />
@@ -715,7 +715,7 @@ function Header({ M, a }) {
   const teams = M.white.team && M.black.team ? `${M.white.team} vs ${M.black.team}` : M.white.team || M.black.team;
   const lines = [[M.event, M.round && 'Round ' + M.round, teams].filter(Boolean).join(' · '), [M.site, M.date].filter(Boolean).join(' · '), [M.eco, M.opening].filter(Boolean).join(' ')].filter(Boolean);
   return (
-    <Panel box={L.header} a={a} style={{ padding: `${tx(10)}px ${tx(L.pad[1])}px`, display: 'flex', flexDirection: 'column', justifyContent: 'center', gap: tx(4), font: `500 ${tx(15)}px/1.35 ${MONO}`, color: C.dim }}>
+    <Panel box={L.header} a={a} style={{ padding: `${tx(10)}px ${tx(L.pad[1])}px`, display: 'flex', flexDirection: 'column', justifyContent: 'center', gap: tx(4), font: `500 ${tx(16)}px/1.35 ${MONO}`, color: C.dim }}>
       {lines.map((t, i) => <SideScroll key={i} style={{ display: 'block', color: C.ink }}>{t}</SideScroll>)}
     </Panel>
   );
@@ -791,7 +791,7 @@ function MoveList({ M, T, S, a, paused, onPick, deadAt, end, startAt }) {
     moves.push(
       <span key={i} style={{ display: 'flex', alignItems: 'center', gap: tx(5), opacity: shown }}>
         {startAt > 0 && i === startAt && <StartPill />}
-        {(white || i === 0 || i === startAt) && <span style={{ color: i <= c ? C.ink : C.dim, marginLeft: i ? tx(6) : 0, font: `500 ${tx(15)}px ${MONO}` }}>{window.ChessCore.moveNo(M.ply0 + i)}</span>}
+        {(white || i === 0 || i === startAt) && <span style={{ color: i <= c ? C.ink : C.dim, marginLeft: i ? tx(6) : 0, font: `500 ${tx(16)}px ${MONO}` }}>{window.ChessCore.moveNo(M.ply0 + i)}</span>}
         <span className="mv" role="button" data-ply={i} tabIndex={i === focusPly ? 0 : -1} title={`Go to ${label(M, i)}`} onClick={(e) => { e.stopPropagation(); onPick(i); }}
           onKeyDown={(e) => moveKey(e, i)}
           style={moveChip(white, { opacity: ahead ? 0.5 : 1, height: CHIP, boxSizing: 'border-box', display: 'flex', alignItems: 'center', padding: `0 ${tx(8)}px`, cursor: 'pointer', font: `${cur ? 700 : 600} ${tx(16)}px ${MONO}`, border: edge, boxShadow: cur ? `0 0 0 3px ${C.last}` : 'none' })}>{P.san}{P.mark || ''}</span>
@@ -805,7 +805,7 @@ function MoveList({ M, T, S, a, paused, onPick, deadAt, end, startAt }) {
     moves.push(
       <span key="end" className="move-result" style={{ ...NO_SELECT, display: 'flex', alignItems: 'baseline', gap: tx(6), marginLeft: tx(6), opacity: paused ? 1 : cl01((T - S.tp[S.N - 1]) / 0.15) }}>
         <span style={{ color: C.ink, font: `700 ${tx(16)}px ${MONO}` }}>{end.score}</span>
-        <span style={{ color: C.dim, font: `500 ${tx(13)}px ${MONO}` }}>{end.why}</span>
+        <span style={{ color: C.dim, font: `500 ${tx(14)}px ${MONO}` }}>{end.why}</span>
       </span>
     );
   }
@@ -895,7 +895,7 @@ function Analysis({ M, T, S, a, vline, onLine, onPreview, onReplyHover, paused, 
   }
   if (c < 0) return (
     <AnalysisPanel box={box} a={a} paused={paused} depth={depth}>
-      {paused && <span style={{ ...NO_SELECT, font: `500 ${tx(15)}px ${MONO}`, color: C.dim }}>Press play to watch the game, or drag a piece to try your own move.</span>}
+      {paused && <span style={{ ...NO_SELECT, font: `500 ${tx(16)}px ${MONO}`, color: C.dim }}>Press play to watch the game, or drag a piece to try your own move.</span>}
       {sf && !M.hasAnalysis && (sf.run.state === 'running' || paused) && <div style={{ marginTop: tx(16) }}><EngineEmptyState M={M} sf={sf} paused={paused} compact /></div>}
       {tbEl}
     </AnalysisPanel>
@@ -1025,8 +1025,8 @@ function EvalPlot({ M, T, S, a, paused, onPick }) {
           <text x={W / 2} y={mid + 5} textAnchor="middle" fill={C.dim} style={{ font: `500 ${tx(16)}px ${MONO}` }}>No evaluation data</text>
         )}
         {/* under the hover label, which would otherwise sit behind WHITE */}
-        <text x="4" y="12" fill={C.dim} style={{ font: `600 ${tx(14)}px ${MONO}`, letterSpacing: '0.1em' }}>WHITE</text>
-        <text x="4" y={H - 4} fill={C.dim} style={{ font: `600 ${tx(14)}px ${MONO}`, letterSpacing: '0.1em' }}>BLACK</text>
+        <text x="4" y="12" fill={C.dim} style={{ font: `600 ${tx(15)}px ${MONO}`, letterSpacing: '0.1em' }}>WHITE</text>
+        <text x="4" y={H - 4} fill={C.dim} style={{ font: `600 ${tx(15)}px ${MONO}`, letterSpacing: '0.1em' }}>BLACK</text>
         {hover != null && (() => {
           const x = px(hover + 1), name = hover < 0 ? 'Start' : label(M, hover), w = name.length * tx(16) * 0.62 + 16;
           const bx = Math.min(Math.max(x - w / 2, 0), W - w);
