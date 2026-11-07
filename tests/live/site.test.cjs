@@ -1964,6 +1964,26 @@ for (const name of BROWSERS) for (const site of SITES) {
     // Lichess links in Import game (Lichess faked: the page's own fetch answers for lichess.org): a finished game opens
     // as a loaded game, its /black flipping the board and #ply opening there; an unfinished one and a 404 say so and
     // keep the dialog; a broadcast round lists its games, the unfinished greyed, Back keeps the link
+    // Safari focuses no button on a click, so a click on Open leaves the focus on the page: the dialog still takes the keys
+    await t.test('desktop: a dialog takes Tab and Esc with the focus outside it', async () => {
+      const pp = await open(browser, { width: 1440, height: 900 });
+      const p = pp.page, dialog = p.getByRole('dialog', { name: 'Import game' });
+      await p.goto(base, { waitUntil: 'load' });
+      await loadedOn(p);
+      await p.getByRole('button', { name: 'Import game' }).click();
+      await dialog.waitFor({ timeout: 5000 });
+      await p.evaluate(() => document.activeElement.blur());
+      await p.keyboard.press('Space');
+      assert.equal(await p.getByRole('button', { name: 'Pause (space)' }).count(), 0, 'Space reached the page behind the dialog');
+      await p.keyboard.press('Tab');
+      assert.equal(await p.evaluate(() => !!document.activeElement.closest('[role="dialog"]')), true, 'Tab brings the focus into the dialog');
+      await p.evaluate(() => document.activeElement.blur());
+      await p.keyboard.press('Escape');
+      await assert.doesNotReject(dialog.waitFor({ state: 'detached', timeout: 5000 }));
+      assert.deepEqual(pp.errors, []);
+      await pp.ctx.close();
+    });
+
     await t.test('desktop: Import game opens a Lichess game, refuses an unfinished one, and lists a round', async () => {
       const li = await open(browser, { width: 1440, height: 900 });
       const p = li.page, dialog = p.getByRole('dialog', { name: 'Import game' }), field = dialog.getByRole('textbox', { name: 'PGN, FEN or Lichess link' });
