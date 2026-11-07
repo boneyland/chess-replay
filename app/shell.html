@@ -258,7 +258,7 @@ body:has(.stage-one) .twk-panel { bottom: calc(51px + var(--safe-b)); max-height
 .expl-open-btn.on { background: var(--raise); color: var(--ink); border-color: var(--line-strong); }
 @media (max-width: 520px) { .import-box .vision-tile { min-height: 96px; font-size: 0.9375rem; } .import-box .vision-tile small { display: none; } }
 .keys-body { display: flex; flex-direction: column; gap: 14px; overflow-y: auto; min-height: 0; }
-.keys-title { margin: 0 0 6px; font: 600 0.625rem var(--mono); letter-spacing: 0.14em; text-transform: uppercase; color: var(--accent); }
+.keys-title { margin: 0 0 6px; font: 600 0.6875rem var(--mono); letter-spacing: 0.14em; text-transform: uppercase; color: var(--accent); }
 .keys-list { display: grid; grid-template-columns: minmax(max-content, 11rem) 1fr; gap: 6px 14px; margin: 0; align-items: baseline; }
 .keys-list dt { display: flex; flex-wrap: wrap; gap: 4px; margin: 0; }
 .keys-list dd { margin: 0; font: 0.8125rem/1.4 var(--sans); color: var(--ink); }
@@ -322,8 +322,11 @@ body:has(.stage-one) .twk-panel { bottom: calc(51px + var(--safe-b)); max-height
    tabs doesn't move the panel; the tabs sit in a fixed grid, three a row when there are five or six */
 .twk-tabbed { width: min(380px, calc(100% - 32px)); height: min(720px, calc(100% - 72px)); }
 .twk-tabs { flex: none; display: grid; grid-template-columns: repeat(var(--twk-tab-cols), 1fr); gap: 2px; margin: 0 14px 12px; padding: 2px; border-radius: 4px; background: var(--raise); }
-.twk-tabs button { min-height: 28px; padding: 4px 6px; border: 0; border-radius: 3px; background: transparent; color: var(--dim); font: 600 0.75rem var(--sans); cursor: pointer; }
+.twk-tabs button { min-height: 28px; padding: 4px 6px; border: 0; border-radius: 3px; background: transparent; color: var(--dim); font: 600 0.8125rem var(--sans); cursor: pointer; }
 .twk-tabs button:hover { color: var(--ink); }
+/* Settings' section titles and controls a step over the shared 0.75rem/0.6875rem (the engine menu, zoomed, and the dialogs keep those) */
+.twk-tabbed .twk-sect { font-size: 0.75rem; }
+.twk-tabbed :is(.twk-lbl, .twk-val, .twk-field, .twk-seg button, .twk-btn) { font-size: 0.8125rem; }
 .twk-tabs button[aria-selected="true"] { color: var(--ink); background: color-mix(in srgb, var(--accent) 22%, transparent); box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--accent) 50%, transparent); }
 .twk-tabs button:focus-visible { outline: 2px solid var(--accent); outline-offset: 1px; }
 /* a phone on its side (or a short or wide window): Settings is wide and reaches down to the transport bar, with its title, tabs
@@ -413,7 +416,7 @@ body:has(.stage.stage-short) .twk-panel { bottom: calc(44px + var(--safe-b)); ma
 .q-panel { left: max(16px, env(safe-area-inset-left, 0px)); right: auto; width: min(400px, calc(100% - 32px)); }
 .q-panel .twk-hd b { color: var(--queen); }
 .q-hd { display: flex; align-items: center; gap: 8px; }
-.q-exp { padding: 1px 6px; border-radius: 2px; border: 1px solid color-mix(in srgb, var(--queen) 55%, transparent); color: var(--queen); font: 600 0.5625rem var(--mono); letter-spacing: 0.1em; text-transform: uppercase; }
+.q-exp { padding: 1px 6px; border-radius: 2px; border: 1px solid color-mix(in srgb, var(--queen) 55%, transparent); color: var(--queen); font: 600 0.625rem var(--mono); letter-spacing: 0.1em; text-transform: uppercase; }
 .twk-note a, .fen-note a { color: var(--accent); }
 .twk-info { flex: none; width: 15px; height: 15px; margin-left: 6px; padding: 0; vertical-align: 1px; border: 1px solid var(--dim); border-radius: 50%; background: var(--dim); color: var(--panel); font: italic 600 0.6875rem/13px Georgia, serif; cursor: help; }
 .twk-info:hover, .twk-info[aria-expanded="true"] { background: var(--ink); border-color: var(--ink); }
@@ -438,7 +441,7 @@ body:has(.stage.stage-short) .twk-panel { bottom: calc(44px + var(--safe-b)); ma
 .q-grid dd { margin: 0; min-width: 0; display: flex; flex-wrap: wrap; align-items: center; gap: 6px; }
 .q-queen { color: var(--queen); font-size: 0.875rem; }
 .q-line { color: var(--dim); }
-.q-tag { padding: 1px 6px; border-radius: 2px; font: 600 0.625rem var(--mono); letter-spacing: 0.04em; }
+.q-tag { padding: 1px 6px; border-radius: 2px; font: 600 0.6875rem var(--mono); letter-spacing: 0.04em; }
 .q-tag.q-ok { background: rgba(98, 196, 131, 0.16); }
 .q-tag.q-no { background: rgba(236, 148, 66, 0.16); }
 .q-ok { color: var(--ok); }
@@ -446,22 +449,22 @@ body:has(.stage.stage-short) .twk-panel { bottom: calc(44px + var(--safe-b)); ma
 .q-dim { color: var(--dim); }
 .q-evalbox { display: flex; flex-direction: column; gap: 6px; padding-top: 8px; border-top: 1px solid var(--line); }
 .q-evals { width: 100%; border-collapse: collapse; font: 700 1rem var(--mono); font-variant-numeric: tabular-nums; }
-.q-evals thead th { font: 600 0.625rem var(--mono); letter-spacing: 0.1em; text-transform: uppercase; color: var(--dim); text-align: right; padding: 0 0 4px 12px; }
+.q-evals thead th { font: 600 0.6875rem var(--mono); letter-spacing: 0.1em; text-transform: uppercase; color: var(--dim); text-align: right; padding: 0 0 4px 12px; }
 .q-evals tbody th { font: 500 0.6875rem var(--mono); color: var(--dim); text-align: left; padding: 3px 0; white-space: nowrap; }
 .q-evals td { text-align: right; padding: 3px 0 3px 12px; color: var(--ink); white-space: nowrap; }
 .q-evals td.q-evalv { color: var(--queen); }
 .q-evals tr.q-change th, .q-evals tr.q-change td { border-top: 1px solid var(--line); padding-top: 5px; font-size: 0.8125rem; }
 .q-sr { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); }
 .q-mini { padding: 1px 8px; border-radius: 3px; border: 1px solid color-mix(in srgb, var(--queen) 55%, transparent); background: transparent; color: var(--queen); font: 600 0.6875rem var(--mono); cursor: pointer; }
-.q-evalnote { font: 500 0.625rem/1.4 var(--mono); color: var(--dim); }
-.q-evaltext span { font: 600 0.625rem var(--mono); letter-spacing: 0.08em; text-transform: uppercase; font-style: normal; color: var(--dim); }
+.q-evalnote { font: 500 0.6875rem/1.4 var(--mono); color: var(--dim); }
+.q-evaltext span { font: 600 0.6875rem var(--mono); letter-spacing: 0.08em; text-transform: uppercase; font-style: normal; color: var(--dim); }
 .q-evalv { color: var(--queen); }
 .q-evalsf { color: var(--ink); }
 .q-evaltext { margin: 0; padding-left: 10px; border-left: 2px solid var(--queen); font: italic 1.0625rem/1.4 "Instrument Serif", Georgia, serif; color: var(--ink); max-width: 65ch; }
 .q-why summary { cursor: pointer; color: var(--ink); font-weight: 500; }
 .q-why p { margin: 8px 0 0; color: var(--ink); font: 0.8125rem/1.5 var(--sans); max-width: 65ch; }
 .q-table { width: 100%; border-collapse: collapse; font: 500 0.75rem var(--mono); font-variant-numeric: tabular-nums; }
-.q-table th { text-align: left; padding: 4px 6px; font: 600 0.625rem var(--mono); letter-spacing: 0.08em; text-transform: uppercase; color: var(--dim); border-bottom: 1px solid var(--line); }
+.q-table th { text-align: left; padding: 4px 6px; font: 600 0.6875rem var(--mono); letter-spacing: 0.08em; text-transform: uppercase; color: var(--dim); border-bottom: 1px solid var(--line); }
 .q-table td { padding: 5px 6px; border-bottom: 1px solid var(--line); white-space: nowrap; }
 .q-table tbody tr { cursor: pointer; }
 .q-table tbody tr:hover, .q-table tr.q-sel { background: rgba(224, 96, 159, 0.1); }

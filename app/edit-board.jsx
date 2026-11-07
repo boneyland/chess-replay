@@ -203,7 +203,7 @@ function EditBoard({ setup, onChange, onDone, onCancel, fenText, onFenText, fenM
   // contents outgrow it (the unsure line, problems, a FEN message), so Cancel and Done stay in the panel
   const side = image && !oneCol ? Math.round(P.h * 0.35) : 0, fill = side ? { display: 'flex', flexDirection: 'column' } : null;
   // a span, not a div: it also heads the fields inside a <label>, which may hold only phrasing content
-  const label = (t) => <span style={{ display: 'block', font: `600 ${tx(13)}px ${MONO}`, letterSpacing: '0.1em', textTransform: 'uppercase', color: C.dim, marginBottom: tx(6) }}>{t}</span>;
+  const label = (t) => <span style={{ display: 'block', font: `600 ${tx(14)}px ${MONO}`, letterSpacing: '0.1em', textTransform: 'uppercase', color: C.dim, marginBottom: tx(6) }}>{t}</span>;
   return (
     <div ref={flowRef} style={{ position: 'absolute', inset: 0, background: C.bg, overflow: 'hidden', ...flowStyle() }}>
       <BoardSpace>
