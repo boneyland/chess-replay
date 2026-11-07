@@ -166,6 +166,16 @@ body:has(.stage-one) .twk-panel { bottom: calc(51px + var(--safe-b)); max-height
   .pmenu .dock-group-more { grid-area: mo; }
   .pmenu .dock-icons { grid-area: tail; align-self: end; }
 }
+/* a very short phone held sideways (under 350 px high): slimmer items, gaps and headings, so the menu fits with less scrolling */
+@media (orientation: landscape) and (max-height: 349px) {
+  .pmenu .dock-items, .pmenu .dock-group { gap: 4px; }
+  .pmenu .dock-items { padding: 6px; bottom: calc(100% + 8px); }
+  .pmenu-open .dock-items { max-height: calc(100dvh - 52px); }
+  .pmenu .dock-btn { padding: 6px 12px; }
+  .pmenu .dock-iconic { width: 32px; height: 32px; padding: 0; }
+  .pmenu .dock-menu-label { padding-top: 2px; }
+  .pmenu .dock-menu-status { padding: 0 4px 2px; }
+}
 /* Menu: a small menu above its dock button, its items under Explore, Play and More labels; on a phone they sit in the folded menu.
    Anchored to the button's right edge: the button is near the end of the bar, which runs the full width in a window under
    about 1260 px, where a menu hung from its left edge ran off the screen */
