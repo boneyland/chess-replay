@@ -544,15 +544,28 @@ function ImportDialog({ text: text0, auto, onChoose, onPgn, onFen, onImage, onCl
 function DialogBox({ label, className, onClose, children }) {
   const box = React.useRef(null);
   React.useEffect(() => { const first = box.current && box.current.querySelector('[data-autofocus]'); if (first) first.focus(); }, []);
-  const onKey = (e) => {
+  const onKey = (e, root = e.currentTarget) => {
     e.stopPropagation();
     if (e.key === 'Escape') { e.preventDefault(); onClose(); } else if (e.key === 'Tab') {
       // a hidden file input and disabled buttons take no focus, so they are skipped; a focusable box (the crop box) is a stop
-      const stops = [...e.currentTarget.querySelectorAll('input, textarea, select, button, a[href], [tabindex="0"]')].filter((el) => !el.disabled && el.getClientRects().length), i = stops.indexOf(document.activeElement);
+      const stops = [...root.querySelectorAll('input, textarea, select, button, a[href], [tabindex="0"]')].filter((el) => !el.disabled && el.getClientRects().length), i = stops.indexOf(document.activeElement);
       e.preventDefault();
       if (stops.length) stops[(i + (e.shiftKey ? -1 : 1) + stops.length) % stops.length].focus();
     }
   };
+  // focus outside the dialog (Safari focuses no button on a click, so a click on one leaves the focus on the page; a
+  // button disabled while it works drops it too): the topmost dialog still takes the keys, before anything else hears them
+  const onKeyRef = React.useRef(onKey);
+  onKeyRef.current = onKey;
+  React.useEffect(() => {
+    const away = (e) => {
+      const el = box.current;
+      if (!el || el.contains(document.activeElement) || [...document.querySelectorAll('[role="dialog"]')].pop() !== el) return;
+      onKeyRef.current(e, el);
+    };
+    window.addEventListener('keydown', away, true);
+    return () => window.removeEventListener('keydown', away, true);
+  }, []);
   return (
     <div className="fen-scrim" onPointerDown={(e) => { if (e.target === e.currentTarget) onClose(); }}>
       <div ref={box} className={className ? 'fen-box ' + className : 'fen-box'} role="dialog" aria-modal="true" aria-label={label} onKeyDown={onKey} onMouseDown={(e) => { if (!e.target.closest('input, textarea, select, button')) e.preventDefault(); }}>
