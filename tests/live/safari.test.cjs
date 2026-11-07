@@ -1,0 +1,198 @@
+// Smoke tests in desktop Safari on macOS (Apple's own Safari, which Playwright can't drive: its WebKit is a build of its
+// own), over WebDriver by safaridriver, against a build of this checkout served by serve.cjs, at the desktop layout
+// (a 1440×900 page) with mouse input:
+//   node --test tests/live/safari.test.cjs
+// Needs macOS, WebdriverIO (`npm install --no-save webdriverio`) and `sudo safaridriver --enable` once. GitHub Actions
+// runs it on a macOS runner (the `safari` job), with whichever Safari that runner's image has. The page is served as
+// safari.html, the page with a logger in front of its scripts, as WebDriver can't read Safari's console. Screenshots go
+// to tests/out/live/. ios.test.cjs is its iPhone counterpart.
+const test = require('node:test');
+const assert = require('node:assert/strict');
+const { execFileSync, spawn } = require('child_process');
+const fs = require('fs'), path = require('path'), http = require('http');
+const { serve } = require('./serve.cjs');
+const { boardBox, square } = require('./board.cjs');
+
+const ROOT = path.join(__dirname, '..', '..');
+const SITE = path.join(ROOT, 'out', 'site');
+const OUT = path.join(ROOT, 'tests', 'out', 'live');
+const PORT = 8769, WD_PORT = 4445;
+const VIEW = { w: 1440, h: 900 };
+const VERDICT = /your move · .*(stockfish’s choice|cp vs|as good as|can’t run here|stopped)/i;
+
+const wdUp = () => new Promise((ok) => http.get(`http://127.0.0.1:${WD_PORT}/status`, (r) => { r.resume(); ok(r.statusCode === 200); }).on('error', () => ok(false)));
+const wait = (ms) => new Promise((r) => setTimeout(r, ms));
+
+test('macos · safari · local build', async (t) => {
+  // undone last first, as t.after hooks run in the order they were added
+  const undo = [];
+  t.after(async () => { for (const f of undo.reverse()) { try { await f(); } catch (e) { t.diagnostic(`cleanup: ${e.message}`); } } });
+  fs.mkdirSync(OUT, { recursive: true });
+  execFileSync(process.execPath, [path.join(ROOT, 'build.cjs')], { cwd: ROOT });
+  // the page with the logger first in <head>: a file of the site, which the page's CSP allows ('self')
+  fs.writeFileSync(path.join(SITE, 'safari-log.js'), `window.__errs = [];
+addEventListener('error', (e) => __errs.push('error: ' + e.message + ' ' + (e.filename || '') + ':' + (e.lineno || '')));
+addEventListener('unhandledrejection', (e) => __errs.push('unhandled rejection: ' + (e.reason && (e.reason.stack || e.reason.message) || e.reason)));
+addEventListener('securitypolicyviolation', (e) => __errs.push('CSP: ' + e.violatedDirective + ' ' + e.blockedURI));
+const ce = console.error; console.error = (...a) => { __errs.push(a.map(String).join(' ')); ce.apply(console, a); };
+`);
+  const html = fs.readFileSync(path.join(SITE, 'chess-game-video.html'), 'utf8');
+  fs.writeFileSync(path.join(SITE, 'safari.html'), html.replace('<head>', '<head><script src="safari-log.js"></script>'));
+  undo.push(() => { for (const f of ['safari.html', 'safari-log.js']) fs.rmSync(path.join(SITE, f), { force: true }); });
+  const local = await serve(SITE, PORT);
+  undo.push(() => local.close());
+  const URL_ = local.url + 'safari.html';
+
+  const wd = spawn('safaridriver', ['-p', String(WD_PORT)], { stdio: 'inherit' });
+  undo.push(() => wd.kill());
+  for (let i = 0; i < 50 && !(await wdUp()); i++) await wait(200);
+  const { remote } = await import('webdriverio');
+  let browser;
+  for (let i = 1; !browser; i++) {
+    try {
+      browser = await remote({ hostname: '127.0.0.1', port: WD_PORT, path: '/', logLevel: 'error', connectionRetryTimeout: 120000, connectionRetryCount: 0, capabilities: { browserName: 'safari' } });
+    } catch (e) {
+      t.diagnostic(`session, try ${i}: ${e.message.slice(0, 160)}`);
+      if (i === 3) throw e;
+      await wait(5000);
+    }
+  }
+  undo.push(() => browser.deleteSession());
+  t.diagnostic(`Safari ${browser.capabilities.browserVersion} · ${browser.capabilities.platformName || ''}`);
+  await browser.setTimeout({ script: 15000 });
+
+  // Playwright's page.evaluate, for board.cjs
+  const page = { evaluate: (fn, ...a) => browser.execute(fn, ...a) };
+  const js = (fn, ...a) => browser.execute(fn, ...a);
+  const until = (fn, timeout, msg, ...a) => browser.waitUntil(() => js(fn, ...a), { timeout, interval: 250, timeoutMsg: msg });
+  const errors = () => js(() => window.__errs || ['the logger did not load']);
+  const shot = (name) => browser.saveScreenshot(path.join(OUT, `safari-${name}.png`));
+  const mouse = () => browser.action('pointer', { parameters: { pointerType: 'mouse' } });
+  const click = (x, y) => mouse().move({ x: Math.round(x), y: Math.round(y), origin: 'viewport' }).down().pause(50).up().perform();
+  // a drag in small steps, as a hand moves a piece
+  const drag = async (a, b) => {
+    let act = mouse().move({ x: Math.round(a.x), y: Math.round(a.y), origin: 'viewport' }).down().pause(100);
+    for (let i = 1; i <= 10; i++) act = act.move({ x: Math.round(a.x + (b.x - a.x) * i / 10), y: Math.round(a.y + (b.y - a.y) * i / 10), origin: 'viewport', duration: 20 });
+    await act.pause(100).up().perform();
+  };
+  // a shown button by its accessible name (aria-label, else its text), as getByRole finds it
+  const button = (name) => js((n) => {
+    const b = [...document.querySelectorAll('button, [role="button"], [role="tab"]')].find((e) => (e.getAttribute('aria-label') || e.innerText || '').trim() === n && e.getClientRects().length);
+    if (!b) return null;
+    const r = b.getBoundingClientRect();
+    return { x: r.left + r.width / 2, y: r.top + r.height / 2 };
+  }, name);
+  const clickButton = async (name) => { const b = await button(name); assert.ok(b, `no ${name} button`); await click(b.x, b.y); };
+  // clicks name (when it's shown) until done() holds, 8 s after each click, three clicks at most (as ios.test.cjs taps:
+  // a CI Mac is slow at times)
+  const clickUntil = async (name, done, msg) => {
+    for (let i = 0; i < 3; i++) {
+      if (await done()) return;
+      if (await button(name)) await clickButton(name);
+      if (await browser.waitUntil(done, { timeout: 8000, interval: 250 }).then(() => true, () => false)) return;
+    }
+    throw new Error(msg);
+  };
+  const loaded = () => until(() => !!document.querySelector('.dock-primary') && document.querySelectorAll('img').length >= 32, 60000, 'the page did not load');
+  const fresh = async () => { await browser.url(URL_); await loaded(); await wait(1000); };
+
+  await browser.url(URL_);
+  await js(() => localStorage.clear());
+  // the window sized so the page is VIEW: the window's frame and toolbar come on top of the page's size
+  {
+    await browser.setWindowRect(0, 0, VIEW.w, VIEW.h);
+    const v = await js(() => ({ w: innerWidth, h: innerHeight }));
+    await browser.setWindowRect(0, 0, VIEW.w + (VIEW.w - v.w), VIEW.h + (VIEW.h - v.h));
+  }
+
+  await t.test('the page loads in the desktop layout, fits the window, with no console errors', { timeout: 120000 }, async () => {
+    await fresh();
+    const v = await js(() => ({ w: innerWidth, h: innerHeight, dpr: devicePixelRatio, sw: document.documentElement.scrollWidth, ua: navigator.userAgent, screen: `${screen.width}×${screen.height}` }));
+    t.diagnostic(`page ${v.w}×${v.h} at ${v.dpr}× on a ${v.screen} screen · ${v.ua}`);
+    assert.ok(v.sw <= v.w, `no sideways scroll (${v.sw} > ${v.w})`);
+    const b = await boardBox(page);
+    assert.equal(b.n, 32, 'pieces on the board');
+    assert.ok(b.x0 >= 0 && b.x0 + 8 * b.sq <= v.w + 1, `the board (${Math.round(8 * b.sq)} px) fits the ${v.w} px width`);
+    assert.ok(await button('Import game'), 'no Import game button in the dock: not the desktop layout');
+    await shot('desktop');
+    assert.deepEqual(await errors(), []);
+  });
+
+  await t.test('the page is cross-origin isolated, so Stockfish can run threads', async () => {
+    assert.deepEqual(await js(() => ({ iso: self.crossOriginIsolated, sab: typeof SharedArrayBuffer })), { iso: true, sab: 'function' });
+  });
+
+  await t.test('the service worker takes over the page', { timeout: 120000 }, async () => {
+    await until(() => !!navigator.serviceWorker, 5000, 'no navigator.serviceWorker');
+    await fresh();
+    await until(() => !!navigator.serviceWorker.controller, 60000, 'the service worker did not take over after a reload');
+    assert.deepEqual(await errors(), []);
+  });
+
+  await t.test('Play plays the game and Pause stops it', { timeout: 60000 }, async () => {
+    await fresh();
+    const time = () => js(() => document.querySelector('.ptime').textContent);
+    const t0 = await time();
+    await clickUntil('Play (space)', async () => !!(await button('Pause (space)')), 'Play did not start playback');
+    await wait(2500);
+    const t1 = await time();
+    assert.notEqual(t1, t0, `the time stayed at ${t0}`);
+    await shot('playing');
+    await clickUntil('Pause (space)', async () => !!(await button('Play (space)')), 'Pause did not stop playback');
+    const t2 = await time();
+    await wait(1500);
+    assert.equal(await time(), t2, 'the time moved on while paused');
+    assert.deepEqual(await errors(), []);
+  });
+
+  await t.test('a dragged move gets a Stockfish verdict', { timeout: 180000 }, async () => {
+    await fresh();
+    const b = await boardBox(page);
+    await drag(square(b, 'e2'), square(b, 'e4'));
+    const played = await browser.waitUntil(() => js(() => /your move ·/i.test(document.body.innerText)), { timeout: 5000, interval: 250 }).then(() => true, () => false);
+    await shot('drag');
+    assert.ok(played, 'the drag played no move');
+    await until((re) => new RegExp(re, 'i').test(document.body.innerText), 120000, 'no verdict', VERDICT.source);
+    assert.doesNotMatch(await js(() => document.body.innerText.match(/your move ·[^\n]*/i)[0]), /can’t run here|stopped/i);
+    await shot('own-move');
+    assert.deepEqual(await errors(), []);
+  });
+
+  await t.test('Settings opens, switches tabs and closes', { timeout: 60000 }, async () => {
+    await fresh();
+    const open = () => js(() => !!document.querySelector('[role="tablist"]'));
+    await clickUntil('Settings', open, 'Settings did not open');
+    const selected = () => js(() => document.querySelector('[role="tab"][aria-selected="true"]')?.innerText.trim());
+    await clickUntil('View', async () => (await selected()) === 'View', 'the View tab was not selected');
+    assert.ok(await js(() => /Theme/.test(document.querySelector('[role="tabpanel"]').innerText)), 'no Theme on the View tab');
+    await shot('settings');
+    await clickUntil('Close settings', async () => !(await open()), 'Settings did not close');
+    assert.deepEqual(await errors(), []);
+  });
+
+  await t.test('Full screen goes full screen and back', { timeout: 120000 }, async () => {
+    await fresh();
+    const isFull = () => js(() => !!(document.fullscreenElement || document.webkitFullscreenElement));
+    const shown = (n) => async () => !!(await button(n));
+    assert.ok(await js(() => !!(document.fullscreenEnabled || document.webkitFullscreenEnabled)), 'Safari reports no element full screen');
+    if (!(await button('Full screen'))) await clickUntil('Menu', shown('Full screen'), 'no Full screen item');
+    await clickUntil('Full screen', isFull, 'Full screen did not go full screen');
+    const v = await js(() => ({ w: innerWidth, h: innerHeight }));
+    t.diagnostic(`full screen: ${v.w}×${v.h}`);
+    await wait(1000);
+    await shot('full-screen');
+    if (!(await button('Exit full screen'))) await clickUntil('Menu', shown('Exit full screen'), 'no Exit full screen item');
+    await clickUntil('Exit full screen', async () => !(await isFull()), 'Exit full screen did not leave it');
+  });
+
+  // the browser's codecs, which the MP4 export uses
+  await t.test('WebCodecs can encode H.264, so the export writes an MP4', async () => {
+    const got = await browser.executeAsync((done) => {
+      const v = window.VideoEncoder ? VideoEncoder.isConfigSupported({ codec: 'avc1.42001f', width: 1280, height: 720 }).then((r) => r.supported, () => false) : Promise.resolve('no VideoEncoder');
+      const a = window.AudioEncoder ? AudioEncoder.isConfigSupported({ codec: 'mp4a.40.2', sampleRate: 48000, numberOfChannels: 1 }).then((r) => r.supported, () => false) : Promise.resolve('no AudioEncoder');
+      Promise.all([v, a]).then(([avc, aac]) => done({ avc, aac }));
+    });
+    t.diagnostic(`H.264 ${got.avc} · AAC ${got.aac}`);
+    assert.equal(got.avc, true);
+  });
+});
