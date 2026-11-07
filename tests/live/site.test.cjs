@@ -34,9 +34,12 @@ const PAGE = 'chess-game-video.html';
 const SF = 'stockfish-19-lite-single';
 const PROXY_CA = !!process.env.CCR_AGENT_PROXY_ENABLED;
 const firstFile = (...files) => files.find((f) => f && fs.existsSync(f));
+const FIREFOX_PREFS = { 'ui.useOverlayScrollbars': 1 };
 const LAUNCH = {
   chromium: () => pw.chromium.launch({ channel: process.env.CHROMIUM_CHANNEL, executablePath: process.env.CHROMIUM_PATH || firstFile('/var/lib/flatpak/exports/bin/io.github.ungoogled_software.ungoogled_chromium') }),
-  firefox: () => process.env.FIREFOX_PATH === 'playwright' ? pw.firefox.launch() : pw.firefox.launch({ channel: 'moz-firefox', executablePath: process.env.FIREFOX_PATH || firstFile('/usr/bin/firefox-devedition', '/usr/bin/firefox') }),
+  // overlay scrollbars, as a desktop Firefox with "Always show scrollbars" off draws them: Playwright's fresh profile
+  // otherwise takes 12 px for classic ones, which narrows the layout and shows in every screenshot
+  firefox: () => process.env.FIREFOX_PATH === 'playwright' ? pw.firefox.launch({ firefoxUserPrefs: FIREFOX_PREFS }) : pw.firefox.launch({ channel: 'moz-firefox', executablePath: process.env.FIREFOX_PATH || firstFile('/usr/bin/firefox-devedition', '/usr/bin/firefox'), firefoxUserPrefs: FIREFOX_PREFS }),
   webkit: () => pw.webkit.launch(),
 };
 const IPHONE = { userAgent: pw.devices['iPhone 13'].userAgent, deviceScaleFactor: pw.devices['iPhone 13'].deviceScaleFactor };
