@@ -146,7 +146,7 @@ jobs:
           name: ios-screenshots
           path: tests/out/live/
   # tests/live/safari.test.cjs: Apple's own desktop Safari on macOS, over WebDriver (safaridriver), at the desktop layout
-  # with mouse input; whichever Safari the runner's image has. Not a required check (yet)
+  # with mouse input; whichever Safari the runner's image has. A required check (since 2026-11-08)
   safari:
     runs-on: macos-latest
     timeout-minutes: 20
