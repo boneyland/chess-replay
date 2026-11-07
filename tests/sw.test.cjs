@@ -20,16 +20,19 @@ function load() {
     delete: async (name) => delete stores[name],
   };
   const self = { location: { origin: 'https://site.test', href: 'https://site.test/sw.js' }, addEventListener: (t, f) => { handlers[t] = f; }, skipWaiting: async () => {}, clients: { claim: async () => {} } };
-  const fakeFetch = async (req) => { fetched.push(req.url); return new Response('from network', { status: 200 }); };
+  // a same-origin answer, as the browser's fetch gives one (Node's Response says 'default')
+  const fakeFetch = async (req) => { fetched.push(req.url); return Object.defineProperty(new Response('from network', { status: 200 }), 'type', { value: 'basic' }); };
   vm.runInNewContext(src, { self, caches, fetch: fakeFetch, Response, Headers, URL, Promise, setTimeout, console });
-  const fetchEvent = async (url, method = 'GET') => {
+  // the event's waitUntil promises are kept in held (the cache writes the worker must stay alive for)
+  const held = [];
+  const fetchEvent = async (url, method = 'GET', mode = 'cors') => {
     let answer;
-    const req = { url, method, mode: 'cors' };
-    handlers.fetch({ request: req, respondWith: (p) => { answer = p; } });
+    const req = { url, method, mode };
+    handlers.fetch({ request: req, respondWith: (p) => { answer = p; }, waitUntil: (p) => { held.push(p); } });
     return answer === undefined ? undefined : await answer;
   };
   const activate = async () => { let done; handlers.activate({ waitUntil: (p) => { done = p; } }); await done; };
-  return { stores, store, puts, fetched, fetchEvent, activate };
+  return { stores, store, puts, fetched, held, fetchEvent, activate };
 }
 
 const WASM = 'https://site.test/vision/ort.wasm.min.mjs';
@@ -58,6 +61,8 @@ test('another file next to the page still goes through cacheFirst, into the per-
   const u = 'https://site.test/dead-worker.js';
   const r = await sw.fetchEvent(u);
   assert.equal(await r.text(), 'from network');
+  assert.equal(sw.held.length, 1, 'the cache write is held open with waitUntil');
+  await Promise.all(sw.held);
   assert.equal(sw.puts.length, 1);
   assert.match(sw.puts[0][0], /^chess-replay-/);
   assert.equal(sw.puts[0][1], u);
@@ -79,4 +84,32 @@ test('activate deletes a board reader kept under an older name, and keeps the cu
   for (const n of ['chess-vision-0', 'chess-vision-1', 'stockfish-full-19', 'chess-replay-old']) sw.store(n);
   await sw.activate();
   assert.deepEqual(Object.keys(sw.stores).sort(), ['chess-vision-1', 'stockfish-full-19']);
+});
+
+const PAGE = 'chess-game-video.html';
+
+for (const u of ['https://site.test/', 'https://site.test/?code=abc&state=xyz', 'https://site.test/chess-game-video.html']) {
+  test(`a navigation to the page (${u.slice(17) || '/'}) is kept as the page, the write held open with waitUntil`, async () => {
+    const sw = load();
+    const r = await sw.fetchEvent(u, 'GET', 'navigate');
+    assert.equal(await r.text(), 'from network');
+    assert.equal(r.headers.get('Cross-Origin-Embedder-Policy'), 'require-corp');
+    assert.equal(sw.held.length, 1);
+    await Promise.all(sw.held);
+    assert.equal(sw.puts.length, 1);
+    assert.match(sw.puts[0][0], /^chess-replay-/);
+    assert.equal(sw.puts[0][1], PAGE);
+  });
+}
+
+test('a navigation to another file next to the page is not kept as the page, nor answered with it', async () => {
+  const sw = load();
+  const r0 = await sw.fetchEvent('https://site.test/', 'GET', 'navigate');
+  await r0.text();
+  await Promise.all(sw.held);
+  const u = 'https://site.test/og-image.png';
+  const r = await sw.fetchEvent(u, 'GET', 'navigate');
+  assert.equal(await r.text(), 'from network');
+  await Promise.all(sw.held);
+  assert.deepEqual(sw.puts.map((p) => p[1]), [PAGE, u]);
 });

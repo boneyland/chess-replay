@@ -217,11 +217,14 @@ test('render.yaml isolates the page: COOP same-origin and COEP require-corp on e
   assert.equal(h['Cross-Origin-Embedder-Policy'], 'require-corp');
 });
 
+// the worker's self, enough for sw.js's top level to run
+const SELF = { addEventListener() {}, location: { href: 'https://site.test/sw.js' } };
+
 // a copy kept before the headers existed, or a HEAD made from a kept GET, still answers isolated
 test('the service worker gives its own files the isolation headers', () => {
   const sw = builtSw();
   const run = new Function('self', 'caches', 'fetch', sw + '\nreturn isolated;');
-  const isolated = run({ addEventListener() {} }, {}, () => {});
+  const isolated = run(SELF, {}, () => {});
   const r = isolated(new Response('x', { status: 200, headers: { 'content-type': 'text/html' } }));
   assert.equal(r.headers.get('cross-origin-opener-policy'), 'same-origin');
   assert.equal(r.headers.get('cross-origin-embedder-policy'), 'require-corp');
@@ -233,17 +236,18 @@ test('the service worker answers a navigation with the kept page when the server
   const sw = builtSw();
   const kept = new Response('kept', { status: 200 });
   const run = (status, copy) => new Function('self', 'caches', 'fetch', sw + '\nreturn page;')(
-    { addEventListener() {} }, { open: async () => ({ put: async () => {}, match: async () => copy }) }, async () => new Response(String(status), { status }));
-  assert.equal(await (await run(503, kept.clone())('x')).text(), 'kept');
-  assert.equal((await run(404, kept.clone())('x')).status, 404);
-  assert.equal((await run(500, undefined)('x')).status, 500);
-  assert.equal((await run(200, kept.clone())('x')).status, 200);
+    SELF, { open: async () => ({ put: async () => {}, match: async () => copy }) }, async () => new Response(String(status), { status }));
+  const ev = { request: 'x', waitUntil() {} };
+  assert.equal(await (await run(503, kept.clone())(ev)).text(), 'kept');
+  assert.equal((await run(404, kept.clone())(ev)).status, 404);
+  assert.equal((await run(500, undefined)(ev)).status, 500);
+  assert.equal((await run(200, kept.clone())(ev)).status, 200);
 });
 
 // a navigation fetched with redirect: 'manual' answers an opaqueredirect (status 0), which can't be rebuilt
 test('the service worker passes a navigation redirect through untouched', () => {
   const sw = builtSw();
-  const isolated = new Function('self', 'caches', 'fetch', sw + '\nreturn isolated;')({ addEventListener() {} }, {}, () => {});
+  const isolated = new Function('self', 'caches', 'fetch', sw + '\nreturn isolated;')(SELF, {}, () => {});
   const redirect = { type: 'opaqueredirect', status: 0, headers: new Headers() };
   assert.equal(isolated(redirect), redirect);
 });
@@ -325,7 +329,7 @@ test('without isolation headers in render.yaml, the service worker adds none', (
   assert.deepEqual(RH.isolation(RH.headers(yaml)), {});
   assert.equal(RH.headers(yaml)['X-Frame-Options'], 'SAMEORIGIN', 'the other headers stay');
   const sw = builtSw().replace(/const ISOLATION = \{.*\};/, 'const ISOLATION = {};');
-  const isolated = new Function('self', 'caches', 'fetch', sw + '\nreturn isolated;')({ addEventListener() {} }, {}, () => {});
+  const isolated = new Function('self', 'caches', 'fetch', sw + '\nreturn isolated;')(SELF, {}, () => {});
   const r = new Response('x', { status: 200, headers: { 'content-type': 'text/html' } });
   assert.equal(isolated(r), r);
   assert.throws(() => RH.headers('headers:\n  - path: /app/*\n    name: X\n    value: y\n'), /only \/\* is read/);

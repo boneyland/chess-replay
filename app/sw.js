@@ -1,11 +1,15 @@
 // The site's service worker (build.cjs fills in VERSION, LOCAL, REMOTE, KEEP_HOSTS, VISION_CACHE and ISOLATION): it keeps a copy of the page and everything
-// it loads, so the player, Stockfish and the export work with no connection. Only Ask Queen, Hugging Face sign-in and
-// the endgame tablebase need the network. The page itself comes from the network first, so a deploy shows up at once;
-// the files around it change only with a deploy that changes this file's VERSION, so they come from the copy first.
+// it loads, so the player, Stockfish and the export work with no connection. What needs the network: Ask Queen and its
+// Hugging Face sign-in; Lichess (the tablebase, the opening explorer and its sign-in, cloud evaluation, importing a
+// Lichess link); and the first download of Full Stockfish (from unpkg) or of the board reader (vision/), each kept in
+// a cache of its own after that. The page itself comes from the network first, so a deploy shows up at once; the files
+// around it change only with a deploy that changes this file's VERSION, so they come from the copy first.
 const VERSION = '__VERSION__';
 const LOCAL = __LOCAL__; // next to the page, the page first
 const REMOTE = __REMOTE__; // pinned CDN files: React, the export's libraries, the fonts' stylesheet
 const PAGE = 'chess-game-video.html';
+// the folder the page is served from: the page answers there (Render rewrites it) and at its own name
+const SCOPE = new URL('./', self.location.href).pathname;
 const CACHE = 'chess-replay-' + VERSION;
 // hosts whose files are kept as they're used (the fonts' stylesheet names font files by the browser that asks)
 const KEEP_HOSTS = __KEEP_HOSTS__; // build.cjs's CDN_HOSTS, which the page's CSP allows
@@ -54,9 +58,11 @@ self.addEventListener('fetch', (e) => {
   if (req.method !== 'GET' && req.method !== 'HEAD') return;
   const here = url.origin === self.location.origin;
   if (here && url.pathname.startsWith(new URL('vision/', self.location.href).pathname)) return e.respondWith(vision(req).then(isolated));
-  if (req.mode === 'navigate' && here) return e.respondWith(page(req).then(isolated));
-  if (here) return e.respondWith(cacheFirst(req).then(isolated));
-  if (KEEP_HOSTS.includes(url.hostname) && req.method === 'GET') return e.respondWith(cacheFirst(req));
+  // only the page's own address is kept as the page: opening another file in a tab (the link-preview image) must
+  // not replace it, or the next offline visit would show that file
+  if (req.mode === 'navigate' && here && (url.pathname === SCOPE || url.pathname === SCOPE + PAGE)) return e.respondWith(page(e).then(isolated));
+  if (here) return e.respondWith(cacheFirst(e).then(isolated));
+  if (KEEP_HOSTS.includes(url.hostname) && req.method === 'GET') return e.respondWith(cacheFirst(e));
   // anything else (Hugging Face, Lichess's tablebase: live data, never kept) goes to the network as usual
 });
 
@@ -67,14 +73,24 @@ async function vision(req) {
 }
 
 // the page from the network, kept for next time; offline, too slow or a server error (a deploy, an outage), the kept one.
-// A 404 is the network's answer: a path that isn't the page
-async function page(req) {
-  const cache = await caches.open(CACHE);
-  const net = fetch(req).then((r) => {
-    if (r.ok && r.type === 'basic') cache.put(PAGE, r.clone());
+// A 404 is the network's answer. Keeping the page is held open with waitUntil, called now while the event can still take
+// it: the network may answer after the copy has, and the browser may stop an idle worker before a write ends
+function page(e) {
+  let saved = Promise.resolve();
+  const net = fetch(e.request).then((r) => {
+    if (r.ok && r.type === 'basic') {
+      const copy = r.clone(); // before the page's answer starts reading the body
+      saved = caches.open(CACHE).then((cache) => cache.put(PAGE, copy));
+    }
     return r;
   });
   net.catch(() => {}); // when the copy has answered, a later failure has no one to tell
+  e.waitUntil(net.then(() => saved).catch(() => {}));
+  return answer(net);
+}
+
+async function answer(net) {
+  const cache = await caches.open(CACHE);
   const slow = new Promise((ok) => setTimeout(ok, PAGE_TIMEOUT_MS));
   try {
     const r = await Promise.race([net, slow.then(() => null)]);
@@ -100,11 +116,13 @@ async function kept(req, name = CACHE) {
   return hit && req.method === 'HEAD' ? new Response(null, { status: hit.status, statusText: hit.statusText, headers: hit.headers }) : hit;
 }
 
-async function cacheFirst(req) {
+// the write is held open with waitUntil, which the event still takes while its answer is pending
+async function cacheFirst(e) {
+  const req = e.request;
   const cache = await caches.open(CACHE);
   const hit = await kept(req);
   if (hit) return hit;
   const r = await fetch(req);
-  if (req.method === 'GET' && (r.ok || r.type === 'opaque')) cache.put(req.url, r.clone()).catch(() => {});
+  if (req.method === 'GET' && (r.ok || r.type === 'opaque')) e.waitUntil(cache.put(req.url, r.clone()).catch(() => {}));
   return r;
 }
