@@ -317,7 +317,7 @@ body:has(.stage-one) .twk-panel { bottom: calc(51px + var(--safe-b)); max-height
 .twk-keep { display: flex; flex-direction: column; gap: 10px; }
 .twk-group, .twk-lead { display: flex; flex-direction: column; gap: 10px; }
 .twk-flow > * + .twk-group { padding-top: 10px; }
-.twk-sect { font: 600 0.625rem var(--mono); letter-spacing: 0.14em; text-transform: uppercase; color: var(--accent); }
+.twk-sect { font: 600 0.6875rem var(--mono); letter-spacing: 0.14em; text-transform: uppercase; color: var(--accent); }
 /* Settings: one size in every layout and on every tab, so a tab reads the same on a phone as on a desktop and switching
    tabs doesn't move the panel; the tabs sit in a fixed grid, three a row when there are five or six */
 .twk-tabbed { width: min(380px, calc(100% - 32px)); height: min(720px, calc(100% - 72px)); }
@@ -369,7 +369,7 @@ body:has(.stage.stage-short) .twk-panel { bottom: calc(44px + var(--safe-b)); ma
 .twk-row { display: flex; flex-direction: column; gap: 5px; }
 .twk-row-h { flex-direction: row; align-items: center; justify-content: space-between; gap: 10px; }
 .twk-lbl { display: flex; justify-content: space-between; align-items: baseline; gap: 8px; color: var(--ink); font-weight: 500; }
-.twk-val { color: var(--dim); font: 500 0.6875rem var(--mono); font-variant-numeric: tabular-nums; }
+.twk-val { color: var(--dim); font: 500 0.75rem var(--mono); font-variant-numeric: tabular-nums; }
 .twk-note { color: var(--dim); }
 .twk-err { color: var(--danger); }
 .twk-progress { height: 6px; border-radius: 2px; background: var(--raise); overflow: hidden; }
@@ -415,14 +415,14 @@ body:has(.stage.stage-short) .twk-panel { bottom: calc(44px + var(--safe-b)); ma
 .q-hd { display: flex; align-items: center; gap: 8px; }
 .q-exp { padding: 1px 6px; border-radius: 2px; border: 1px solid color-mix(in srgb, var(--queen) 55%, transparent); color: var(--queen); font: 600 0.5625rem var(--mono); letter-spacing: 0.1em; text-transform: uppercase; }
 .twk-note a, .fen-note a { color: var(--accent); }
-.twk-info { flex: none; width: 15px; height: 15px; margin-left: 6px; padding: 0; vertical-align: 1px; border: 1px solid var(--dim); border-radius: 50%; background: var(--dim); color: var(--panel); font: italic 600 0.625rem/13px Georgia, serif; cursor: help; }
+.twk-info { flex: none; width: 15px; height: 15px; margin-left: 6px; padding: 0; vertical-align: 1px; border: 1px solid var(--dim); border-radius: 50%; background: var(--dim); color: var(--panel); font: italic 600 0.6875rem/13px Georgia, serif; cursor: help; }
 .twk-info:hover, .twk-info[aria-expanded="true"] { background: var(--ink); border-color: var(--ink); }
 .twk-btn-row { display: flex; align-items: center; gap: 4px; }
 .twk-tip { position: fixed; z-index: 100; max-width: min(280px, calc(100vw - 16px)); padding: 7px 10px; border: 1px solid var(--line); border-radius: 4px; background: var(--panel); color: var(--ink); box-shadow: 0 8px 24px var(--shadow), var(--halo); font: 0.75rem/1.4 var(--sans); pointer-events: none; }
 .twk-btn-row > .twk-btn { flex: 1; min-width: 0; }
-/* the engine settings in the Analysis panel (its ☰ menu): the Settings panel's controls, zoomed 1.3 to read at the frame's text size and sized by the Text size setting (rem) like
+/* the engine settings in the Analysis panel (its ☰ menu): the Settings panel's controls, zoomed 1.2 to read at the frame's text size and sized by the Text size setting (rem) like
    the rest of the overlays, in as many columns as fit */
-.an-engine { zoom: 1.3; font: 0.75rem/1.4 var(--sans); color: var(--ink); letter-spacing: normal; text-transform: none; }
+.an-engine { zoom: 1.2; font: 0.75rem/1.4 var(--sans); color: var(--ink); letter-spacing: normal; text-transform: none; }
 .an-engine .twk-flow { display: grid; grid-template-columns: repeat(auto-fill, minmax(230px, 1fr)); gap: 10px 24px; align-items: start; }
 .an-engine .twk-flow > :is(.twk-note, .twk-progress, .twk-pair, .twk-btn, .twk-btn-row) { grid-column: 1 / -1; }
 .q-strong { color: var(--ink); }
