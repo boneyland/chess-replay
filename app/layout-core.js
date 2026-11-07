@@ -108,6 +108,22 @@
     return !keepTwo && (tall || narrow || wasted) ? 1 : 2;
   }
 
+  // The column count for the stage area as just measured (w × h, in a vw × vh viewport), switching from was (the last
+  // count, null at first) only where columns() would still say so for the area the new layout will have. A switch
+  // resizes the area, which can cross columns()'s line the other way (the eval graph goes under the board from 700 px
+  // high): the page flipped between layouts for good at about 820×755. off holds what each count left of the viewport
+  // for the area (other bars, a scrollbar), as last seen, and is kept up to date here. The viewport is
+  // document.documentElement's client size, never innerWidth/innerHeight: Firefox for Android, turned from landscape to
+  // portrait, reported 763×1470 inner for a 366×705 viewport, and the offset that left for two columns kept the page in
+  // one column once turned back
+  function pickColumns({ w, h, vw, vh, text = 1, video = false, was = null, off = {} }) {
+    if (was != null) off[was] = [vw - w, vh - h];
+    const cols = columns({ w, h, text, video, prevCols: was, vw, vh });
+    const o = off[cols];
+    if (was != null && cols !== was && o && columns({ w: vw - o[0], h: vh - o[1], text, video, prevCols: cols, vw, vh }) !== cols) return was;
+    return cols;
+  }
+
   // moves.rows: how many lines of moves fit under the list's title
   function withMoves(m, text) {
     if (!m) return m;
@@ -264,5 +280,5 @@
   // the export's canvas size on one side: the page's CSS size at that scale, rounded down to even (video wants even sides)
   const exportPx = (v, scale) => Math.max(2, 2 * Math.floor((v * scale) / 2));
 
-  window.LayoutCore = { TEXT_SIZES, textScale, columns, compute, exportScale, exportPx };
+  window.LayoutCore = { TEXT_SIZES, textScale, columns, pickColumns, compute, exportScale, exportPx };
 })();
