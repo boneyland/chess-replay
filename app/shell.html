@@ -153,11 +153,11 @@ body:has(.stage-one) .twk-panel { bottom: calc(51px + var(--safe-b)); max-height
 .pmenu .dock-icons .dock-queen { flex: 1; text-align: center; }
 .pmenu .dock-menu-status { display: block; max-width: 240px; padding: 2px 4px 4px; font: 500 0.6875rem/1.4 var(--mono); color: var(--dim); white-space: normal; }
 .pmenu-err .dock-menu-status { color: var(--danger); }
-/* a phone held sideways (under 500 px high, the phone tier's breakpoint): the menu is 560 px wide at most, Explore and Play
-   side by side, the last row under Play; a taller landscape window keeps the one-column list (this goes by the viewport,
+/* a phone held sideways (under 500 px high, the phone tier's breakpoint): the menu is 560 px wide at most, Import game over Play
+   on the left, Explore, More and the last row on the right; a taller landscape window keeps the one-column list (this goes by the viewport,
    not by stage class, as the folded menu also shows in the wide layout, e.g. at 800×480) */
 @media (orientation: landscape) and (max-height: 499px) {
-  .pmenu-open .dock-items { display: grid; grid-template-columns: 1fr 1fr; grid-template-areas: "st st" "load load" "ex pl" "ex mo" "ex tail"; align-items: start; width: min(560px, calc(100vw - 32px)); }
+  .pmenu-open .dock-items { display: grid; grid-template-columns: 1fr 1fr; grid-template-areas: "st st" "load ex" "pl ex" "pl mo" "pl tail"; align-items: start; width: min(560px, calc(100vw - 32px)); }
   .pmenu .dock-menu-status { grid-area: st; max-width: none; }
   .pmenu .dock-primary { grid-area: load; }
   .pmenu .dock-group { display: flex; flex-direction: column; gap: 6px; }
@@ -165,6 +165,16 @@ body:has(.stage-one) .twk-panel { bottom: calc(51px + var(--safe-b)); max-height
   .pmenu .dock-group-play { grid-area: pl; }
   .pmenu .dock-group-more { grid-area: mo; }
   .pmenu .dock-icons { grid-area: tail; align-self: end; }
+}
+/* a very short phone held sideways (under 350 px high): slimmer items, gaps and headings, so the menu fits with less scrolling */
+@media (orientation: landscape) and (max-height: 349px) {
+  .pmenu .dock-items, .pmenu .dock-group { gap: 4px; }
+  .pmenu .dock-items { padding: 6px; bottom: calc(100% + 8px); }
+  .pmenu-open .dock-items { max-height: calc(100dvh - 52px); }
+  .pmenu .dock-btn { padding: 6px 12px; }
+  .pmenu .dock-iconic { width: 32px; height: 32px; padding: 0; }
+  .pmenu .dock-menu-label { padding-top: 2px; }
+  .pmenu .dock-menu-status { padding: 0 4px 2px; }
 }
 /* Menu: a small menu above its dock button, its items under Explore, Play and More labels; on a phone they sit in the folded menu.
    Anchored to the button's right edge: the button is near the end of the bar, which runs the full width in a window under
