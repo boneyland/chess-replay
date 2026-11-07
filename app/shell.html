@@ -10,7 +10,7 @@
   --bg: #f2ece3; --panel: #fbf7f1; --raise: #ebe3d6; --line: rgba(60, 40, 20, 0.14); --line-strong: rgba(60, 40, 20, 0.3);
   --ink: #2a211b; --dim: #6b5f53; --accent: #8a5e15; --accent-ink: #fffaf2; --danger: #c0392b; --ok: #237a46;
   --warn: #b05616; --queen: #c03f7c; --track: rgba(60, 40, 20, 0.16); --btn: var(--raise); --btn-line: var(--line); --btn-hover: #ddd2c0;
-  --panel-glass: #fbf7f1; --scrim: rgba(242, 236, 227, 0.86); --shadow: rgba(60, 40, 20, 0.18); --halo: 0 0 0 transparent;
+  --panel-glass: #fbf7f1; --net-tint: 22%; --net-line: 60%; --scrim: rgba(242, 236, 227, 0.86); --shadow: rgba(60, 40, 20, 0.18); --halo: 0 0 0 transparent;
   --mono: "JetBrains Mono", ui-monospace, SFMono-Regular, Menlo, monospace;
   --sans: "IBM Plex Sans", system-ui, -apple-system, "Segoe UI", sans-serif;
   color-scheme: light;
@@ -20,7 +20,7 @@
     --bg: #13100f; --panel: #1b1715; --raise: #241e1b; --line: rgba(255, 236, 214, 0.1); --line-strong: rgba(255, 236, 214, 0.25);
     --ink: #efe8de; --dim: #9a8e82; --accent: #e3b55b; --accent-ink: #15100d; --danger: #e4553f; --ok: #62c483;
     --warn: #ec9442; --queen: #e0609f; --track: rgba(255, 236, 214, 0.16); --btn: #3a312c; --btn-line: rgba(255, 236, 214, 0.28); --btn-hover: #5a4d44;
-    --panel-glass: #1b1715; --scrim: rgba(19, 16, 15, 0.82); --shadow: rgba(0, 0, 0, 0.45); --halo: 0 0 3px rgba(255, 236, 214, 0.3), 0 0 14px rgba(255, 236, 214, 0.14), 0 0 36px rgba(255, 236, 214, 0.1), 0 10px 40px rgba(255, 236, 214, 0.07);
+    --panel-glass: #1b1715; --net-tint: 26%; --net-line: 65%; --scrim: rgba(19, 16, 15, 0.82); --shadow: rgba(0, 0, 0, 0.45); --halo: 0 0 3px rgba(255, 236, 214, 0.3), 0 0 14px rgba(255, 236, 214, 0.14), 0 0 36px rgba(255, 236, 214, 0.1), 0 10px 40px rgba(255, 236, 214, 0.07);
     color-scheme: dark;
   }
 }
@@ -28,7 +28,7 @@
   --bg: #13100f; --panel: #1b1715; --raise: #241e1b; --line: rgba(255, 236, 214, 0.1); --line-strong: rgba(255, 236, 214, 0.25);
   --ink: #efe8de; --dim: #9a8e82; --accent: #e3b55b; --accent-ink: #15100d; --danger: #e4553f; --ok: #62c483;
   --warn: #ec9442; --queen: #e0609f; --track: rgba(255, 236, 214, 0.16); --btn: #3a312c; --btn-line: rgba(255, 236, 214, 0.28); --btn-hover: #5a4d44;
-  --panel-glass: #1b1715; --scrim: rgba(19, 16, 15, 0.82); --shadow: rgba(0, 0, 0, 0.45); --halo: 0 0 3px rgba(255, 236, 214, 0.3), 0 0 14px rgba(255, 236, 214, 0.14), 0 0 36px rgba(255, 236, 214, 0.1), 0 10px 40px rgba(255, 236, 214, 0.07);
+  --panel-glass: #1b1715; --net-tint: 26%; --net-line: 65%; --scrim: rgba(19, 16, 15, 0.82); --shadow: rgba(0, 0, 0, 0.45); --halo: 0 0 3px rgba(255, 236, 214, 0.3), 0 0 14px rgba(255, 236, 214, 0.14), 0 0 36px rgba(255, 236, 214, 0.1), 0 10px 40px rgba(255, 236, 214, 0.07);
   color-scheme: dark;
 }
 html { height: 100%; box-sizing: border-box; font-size: calc(16px * var(--text, 1)); }
@@ -471,20 +471,21 @@ body:has(.stage.stage-short) .twk-panel { bottom: calc(44px + var(--safe-b)); ma
 .q-via-box { display: flex; flex-direction: column; gap: 8px; }
 .q-via { color: var(--ink); }
 .signin-note { position: fixed; z-index: 80; top: calc(56px + env(safe-area-inset-top, 0px)); left: 50%; transform: translateX(-50%); max-width: calc(100% - 32px); display: flex; align-items: center; gap: 10px; padding: 10px 8px 10px 14px; border-radius: 5px; background: var(--panel-glass); border: 1px solid var(--line); box-shadow: 0 10px 30px var(--shadow), var(--halo); font: 500 0.8125rem/1.4 var(--sans); color: var(--ink); }
-/* no connection: a warning-tinted tag at the top of the page, above the frame, while it lasts */
-.net-chip { flex: none; display: inline-flex; align-items: center; gap: 6px; height: 24px; padding: 0 10px; border-radius: 6px; border: 1px solid color-mix(in srgb, var(--warn) 55%, transparent); background: color-mix(in srgb, var(--warn) 16%, var(--bg)); font: 600 0.6875rem var(--mono); letter-spacing: 0.06em; color: var(--warn); white-space: nowrap; }
+/* no connection: a red-tinted tag at the top of the page, above the frame, while it lasts, tinted and lettered as the
+   offline note is (--net-tint and --net-line, stronger in the dark theme) */
+.net-chip { flex: none; display: inline-flex; align-items: center; gap: 6px; height: 24px; padding: 0 10px; border-radius: 6px; border: 1px solid color-mix(in srgb, var(--danger) var(--net-line), transparent); background: color-mix(in srgb, var(--danger) var(--net-tint), var(--bg)); font: 600 0.6875rem var(--mono); letter-spacing: 0.06em; color: var(--ink); white-space: nowrap; }
 /* the note sits centred from the middle of the page, which would wrap it at half the width: it takes its text's width, up to the page's */
 .net-note { width: max-content; box-sizing: border-box; }
-/* the offline note tinted with the warning colour, Back online with the ok one, so each stands out from the page */
-.net-note-off { background: color-mix(in srgb, var(--warn) 18%, var(--panel-glass)); border-color: color-mix(in srgb, var(--warn) 55%, transparent); }
-.net-note-on { background: color-mix(in srgb, var(--ok) 16%, var(--panel-glass)); border-color: color-mix(in srgb, var(--ok) 50%, transparent); }
+/* the offline note tinted red (the danger colour), Back online green (the ok one), so each stands out from the page */
+.net-note-off { background: color-mix(in srgb, var(--danger) var(--net-tint), var(--panel-glass)); border-color: color-mix(in srgb, var(--danger) var(--net-line), transparent); }
+.net-note-on { background: color-mix(in srgb, var(--ok) var(--net-tint), var(--panel-glass)); border-color: color-mix(in srgb, var(--ok) var(--net-line), transparent); }
 /* Copy FEN's note: the FEN in a read-only field, where a click selects all of it; it wraps anywhere on a phone, and
    is as tall as its lines where the browser can size a field to its content */
 .fen-note { max-width: min(640px, calc(100% - 32px)); }
 .fen-note-fen { display: block; width: min(46ch, 100%); margin-top: 4px; padding: 2px 6px; border: 1px solid var(--line); border-radius: 2px; background: var(--bg); color: inherit; font: inherit; font-family: var(--mono); overflow-wrap: anywhere; resize: none; overflow: hidden; field-sizing: content; }
 /* the offline note reads larger on a desktop's full-size page */
 body:has(.stage:not(.stage-one)) .net-note { top: calc(64px + env(safe-area-inset-top, 0px)); gap: 14px; padding: 14px 12px 14px 20px; border-radius: 6px; font-size: 1rem; }
-.net-chip::before { content: ""; width: 7px; height: 7px; border-radius: 50%; background: var(--warn); }
+.net-chip::before { content: ""; width: 7px; height: 7px; border-radius: 50%; background: var(--danger); }
 .q-log pre { margin: 8px 0 0; max-height: 160px; overflow: auto; padding: 8px; border-radius: 3px; background: var(--bg); border: 1px solid var(--line); font: 500 0.6875rem/1.5 var(--mono); color: var(--ink); white-space: pre-wrap; }
 .q-diag { display: flex; flex-direction: column; gap: 6px; }
 .q-diag pre { margin: 0; max-height: 180px; overflow: auto; padding: 8px; border-radius: 3px; background: var(--bg); border: 1px solid var(--line); font: 500 0.6875rem/1.5 var(--mono); color: var(--ink); white-space: pre-wrap; word-break: break-word; }
