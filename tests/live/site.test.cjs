@@ -2877,6 +2877,8 @@ for (const name of BROWSERS) for (const site of SITES) {
           constructor(url, o) { super(url, o); made.push([Math.round(performance.now()), String(url).split('#')[0].split('/').pop()]); }
           get onmessage() { return super.onmessage; }
           set onmessage(f) { super.onmessage = f && ((e) => { const m = typeof e.data === 'string' && e.data.match(/^(bestmove \S+|info depth \d+)/); if (m) out.push([Math.round(performance.now()), m[1]]); return f(e); }); }
+          // the searches asked for, as 'go' in the same log
+          postMessage(d, o) { if (typeof d === 'string' && d.startsWith('go')) out.push([Math.round(performance.now()), 'go']); return super.postMessage(d, o); }
         };
       });
       const panel = (title) => p.evaluate((tt) => { const d = [...document.querySelectorAll('div')].find((e) => e.firstElementChild && e.firstElementChild.firstElementChild && e.firstElementChild.firstElementChild.textContent === tt && getComputedStyle(e.firstElementChild).textTransform === 'uppercase'); return d ? d.innerText : ''; }, title);
@@ -2888,6 +2890,9 @@ for (const name of BROWSERS) for (const site of SITES) {
       const dialog = p.getByRole('dialog', { name: 'Play vs Stockfish' });
       await dialog.getByRole('radio', { name: 'Set-up position' }).click();
       await dialog.getByRole('radio', { name: 'White' }).click();
+      // from just before the game starts: its search of the position can end at once (the mate), before any later mark
+      // (WebKit on GitHub, 2026-11-07: bestmove 50 ms before t0 was taken, then 60 s waiting for another)
+      const t0 = await p.evaluate(() => performance.now());
       await dialog.getByRole('button', { name: 'Start game' }).click();
       await assert.doesNotReject(dialog.waitFor({ state: 'detached', timeout: 3000 }));
       assert.match(await panel('Play vs Stockfish'), /You play White[\s\S]*No hints: Stockfish only says/);
@@ -2895,12 +2900,19 @@ for (const name of BROWSERS) for (const site of SITES) {
       // pieces don't span the board
       const b = await p.evaluate(() => { const r = [...document.querySelectorAll('div')].find((d) => d.style.touchAction === 'none').getBoundingClientRect(); return { x0: r.left, y0: r.top, sq: r.width / 8 }; });
       // Stockfish searches the position while the player thinks: the move is rated against that search, which finds the
-      // mate (Qe8#) at once, so wait for its bestmove, however long the engine takes to start (a move made before it had
-      // started went unrated after a fixed 5 s in WebKit on GitHub, 2026-11-01; 30 s ran out there on 2026-11-03)
-      const t0 = await p.evaluate(() => performance.now());
+      // mate (Qe8#) at once, so wait for it to end, however long the engine takes to start (a move made before it had
+      // started went unrated after a fixed 5 s in WebKit on GitHub, 2026-11-01; 30 s ran out there on 2026-11-03). The
+      // engine sends a 'go' only once the last search's bestmove is in (SFEngine's queue), so the engine is idle when
+      // the last 'go' since t0 has a bestmove after it
+      const idle = (t0) => {
+        const log = window.__sfOut;
+        let g = -1;
+        log.forEach(([t, m], i) => { if (t >= t0 && m === 'go') g = i; });
+        return g >= 0 && log.slice(g + 1).some(([, m]) => m.startsWith('bestmove'));
+      };
       // where none comes, what the engine said and when (ms from t0), and the Workers the page started, to tell an engine
       // that never started from one that searched and was stopped
-      const before = await p.waitForFunction((t0) => window.__sfOut.some(([t, m]) => t > t0 && m.startsWith('bestmove')), t0, { timeout: 60000 }).then(() => null, (e) => e);
+      const before = await p.waitForFunction(idle, t0, { timeout: 60000 }).then(() => null, (e) => e);
       if (before) {
         const said = await p.evaluate((t0) => ({ out: window.__sfOut.map(([t, m]) => `${t - Math.round(t0)} ms ${m}`).slice(-30), workers: window.__sfWorkers, status: document.body.innerText.match(/Stockfish[^\n]*/g) }), t0);
         assert.fail(`the search before the move ends (${before.message.split('\n')[0]})\nengine: ${said.out.join('; ')}\nworkers: ${JSON.stringify(said.workers)}\npage: ${JSON.stringify(said.status)}\nerrors: ${JSON.stringify(g.errors)}`);
@@ -2915,7 +2927,7 @@ for (const name of BROWSERS) for (const site of SITES) {
       // if the move went unrated: each search since the game began, as the depth it reached and its bestmove
       const searched = await p.evaluate((t0) => {
         let d = 0; const r = [];
-        for (const [t, m] of window.__sfOut) if (t > t0) { if (m.startsWith('bestmove')) { r.push(`${t - Math.round(t0)} ms: depth ${d}, ${m}`); d = 0; } else d = Math.max(d, +m.split(' ')[2]); }
+        for (const [t, m] of window.__sfOut) if (t > t0 && m !== 'go') { if (m.startsWith('bestmove')) { r.push(`${t - Math.round(t0)} ms: depth ${d}, ${m}`); d = 0; } else d = Math.max(d, +m.split(' ')[2]); }
         return r;
       }, t0);
       assert.match(info, /Blunder: 1\. Qc4[\s\S]*drops the queen/, `${info}\nengine: ${searched.join('; ')}`);
