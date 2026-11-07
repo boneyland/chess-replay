@@ -317,16 +317,13 @@ body:has(.stage-one) .twk-panel { bottom: calc(51px + var(--safe-b)); max-height
 .twk-keep { display: flex; flex-direction: column; gap: 10px; }
 .twk-group, .twk-lead { display: flex; flex-direction: column; gap: 10px; }
 .twk-flow > * + .twk-group { padding-top: 10px; }
-.twk-sect { font: 600 0.6875rem var(--mono); letter-spacing: 0.14em; text-transform: uppercase; color: var(--accent); }
+.twk-sect { font: 600 0.75rem var(--mono); letter-spacing: 0.14em; text-transform: uppercase; color: var(--accent); }
 /* Settings: one size in every layout and on every tab, so a tab reads the same on a phone as on a desktop and switching
    tabs doesn't move the panel; the tabs sit in a fixed grid, three a row when there are five or six */
 .twk-tabbed { width: min(380px, calc(100% - 32px)); height: min(720px, calc(100% - 72px)); }
 .twk-tabs { flex: none; display: grid; grid-template-columns: repeat(var(--twk-tab-cols), 1fr); gap: 2px; margin: 0 14px 12px; padding: 2px; border-radius: 4px; background: var(--raise); }
 .twk-tabs button { min-height: 28px; padding: 4px 6px; border: 0; border-radius: 3px; background: transparent; color: var(--dim); font: 600 0.8125rem var(--sans); cursor: pointer; }
 .twk-tabs button:hover { color: var(--ink); }
-/* Settings' section titles and controls a step over the shared 0.75rem/0.6875rem (the engine menu, zoomed, and the dialogs keep those) */
-.twk-tabbed .twk-sect { font-size: 0.75rem; }
-.twk-tabbed :is(.twk-lbl, .twk-val, .twk-field, .twk-seg button, .twk-btn) { font-size: 0.8125rem; }
 .twk-tabs button[aria-selected="true"] { color: var(--ink); background: color-mix(in srgb, var(--accent) 22%, transparent); box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--accent) 50%, transparent); }
 .twk-tabs button:focus-visible { outline: 2px solid var(--accent); outline-offset: 1px; }
 /* a phone on its side (or a short or wide window): Settings is wide and reaches down to the transport bar, with its title, tabs
@@ -371,8 +368,9 @@ body:has(.stage.stage-short) .twk-panel { bottom: calc(44px + var(--safe-b)); ma
 .twk-pair > * { flex: 1; min-width: 0; }
 .twk-row { display: flex; flex-direction: column; gap: 5px; }
 .twk-row-h { flex-direction: row; align-items: center; justify-content: space-between; gap: 10px; }
-.twk-lbl { display: flex; justify-content: space-between; align-items: baseline; gap: 8px; color: var(--ink); font-weight: 500; }
-.twk-val { color: var(--dim); font: 500 0.75rem var(--mono); font-variant-numeric: tabular-nums; }
+/* the panels' controls (Settings, the engine menu, the dialogs): a step over the panels' 0.75rem, never under the box's own size */
+.twk-lbl { display: flex; justify-content: space-between; align-items: baseline; gap: 8px; color: var(--ink); font-weight: 500; font-size: max(0.8125rem, 1em); }
+.twk-val { color: var(--dim); font: 500 0.8125rem var(--mono); font-variant-numeric: tabular-nums; }
 .twk-note { color: var(--dim); }
 .twk-err { color: var(--danger); }
 .twk-progress { height: 6px; border-radius: 2px; background: var(--raise); overflow: hidden; }
@@ -388,18 +386,18 @@ body:has(.stage.stage-short) .twk-panel { bottom: calc(44px + var(--safe-b)); ma
 .board-tile i { background-size: 400% auto; background-position: 0 0; }
 .board-tile:hover { border-color: var(--accent); }
 .board-tile[aria-pressed="true"] { border-color: var(--accent); box-shadow: 0 0 0 2px var(--accent); }
-.twk-field { width: 100%; height: 28px; padding: 0 8px; border: 1px solid var(--line); border-radius: 4px; background: var(--raise); color: var(--ink); font: inherit; }
+.twk-field { width: 100%; height: 28px; padding: 0 8px; border: 1px solid var(--line); border-radius: 4px; background: var(--raise); color: var(--ink); font: inherit; font-size: max(0.8125rem, 1em); }
 .twk-slider { width: 100%; margin: 4px 0; accent-color: var(--accent); }
 .twk-seg { position: relative; display: grid; grid-template-columns: repeat(var(--n), 1fr); padding: 2px; border-radius: 4px; background: var(--raise); }
 .twk-seg-thumb { grid-area: 1 / 1; border-radius: 3px; background: color-mix(in srgb, var(--accent) 22%, transparent); box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--accent) 50%, transparent); width: 100%; min-width: 0; margin-left: calc(var(--i) * 100%); pointer-events: none; transition: margin-left 0.15s; }
-.twk-seg button { position: relative; z-index: 1; grid-row: 1; min-height: 24px; padding: 4px 6px; border: 0; border-radius: 3px; background: transparent; font-weight: 500; cursor: pointer; }
+.twk-seg button { position: relative; z-index: 1; grid-row: 1; min-height: 24px; padding: 4px 6px; border: 0; border-radius: 3px; background: transparent; font-weight: 500; font-size: max(0.8125rem, 1em); cursor: pointer; }
 /* the knob is a flex item, not absolutely positioned: in Settings' two columns Firefox gave an absolute knob at the top of
    the second column no height after a re-render (dragging Seconds per move), so the switch lost its knob */
 .twk-toggle { position: relative; flex: none; display: flex; align-items: center; width: 34px; height: 20px; padding: 0 3px; border: 0; border-radius: 999px; background: var(--track); cursor: pointer; transition: background 0.15s; }
 .twk-toggle[data-on="1"] { background: var(--ok); }
 .twk-toggle i { flex: none; width: 14px; height: 14px; border-radius: 50%; background: #fff; transition: transform 0.15s; }
 .twk-toggle[data-on="1"] i { transform: translateX(14px); }
-.twk-btn { min-height: 30px; padding: 4px 12px; border: 0; border-radius: 4px; background: var(--accent); color: var(--accent-ink); font-weight: 600; cursor: pointer; text-align: center; }
+.twk-btn { min-height: 30px; padding: 4px 12px; border: 0; border-radius: 4px; background: var(--accent); color: var(--accent-ink); font-weight: 600; font-size: max(0.8125rem, 1em); cursor: pointer; text-align: center; }
 .twk-btn.secondary { background: var(--raise); color: var(--ink); border: 1px solid var(--line); }
 .twk-btn.danger { background: var(--danger); color: var(--panel); }
 .twk-btn:disabled { opacity: 0.6; cursor: progress; }
@@ -423,9 +421,9 @@ body:has(.stage.stage-short) .twk-panel { bottom: calc(44px + var(--safe-b)); ma
 .twk-btn-row { display: flex; align-items: center; gap: 4px; }
 .twk-tip { position: fixed; z-index: 100; max-width: min(280px, calc(100vw - 16px)); padding: 7px 10px; border: 1px solid var(--line); border-radius: 4px; background: var(--panel); color: var(--ink); box-shadow: 0 8px 24px var(--shadow), var(--halo); font: 0.75rem/1.4 var(--sans); pointer-events: none; }
 .twk-btn-row > .twk-btn { flex: 1; min-width: 0; }
-/* the engine settings in the Analysis panel (its ☰ menu): the Settings panel's controls, zoomed 1.2 to read at the frame's text size and sized by the Text size setting (rem) like
+/* the engine settings in the Analysis panel (its ☰ menu): the Settings panel's controls, sized by the Text size setting (rem) like
    the rest of the overlays, in as many columns as fit */
-.an-engine { zoom: 1.2; font: 0.75rem/1.4 var(--sans); color: var(--ink); letter-spacing: normal; text-transform: none; }
+.an-engine { font: 0.75rem/1.4 var(--sans); color: var(--ink); letter-spacing: normal; text-transform: none; }
 .an-engine .twk-flow { display: grid; grid-template-columns: repeat(auto-fill, minmax(230px, 1fr)); gap: 10px 24px; align-items: start; }
 .an-engine .twk-flow > :is(.twk-note, .twk-progress, .twk-pair, .twk-btn, .twk-btn-row) { grid-column: 1 / -1; }
 .q-strong { color: var(--ink); }

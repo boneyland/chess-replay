@@ -198,6 +198,7 @@ function EditBoard({ setup, onChange, onDone, onCancel, fenText, onFenText, fenM
   const [showPic, setShowPic] = React.useState(false);
   const unsure = image ? image.unsure || [] : [];
   const oneCol = !!L.tray; // the tray under the board is the portrait frame's layout
+  const phone = L.tier === 'phone' && !oneCol; // a phone held sideways: the tray's pieces no bigger than the board's, the buttons compact
   const pic = (style) => <img src={image.url} alt="The picture read" draggable={false} style={{ objectFit: 'contain', display: 'block', ...style }} />;
   // beside the board, the picture's box is reserved before it decodes (no jump) and is what gives way when the panel's
   // contents outgrow it (the unsure line, problems, a FEN message), so Cancel and Done stay in the panel
@@ -288,14 +289,14 @@ function EditBoard({ setup, onChange, onDone, onCancel, fenText, onFenText, fenM
           </div>
           {badCount && <div id="edit-count-msg" role="alert" style={{ marginTop: tx(-6), font: `500 ${tx(14)}px ${MONO}`, color: C.blunder }}>
             {`Type a whole number from ${badCount[1]} to ${E.MAX_COUNT}: ${badCount[2]} stays ${setup[badCount[0]]} until then.`}</div>}
-          {!L.tray && <Tray size={Math.min(84, Math.floor((P.w - 60) / 6))} held={held} trayHandlers={trayHandlers} style={{ borderTop: `1px solid ${C.line}`, paddingTop: tx(14) }} />}
+          {!L.tray && <Tray size={Math.min(84, Math.floor((P.w - 60) / 6), phone ? Math.floor(L.board.size / 8) : Infinity)} held={held} trayHandlers={trayHandlers} style={{ borderTop: `1px solid ${C.line}`, paddingTop: tx(14) }} />}
           <div role="status" style={{ display: 'flex', flexDirection: 'column', gap: 4, font: `500 ${tx(15)}px ${MONO}`, minHeight: tx(22) }}>
             {empty ? <span style={{ color: C.dim }}>{EDIT_HINT}</span> : problems.map((t) => <span key={t} style={{ color: C.blunder }}>{t}</span>)}
             {kbFocus && <span style={{ color: C.dim }}>{EDIT_KEYS}</span>}
           </div>
           <div style={{ display: 'flex', justifyContent: 'flex-end', gap: tx(12) }}>
-            <FrameButton color={C.dim} onClick={onCancel}>Cancel</FrameButton>
-            <FrameButton primary color={C.last} disabled={problems.length > 0} onClick={onDone}>{doneLabel}</FrameButton>
+            <FrameButton compact={phone} color={C.dim} onClick={onCancel}>Cancel</FrameButton>
+            <FrameButton compact={phone} primary color={C.last} disabled={problems.length > 0} onClick={onDone}>{doneLabel}</FrameButton>
           </div>
         </div>
       </Panel>
