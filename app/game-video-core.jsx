@@ -453,7 +453,7 @@ function AnalysisPanel({ box, a, depth, deep, paused, style, children }) {
   );
   return (
     <Panel box={shown && !box.flow ? { ...box, scroll: true } : box} a={a} style={style} tight head={head} progress={!shown && deep && deep.pending ? deep.progress || 0 : null}>
-      {shown ? <div className="an-engine" onClick={stopHere} onPointerDown={stopHere}><div className="twk-flow">{E.body}</div></div> : children}
+      {shown ? <div className="an-engine" onClick={stopHere} onPointerDown={stopHere}><div className="twk-flow">{E.body}</div></div> : <div className="an-lines" data-playing={paused ? undefined : '1'} style={{ display: 'contents' }}>{children}</div>}
     </Panel>
   );
 }
@@ -1300,8 +1300,8 @@ function GameVideo({ M, tw, d, probe, queen, nav, scheme, sf, orient }) {
   const cNow = lastPly(T, S);
   const line = useShownLine(M, cNow, playing), { vline, setVline, pv, setPv, playOwn } = line;
   useMoveSounds(M, T, S, tw, playing, vline);
-  const onPreview = (src, moves, j, at = cNow) => setPv(j != null && j < moves.length ? { c: cNow, at, src, moves, upto: j } : null);
-  const onReplyHover = (steps) => setPv(steps && steps.length && vline ? { ...vline, moves: [...vline.moves.slice(0, vline.upto + 1), ...steps], upto: vline.upto + steps.length } : null);
+  const onPreview = (src, moves, j, at = cNow) => setPv(!playing && j != null && j < moves.length ? { c: cNow, at, src, moves, upto: j } : null);
+  const onReplyHover = (steps) => setPv(!playing && steps && steps.length && vline ? { ...vline, moves: [...vline.moves.slice(0, vline.upto + 1), ...steps], upto: vline.upto + steps.length } : null);
   const onLine = (src, moves, j, at = cNow) => { setPv(null); if (j < moves.length) { tl.setPlaying(false); input.clear(); setVline({ c: cNow, at, src, moves, upto: j }); } };
   // ---- moves the viewer plays on the board ----
   const explore = () => { tl.setPlaying(false); if (!vline) setVline(line.newLine()); };
