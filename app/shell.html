@@ -153,9 +153,10 @@ body:has(.stage-one) .twk-panel { bottom: calc(51px + var(--safe-b)); max-height
 .pmenu .dock-icons .dock-queen { flex: 1; text-align: center; }
 .pmenu .dock-menu-status { display: block; max-width: 240px; padding: 2px 4px 4px; font: 500 0.6875rem/1.4 var(--mono); color: var(--dim); white-space: normal; }
 .pmenu-err .dock-menu-status { color: var(--danger); }
-/* a screen held sideways: the menu is 560 px wide at most, Explore and Play side by side, the last row under Play
-   (the folded menu shows in the wide layout too, as at 800×480, so this goes by orientation, not by stage class) */
-@media (orientation: landscape) {
+/* a phone held sideways (under 500 px high, the phone tier's breakpoint): the menu is 560 px wide at most, Explore and Play
+   side by side, the last row under Play; a taller landscape window keeps the one-column list (this goes by the viewport,
+   not by stage class, as the folded menu also shows in the wide layout, e.g. at 800×480) */
+@media (orientation: landscape) and (max-height: 499px) {
   .pmenu-open .dock-items { display: grid; grid-template-columns: 1fr 1fr; grid-template-areas: "st st" "load load" "ex pl" "ex mo" "ex tail"; align-items: start; width: min(560px, calc(100vw - 32px)); }
   .pmenu .dock-menu-status { grid-area: st; max-width: none; }
   .pmenu .dock-primary { grid-area: load; }
