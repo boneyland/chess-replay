@@ -1,6 +1,7 @@
 // Smoke tests in desktop Safari on macOS (Apple's own Safari, which Playwright can't drive: its WebKit is a build of its
 // own), over WebDriver by safaridriver, against a build of this checkout served by serve.cjs, at the desktop layout
-// (a 1440×900 page) with mouse input:
+// (a 1440×900 page) with mouse and keyboard input: Play/Pause, stepping, the keyboard on the playhead and Moves panel,
+// Settings (tabs, a setting kept over a reload, Flip board), Import game, a promotion, dialogs and Esc, full screen:
 //   node --test tests/live/safari.test.cjs
 // Needs macOS, WebdriverIO (`npm install --no-save webdriverio`) and `sudo safaridriver --enable` once. GitHub Actions
 // runs it on a macOS runner (the `safari` job), with whichever Safari that runner's image has. The page is served as
@@ -46,7 +47,7 @@ const ce = console.error; console.error = (...a) => { __errs.push(a.map(String).
   const wd = spawn('safaridriver', ['-p', String(WD_PORT)], { stdio: 'inherit' });
   undo.push(() => wd.kill());
   for (let i = 0; i < 50 && !(await wdUp()); i++) await wait(200);
-  const { remote } = await import('webdriverio');
+  const { remote, Key } = await import('webdriverio');
   let browser;
   for (let i = 1; !browser; i++) {
     try {
@@ -192,6 +193,150 @@ const ce = console.error; console.error = (...a) => { __errs.push(a.map(String).
     await shot('full-screen');
     if (!(await button('Exit full screen'))) await clickUntil('Menu', shown('Exit full screen'), 'no Exit full screen item');
     await clickUntil('Exit full screen', async () => !(await isFull()), 'Exit full screen did not leave it');
+  });
+
+  await t.test('Next, Previous and Back to start step through the moves', { timeout: 60000 }, async () => {
+    await fresh();
+    const label = () => js(() => document.querySelector('.plabel').textContent.trim());
+    const homeOff = () => js(() => [...document.querySelectorAll('button')].find((b) => b.getAttribute('aria-label') === 'Back to start (Home)').disabled);
+    assert.match(await label(), /Start/);
+    assert.equal(await homeOff(), true, 'Back to start is disabled at the start');
+    await clickUntil('Next move (→)', async () => /^1\.\s*\S/.test(await label()), 'Next did not play the first move');
+    assert.equal(await homeOff(), false, 'Back to start is enabled after a move');
+    await clickUntil('Next move (→)', async () => /^1…/.test(await label()), 'Next did not play the second move');
+    await clickUntil('Previous move (←)', async () => /^1\.\s*\S/.test(await label()), 'Previous did not go back a move');
+    await clickUntil('Back to start (Home)', async () => /Start/.test(await label()), 'Back to start did not go to the start');
+    assert.deepEqual(await errors(), []);
+  });
+
+  await t.test('the keyboard moves the playhead and steps the Moves panel', { timeout: 60000 }, async () => {
+    await fresh();
+    const head = () => js(() => { const s = document.querySelector('[role="slider"][aria-label="Playhead"]'); return { now: s.getAttribute('aria-valuenow'), max: s.getAttribute('aria-valuemax'), text: s.getAttribute('aria-valuetext') }; });
+    await js(() => document.querySelector('[role="slider"][aria-label="Playhead"]').focus());
+    await browser.keys(Key.End);
+    await until(() => { const s = document.querySelector('[role="slider"][aria-label="Playhead"]'); return s.getAttribute('aria-valuenow') === s.getAttribute('aria-valuemax'); }, 5000, 'End did not move the playhead to the end');
+    await browser.keys(Key.Home);
+    await browser.keys(Key.ArrowRight);
+    await until(() => document.querySelector('[role="slider"][aria-label="Playhead"]').getAttribute('aria-valuenow') === '1', 5000, `ArrowRight did not move the playhead to 1 s`);
+    assert.match((await head()).text, /^1 second of \d+ minutes? /);
+    assert.equal(await js(() => document.querySelectorAll('[data-ply][tabindex="0"]').length), 1, 'Tab stops in the Moves panel');
+    await js(() => document.querySelector('[data-ply="0"]').focus());
+    await browser.keys(Key.ArrowRight);
+    await until(() => document.activeElement && document.activeElement.dataset.ply === '1', 5000, 'ArrowRight did not move to the next move');
+    await until(() => /^1…/.test(document.querySelector('.plabel').textContent.trim()), 5000, 'the board did not follow the focused move');
+    assert.deepEqual(await errors(), []);
+  });
+
+  await t.test('a changed setting survives a reload', { timeout: 60000 }, async () => {
+    await fresh();
+    try {
+      await clickUntil('Settings', () => js(() => !!document.querySelector('[role="tablist"]')), 'Settings did not open');
+      assert.deepEqual(await js(() => [...document.querySelectorAll('[role="tab"]')].map((e) => e.innerText.trim())), ['Game', 'View', 'Online', 'Sound']);
+      // the arrow keys move between the tabs
+      await js(() => document.querySelector('[role="tab"]').focus());
+      await browser.keys(Key.ArrowRight);
+      await until(() => document.querySelector('[role="tab"][aria-selected="true"]').innerText.trim() === 'View', 5000, 'ArrowRight did not select the View tab');
+      await clickUntil('Dark', () => js(() => document.documentElement.getAttribute('data-scheme') === 'dark'), 'Theme Dark did not apply');
+      await fresh();
+      assert.equal(await js(() => document.documentElement.getAttribute('data-scheme')), 'dark', 'the theme was lost on reload');
+      await shot('dark');
+      assert.deepEqual(await errors(), []);
+    } finally {
+      await js(() => localStorage.clear());
+    }
+  });
+
+  await t.test('Menu › Keyboard shortcuts opens a dialog that Esc closes, focus back on Menu', { timeout: 60000 }, async () => {
+    await fresh();
+    const dlg = () => js(() => !!document.querySelector('[role="dialog"]') && /Play or pause/.test(document.querySelector('[role="dialog"]').innerText));
+    await clickUntil('Menu', async () => !!(await button('Keyboard shortcuts')), 'Menu did not open');
+    await clickUntil('Keyboard shortcuts', dlg, 'no Keyboard shortcuts dialog');
+    await shot('keyboard-shortcuts');
+    await browser.keys(Key.Escape);
+    await until(() => !document.querySelector('[role="dialog"]'), 5000, 'Esc did not close the dialog');
+    assert.equal(await js(() => document.activeElement.textContent), 'Menu', 'focus back on Menu');
+    assert.deepEqual(await errors(), []);
+  });
+
+  // types into the Import game box and opens it with the Open button
+  const importText = async (text) => {
+    const field = () => js(() => !!document.querySelector('textarea[aria-label="PGN, FEN or Lichess link"]'));
+    await clickUntil('Import game', field, 'no Import game dialog');
+    await until(() => document.activeElement === document.querySelector('textarea[aria-label="PGN, FEN or Lichess link"]'), 5000, 'the box is not focused on open');
+    await browser.keys(text);
+    await until((s) => document.querySelector('textarea[aria-label="PGN, FEN or Lichess link"]').value === s, 5000, 'the box did not take the typed text', text);
+    await clickButton('Open');
+  };
+
+  await t.test('Import game opens a typed PGN, and says what\'s wrong with a bad one', { timeout: 60000 }, async () => {
+    await fresh();
+    await importText('1. e4 e5 2. Qh9');
+    await until(() => !!document.querySelector('[role="dialog"] [role="alert"]') && /\S/.test(document.querySelector('[role="dialog"] [role="alert"]').innerText), 5000, 'a bad PGN said nothing');
+    await shot('import-bad');
+    await browser.keys(Key.Escape);
+    await until(() => !document.querySelector('[role="dialog"]'), 5000, 'Esc did not close the dialog');
+    await importText('[White "Alpha Tester"] [Black "Beta Tester"] 1. e4 e5 2. Nf3 Nc6 3. Bb5 a6 *');
+    await until(() => !document.querySelector('[role="dialog"]') && /Alpha Tester/.test(document.body.innerText) && /Beta Tester/.test(document.body.innerText), 10000, 'the PGN did not open');
+    await browser.keys(Key.End);
+    await until(() => /a6/.test(document.querySelector('.plabel').textContent), 5000, 'End did not go to the last move');
+    await shot('import-pgn');
+    assert.deepEqual(await errors(), []);
+  });
+
+  await t.test('an own promotion offers the four pieces', { timeout: 60000 }, async () => {
+    await fresh();
+    await importText('1. e4 d5 2. exd5 c6 3. dxc6 Qd6 4. cxb7 Qd5 *');
+    await until(() => !document.querySelector('[role="dialog"]'), 10000, 'the PGN did not open');
+    await browser.keys(Key.End);
+    await until(() => /Qd5/.test(document.querySelector('.plabel').textContent), 5000, 'End did not go to the last move');
+    const b = await boardBox(page);
+    const picker = () => js(() => [...document.querySelectorAll('[role="button"]')].map((e) => e.getAttribute('aria-label')).filter((l) => /^Promote to /.test(l || '')));
+    await drag(square(b, 'b7'), square(b, 'a8'));
+    await until(() => document.querySelectorAll('[aria-label^="Promote to "]').length > 0, 5000, 'no promotion picker');
+    assert.deepEqual(await picker(), ['Promote to queen', 'Promote to knight', 'Promote to rook', 'Promote to bishop']);
+    await shot('promotion');
+    await browser.keys(Key.Escape);
+    await until(() => !document.querySelector('[aria-label^="Promote to "]'), 5000, 'Esc did not close the picker');
+    assert.match(await js(() => document.querySelector('.plabel').textContent), /Qd5/, 'and plays nothing');
+    await drag(square(b, 'b7'), square(b, 'a8'));
+    await until(() => document.querySelectorAll('[aria-label^="Promote to "]').length > 0, 5000, 'no promotion picker the second time');
+    const knight = square(b, 'a7'); // the column runs down from a8: queen, knight, rook, bishop
+    await click(knight.x, knight.y);
+    await until(() => /bxa8=N/.test(document.querySelector('.plabel').textContent), 5000, 'the knight promotion was not played');
+    assert.deepEqual(await errors(), []);
+  });
+
+  await t.test('Flip board turns the board, and a drag still plays the move under the pointer', { timeout: 120000 }, async () => {
+    await fresh();
+    // the kings are the only pieces on e1/e8 at the start
+    const kings = () => js(() => {
+      const top = (src) => { const i = [...document.querySelectorAll('img')].find((e) => e.src === src); return i && i.getBoundingClientRect().top; };
+      return { w: top(window.PIECE_IMG.wK), b: top(window.PIECE_IMG.bK) };
+    });
+    const before = await kings();
+    assert.ok(before.w > before.b, 'the white king at the bottom by default');
+    try {
+      await clickUntil('Settings', () => js(() => !!document.querySelector('[role="tablist"]')), 'Settings did not open');
+      await clickUntil('View', () => js(() => !!document.getElementById('tw-flip')), 'no View tab');
+      const sw = await js(() => { const r = document.getElementById('tw-flip').getBoundingClientRect(); return { x: r.left + r.width / 2, y: r.top + r.height / 2 }; });
+      await click(sw.x, sw.y);
+      await until(() => document.getElementById('tw-flip').getAttribute('aria-checked') === 'true', 5000, 'Flip board did not switch on');
+      await clickUntil('Close settings', async () => !(await js(() => !!document.querySelector('[role="tablist"]'))), 'Settings did not close');
+      const after = await kings();
+      assert.ok(after.w < after.b, 'the white king above the black king when flipped');
+      const b = await boardBox(page);
+      await drag(square(b, 'e2', true), square(b, 'e4', true));
+      await until(() => /You 1\. e4/.test(document.querySelector('.plabel').textContent), 5000, 'the drag on the flipped board did not play e4');
+      await shot('flipped');
+      // the move started Stockfish: its verdict comes before the reload, which would cut off its loading files
+      await until((re) => new RegExp(re, 'i').test(document.body.innerText), 120000, 'no verdict', VERDICT.source);
+      await fresh();
+      const again = await kings();
+      assert.ok(again.w < again.b, 'still flipped after a reload');
+      assert.deepEqual(await errors(), []);
+    } finally {
+      await js(() => localStorage.clear());
+    }
   });
 
   // the browser's codecs, which the MP4 export uses
