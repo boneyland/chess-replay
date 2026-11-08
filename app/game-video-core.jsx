@@ -233,7 +233,8 @@ function SideScroll({ style, children }) {
 // extra: a node after right that never scrolls with it (Analysis: Go deeper beside the search's depth)
 // head: the title row's own contents, in place of title, right and extra (the Analysis panel's)
 // part: the panel's name, as the class part-<part> (docs/parts.md)
-// progress: 0–1, drawn along the top border (the Analysis panel's while Stockfish searches); null draws none
+// progress: 0–1, drawn along the top border (the Analysis panel's while Stockfish searches for it, else while the game
+// analysis runs); null draws none
 function Panel({ box, part, title, info, right, extra, head, a, style, progress, tight, children }) {
   const { x, y, w, h } = box;
   // the entrance slide only while it fades in (a video's): a settled panel has no transform. A flowing panel (a paused
@@ -417,33 +418,24 @@ function searchDepth(s) {
 const EngineMenuContext = React.createContext(null);
 const headCtl = () => ({ ...NO_SELECT, flex: 'none', height: '1.8em', margin: '-0.4em 0', borderRadius: 3, cursor: 'pointer', border: `1.5px solid ${C.ctlLine}`, background: 'transparent', color: C.ink, letterSpacing: 0 }); // C changes with the colour scheme; ctlLine stands out more than the panels' line
 const stopHere = (e) => e.stopPropagation();
-// The Analysis panel's title row (on the right: Go deeper, the search's depth, the engine, the engine menu) and, while the menu is
-// open, the engine settings in place of the panel's contents. Only a paused replay offers them; playing (an export
-// too) shows the engine's name.
+// The Analysis panel's title row (on the right: the Stockfish switch, the engine, the game analysis's computer button,
+// the engine menu) and, while the menu is open, the engine settings in place of the panel's contents. Only a paused
+// replay offers them; playing (an export too) shows the engine's name. depth and deep (Go deeper, useMoveEval's) go to
+// the eval's row through AnalysisStatContext, where AnalysisStat draws them
+const AnalysisStatContext = React.createContext(null);
 function AnalysisPanel({ box, a, depth, deep, paused, style, children }) {
   const E = React.useContext(EngineMenuContext);
   const [open, setOpen] = React.useState(false);
-  const [whyOpen, setWhyOpen] = React.useState(false); // Go deeper's failure in full (a touchscreen shows no tooltip)
-  React.useEffect(() => setWhyOpen(false), [deep && deep.failed]); // a new failure starts short again
   const live = !!E && paused, shown = open && live, pick = live && E.pick;
   const name = E ? E.name : 'Stockfish';
-  // a narrow panel (a laptop's sidebar, a phone) shortens the depth to D22 (the tablebase to TB, the cloud to Cloud
-  // D40), so the title and the controls share one line
-  const roomy = box.w >= 440 * TEXT;
-  const depthText = !depth || roomy ? depth : depth.startsWith('depth ') ? 'D' + depth.slice(6) : depth.startsWith('cloud depth ') ? 'Cloud D' + depth.slice(12) : 'TB';
-  const depthTip = depth && depth.startsWith('cloud ') ? 'Lichess cloud, depth ' + depth.slice(12) : depth;
   const head = (
     // the controls go under the title rather than over it where even then they don't fit (a small phone, large text)
     <span style={{ flex: 1, minWidth: 0, display: 'flex', flexWrap: 'wrap', alignItems: 'center', justifyContent: 'space-between', columnGap: tx(16), rowGap: tx(8) }}>
       <span style={{ flex: 'none' }}>Analysis</span>
-      {/* the engine stays put, next to the menu; Go deeper and the depth come and go to its left. Spaced as the
-          desktop's heading whatever the layout's title gap (the phone's wide one left the depth no room) */}
-      <span style={{ flex: '1 1 auto', minWidth: 0, display: 'flex', alignItems: 'center', justifyContent: 'flex-end', gap: tx(16) }}>
-      {!shown && paused && <DeeperButton ev={deep} />}
-      {/* Go deeper's failure: short, its reason in the tooltip, and all of it at a tap */}
-      {!shown && deep && deep.failed && <span role="status" title={deep.failed} onClick={(e) => { e.stopPropagation(); setWhyOpen((o) => !o); }} onPointerDown={stopHere}
-        style={{ flex: whyOpen ? '1 1 100%' : '0 1 auto', minWidth: 0, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: whyOpen ? 'normal' : 'nowrap', textTransform: 'none', color: C.blunder, cursor: 'pointer' }}>{whyOpen ? deep.failed : roomy ? deep.failed.split(':')[0] : 'Engine failed'}</span>}
-      {!shown && depthText && <span title={depthTip} style={{ flex: 'none', whiteSpace: 'nowrap', letterSpacing: '0.04em' }}>{depthText}</span>}
+      {/* spaced as the desktop's heading whatever the layout's title gap (the phone's wide one left no room) */}
+      <span style={{ flex: '1 1 auto', minWidth: 0, display: 'flex', alignItems: 'center', justifyContent: 'flex-end', gap: tx(12) }}>
+      {live && E.setOn && <button type="button" className="twk-toggle an-switch" data-on={E.on ? '1' : '0'} role="switch" aria-checked={!!E.on} aria-label="Stockfish" title={E.run && E.on ? 'Stockfish on, looking only at the game while it is analysed: turn it off' : E.on ? 'Stockfish on: turn it off' : 'Stockfish off: turn it on'}
+        onClick={(e) => { e.stopPropagation(); E.setOn(!E.on); }} onPointerDown={stopHere}><i /></button>}
       {/* smaller on the phone, where the row is tight */}
       {pick
         ? <select aria-label="Engine" value={pick.value} onChange={(e) => { const go = pick.onChange(e.target.value); if (go) setOpen(true); }} onClick={stopHere} onPointerDown={stopHere}
@@ -451,6 +443,15 @@ function AnalysisPanel({ box, a, depth, deep, paused, style, children }) {
             {pick.options.map((o) => <option key={o.value} value={o.value}>{o.label}</option>)}
           </select>
         : <span style={{ flex: '0 1 auto', minWidth: 0, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', textTransform: 'none', letterSpacing: '0.04em', color: C.ink }}>{name}</span>}
+      {/* the game analysis: its dialog, with its own settings; while a run goes on, a turning rainbow ring in place
+          of the computer, so a run going on isn't forgotten */}
+      {live && E.analyse && (
+        <button type="button" aria-label={E.run ? `Analyse the game: analysing, ${E.run.done} of ${E.run.total} positions` : 'Analyse the game'} title={E.run ? `Analysing the game: ${E.run.done} of ${E.run.total} positions` : 'Analyse the game'} onClick={(e) => { e.stopPropagation(); E.analyse(); }} onPointerDown={stopHere}
+          style={{ ...headCtl(), width: '1.8em', padding: 0, display: 'grid', placeItems: 'center', color: C.dim, borderColor: E.run ? 'transparent' : C.ctlLine }}>
+          {E.run ? <span className="an-spin" aria-hidden="true" />
+            : <svg viewBox="0 0 16 16" width="70%" height="70%" aria-hidden="true" fill="none" stroke="currentColor" strokeWidth="1.6" strokeLinejoin="round" strokeLinecap="round"><rect x="1.5" y="2.5" width="13" height="8.5" rx="1" /><path d="M5.5 14h5M8 11v3" /></svg>}
+        </button>
+      )}
       {live && (
         <button type="button" aria-label="Engine options" aria-expanded={shown} title="Engine settings" onClick={(e) => { e.stopPropagation(); setOpen((o) => !o); }} onPointerDown={stopHere}
           style={{ ...headCtl(), width: '1.8em', padding: 0, display: 'grid', placeItems: 'center', color: shown ? C.best : C.dim, borderColor: shown ? C.best : C.ctlLine }}>
@@ -461,9 +462,44 @@ function AnalysisPanel({ box, a, depth, deep, paused, style, children }) {
     </span>
   );
   return (
-    <Panel box={shown && !box.flow ? { ...box, scroll: true } : box} part="analysis" a={a} style={style} tight head={head} progress={!shown && deep && deep.pending ? deep.progress || 0 : null}>
-      {shown ? <div className="an-engine part-engine-menu" onClick={stopHere} onPointerDown={stopHere}><div className="twk-flow">{E.body}</div></div> : <div className="an-lines" data-playing={paused ? undefined : '1'} style={{ display: 'contents' }}>{children}</div>}
+    <Panel box={shown && !box.flow ? { ...box, scroll: true } : box} part="analysis" a={a} style={style} tight head={head} progress={!shown && deep && deep.pending ? deep.progress || 0 : E && E.run ? E.run.k : null}>
+      {shown ? <div className="an-engine part-engine-menu" onClick={stopHere} onPointerDown={stopHere}><div className="twk-flow">{E.body}</div></div>
+        : <AnalysisStatContext.Provider value={{ depth, deep, paused }}>
+          {E && E.runErr && <div role="alert" style={{ marginBottom: tx(10), font: `500 ${tx(15)}px ${MONO}`, color: C.blunder }}>{E.runErr}</div>}
+          <div className="an-lines" data-playing={paused ? undefined : '1'} style={{ display: 'contents' }}>{children}</div>
+        </AnalysisStatContext.Provider>}
     </Panel>
+  );
+}
+// The eval's row: Go deeper's + and the depth the search behind the eval reached ("depth 20", "cloud depth 40",
+// "Tablebase"; in full even on a phone, where the eval's row has room), to the left of the eval
+function AnalysisStat() {
+  const X = React.useContext(AnalysisStatContext);
+  const [whyOpen, setWhyOpen] = React.useState(false); // Go deeper's failure in full (a touchscreen shows no tooltip)
+  const failed = X && X.deep && X.deep.failed;
+  React.useEffect(() => setWhyOpen(false), [failed]); // a new failure starts short again
+  if (!X) return null;
+  // a narrow panel shortens Go deeper's failure to its first words ("Engine failed" on a phone)
+  const { depth, deep, paused } = X, roomy = !L.analysis || L.analysis.w >= 440 * TEXT;
+  const depthTip = depth && depth.startsWith('cloud ') ? 'Lichess cloud, depth ' + depth.slice(12) : depth;
+  if (!depth && !(paused && deep && (deep.deeper || failed))) return null;
+  return (
+    <span style={{ ...NO_SELECT, flex: '0 1 auto', minWidth: 0, display: 'flex', alignItems: 'center', gap: tx(12), font: `600 ${tx(15)}px ${MONO}`, letterSpacing: '0.04em', color: C.dim, flexWrap: whyOpen ? 'wrap' : 'nowrap' }}>
+      {paused && <DeeperButton ev={deep} />}
+      {/* Go deeper's failure: short, its reason in the tooltip, and all of it at a tap */}
+      {failed && <span role="status" title={failed} onClick={(e) => { e.stopPropagation(); setWhyOpen((o) => !o); }} onPointerDown={stopHere}
+        style={{ flex: whyOpen ? '1 1 100%' : '0 1 auto', minWidth: 0, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: whyOpen ? 'normal' : 'nowrap', color: C.blunder, cursor: 'pointer' }}>{whyOpen ? failed : roomy ? failed.split(':')[0] : 'Engine failed'}</span>}
+      {depth && <span title={depthTip} style={{ flex: 'none', whiteSpace: 'nowrap' }}>{depth}</span>}
+    </span>
+  );
+}
+// the eval at the right of a move's row, with AnalysisStat to its left
+function EvalWithStat({ children }) {
+  return (
+    <span style={{ marginLeft: 'auto', minWidth: 0, display: 'flex', alignItems: 'center', gap: tx(14) }}>
+      <AnalysisStat />
+      <span style={{ flex: 'none', font: `700 ${headline()}px ${MONO}`, color: C.ink }}>{children}</span>
+    </span>
   );
 }
 const lineAccent = (src) => (src === 'queen' ? C.queen : src === 'you' ? C.last : C.best);
@@ -891,8 +927,8 @@ function Analysis({ M, T, S, a, vline, onLine, onPreview, onReplyHover, paused, 
   const depth = searchDepth(deeper || (c >= 0 ? M.plies[c].search : null));
   if (own && vline && vline.src === 'you' && vline.upto >= 0) {
     return (
-      <AnalysisPanel box={box} a={a} paused={paused} depth={sf && (sf.status === 'unavailable' || sf.status === 'stopped') ? null : searchDepth(own.after)} deep={own}>
-        <OwnMoveAnalysis M={M} vline={vline} own={own} status={sf ? sf.status : 'idle'} why={sf ? sf.why : ''} onReply={onReply} onHover={onReplyHover} />
+      <AnalysisPanel box={box} a={a} paused={paused} depth={sf && !sf.off && (sf.status === 'unavailable' || sf.status === 'stopped') ? null : searchDepth(own.after)} deep={own}>
+        <OwnMoveAnalysis M={M} vline={vline} own={own} status={!sf ? 'idle' : sf.busy ? 'busy' : sf.off ? 'off' : sf.status} why={sf ? sf.why : ''} onReply={onReply} onHover={onReplyHover} />
         {tbEl}
         <span style={{ display: 'block', marginTop: tx(8), font: `500 ${tx(15)}px ${MONO}`, color: C.dim }}>
           <span style={{ color: lineAccent('you') }}>Your moves: {vline.moves.slice(0, vline.upto + 1).map((m, j) => (j === 0 || (M.ply0 + vline.at + j) % 2 === 0 ? lineLabel(M, vline.at, j, m.san) : m.san)).join(' ')}</span>
@@ -938,7 +974,7 @@ function Analysis({ M, T, S, a, vline, onLine, onPreview, onReplyHover, paused, 
       <div style={{ opacity: k, transform: `translateY(${(1 - k) * 8}px)` }}>
         <div style={{ display: 'flex', flexWrap: 'wrap', alignItems: 'flex-end', columnGap: tx(28) }}>
           <span style={{ font: `700 ${big}px ${MONO}`, color: col }}>{label(M, c)}</span>
-          {M.hasEval && <span style={{ marginLeft: 'auto', font: `700 ${big}px ${MONO}`, color: C.ink }}>{deeper ? fmtSf(deeper.cp) : (P.mate != null || P.won) && k >= 1 ? fmtEval(P) : fmtEval({ cp })}</span>}
+          {M.hasEval && <EvalWithStat>{deeper ? fmtSf(deeper.cp) : (P.mate != null || P.won) && k >= 1 ? fmtEval(P) : fmtEval({ cp })}</EvalWithStat>}
         </div>
         {/* the verdict spans the panel under the move and the eval; spaced parts rather than " · " separators, so a
             line too long for a narrow panel breaks between them */}
@@ -1247,7 +1283,7 @@ function useOwnLineEval(M, line, sf, tw) {
   const on = !!(sf && vline && vline.src === 'you' && vline.upto >= 0);
   const before = on ? M.plies.slice(0, vline.at).map((p) => p.uci).concat(vline.moves.slice(0, vline.upto).map((m) => m.uci)) : null;
   const after = on ? before.concat([vline.moves[vline.upto].uci]) : null;
-  const ev = useMoveEval(sf ? sf.engine : null, before, after, sf ? sf.own : window.AnalysisCore.engineSettings().own, M.start.fen, null, cloudSetting(tw));
+  const ev = useMoveEval(sf ? sf.engine : null, before, after, sf ? sf.own : window.AnalysisCore.engineSettings().own, M.start.fen, null, cloudSetting(tw), !sf || sf.off);
   if (!on) return null;
   const posBefore = vline.upto > 0 ? vline.moves[vline.upto - 1].pos : vline.base || gamePos(vline.at - 1);
   const bm = ev.before && ev.before.best ? window.ChessCore.applyUci(posBefore, ev.before.best) : null;
@@ -1283,7 +1319,7 @@ function useGoDeeper(M, c, on, sf, tw) {
   // name: the engine running keys Go deeper's results, so lite and full ones never mix
   const base = { name: settings.name, depth: p && p.search ? p.search.depth : settings.depth, time_limit: settings.time_limit };
   const moves = on ? M.plies.slice(0, c + 1).map((q) => q.uci) : null;
-  const ev = useMoveEval(sf ? sf.engine : null, moves, moves, base, M.start.fen, on ? { cp: cpOf(M, c), depth: base.depth, pv: [], stored: true, src: M.engine } : null, cloudSetting(tw));
+  const ev = useMoveEval(sf ? sf.engine : null, moves, moves, base, M.start.fen, on ? { cp: cpOf(M, c), depth: base.depth, pv: [], stored: true, src: M.engine } : null, cloudSetting(tw), !sf || sf.off);
   const r = on && ev.after && !ev.after.stored && !ev.after.partial && ev.after.cp != null ? ev.after : null;
   React.useEffect(() => {
     if (!r) return;

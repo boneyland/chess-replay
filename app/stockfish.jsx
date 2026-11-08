@@ -52,6 +52,8 @@ const sfReason = (e) => (!e ? '' : e.message ? String(e.message) : e.type === 'e
 // What the Analysis panel says while the engine is down (status 'unavailable' or 'stopped'), with why, so a failure on
 // a device we can't test on can be read off the screen. then: what to do next, after a stop
 function sfDownText(status, why, then = 'play a move to restart it') {
+  if (status === 'off') return 'Stockfish is off: turn it on with the switch by the engine';
+  if (status === 'busy') return 'Stockfish is analysing the game: it looks at your moves again once that ends';
   const r = why ? ` (${why})` : '';
   return status === 'unavailable' ? 'Stockfish can’t run here' + r : `Stockfish stopped${r} · ${then}`;
 }
@@ -60,16 +62,25 @@ function sfDownText(status, why, then = 'play a move to restart it') {
 // the next use starts the other. onBroken: the full engine's kept copy turned out missing (it is dropped).
 // threads: Threads (engineSettings), changed between searches without a restart; a single-thread engine ignores it
 // onHashFail(mb, to): the engine couldn't get memory for an mb MB hash table and runs with to MB (SFEngine)
+// hashMB: the live searches' hash table; holdHash(mb) gives the engine the game analysis's size while a run goes on (its
+// searches and any live ones between them share the table, so it isn't resized and cleared on every switch), and
+// holdHash(null) gives hashMB back
 function useEngine(hashMB, threads, kind = 'lite', onBroken, onHashFail) {
   const ref = React.useRef(null), hash = React.useRef(hashMB), want = React.useRef(kind), has = React.useRef(kind), broken = React.useRef(onBroken), hashFail = React.useRef(onHashFail);
   const nThreads = React.useRef(threads), threaded = React.useRef(false);
   hash.current = hashMB;
   nThreads.current = threads;
+  const held = React.useRef(null), hashNow = () => (held.current != null ? held.current : hash.current);
   // set while rendering, not in an effect: the panels' effects run before this one and must not get the engine being replaced
   want.current = kind;
   broken.current = onBroken;
   hashFail.current = onHashFail;
-  React.useEffect(() => { if (ref.current) ref.current.then((eng) => eng.setHash(hashMB), () => {}); }, [hashMB]);
+  React.useEffect(() => { if (ref.current && held.current == null) ref.current.then((eng) => eng.setHash(hashMB), () => {}); }, [hashMB]);
+  const holdHash = React.useCallback((mb) => {
+    if (held.current === mb) return;
+    held.current = mb;
+    if (ref.current) ref.current.then((eng) => eng.setHash(hashNow()), () => {});
+  }, []);
   React.useEffect(() => { if (ref.current) ref.current.then((eng) => eng.setThreads(threads), () => {}); }, [threads]);
   const [status, setStatus] = React.useState('idle');
   const [why, setWhy] = React.useState(''); // why the engine stopped or can't run (sfDownText shows it)
@@ -111,8 +122,8 @@ function useEngine(hashMB, threads, kind = 'lite', onBroken, onHashFail) {
           if (withThreads) sfThreadsFailed('The threaded engine stopped');
           if (ref.current === mine) { ref.current = null; setStatus('stopped'); setWhy(sfReason(err)); }
         };
-        const eng = window.SFEngine.create(make, { hashMB: hash.current, threaded: withThreads, threads: withThreads ? nThreads.current : 1, probeMs: withThreads ? SF_PROBE_MS(nThreads.current) : 0,
-          ...(withThreads && kk === 'lite' ? { readyTimeoutMs: SF_LITE_LOAD_MS } : kk === 'asm' ? { readyTimeoutMs: SF_ASM_LOAD_MS } : {}), onFail, onHashFail: (mb, to) => { hash.current = to; if (hashFail.current) hashFail.current(mb, to); } });
+        const eng = window.SFEngine.create(make, { hashMB: hashNow(), threaded: withThreads, threads: withThreads ? nThreads.current : 1, probeMs: withThreads ? SF_PROBE_MS(nThreads.current) : 0,
+          ...(withThreads && kk === 'lite' ? { readyTimeoutMs: SF_LITE_LOAD_MS } : kk === 'asm' ? { readyTimeoutMs: SF_ASM_LOAD_MS } : {}), onFail, onHashFail: (mb, to) => { if (held.current != null) held.current = to; else hash.current = to; if (hashFail.current) hashFail.current(mb, to); } });
         await eng.ready();
         up = true;
         return eng;
@@ -139,7 +150,7 @@ function useEngine(hashMB, threads, kind = 'lite', onBroken, onHashFail) {
     const id = setTimeout(() => get().catch(() => {}), SF_ASM_EARLY_MS);
     return () => clearTimeout(id);
   }, [kind]);
-  return { get, status, why };
+  return { get, status, why, holdHash };
 }
 
 // The full engine's download (the Analysis panel's engine drop-down and menu).
@@ -246,6 +257,7 @@ function useGameAnalysis(M, files, getFiles, commit, engine, settings, tbOn) {
     // { sec, at }: the latest estimate and when it was made; a timer counts it down in between
     me.eta = { sec: secondsFrom(earlier.length, prior), at: Date.now() };
     setSt({ state: 'running', done: d0, total: N, etaSec: Math.round(me.eta.sec), err: '' });
+    if (engine.holdHash) engine.holdHash(S.hash_mb);
     try {
       const eng = await engine.get();
       // an engine that fell back to one thread searches, records and resumes as one
@@ -284,9 +296,11 @@ function useGameAnalysis(M, files, getFiles, commit, engine, settings, tbOn) {
     } catch (e) {
       if (run.current !== me) return;
       run.current = null;
-      setSt({ ...idle, err: engine.status === 'unavailable' ? '' : 'Analysis stopped: ' + ((e && e.message) || e) });
+      setSt({ ...idle, err: engine.status === 'unavailable' ? '' : `Analysis stopped: ${(e && e.message) || e}. Press the computer button to start analysis again.` });
     }
   };
+  // the run's hash table goes back to the live searches' once it ends, however it ends
+  React.useEffect(() => { if (st.state !== 'running' && engine.holdHash) engine.holdHash(null); }, [st.state]);
   // between positions the estimate counts down by the second
   React.useEffect(() => {
     if (st.state !== 'running') return;
@@ -344,7 +358,7 @@ function EngineEmptyState({ M, sf, paused, compact }) {
       <div style={{ display: 'flex', flexDirection: 'column', gap: tx(12) }}>
         {text}
         <span style={{ font: `500 ${tx(17)}px ${MONO}`, color: C.dim }}>Stockfish can't run here.</span>
-        <div><FrameButton onClick={sf.start} label="Try starting Stockfish again">Try again</FrameButton></div>
+        <div><FrameButton onClick={() => sf.engine.get().catch(() => {})} label="Try starting Stockfish again">Try again</FrameButton></div>
       </div>
     );
   }
@@ -352,13 +366,12 @@ function EngineEmptyState({ M, sf, paused, compact }) {
     <div style={{ display: 'flex', flexDirection: 'column', gap: tx(14), alignItems: 'flex-start' }}>
       {text}
       <div style={{ display: 'flex', alignItems: 'center', gap: tx(14), flexWrap: 'wrap' }}>
-        <FrameButton primary onClick={sf.start}>{(run.resumeAt ? `${narrow ? 'Resume' : 'Resume analysis'} from move ${Math.floor((M.ply0 + run.resumeAt) / 2) + 1}` : 'Analyse with Stockfish') + (narrow ? '' : ` · ${est}`)}</FrameButton>
+        <FrameButton primary onClick={sf.ask}>{(run.resumeAt ? `${narrow ? 'Resume' : 'Resume analysis'} from move ${Math.floor((M.ply0 + run.resumeAt) / 2) + 1}` : 'Analyse with Stockfish') + (narrow ? '' : ` · ${est}`)}</FrameButton>
         {narrow && <span style={{ ...NO_SELECT, font: `500 ${tx(15)}px ${MONO}`, color: C.dim, whiteSpace: 'nowrap' }}>{est}</span>}
       </div>
       {run.resumeAt > 0 && <span style={{ ...NO_SELECT, font: `500 ${tx(15)}px ${MONO}`, color: C.dim }}>{run.resumeAt} of {run.plies} moves analysed so far.</span>}
       {!compact && <span style={{ ...NO_SELECT, font: `500 ${tx(15)}px ${MONO}`, color: C.dim }}>{engineLabel(sf.game.name)} runs in your browser.</span>}
       {!SF_SIMD && <span style={{ ...NO_SELECT, font: `500 ${tx(15)}px ${MONO}`, color: C.blunder }}>{SF_ASM_NOTE}</span>}
-      {run.err && <span style={{ font: `500 ${tx(15)}px ${MONO}`, color: C.blunder }}>{run.err}</span>}
     </div>
   );
 }
@@ -384,7 +397,11 @@ const CLOUD_DEBOUNCE_MS = 300; // after the last position change (stepping throu
 // shows, and a finished local search replaces the cloud's only when deeper. prefer: a position the cloud has as deep
 // as the local depth limit (AnalysisCore.cloudEnough: with No limit, 35, or 22 for asm.js) isn't searched locally. A miss falls back silently
 const cloudSetting = (tw) => ({ on: !!(tw && tw.cloudEval), prefer: !!(tw && tw.cloudPrefer) });
-function useMoveEval(engine, before, after, own, fen, stored, cloud) {
+// off: no live Stockfish searches (the Analysis panel's switch off, or a game analysis running): nothing is searched
+// locally and Go deeper isn't offered, but the cloud (its setting on) is still asked and shown, and finished searches
+// still show; a stored result shows with the deepest Go deeper level whose local searches finished (and the cloud's
+// answers there), as the annotated PGN writes it
+function useMoveEval(engine, before, after, own, fen, stored, cloud, off) {
   const A = window.AnalysisCore;
   // a search of several lines (Analysis › ☰ › Lines) is cached apart from one of one line
   const keyOf = (s, moves) => (own.name ? own.name + '|' : '') + (sfStartFen(fen) ? fen + '|' : '') + `${s.depth}/${s.movetimeMs}${s.lines > 1 ? '/' + s.lines : ''}:` + moves.join(' ');
@@ -392,19 +409,27 @@ function useMoveEval(engine, before, after, own, fen, stored, cloud) {
   const baseKey = after ? keyOf(toSearch(own), after) + (stored ? '|' + stored.src : '') : '';
   const [, bump] = React.useState(0);
   const [fail, setFail] = React.useState(null); // { key: baseKey, msg }
-  const level = SF_DEEPER.get(baseKey) || 0;
+  // off: the deepest level pressed whose searches both finished (the stored result at 0)
+  const linesOf = (which) => (which === 'after' || before.join(' ') === after.join(' ') ? own.lines || 1 : 1);
+  const finished = (lv) => ['after', 'before'].every((w) => SF_EVAL_CACHE.has(keyOf(toSearch(A.deeperSearch(own, lv), linesOf(w)), w === 'after' ? after : before)));
+  const pressed = SF_DEEPER.get(baseKey) || 0;
+  let level = pressed;
+  if (off && after) while (level > 0 && !finished(level)) level--;
   const search = toSearch(A.deeperSearch(own, level));
   const sfKey = (moves) => keyOf(search, moves);
-  const cloudOn = !!(cloud && cloud.on && CLOUD && after && (!stored || level > 0)), prefer = cloudOn && !!cloud.prefer;
-  const key = after ? sfKey(after) + (cloudOn ? (prefer ? '|cloud+' : '|cloud') : '') : '';
+  // a stored result asks the cloud once Go deeper is pressed, whatever the local searches got to (off keeps it asked)
+  const cloudOn = !!(cloud && cloud.on && CLOUD && after && (!stored || pressed > 0)), prefer = cloudOn && !!cloud.prefer;
+  const key = after ? sfKey(after) + (cloudOn ? (prefer ? '|cloud+' : '|cloud') : '') + (off ? '|off' : '') : '';
   const empty = { key: '', before: null, after: null, cloud: {}, pending: false, progress: 0 };
   const [st, setSt] = React.useState(empty);
-  React.useEffect(() => {
+  // a layout effect: a new key's state (the cached results and cloud answers it starts with) replaces the old one
+  // before the page paints, so no frame shows the bare analysis in between (switching Stockfish off flashed it)
+  React.useLayoutEffect(() => {
     if (!after) { setSt(empty); return; }
     let live = true;
     // only after's lines are shown, so before (what the move is rated against) searches one line, as deep as it can;
     // the start position is both, and searches after's lines
-    const lines = (which) => (which === 'after' || before.join(' ') === after.join(' ') ? own.lines || 1 : 1);
+    const lines = linesOf;
     const moves = { after, before };
     // the cloud's answers, as promises (null: a miss); a cached one shows at once
     const ctl = new AbortController(), timers = [], asked = {};
@@ -423,7 +448,9 @@ function useMoveEval(engine, before, after, own, fen, stored, cloud) {
     // the result a press of Go deeper started from, shown until the deeper search passes its depth
     const prev = (which) => (level > 0 ? at(level - 1, which) : null);
     const shown = (which) => cached(which) || (prev(which) && { ...prev(which), partial: true, held: true });
-    setSt({ key, before: shown('before'), after: shown('after'), cloud: { before: cloudHit.before || null, after: cloudHit.after || null }, pending: !cached('after') || !cached('before'), progress: 0 });
+    setSt({ key, before: shown('before'), after: shown('after'), cloud: { before: cloudHit.before || null, after: cloudHit.after || null }, pending: !off && (!cached('after') || !cached('before')), progress: 0 });
+    // no local search: the cloud's answers (asked above) are all that can come
+    if (off) return () => { live = false; timers.forEach(clearTimeout); ctl.abort(); };
     // the searches to run (the start position's two are one)
     const todo = [...new Set(['after', 'before'].filter((w) => !cached(w)).map((w) => keyAt(level, w)))].length;
     let ran = 0;
@@ -470,7 +497,7 @@ function useMoveEval(engine, before, after, own, fen, stored, cloud) {
   // nothing to go deeper on where both positions show a cloud answer at least as deep as the next search would reach
   // (AnalysisCore.cloudEnough)
   const cloudDeep = (r) => fromCloud(r) && r.depth >= A.cloudEnough(next.depth, own.name);
-  const deeper = done && !(cloudDeep(out.after) && cloudDeep(out.before)) && A.canGoDeeper(own, level) ? () => { SF_DEEPER.set(baseKey, level + 1); setFail(null); bump((n) => n + 1); } : null;
+  const deeper = !off && done && !(cloudDeep(out.after) && cloudDeep(out.before)) && A.canGoDeeper(own, level) ? () => { SF_DEEPER.set(baseKey, level + 1); setFail(null); bump((n) => n + 1); } : null;
   return { ...out, deeper, deeperTo: deeper ? next : null, failed: fail && fail.key === baseKey ? fail.msg : null };
 }
 
@@ -533,7 +560,8 @@ function OwnMoveAnalysis({ M, vline, own, status, why, onReply, onHover }) {
   const bad = rated && ['inaccuracy', 'mistake', 'blunder'].includes(rated.classification);
   const col = bad ? clsColor(rated.classification) : lineAccent('you');
   const who = step.byEngine ? 'STOCKFISH’S REPLY' : 'YOUR MOVE';
-  const verdict = !rated ? (status === 'unavailable' || status === 'stopped' ? sfDownText(status, why) : 'Stockfish is thinking…')
+  const down = status === 'unavailable' || status === 'stopped' || status === 'off' || status === 'busy';
+  const verdict = !rated ? (down ? sfDownText(status, why) : 'Stockfish is thinking…')
     : step.uci === before.best ? 'Stockfish’s choice'
     : rated.evalLoss > 0 ? `−${Math.round(rated.evalLoss)} cp vs ${own.bestSan || before.best}` : `as good as ${own.bestSan || before.best}`;
   const replies = engineSteps(step.pos, after && after.pv);
@@ -542,7 +570,7 @@ function OwnMoveAnalysis({ M, vline, own, status, why, onReply, onHover }) {
     <React.Fragment>
       <div style={{ display: 'flex', flexWrap: 'wrap', alignItems: 'flex-end', columnGap: tx(28) }}>
         <span style={{ font: `700 ${headline()}px ${MONO}`, color: col }}>{lineLabel(M, vline.at, vline.upto, step.san)}</span>
-        <span style={{ marginLeft: 'auto', font: `700 ${headline()}px ${MONO}`, color: C.ink }}>{(status === 'unavailable' || status === 'stopped') && !(after && !after.partial) ? '—' : fmtSf(after && after.cp)}</span>
+        <EvalWithStat>{down && !(after && !after.partial) ? '—' : fmtSf(after && after.cp)}</EvalWithStat>
       </div>
       {/* the verdict spans the panel, under the move and the eval, so it fits on one line in the phone layout */}
       <div style={{ marginTop: anGap(6), font: `600 ${tx(16)}px ${MONO}`, letterSpacing: '0.08em', textTransform: 'uppercase', color: col }}>{who} · {bad ? CLASS_LABEL[rated.classification] + ' · ' : ''}{verdict}</div>

@@ -3,17 +3,17 @@
 // (t, setTweak) and what else it shows or changes as props
 
 // The Analysis panel's engine menu (EngineMenuContext): the Lite/Full choice in its title row, and these settings in
-// the panel while the menu is open; the explanations sit behind ⓘ. A game has no engine menu.
+// the panel while the menu is open; the explanations sit behind ⓘ. A game has no engine menu. They are the live
+// searches' (your moves, the free board, Go deeper); the game analysis has its own, in GameAnalysisDialog.
 // full: the full engine's download (useFullEngine); ES the engine settings in use (AnalysisCore.engineSettings);
-// hash: { choices, note, clearNote }, the hash sizes this device can give; analysis the game analysis (useGameAnalysis),
-// files the stored files and onRemoveAnalysis drops their analysis; board: a free board, which has no game analysis
-function EngineSettings({ t, setTweak, full, ES, sfKind, threading, hash, analysis, engine, files, M, board, onRemoveAnalysis }) {
+// hash: { choices, note, clearNote }, the hash sizes this device can give; board: a free board
+function EngineSettings({ t, setTweak, full, ES, sfKind, threading, hash, board }) {
   // Remove the full engine asks first (getting it back is another 99 MB); answering it, or any change to the download,
   // drops the question (a removal that fails leaves the engine kept, and says why)
   const [askRemove, setAskRemove] = React.useState(false);
   React.useEffect(() => setAskRemove(false), [full.state]);
-  const depthText = (d) => (d == null ? 'No limit' : String(d)), SF_KEYS = ['sfDepth', 'sfTime', 'sfOwnDepth', 'sfOwnTime', 'sfLines', 'sfHash', 'sfThreads'];
-  const sfChanged = JSON.stringify(ES) !== JSON.stringify(window.AnalysisCore.engineSettings(window.TWEAK_DEFAULTS, sfKind, threading, hash.choices));
+  const SF_KEYS = ['sfOwnDepth', 'sfOwnTime', 'sfLines', 'sfHash', 'sfThreads'];
+  const sfChanged = JSON.stringify(ES.own) !== JSON.stringify(window.AnalysisCore.engineSettings(window.TWEAK_DEFAULTS, sfKind, threading, hash.choices).own);
   const MB = keptMB(full.total), stopsAt = 'Each search stops at its depth or time limit, whichever comes first.';
   return <>
     {!SF_SIMD && <div className="twk-note twk-err">{SF_ASM_NOTE}</div>}
@@ -34,34 +34,65 @@ function EngineSettings({ t, setTweak, full, ES, sfKind, threading, hash, analys
       </> : <TweakButton secondary label={`Remove the full engine download · ${MB} MB`} onClick={() => setAskRemove(true)}
         info={`Full Stockfish is kept in this browser (${MB} MB) and takes a few seconds to start. It reaches less depth than Lite in the same time but judges positions better.`} />)}
     </>}
-    {/* the game-analysis limits apply only to a loaded game; the own-move ones only on the free board and your own moves in a replay */}
-    {!board && <>
-      <TweakSlider id="tw-sf-depth" label="Game analysis: depth" value={ES.game.depth} stops={window.AnalysisCore.DEPTHS} format={depthText} onChange={(v) => setTweak('sfDepth', v)} info={`For “Analyse with Stockfish”. ${stopsAt}`} />
-      <TweakSlider id="tw-sf-time" label="Game analysis: time limit per position" value={ES.game.time_limit} stops={window.AnalysisCore.SECONDS} unit="s" onChange={(v) => setTweak('sfTime', v)} info={`For “Analyse with Stockfish”. ${stopsAt}`} />
-    </>}
-    <TweakSlider id="tw-sf-odepth" label="Your moves: depth" value={ES.own.depth} stops={window.AnalysisCore.DEPTHS} format={depthText} onChange={(v) => setTweak('sfOwnDepth', v)} info={`For the moves you play on the board${board ? ': on the free board every move is rated with these' : ''}. ${stopsAt}`} />
+    <TweakSlider id="tw-sf-odepth" label="Your moves: depth" value={ES.own.depth} stops={window.AnalysisCore.DEPTHS} format={sfDepthText} onChange={(v) => setTweak('sfOwnDepth', v)} info={`For the moves you play on the board${board ? ': on the free board every move is rated with these' : ''}; Go deeper starts from them. ${stopsAt}`} />
     <TweakSlider id="tw-sf-otime" label="Your moves: time limit per position" value={ES.own.time_limit} stops={window.AnalysisCore.SECONDS} unit="s" onChange={(v) => setTweak('sfOwnTime', v)} info={`For the moves you play on the board. ${stopsAt}`} />
     <TweakSelect id="tw-sf-lines" label="Your moves: lines" value={String(ES.own.lines)} options={window.AnalysisCore.LINES.map(String)} onChange={(v) => setTweak('sfLines', parseInt(v, 10))}
       info="Above one, Stockfish shows that many best moves, with an arrow each. Every line takes its share of the search, so each one goes less deep in the same time." />
-    <TweakSelect id="tw-sf-hash" label="Hash table" value={ES.game.hash_mb + ' MB'} options={hash.choices.map((x) => x + ' MB')} onChange={(v) => { hash.clearNote(); setTweak('sfHash', parseInt(v, 10)); }}
-      info={`Helps long searches${SF_HASH_CHOICES.length < window.AnalysisCore.HASH_MB.length ? '; larger sizes aren’t offered on this device, a touchscreen with no mouse or touchpad, or short of memory' : '; a big table on a device short of memory falls back to 64 MB'}.`} />
-    {hash.note && <div className="twk-note twk-err" role="status">{hash.note}</div>}
-    {/* sfThreads null (the default): half the cores, at most 4 */}
-    <TweakSelect id="tw-sf-threads" label="Threads" value={String(ES.game.threads)} options={window.AnalysisCore.threadChoices(threading.cores).map(String)} disabled={!threading.on} onChange={(v) => setTweak('sfThreads', parseInt(v, 10))}
-      info="How many of your processor’s threads Stockfish uses. More threads let it look at more positions in the same time, which helps most in sharp positions, but keep your computer busier." />
-    {!threading.on && <div className="twk-note">{threading.reason}</div>}
+    <SfHashSelect id="tw-sf-hash" value={ES.own.hash_mb} hash={hash} onChange={(v) => setTweak('sfHash', v)} />
+    <SfThreadsSelect id="tw-sf-threads" value={ES.own.threads} threading={threading} onChange={(v) => setTweak('sfThreads', v)} />
     {sfChanged && <TweakButton secondary label="Reset engine settings" onClick={() => SF_KEYS.forEach((k) => setTweak(k, window.TWEAK_DEFAULTS[k]))} />}
-    {!board && (analysis.state === 'running'
-      ? <>
-        <div className="twk-note">Analysing {analysis.done} of {analysis.total} positions{analysis.etaSec != null ? ' · ' + fmtEta(analysis.etaSec) : ''}</div>
-        <TweakButton secondary label="Stop the analysis" onClick={analysis.stop} />
-      </>
-      : <TweakButton disabled={engine.status === 'unavailable'} label={`${analysis.resumeAt ? `Resume analysis from move ${Math.floor((M.ply0 + analysis.resumeAt) / 2) + 1}` : files.analysis ? 'Analyse again' : 'Analyse with Stockfish'} · about ${analysis.estimateMin} min`} onClick={analysis.start}
-        info={`${engineLabel(ES.game.name)} runs in your browser. New settings apply to the next analysis${files.analysis ? ', which replaces this one' : ''}; a stopped analysis resumes with its original settings.`} />)}
-    {!board && analysis.err && <div className="twk-note twk-err">{analysis.err}</div>}
-    {!board && files.analysis && analysis.state !== 'running' && <TweakButton secondary label="Remove analysis" onClick={onRemoveAnalysis} />}
+    {!board && <div className="twk-note">Analysing the whole game has its own settings, under the computer button by the engine.</div>}
     <div className="twk-note">Stockfish is free software under the GPL-3.0; <a href="https://github.com/nmrugg/stockfish.js" target="_blank" rel="noopener">source</a>.</div>
   </>;
+}
+const sfDepthText = (d) => (d == null ? 'No limit' : String(d));
+// Hash table and Threads, for the live searches (the engine menu) and the game analysis (its dialog) alike
+function SfHashSelect({ id, value, hash, onChange }) {
+  return <>
+    <TweakSelect id={id} label="Hash table" value={value + ' MB'} options={hash.choices.map((x) => x + ' MB')} onChange={(v) => { hash.clearNote(); onChange(parseInt(v, 10)); }}
+      info={`Helps long searches${SF_HASH_CHOICES.length < window.AnalysisCore.HASH_MB.length ? '; larger sizes aren’t offered on this device, a touchscreen with no mouse or touchpad, or short of memory' : '; a big table on a device short of memory falls back to 64 MB'}.`} />
+    {hash.note && <div className="twk-note twk-err" role="status">{hash.note}</div>}
+  </>;
+}
+// sfThreads and sfGameThreads null (the default): half the cores, at most 4
+function SfThreadsSelect({ id, value, threading, onChange }) {
+  return <>
+    <TweakSelect id={id} label="Threads" value={String(value)} options={window.AnalysisCore.threadChoices(threading.cores).map(String)} disabled={!threading.on} onChange={(v) => onChange(parseInt(v, 10))}
+      info="How many of your processor’s threads Stockfish uses. More threads let it look at more positions in the same time, which helps most in sharp positions, but keep your computer busier." />
+    {!threading.on && <div className="twk-note">{threading.reason}</div>}
+  </>;
+}
+
+// Analyse the game (the Analysis panel's computer button, and the empty panel's Analyse with Stockfish): the game
+// analysis's own settings (sfDepth, sfTime, sfGameThreads, sfGameHash, kept like every setting), and the button that
+// runs it. Starting closes the dialog: the panel shows the run. While one runs, the dialog shows it and Stop.
+// analysis: useGameAnalysis; engine: useEngine; files: the stored files and onRemoveAnalysis drops their analysis
+function GameAnalysisDialog({ t, setTweak, ES, sfKind, threading, hash, analysis, engine, files, M, onRemoveAnalysis, onClose }) {
+  const KEYS = ['sfDepth', 'sfTime', 'sfGameThreads', 'sfGameHash'];
+  const changed = JSON.stringify(ES.game) !== JSON.stringify(window.AnalysisCore.engineSettings(window.TWEAK_DEFAULTS, sfKind, threading, hash.choices).game);
+  const stopsAt = 'Each position’s search stops at its depth or time limit, whichever comes first.';
+  const running = analysis.state === 'running';
+  const label = analysis.resumeAt ? `Resume from move ${Math.floor((M.ply0 + analysis.resumeAt) / 2) + 1}` : files.analysis ? 'Analyse again' : 'Analyse with Stockfish';
+  return (
+    <DialogBox label="Analyse the game" part="game-analysis" className="xfer-box" onClose={onClose}>
+      {!SF_SIMD && <div className="twk-note twk-err">{SF_ASM_NOTE}</div>}
+      <TweakSlider id="tw-sf-depth" label="Depth" value={ES.game.depth} stops={window.AnalysisCore.DEPTHS} format={sfDepthText} onChange={(v) => setTweak('sfDepth', v)} info={stopsAt} />
+      <TweakSlider id="tw-sf-time" label="Time limit per position" value={ES.game.time_limit} stops={window.AnalysisCore.SECONDS} unit="s" onChange={(v) => setTweak('sfTime', v)} info={stopsAt} />
+      <SfThreadsSelect id="tw-sf-gthreads" value={ES.game.threads} threading={threading} onChange={(v) => setTweak('sfGameThreads', v)} />
+      <SfHashSelect id="tw-sf-ghash" value={ES.game.hash_mb} hash={hash} onChange={(v) => setTweak('sfGameHash', v)} />
+      {changed && <TweakButton secondary label="Reset these settings" onClick={() => KEYS.forEach((k) => setTweak(k, window.TWEAK_DEFAULTS[k]))} />}
+      <div className="twk-note">{engineLabel(ES.game.name)} runs in your browser, one line per position. New settings apply to the next analysis{files.analysis ? ', which replaces this one' : ''}; a stopped analysis resumes with its original settings. While it runs, Stockfish looks at nothing else: your moves and Go deeper wait until it ends.</div>
+      {running && <div className="twk-note" role="status">Analysing {analysis.done} of {analysis.total} positions{analysis.etaSec != null ? ' · ' + fmtEta(analysis.etaSec) : ''}</div>}
+      {analysis.err && <div className="twk-note twk-err">{analysis.err}</div>}
+      <div className="fen-btns">
+        {files.analysis && !running && <button type="button" className="twk-btn secondary" onClick={onRemoveAnalysis}>Remove analysis</button>}
+        <button type="button" className="twk-btn secondary" onClick={onClose}>{running ? 'Close' : 'Cancel'}</button>
+        {running
+          ? <button type="button" className="twk-btn danger" onClick={analysis.stop}>Stop the analysis</button>
+          : <button type="button" className="twk-btn" data-autofocus disabled={engine.status === 'unavailable'} onClick={() => { onClose(); analysis.start(); }}>{label} · about {analysis.estimateMin} min</button>}
+      </div>
+    </DialogBox>
+  );
 }
 
 // Settings › Game: the loaded game or board (status, the error if any), where to go from it, and About.
@@ -71,7 +102,7 @@ function GameSettings({ M, files, board, status, err, go, commit, commentary }) 
       <div className={err ? 'twk-note twk-err' : 'twk-note'}>{err || status}</div>
       <TweakButton label="Import game" onClick={go.importGame} />
       {board && board.game && <div className="twk-note">{board.game.mode === 'stockfish' ? 'Stockfish 19 plays the other side at full strength (there is no strength setting) and quietly rates your moves; Analyse on the free board shows its eval once the game ends.' : 'Stockfish is off during a game; Analyse on the free board brings it back once the game ends.'}</div>}
-      {!board && <div className="twk-note">Uses the PGN’s own evals (Lichess [%eval] or cutechess +0.25/20). Without them, run “Analyse with Stockfish” from the Analysis panel’s ☰ menu. Saved analysis, notes and Queen files load here too.</div>}
+      {!board && <div className="twk-note">Uses the PGN’s own evals (Lichess [%eval] or cutechess +0.25/20). Without them, analyse the game with Stockfish: the computer button in the Analysis panel’s title. Saved analysis, notes and Queen files load here too.</div>}
       {board && !window.PlayCore.inProgress(board) && <TweakButton label="Replay these moves as a game" disabled={!board.steps.length} onClick={go.boardAsGame} />}
       {board && !window.PlayCore.inProgress(board) && <div className="twk-note">{board.steps.length ? 'Opens every move on the board as a game: watch it, analyse it with Stockfish, and export it as a video or WebP. The board comes back with “Back to the free board”.' : 'Play some moves first; then they can be replayed and exported as a video.'}</div>}
       {board && files.lastGame && <TweakButton secondary label="Back to the loaded game" onClick={go.backToGame} />}

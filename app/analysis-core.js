@@ -159,7 +159,7 @@
   // own.lines: the lines (MultiPV) the viewer's own searches show; a game's analysis always searches one
   const LINES = [1, 2, 3, 4, 5];
   const OWN = { depth: null, time_limit: 5, lines: 1 };
-  // Threads (one setting for every search): 1 to one less than the browser's cores, at most 8; by default half of
+  // Threads (one setting for the game analysis, one for the live searches): 1 to one less than the browser's cores, at most 8; by default half of
   // them, at most 4, so a search leaves the computer room (decided 2026-10-28)
   const threadChoices = (cores) => [...Array(Math.max(1, Math.min((cores | 0) - 1, 8))).keys()].map((i) => i + 1);
   const defaultThreads = (cores) => Math.max(1, Math.min(4, Math.floor((cores | 0) / 2)));
@@ -177,10 +177,13 @@
     // a time limit in range snaps to the nearest stop
     const pickTime = (v, dflt) => { const x = +v; return Number.isFinite(x) && x >= SECONDS[0] && x <= SECONDS[SECONDS.length - 1] ? SECONDS.reduce((a, b) => (Math.abs(b - x) < Math.abs(a - x) ? b : a)) : dflt; };
     const name = ENGINE_NAMES[kind] || ENGINE.name;
-    const threads = !threading || !threading.on ? 1 : threadChoices(threading.cores).includes(+t.sfThreads) ? +t.sfThreads : defaultThreads(threading.cores);
+    const threadsOf = (v) => (!threading || !threading.on ? 1 : threadChoices(threading.cores).includes(+v) ? +v : defaultThreads(threading.cores));
+    const hashOf = (v) => (hashes.includes(+v) ? +v : ENGINE.hash_mb);
+    // the game analysis (its dialog: sfDepth, sfTime, sfGameThreads, sfGameHash) and the live searches (the Analysis
+    // panel's ☰: your moves, the free board, Go deeper) each have their own threads and hash table
     return {
-      game: { ...ENGINE, name, threads, depth: pickDepth(t.sfDepth, ENGINE.depth), time_limit: pickTime(t.sfTime, ENGINE.time_limit), hash_mb: hashes.includes(+t.sfHash) ? +t.sfHash : ENGINE.hash_mb },
-      own: { name, depth: pickDepth(t.sfOwnDepth, OWN.depth), time_limit: pickTime(t.sfOwnTime, OWN.time_limit), lines: LINES.includes(+t.sfLines) ? +t.sfLines : OWN.lines, threads },
+      game: { ...ENGINE, name, threads: threadsOf(t.sfGameThreads), depth: pickDepth(t.sfDepth, ENGINE.depth), time_limit: pickTime(t.sfTime, ENGINE.time_limit), hash_mb: hashOf(t.sfGameHash) },
+      own: { name, depth: pickDepth(t.sfOwnDepth, OWN.depth), time_limit: pickTime(t.sfOwnTime, OWN.time_limit), lines: LINES.includes(+t.sfLines) ? +t.sfLines : OWN.lines, threads: threadsOf(t.sfThreads), hash_mb: hashOf(t.sfHash) },
     };
   }
   // Rough seconds a game position takes: 1.3 s measured on a laptop at depth 22 / 3 s, each depth about 1.45 times

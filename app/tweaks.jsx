@@ -3,9 +3,15 @@
 
 const TWEAK_STORE = 'chess-video.tweaks.v1';
 
-function useTweaks(defaults) {
+// carry(stored): settings to add to what a returning viewer stored, read before anything else writes the store (a
+// setting renamed or split carries the old one's value over)
+function useTweaks(defaults, carry) {
   const [values, setValues] = React.useState(() => {
-    try { return { ...defaults, ...(JSON.parse(localStorage.getItem(TWEAK_STORE) || 'null') || {}) }; } catch (e) { return defaults; }
+    try {
+      const stored = JSON.parse(localStorage.getItem(TWEAK_STORE) || 'null') || {}, add = carry ? carry(stored) : null;
+      if (add && Object.keys(add).length) localStorage.setItem(TWEAK_STORE, JSON.stringify({ ...stored, ...add }));
+      return { ...defaults, ...stored, ...add };
+    } catch (e) { return defaults; }
   });
   const setTweak = React.useCallback((key, val) => {
     setValues((prev) => {

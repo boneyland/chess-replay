@@ -203,7 +203,10 @@ function useScheme(pref) {
 }
 
 function GameApp() {
-  const [t, setTweak] = useTweaks(window.TWEAK_DEFAULTS);
+  // the game analysis's Threads and Hash table were the live searches' until it had its own (2026-11-08): a viewer
+  // who stored those keeps them for the game analysis too (and a stopped run, keyed by them, still resumes), once
+  const [t, setTweak] = useTweaks(window.TWEAK_DEFAULTS, (s) => ('sfGameThreads' in s || 'sfGameHash' in s ? null
+    : { ...('sfThreads' in s && { sfGameThreads: s.sfThreads }), ...('sfHash' in s && { sfGameHash: s.sfHash }) }));
   const scheme = useScheme(t.scheme || 'Auto');
   setPalette(scheme);
   // the stored files are read first: reading them says (storedNote) when a kept game was dropped
@@ -250,6 +253,8 @@ function GameApp() {
   const [gamesOpen, setGamesOpen] = React.useState(null);
   // the Keyboard shortcuts dialog
   const [keysOpen, setKeysOpen] = React.useState(false);
+  const [analyseOpen, setAnalyseOpen] = React.useState(false); // the Analyse the game dialog (GameAnalysisDialog)
+  React.useEffect(() => { if (board) setAnalyseOpen(false); }, [!!board]); // a loaded game's only
   const [shareOpen, setShareOpen] = React.useState(null); // the Share and export dialog: { fen } of the position it opened on
   // leaving a game in progress asks first: { run } is what waits on the answer
   const [leave, setLeave] = React.useState(null);
@@ -281,11 +286,11 @@ function GameApp() {
   // setting is left alone: the memory may be there next time
   const [hashCap, setHashCap] = React.useState(Infinity), [hashNote, setHashNote] = React.useState('');
   const hashChoices = React.useMemo(() => SF_HASH_CHOICES.filter((mb) => mb < hashCap), [hashCap]);
-  const ES = React.useMemo(() => window.AnalysisCore.engineSettings(t, sfKind, threading, hashChoices), [t.sfDepth, t.sfTime, t.sfOwnDepth, t.sfOwnTime, t.sfHash, t.sfLines, t.sfThreads, sfKind, threading, hashChoices]);
+  const ES = React.useMemo(() => window.AnalysisCore.engineSettings(t, sfKind, threading, hashChoices), [t.sfDepth, t.sfTime, t.sfOwnDepth, t.sfOwnTime, t.sfHash, t.sfLines, t.sfThreads, t.sfGameHash, t.sfGameThreads, sfKind, threading, hashChoices]);
   const hashAsked = React.useRef(ES.game.hash_mb);
-  hashAsked.current = ES.game.hash_mb;
+  hashAsked.current = Math.max(ES.game.hash_mb, ES.own.hash_mb);
   const onHashFail = React.useCallback((mb, to) => { setHashCap((c) => Math.min(c, mb, hashAsked.current)); setHashNote(`This device couldn’t give Stockfish ${mb} MB for its hash table, so it uses ${to} MB for this visit.`); }, []);
-  const engine = useEngine(ES.game.hash_mb, ES.game.threads, sfKind, full.broken, onHashFail);
+  const engine = useEngine(ES.own.hash_mb, ES.own.threads, sfKind, full.broken, onHashFail);
   const queenInVideo = t.queenInVideo !== false;
   const showCommentary = t.commentary !== false;
   const sayFrom = { pgn: t.commentPgn !== false, notes: t.commentNotes !== false, queen: t.commentQueen !== false };
@@ -578,14 +583,24 @@ function GameApp() {
     window.addEventListener('resize', place);
     return () => window.removeEventListener('resize', place);
   }, [queenOpen, phone]);
-  const sf = { engine, own: ES.own, game: ES.game, book, status: engine.status, why: engine.why, run: analysis, start: analysis.start, stop: analysis.stop, estimateMin: analysis.estimateMin };
+  // sfOn: the Analysis panel's switch; off, Stockfish searches nothing live (your moves, the free board, Go deeper),
+  // while a loaded analysis still shows and the game analysis still runs from its dialog (ask opens it). A running game
+  // analysis turns the live searches off too (busy: the panel says why), so the engine never switches between the
+  // run's threads and theirs (Stockfish resizes its thread pool and clears its hash table on each change)
+  const sfOn = t.sfOn !== false, running = analysis.state === 'running', askAnalysis = () => { closeOverlays(); setAnalyseOpen(true); };
+  const sf = { engine, own: ES.own, game: ES.game, book, status: engine.status, why: engine.why, off: !sfOn || running, busy: running, run: analysis, start: analysis.start, stop: analysis.stop, ask: askAnalysis, estimateMin: analysis.estimateMin };
 
   // the Analysis panel's engine menu (EngineMenuContext): the Lite/Full choice in its title row, and EngineSettings in the
   // panel while the menu is open
-  const engineBody = <EngineSettings t={t} setTweak={setTweak} full={full} ES={ES} sfKind={sfKind} threading={threading} hash={{ choices: hashChoices, note: hashNote, clearNote: () => setHashNote('') }}
-    analysis={analysis} engine={engine} files={files} M={MV} board={board} onRemoveAnalysis={() => commit({ ...files, analysis: null, analysisName: null, evalSource: null })} />;
+  const hashProp = { choices: hashChoices, note: hashNote, clearNote: () => setHashNote('') };
+  const engineBody = <EngineSettings t={t} setTweak={setTweak} full={full} ES={ES} sfKind={sfKind} threading={threading} hash={hashProp} board={board} />;
   // picking Full before it is downloaded opens the menu, where its Download button is
-  const engineMenu = { name: engineLabel(ES.game.name), body: engineBody,
+  // on/setOn: the switch left of the engine; analyse: the computer button right of it (a loaded game only)
+  const engineMenu = { name: engineLabel(ES.game.name), body: engineBody, on: sfOn, setOn: (v) => setTweak('sfOn', v), analyse: board ? null : askAnalysis,
+    // run: the game analysis going on ({ done, total, k }), for the computer button's ring and the panel's progress line
+    // runErr: why the last run stopped, shown at the top of the panel (the dialog it started from has closed)
+    runErr: !board && analysis.err ? analysis.err : '',
+    run: !board && analysis.state === 'running' ? { done: analysis.done, total: analysis.total, k: analysis.total ? analysis.done / analysis.total : 0 } : null,
     pick: full.offered ? { value: t.sfEngine === 'Full' ? 'Full' : 'Lite', options: [{ value: 'Lite', label: engineLabel(window.AnalysisCore.ENGINE_NAMES.lite) }, { value: 'Full', label: engineLabel(window.AnalysisCore.ENGINE_NAMES.full) + ' full' }],
       onChange: (v) => { setTweak('sfEngine', v); return v === 'Full' && full.state === 'absent'; } } : null };
 
@@ -704,6 +719,8 @@ function GameApp() {
       {shareOpen && <ShareDialog fen={shareOpen.fen} board={board} x={X} setTweak={setTweak} onFail={copyFailed} onClose={closeShare} onExport={exportVideo}
         onReplay={() => { setShareOpen(null); boardAsGame(); }}
         pgn={{ board: boardPgn, saveBoard: saveBoardPgn, annotated: annotatedPgn, saveAnnotated: savePgn, raw: rawPgn, saveRaw: saveRawPgn, saveAnalysis: browserAnalysis ? saveAnalysis : null, notes: notes ? () => notes : null, saveNotes }} />}
+      {analyseOpen && !board && <GameAnalysisDialog t={t} setTweak={setTweak} ES={ES} sfKind={sfKind} threading={threading} hash={hashProp} analysis={analysis} engine={engine} files={files} M={MV}
+        onRemoveAnalysis={() => { setAnalyseOpen(false); commit({ ...files, analysis: null, analysisName: null, evalSource: null }); }} onClose={() => setAnalyseOpen(false)} />}
       {gamesOpen && <MyGamesDialog games={gamesOpen} current={board && window.PlayCore.inProgress(board) ? board.game.id : null} onReplay={replayGame} onResume={resumeGame} onDelete={deleteGame} onClose={closeGames} />}
       {leave && <LeaveDialog onStay={() => setLeave(null)} onLeave={() => { const run = leave.run; setLeave(null); keepLeft(board); run(); }} />}
       {queenOpen && !board && <QueenPanel M={M} Q={Q} hf={hf} probe={probe} onClose={closeQueen} onOverlay={setQueenArrow} onSave={saveQueen} left={queenLeft} />}

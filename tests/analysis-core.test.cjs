@@ -179,16 +179,16 @@ test('runAnalysis resumes from earlier searches and reports each search so far',
 test('engineSettings: the defaults, the viewer’s values in range, and the defaults again for anything else', () => {
   const d = A.engineSettings({});
   assert.deepEqual(d.game, A.ENGINE);
-  assert.deepEqual(d.own, { name: A.ENGINE.name, depth: null, time_limit: 5, lines: 1, threads: 1 });
+  assert.deepEqual(d.own, { name: A.ENGINE.name, depth: null, time_limit: 5, lines: 1, threads: 1, hash_mb: 64 });
   assert.equal(d.game.depth, null, 'no depth limit by default');
-  const s = A.engineSettings({ sfDepth: 16, sfTime: 1, sfOwnDepth: 30, sfOwnTime: 20, sfHash: 512, sfLines: 5 });
+  const s = A.engineSettings({ sfDepth: 16, sfTime: 1, sfOwnDepth: 30, sfOwnTime: 20, sfGameHash: 512, sfHash: 256, sfLines: 5 });
   assert.deepEqual([s.game.depth, s.game.time_limit, s.game.hash_mb, s.game.name], [16, 1, 512, A.ENGINE.name]);
-  assert.deepEqual(s.own, { name: A.ENGINE.name, depth: 30, time_limit: 20, lines: 5, threads: 1 });
+  assert.deepEqual(s.own, { name: A.ENGINE.name, depth: 30, time_limit: 20, lines: 5, threads: 1, hash_mb: 256 });
   assert.equal(s.game.lines, 1, 'a game\'s analysis always searches one line');
   for (const bad of [0, 6, 2.5, 'x', null]) assert.equal(A.engineSettings({ sfLines: bad }).own.lines, 1, String(bad));
   assert.equal(A.engineSettings({ sfLines: '3' }).own.lines, 3);
-  const bad = A.engineSettings({ sfDepth: 15, sfTime: 61, sfOwnDepth: 'x', sfOwnTime: null, sfHash: 100 });
-  assert.deepEqual([bad.game.depth, bad.game.time_limit, bad.game.hash_mb, bad.own.depth, bad.own.time_limit], [null, 3, 64, null, 5]);
+  const bad = A.engineSettings({ sfDepth: 15, sfTime: 61, sfOwnDepth: 'x', sfOwnTime: null, sfGameHash: 100, sfHash: 100 });
+  assert.deepEqual([bad.game.depth, bad.game.time_limit, bad.game.hash_mb, bad.own.depth, bad.own.time_limit, bad.own.hash_mb], [null, 3, 64, null, 5, 64]);
   // a viewer who picked a depth keeps it; one who moved back to No limit stores null
   assert.deepEqual([A.engineSettings({ sfOwnDepth: 24 }).own.depth, A.engineSettings({ sfOwnDepth: null }).own.depth], [24, null]);
   assert.deepEqual([A.DEPTHS[0], A.DEPTHS[A.DEPTHS.length - 2], A.DEPTHS[A.DEPTHS.length - 1], A.DEPTHS.length], [16, 30, null, 16]);
@@ -252,7 +252,7 @@ test('deeperSearch: +4 depth and twice the time per press, up to the sliders\' c
 });
 
 test('runAnalysis searches and records the settings it is given', async () => {
-  const reqs = [], settings = A.engineSettings({ sfDepth: 16, sfTime: 1, sfHash: 32 }).game;
+  const reqs = [], settings = A.engineSettings({ sfDepth: 16, sfTime: 1, sfGameHash: 32 }).game;
   const out = await A.runAnalysis({ engine: fakeEngine((r) => reqs.push(r)), ...SCHOLAR, headers: {}, signal: { aborted: false }, onProgress: () => {}, settings });
   assert.deepEqual(reqs.map((r) => [r.depth, r.movetimeMs]), Array(8).fill([16, 1000]));
   assert.deepEqual(out.engine, settings);
@@ -274,14 +274,15 @@ test('defaultThreads: half the cores, at most 4, at least 1', () => {
   assert.deepEqual([8, 12, 4, 2, 1].map(A.defaultThreads), [4, 4, 2, 1, 1]);
 });
 
-test('engineSettings carries threads into game and own searches, 1 where threads can\'t run', () => {
+test('engineSettings: threads for the game analysis and the live searches apart, 1 where threads can\'t run', () => {
   const A = window.AnalysisCore, on = { on: true, cores: 8 };
   assert.equal(A.engineSettings({}, 'lite', on).game.threads, 4);
   assert.equal(A.engineSettings({}, 'lite', on).own.threads, 4);
-  assert.equal(A.engineSettings({ sfThreads: 6 }, 'lite', on).game.threads, 6);
-  assert.equal(A.engineSettings({ sfThreads: 9 }, 'lite', on).game.threads, 4);
+  const both = A.engineSettings({ sfGameThreads: 6, sfThreads: 2 }, 'lite', on);
+  assert.deepEqual([both.game.threads, both.own.threads], [6, 2]);
+  assert.equal(A.engineSettings({ sfGameThreads: 9 }, 'lite', on).game.threads, 4);
   assert.equal(A.engineSettings({ sfThreads: 6 }, 'lite', { on: false, cores: 8 }).own.threads, 1);
-  assert.equal(A.engineSettings({ sfThreads: 6 }).game.threads, 1);
+  assert.equal(A.engineSettings({ sfGameThreads: 6 }).game.threads, 1);
   assert.equal(A.engineSettings({}).own.threads, 1);
 });
 
@@ -294,8 +295,9 @@ test('hashChoices: above 128 MB only where not touch only and, where known, with
   assert.deepEqual(A.hashChoices({ touchOnly: false, memoryGB: 2 }), small);
   assert.deepEqual(A.hashChoices({ touchOnly: true, memoryGB: 8 }), small); // a phone or tablet
   // a stored size this device isn't offered gets the default
-  assert.equal(A.engineSettings({ sfHash: 512 }, 'lite', undefined, small).game.hash_mb, 64);
-  assert.equal(A.engineSettings({ sfHash: 128 }, 'lite', undefined, small).game.hash_mb, 128);
+  assert.equal(A.engineSettings({ sfGameHash: 512, sfHash: 512 }, 'lite', undefined, small).game.hash_mb, 64);
+  assert.equal(A.engineSettings({ sfHash: 512 }, 'lite', undefined, small).own.hash_mb, 64);
+  assert.equal(A.engineSettings({ sfGameHash: 128 }, 'lite', undefined, small).game.hash_mb, 128);
 });
 
 test('cloudEnough: 35 with no depth limit, the limit otherwise; asm.js at most 22', () => {

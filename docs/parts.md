@@ -58,5 +58,6 @@ Each is `part-<name>-dialog`, on the dialog box itself.
 | `part-shortcuts-dialog` | Keyboard shortcuts |
 | `part-share-dialog` | Share and export |
 | `part-reset-settings-dialog` | Reset all settings |
+| `part-game-analysis-dialog` | Analyse the game |
 | `part-exporting-dialog` | Exporting (the export's progress) |
 | `part-export-failed-dialog` | Export failed |

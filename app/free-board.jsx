@@ -77,7 +77,7 @@ function OpeningExplorer({ board, book, onPlay, onHover }) {
 // The Analysis panel before the first move: the start position's eval and Stockfish's best line, whose moves play
 // on the board when picked (as its replies do after a move)
 function StartAnalysis({ board, ev, status, why, onLine, onHover }) {
-  const after = ev.after, down = status === 'unavailable' || status === 'stopped';
+  const after = ev.after, down = status === 'unavailable' || status === 'stopped' || status === 'off' || status === 'busy';
   const line = engineSteps(board.start.pos, after && after.pv);
   const turn = board.start.pos.turn === 'w' ? 'White' : 'Black';
   return (
@@ -85,7 +85,7 @@ function StartAnalysis({ board, ev, status, why, onLine, onHover }) {
       {/* a narrow panel puts the eval under Start, at the right */}
       <div style={{ display: 'flex', flexWrap: 'wrap', alignItems: 'flex-end', columnGap: tx(28) }}>
         <span style={{ font: `700 ${headline()}px ${MONO}`, color: C.last }}>Start</span>
-        <span style={{ marginLeft: 'auto', font: `700 ${headline()}px ${MONO}`, color: C.ink }}>{down && !(after && !after.partial) ? '—' : fmtSf(after && after.cp)}</span>
+        <EvalWithStat>{down && !(after && !after.partial) ? '—' : fmtSf(after && after.cp)}</EvalWithStat>
       </div>
       {/* under the move and the eval, spanning the panel, as in OwnMoveAnalysis */}
       <div style={{ marginTop: anGap(6), font: `600 ${tx(16)}px ${MONO}`, letterSpacing: '0.08em', textTransform: 'uppercase', color: C.last }}>
@@ -345,14 +345,14 @@ function FreeBoard({ board, onChange, tw, setTweak, onLichess, sf, nav, orient, 
   // another position (a step, a takeback) drops a half-made move: a selected piece, the promotion picker
   React.useEffect(() => { input.clear(); setHov(null); setPv(null); }, [boardKey]);
   // Stockfish rates the move on the board: the positions before and after it (before the first move, both the start); never in a game
-  const ev = useMoveEval(sf.engine, G ? null : B.ucis(board, upto), G ? null : B.ucis(board), sf.own, board.fen, null, cloudSetting(tw));
+  const ev = useMoveEval(sf.engine, G ? null : B.ucis(board, upto), G ? null : B.ucis(board), sf.own, board.fen, null, cloudSetting(tw), sf.off);
   const posBefore = upto > 0 ? steps[upto - 1].pos : board.start.pos;
   const bm = upto >= 0 && ev.before && ev.before.best ? window.ChessCore.applyUci(posBefore, ev.before.best) : null;
   const own = { ...ev, bestSan: bm ? bm.san : null };
   // a book move from the explorer, or a tablebase move in its place, goes the way of a drag
   const onBook = (uci) => { const step = window.ChessCore.stepFromUci(pos, uci); if (step) onChange(B.play(board, step)); };
   const onReply = (replies) => { let b = board; for (const s of replies) b = B.play(b, s); onChange(b); };
-  const down = sf.status === 'unavailable' || sf.status === 'stopped';
+  const down = sf.off || sf.status === 'unavailable' || sf.status === 'stopped', sfStatus = sf.busy ? 'busy' : sf.off ? 'off' : sf.status;
   const cp = ev.after && ev.after.cp != null ? ev.after.cp : null;
   // the endgame tablebase for the position on the board (never in a game): it takes the explorer's place, and its
   // result replaces the eval in the bar. chasolver on it: in a game it ends the game (the answer may come after the
@@ -442,14 +442,14 @@ function FreeBoard({ board, onChange, tw, setTweak, onLichess, sf, nav, orient, 
       <MoveList M={MV} T={upto + 0.999} S={S} a={1} paused onPick={go} deadAt={deadAt} end={end} startAt={G && G.from} />
       {G ? <GameInfo board={board} /> : tb ? <TablebaseExplorer t={tb} posKey={boardKey} onPlay={onBook} /> : xl ? <LichessExplorer x={xl} tw={tw} setTweak={setTweak} onGame={onLichess} posKey={boardKey} onPlay={onBook} onHover={setHov} white={pos.turn === 'w'} fallback={<OpeningExplorer board={board} book={book} onPlay={onBook} onHover={setHov} />} /> : <OpeningExplorer board={board} book={book} onPlay={onBook} onHover={setHov} />}
       {G ? <Panel box={L.analysis} part="game" a={1} style={NO_SELECT} title="Game"><GameStatus board={board} onChange={onChange} down={opponent.down} why={sf.why} /></Panel>
-        : <AnalysisPanel box={L.analysis} a={1} paused depth={down ? null : searchDepth(ev.after)} deep={ev}>
+        : <AnalysisPanel box={L.analysis} a={1} paused depth={down && !sf.off ? null : searchDepth(ev.after)} deep={ev}>
         {upto < 0
           ? <React.Fragment>
-            <StartAnalysis board={board} ev={ev} status={sf.status} why={sf.why} onLine={onReply} onHover={setPv} />
+            <StartAnalysis board={board} ev={ev} status={sfStatus} why={sf.why} onLine={onReply} onHover={setPv} />
             {rule && <div style={{ marginTop: tx(12), paddingTop: tx(12), borderTop: `1px solid ${C.line}` }}><RuleBlock w={rule} /></div>}
           </React.Fragment>
           : <React.Fragment>
-            <OwnMoveAnalysis M={MV} vline={{ at: 0, moves: steps, upto, src: 'you' }} own={own} status={sf.status} why={sf.why} onReply={onReply} onHover={setPv} />
+            <OwnMoveAnalysis M={MV} vline={{ at: 0, moves: steps, upto, src: 'you' }} own={own} status={sfStatus} why={sf.why} onReply={onReply} onHover={setPv} />
             {rule && <div style={{ marginTop: tx(12), paddingTop: tx(12), borderTop: `1px solid ${C.line}` }}><RuleBlock w={rule} /></div>}
           </React.Fragment>}
       </AnalysisPanel>}

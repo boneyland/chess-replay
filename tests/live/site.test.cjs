@@ -1406,6 +1406,7 @@ for (const name of BROWSERS) for (const site of SITES) {
       await p.keyboard.type('1. e4 e5 *');
       await p.getByRole('button', { name: 'Open', exact: true }).click();
       await p.getByRole('button', { name: /^Analyse with Stockfish/ }).first().click();
+      await p.getByRole('dialog', { name: 'Analyse the game' }).getByRole('button', { name: /^Analyse with Stockfish/ }).click();
       await p.getByRole('button', { name: 'Menu', exact: true }).click();
       await p.getByRole('button', { name: 'Edit position' }).click();
       const field = p.getByRole('textbox', { name: 'FEN' });
@@ -2242,6 +2243,19 @@ for (const name of BROWSERS) for (const site of SITES) {
       await p.waitForFunction(() => /cloud depth \d+/i.test(document.body.innerText), null, { timeout: 20000 });
       assert.equal(new Set(sent).size, 1, 'the move\'s position asked');
       await p.screenshot({ path: path.join(OUT, host + '-cloud-go-deeper.png') });
+      // Stockfish switched off (its deeper search likely still running): the cloud's answer stays, the + goes, and no
+      // frame in between shows the analysis's or Stockfish's eval instead (sampled every frame for a second)
+      await p.evaluate(() => {
+        const a = document.querySelector('.part-analysis'), seen = window.__frames = [], t0 = performance.now();
+        const tick = () => { seen.push(/cloud depth \d+/i.test(a.innerText)); if (performance.now() - t0 < 1000) requestAnimationFrame(tick); };
+        requestAnimationFrame(tick);
+      });
+      await p.getByRole('switch', { name: 'Stockfish' }).click();
+      await p.waitForTimeout(1200);
+      assert.match(await p.locator('.part-analysis').innerText(), /cloud depth \d+/i, 'the cloud\'s answer with Stockfish off');
+      const frames = await p.evaluate(() => window.__frames);
+      assert.ok(frames.length > 10 && frames.every(Boolean), `every frame shows the cloud's answer (${frames.filter((x) => !x).length} of ${frames.length} didn't)`);
+      assert.equal(await deeper.count(), 0, 'no Go deeper with Stockfish off');
       assert.deepEqual(gd.errors, []);
       await gd.ctx.close();
     });
@@ -2329,6 +2343,80 @@ for (const name of BROWSERS) for (const site of SITES) {
       await sn.ctx.close();
     });
     // Go deeper where the engine won't start (as on a tablet whose + only vanished): the press says so and the + comes back
+    // the Analysis title's switch turns live searches off (a move on the board says so, and nothing searches); the
+    // game analysis's dialog keeps its own hash table, apart from the engine menu's, over a reload, and so does the switch
+    await t.test('desktop: the Stockfish switch and the game analysis dialog\'s own settings', async () => {
+      const g = await open(browser, { width: 1440, height: 900 });
+      const p = g.page;
+      await p.addInitScript(spyEngine, {});
+      await p.goto(base, { waitUntil: 'load' });
+      await loadedOn(p);
+      const sw = p.getByRole('switch', { name: 'Stockfish' });
+      await sw.click();
+      assert.equal(await sw.getAttribute('aria-checked'), 'false');
+      const b = await boardBox(p);
+      const from = square(b, 'd2'), to = square(b, 'd4');
+      await p.mouse.move(from.x, from.y);
+      await p.mouse.down();
+      await p.mouse.move(to.x, to.y, { steps: 8 });
+      await p.mouse.up();
+      await p.getByText(/Stockfish is off/i).first().waitFor({ timeout: 5000 });
+      await p.waitForTimeout(1500);
+      assert.deepEqual(await p.evaluate(() => window.__sf.posted.filter((m) => m.startsWith('go'))), [], 'nothing searched');
+      await p.getByRole('button', { name: 'Analyse the game' }).click();
+      const dlg = p.getByRole('dialog', { name: 'Analyse the game' });
+      await dlg.locator('#tw-sf-ghash').selectOption('32 MB');
+      await p.keyboard.press('Escape');
+      await p.reload({ waitUntil: 'load' });
+      await loadedOn(p);
+      assert.equal(await sw.getAttribute('aria-checked'), 'false', 'the switch is kept');
+      await p.getByRole('button', { name: 'Analyse the game' }).click();
+      assert.equal(await dlg.locator('#tw-sf-ghash').inputValue(), '32 MB');
+      await p.keyboard.press('Escape');
+      await p.getByRole('button', { name: 'Engine options' }).click();
+      assert.equal(await p.locator('#tw-sf-hash').inputValue(), '64 MB', 'the live searches keep theirs');
+      assert.equal(await p.locator('#tw-sf-depth').count(), 0, 'no game analysis sliders in the engine menu');
+      assert.deepEqual(g.errors, []);
+      await g.ctx.close();
+    });
+    // while a game analysis runs, nothing else is searched (the engine never switches between its threads and the live
+    // searches'): a move tried meanwhile says so and is rated once the run ends; the run's hash table is the engine's
+    // while it lasts, the live searches' after
+    await t.test('desktop: a running game analysis pauses the live searches and lends the engine its hash table', async () => {
+      const g = await open(browser, { width: 1440, height: 900 });
+      const p = g.page;
+      await p.addInitScript(spyEngine, {});
+      await p.addInitScript(() => { try { if (!sessionStorage.getItem('seeded')) { sessionStorage.setItem('seeded', '1'); localStorage.setItem('chess-video.tweaks.v1', JSON.stringify({ sfTime: 2, sfGameHash: 32, sfGameThreads: 2, sfThreads: 1 })); } } catch (e) {} });
+      await p.goto(base, { waitUntil: 'load' });
+      await loadedOn(p);
+      await p.getByRole('button', { name: 'Import game' }).click();
+      await p.getByRole('textbox', { name: 'PGN, FEN or Lichess link' }).click();
+      await p.keyboard.type('1. e4 e5 2. Nf3 Nc6 *');
+      await p.getByRole('button', { name: 'Open', exact: true }).click();
+      await p.getByRole('button', { name: /^Analyse with Stockfish/ }).first().click();
+      await p.getByRole('dialog', { name: 'Analyse the game' }).getByRole('button', { name: /^Analyse with Stockfish/ }).click();
+      await p.getByRole('button', { name: /^Analyse the game: analysing/ }).waitFor({ timeout: 15000 });
+      const b = await boardBox(p);
+      const from = square(b, 'd2'), to = square(b, 'd4');
+      await p.mouse.move(from.x, from.y);
+      await p.mouse.down();
+      await p.mouse.move(to.x, to.y, { steps: 8 });
+      await p.mouse.up();
+      await p.getByText(/Stockfish is analysing the game/i).first().waitFor({ timeout: 5000 });
+      await p.getByRole('button', { name: /^Analyse the game: analysing/ }).waitFor({ state: 'detached', timeout: 60000 });
+      const rated = /your move · .*(stockfish’s choice|cp vs|as good as)/i;
+      await p.waitForFunction((re) => new RegExp(re, 'i').test(document.body.innerText), rated.source, { timeout: 30000 });
+      const sf = await p.evaluate(() => window.__sf.posted);
+      const hashes = sf.filter((m) => m.startsWith('setoption name Hash'));
+      assert.equal(hashes[0], 'setoption name Hash value 32', 'the run\'s hash table');
+      assert.equal(hashes[hashes.length - 1], 'setoption name Hash value 64', 'the live searches\' after it');
+      // the run's two threads, then the live searches' one after it: no switching back and forth during the run
+      // (a page that can't run threads sends none)
+      const threads = sf.filter((m) => m.startsWith('setoption name Threads')).map((m) => +m.split(' ').pop());
+      assert.ok(threads.length <= 3 && threads.indexOf(1, threads.indexOf(2)) >= threads.lastIndexOf(2), 'threads set: ' + threads.join(', '));
+      assert.deepEqual(g.errors, []);
+      await g.ctx.close();
+    });
     await t.test('desktop: Go deeper says when Stockfish doesn\'t start', async () => {
       const gd = await open(browser, { width: 1440, height: 900 });
       const p = gd.page;
@@ -2402,6 +2490,29 @@ for (const name of BROWSERS) for (const site of SITES) {
         await ac.ctx.close();
       }
     });
+    // the Stockfish switch off stops only the local engine: Lichess's cloud evaluation (its setting on) still shows, and
+    // nothing is searched
+    await t.test('desktop: with Stockfish switched off, the cloud evaluation still shows', async () => {
+      const cloud = JSON.parse(fs.readFileSync(path.join(__dirname, '..', 'fixtures', 'cloud-e4-3lines.json'), 'utf8'));
+      const ac = await open(browser, { width: 1440, height: 900 });
+      const p = ac.page;
+      // the page's own fetch answers for the cloud (see Prefer cloud's test)
+      await ac.ctx.addInitScript((ans) => {
+        const f = window.fetch;
+        window.fetch = function (u) { return String(u).startsWith('https://lichess.org/api/cloud-eval') ? Promise.resolve(new Response(JSON.stringify(ans), { status: 200, headers: { 'Content-Type': 'application/json' } })) : f.apply(this, arguments); };
+      }, { ...cloud, depth: 25 });
+      await p.addInitScript(spyEngine, {});
+      await p.addInitScript(() => { try { localStorage.setItem('chess-video.tweaks.v1', JSON.stringify({ cloudEval: true, sfOn: false })); } catch (e) {} });
+      await p.goto(base, { waitUntil: 'load' });
+      await loadedOn(p);
+      await setUpFen(p, 'rnbqkbnr/pppppppp/8/8/4P3/8/PPPP1PPP/RNBQKBNR b KQkq - 0 1');
+      await p.waitForFunction(() => /cloud depth 25/i.test(document.body.innerText), null, { timeout: 20000 });
+      assert.equal(await p.getByRole('switch', { name: 'Stockfish' }).getAttribute('aria-checked'), 'false');
+      await p.waitForTimeout(1000);
+      assert.deepEqual(await p.evaluate(() => window.__sf.posted.filter((m) => m.startsWith('go'))), [], 'nothing searched');
+      assert.deepEqual(ac.errors, []);
+      await ac.ctx.close();
+    });
     // the tablebase in a game's analysis (the real service): every position of this KBN v K game has 7 pieces or fewer,
     // so the run asks Lichess (4 requests 4 s apart, the start's answer already shown) and searches none of them (with
     // 20 s a position, a search would show), and 2. Bc4+, which
@@ -2423,6 +2534,7 @@ for (const name of BROWSERS) for (const site of SITES) {
       await p.waitForFunction(() => /Kxc4/.test(document.body.innerText), null, { timeout: 10000 });
       const t0 = Date.now();
       await p.getByRole('button', { name: /^Analyse with Stockfish/ }).first().click();
+      await p.getByRole('dialog', { name: 'Analyse the game' }).getByRole('button', { name: /^Analyse with Stockfish/ }).click();
       // the run ends (its progress and the Analyse button gone) before a move is picked: the panel's own tablebase
       // lookup of a picked position would otherwise race the run's for the same position
       // the five requests' gaps alone take 16 s, and the run waits for the engine to start (a threaded one in Firefox takes
@@ -3284,15 +3396,11 @@ for (const name of BROWSERS) for (const site of SITES) {
         if (await menu.getAttribute('aria-expanded') !== 'true') await menu.click();
       };
       const engineSelect = p.getByRole('combobox', { name: 'Engine', exact: true });
-      // the explanation behind the Analyse button's ⓘ (its tooltip on hover) names the engine running
-      // (scrolled into view first: a hover that scrolls the panel closes the tip it opens, as any scroll does)
+      // the Analyse the game dialog (the Analysis title's computer button) names the engine running
       const runs = async (name) => {
-        const about = p.getByRole('button', { name: /^About (Analyse|Resume)/ });
-        await about.scrollIntoViewIfNeeded();
-        await p.waitForTimeout(200);
-        await about.hover();
-        await p.getByRole('tooltip').filter({ hasText: new RegExp('^' + name + ' runs in your browser') }).waitFor({ timeout: 3000 });
-        await p.mouse.move(0, 0);
+        await p.getByRole('button', { name: 'Analyse the game' }).click();
+        const dlg = p.getByRole('dialog', { name: 'Analyse the game' });
+        try { await dlg.getByText(new RegExp('^' + name + ' runs in your browser')).waitFor({ timeout: 3000 }); } finally { await p.keyboard.press('Escape'); }
       };
       // an own move, rated by Lite first
       const b = await boardBox(p);
