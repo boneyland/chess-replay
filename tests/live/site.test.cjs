@@ -1406,6 +1406,7 @@ for (const name of BROWSERS) for (const site of SITES) {
       await p.keyboard.type('1. e4 e5 *');
       await p.getByRole('button', { name: 'Open', exact: true }).click();
       await p.getByRole('button', { name: /^Analyse with Stockfish/ }).first().click();
+      await p.getByRole('dialog', { name: 'Analyse the game' }).getByRole('button', { name: /^Analyse with Stockfish/ }).click();
       await p.getByRole('button', { name: 'Menu', exact: true }).click();
       await p.getByRole('button', { name: 'Edit position' }).click();
       const field = p.getByRole('textbox', { name: 'FEN' });
@@ -2329,6 +2330,39 @@ for (const name of BROWSERS) for (const site of SITES) {
       await sn.ctx.close();
     });
     // Go deeper where the engine won't start (as on a tablet whose + only vanished): the press says so and the + comes back
+    // the Analysis title's switch turns live searches off (a move on the board says so, and nothing searches); the
+    // game analysis's dialog keeps its own hash table, apart from the engine menu's, over a reload, and so does the switch
+    await t.test('desktop: the Stockfish switch and the game analysis dialog\'s own settings', async () => {
+      const g = await open(browser, { width: 1440, height: 900 });
+      const p = g.page;
+      await p.goto(base, { waitUntil: 'load' });
+      await loadedOn(p);
+      const sw = p.getByRole('switch', { name: 'Stockfish' });
+      await sw.click();
+      assert.equal(await sw.getAttribute('aria-checked'), 'false');
+      const b = await boardBox(p);
+      const from = square(b, 'd2'), to = square(b, 'd4');
+      await p.mouse.move(from.x, from.y);
+      await p.mouse.down();
+      await p.mouse.move(to.x, to.y, { steps: 8 });
+      await p.mouse.up();
+      await p.getByText(/Stockfish is off/i).first().waitFor({ timeout: 5000 });
+      await p.getByRole('button', { name: 'Analyse the game' }).click();
+      const dlg = p.getByRole('dialog', { name: 'Analyse the game' });
+      await dlg.locator('#tw-sf-ghash').selectOption('32 MB');
+      await p.keyboard.press('Escape');
+      await p.reload({ waitUntil: 'load' });
+      await loadedOn(p);
+      assert.equal(await sw.getAttribute('aria-checked'), 'false', 'the switch is kept');
+      await p.getByRole('button', { name: 'Analyse the game' }).click();
+      assert.equal(await dlg.locator('#tw-sf-ghash').inputValue(), '32 MB');
+      await p.keyboard.press('Escape');
+      await p.getByRole('button', { name: 'Engine options' }).click();
+      assert.equal(await p.locator('#tw-sf-hash').inputValue(), '64 MB', 'the live searches keep theirs');
+      assert.equal(await p.locator('#tw-sf-depth').count(), 0, 'no game analysis sliders in the engine menu');
+      assert.deepEqual(g.errors, []);
+      await g.ctx.close();
+    });
     await t.test('desktop: Go deeper says when Stockfish doesn\'t start', async () => {
       const gd = await open(browser, { width: 1440, height: 900 });
       const p = gd.page;
@@ -2423,6 +2457,7 @@ for (const name of BROWSERS) for (const site of SITES) {
       await p.waitForFunction(() => /Kxc4/.test(document.body.innerText), null, { timeout: 10000 });
       const t0 = Date.now();
       await p.getByRole('button', { name: /^Analyse with Stockfish/ }).first().click();
+      await p.getByRole('dialog', { name: 'Analyse the game' }).getByRole('button', { name: /^Analyse with Stockfish/ }).click();
       // the run ends (its progress and the Analyse button gone) before a move is picked: the panel's own tablebase
       // lookup of a picked position would otherwise race the run's for the same position
       // the five requests' gaps alone take 16 s, and the run waits for the engine to start (a threaded one in Firefox takes
@@ -3284,15 +3319,11 @@ for (const name of BROWSERS) for (const site of SITES) {
         if (await menu.getAttribute('aria-expanded') !== 'true') await menu.click();
       };
       const engineSelect = p.getByRole('combobox', { name: 'Engine', exact: true });
-      // the explanation behind the Analyse button's ⓘ (its tooltip on hover) names the engine running
-      // (scrolled into view first: a hover that scrolls the panel closes the tip it opens, as any scroll does)
+      // the Analyse the game dialog (the Analysis title's computer button) names the engine running
       const runs = async (name) => {
-        const about = p.getByRole('button', { name: /^About (Analyse|Resume)/ });
-        await about.scrollIntoViewIfNeeded();
-        await p.waitForTimeout(200);
-        await about.hover();
-        await p.getByRole('tooltip').filter({ hasText: new RegExp('^' + name + ' runs in your browser') }).waitFor({ timeout: 3000 });
-        await p.mouse.move(0, 0);
+        await p.getByRole('button', { name: 'Analyse the game' }).click();
+        const dlg = p.getByRole('dialog', { name: 'Analyse the game' });
+        try { await dlg.getByText(new RegExp('^' + name + ' runs in your browser')).waitFor({ timeout: 3000 }); } finally { await p.keyboard.press('Escape'); }
       };
       // an own move, rated by Lite first
       const b = await boardBox(p);
