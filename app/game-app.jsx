@@ -286,7 +286,7 @@ function GameApp() {
   // setting is left alone: the memory may be there next time
   const [hashCap, setHashCap] = React.useState(Infinity), [hashNote, setHashNote] = React.useState('');
   const hashChoices = React.useMemo(() => SF_HASH_CHOICES.filter((mb) => mb < hashCap), [hashCap]);
-  const ES = React.useMemo(() => window.AnalysisCore.engineSettings(t, sfKind, threading, hashChoices), [t.sfDepth, t.sfTime, t.sfOwnDepth, t.sfOwnTime, t.sfHash, t.sfLines, t.sfThreads, t.sfGameHash, t.sfGameThreads, sfKind, threading, hashChoices]);
+  const ES = React.useMemo(() => window.AnalysisCore.engineSettings(t, sfKind, threading, hashChoices), [t.sfDepth, t.sfTime, t.sfOwnDepth, t.sfOwnTime, t.sfHash, t.sfLines, t.sfGameLines, t.sfThreads, t.sfGameHash, t.sfGameThreads, sfKind, threading, hashChoices]);
   const hashAsked = React.useRef(ES.game.hash_mb);
   hashAsked.current = Math.max(ES.game.hash_mb, ES.own.hash_mb);
   const onHashFail = React.useCallback((mb, to) => { setHashCap((c) => Math.min(c, mb, hashAsked.current)); setHashNote(`This device couldn’t give Stockfish ${mb} MB for its hash table, so it uses ${to} MB for this visit.`); }, []);

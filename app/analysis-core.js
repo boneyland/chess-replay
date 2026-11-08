@@ -189,7 +189,8 @@
   // Rough seconds a game position takes: 1.3 s measured on a laptop at depth 22 / 3 s, each depth about 1.45 times
   // the one before, never more than the time limit (all of it with no depth limit). factor: this device's pace against
   // that laptop's (paceFactor)
-  const secondsPerPosition = (g, factor = 1) => (g.depth == null ? g.time_limit : Math.min(g.time_limit, factor * 1.3 * Math.pow(1.45, g.depth - 22)));
+  // (at a set depth, 3 lines took about 4.5 times as long as 1 in chess-animator's analyzer: lines ^ 1.37)
+  const secondsPerPosition = (g, factor = 1) => (g.depth == null ? g.time_limit : Math.min(g.time_limit, factor * 1.3 * Math.pow(g.lines || 1, 1.37) * Math.pow(1.45, g.depth - 22)));
   // A finished run's seconds per position → its device's factor for secondsPerPosition, within reason
   const paceFactor = (g, sec) => Math.min(4, Math.max(0.25, sec / secondsPerPosition(g)));
   // A running analysis's seconds per position: the estimate before it started, giving way to the run's own pace as it

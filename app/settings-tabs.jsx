@@ -36,8 +36,8 @@ function EngineSettings({ t, setTweak, full, ES, sfKind, threading, hash, board 
     </>}
     <TweakSlider id="tw-sf-odepth" label="Your moves: depth" value={ES.own.depth} stops={window.AnalysisCore.DEPTHS} format={sfDepthText} onChange={(v) => setTweak('sfOwnDepth', v)} info={`For the moves you play on the board${board ? ': on the free board every move is rated with these' : ''}; Go deeper starts from them. ${stopsAt}`} />
     <TweakSlider id="tw-sf-otime" label="Your moves: time limit per position" value={ES.own.time_limit} stops={window.AnalysisCore.SECONDS} unit="s" onChange={(v) => setTweak('sfOwnTime', v)} info={`For the moves you play on the board. ${stopsAt}`} />
-    <TweakSelect id="tw-sf-lines" label="Your moves: lines" value={String(ES.own.lines)} options={window.AnalysisCore.LINES.map(String)} onChange={(v) => setTweak('sfLines', parseInt(v, 10))}
-      info="Above one, Stockfish shows that many best moves, with an arrow each. Every line takes its share of the search, so each one goes less deep in the same time." />
+    <TweakSelect id="tw-sf-lines" label="Lines" value={String(ES.own.lines)} options={window.AnalysisCore.LINES.map(String)} onChange={(v) => setTweak('sfLines', parseInt(v, 10))}
+      info="For the moves you play and for Go deeper. Above one, Stockfish shows that many best moves, with an arrow each, and Go deeper on a move of an analysed game shows and writes into the annotated PGN that many lines. Every line takes its share of the search, so each one goes less deep in the same time." />
     <SfHashSelect id="tw-sf-hash" value={ES.own.hash_mb} hash={hash} onChange={(v) => setTweak('sfHash', v)} />
     <SfThreadsSelect id="tw-sf-threads" value={ES.own.threads} threading={threading} onChange={(v) => setTweak('sfThreads', v)} />
     {sfChanged && <TweakButton secondary label="Reset engine settings" onClick={() => SF_KEYS.forEach((k) => setTweak(k, window.TWEAK_DEFAULTS[k]))} />}
@@ -68,7 +68,7 @@ function SfThreadsSelect({ id, value, threading, onChange }) {
 // runs it. Starting closes the dialog: the panel shows the run. While one runs, the dialog shows it and Stop.
 // analysis: useGameAnalysis; engine: useEngine; files: the stored files and onRemoveAnalysis drops their analysis
 function GameAnalysisDialog({ t, setTweak, ES, sfKind, threading, hash, analysis, engine, files, M, onRemoveAnalysis, onClose }) {
-  const KEYS = ['sfDepth', 'sfTime', 'sfGameThreads', 'sfGameHash'];
+  const KEYS = ['sfDepth', 'sfTime', 'sfGameLines', 'sfGameThreads', 'sfGameHash'];
   const changed = JSON.stringify(ES.game) !== JSON.stringify(window.AnalysisCore.engineSettings(window.TWEAK_DEFAULTS, sfKind, threading, hash.choices).game);
   const stopsAt = 'Each position’s search stops at its depth or time limit, whichever comes first.';
   const running = analysis.state === 'running';
@@ -78,10 +78,12 @@ function GameAnalysisDialog({ t, setTweak, ES, sfKind, threading, hash, analysis
       {!SF_SIMD && <div className="twk-note twk-err">{SF_ASM_NOTE}</div>}
       <TweakSlider id="tw-sf-depth" label="Depth" value={ES.game.depth} stops={window.AnalysisCore.DEPTHS} format={sfDepthText} onChange={(v) => setTweak('sfDepth', v)} info={stopsAt} />
       <TweakSlider id="tw-sf-time" label="Time limit per position" value={ES.game.time_limit} stops={window.AnalysisCore.SECONDS} unit="s" onChange={(v) => setTweak('sfTime', v)} info={stopsAt} />
+      <TweakSelect id="tw-sf-glines" label="Lines" value={String(ES.game.lines)} options={window.AnalysisCore.LINES.map(String)} onChange={(v) => setTweak('sfGameLines', parseInt(v, 10))}
+        info="How many best moves Stockfish finds in each position. The analysis file keeps them (the Analysis panel lists them after each move and the annotated PGN writes them as variations). Every line takes its share of the search, so at a set depth 3 lines take about 4 times as long as one, and with threads on they weaken the search." />
       <SfThreadsSelect id="tw-sf-gthreads" value={ES.game.threads} threading={threading} onChange={(v) => setTweak('sfGameThreads', v)} />
       <SfHashSelect id="tw-sf-ghash" value={ES.game.hash_mb} hash={hash} onChange={(v) => setTweak('sfGameHash', v)} />
       {changed && <TweakButton secondary label="Reset these settings" onClick={() => KEYS.forEach((k) => setTweak(k, window.TWEAK_DEFAULTS[k]))} />}
-      <div className="twk-note">{engineLabel(ES.game.name)} runs in your browser, one line per position. New settings apply to the next analysis{files.analysis ? ', which replaces this one' : ''}; a stopped analysis resumes with its original settings. While it runs, Stockfish looks at nothing else: your moves and Go deeper wait until it ends.</div>
+      <div className="twk-note">{engineLabel(ES.game.name)} runs in your browser, {ES.game.lines === 1 ? 'one line' : ES.game.lines + ' lines'} per position. New settings apply to the next analysis{files.analysis ? ', which replaces this one' : ''}; a stopped analysis resumes with its original settings. While it runs, Stockfish looks at nothing else: your moves and Go deeper wait until it ends.</div>
       {running && <div className="twk-note" role="status">Analysing {analysis.done} of {analysis.total} positions{analysis.etaSec != null ? ' · ' + fmtEta(analysis.etaSec) : ''}</div>}
       {analysis.err && <div className="twk-note twk-err">{analysis.err}</div>}
       <div className="fen-btns">
