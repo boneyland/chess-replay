@@ -392,6 +392,14 @@ function playLineCached(M, c, moves) {
   if (!LINE_CACHE.has(key)) LINE_CACHE.set(key, window.ChessCore.playLine(fen, moves, castle, ep));
   return LINE_CACHE.get(key);
 }
+// Go deeper's best line from the position after a ply P, as steps: the last one kept (the panel re-renders while the
+// search streams in, and the line changes far less often)
+const DEEP_LINE = { key: '', steps: null };
+function deepLineSteps(P, pv) {
+  const key = P.fen + ' ' + P.castle + ' ' + P.ep + '|' + pv.slice(0, 8).join(' ');
+  if (DEEP_LINE.key !== key) Object.assign(DEEP_LINE, { key, steps: engineSteps({ ...window.ChessCore.posFromFen(P.fen), castle: P.castle, ep: P.ep }, pv) });
+  return DEEP_LINE.steps;
+}
 const lineLabel = (M, c, j, san) => `${window.ChessCore.moveNo(M.ply0 + c + j)} ${san}`;
 
 // What a search actually did: "Stockfish 19 lite · depth 22 (23 unfinished) · 3.0 s · 1.5M nodes" (the eval is from depth 22)
@@ -913,11 +921,11 @@ function Analysis({ M, T, S, a, vline, onLine, onPreview, onReplyHover, paused, 
   // engine preferred to it (P.best is also an equally good move rated best with 0 cp lost: "as good as" says that one)
   // Go deeper's result, once it shows, gives the best line too (as it gives the eval): the line streams in with its
   // search, as on the viewer's own moves
-  const deepLine = deeper && deeper.pv && deeper.pv.length && typeof engineSteps === 'function' ? engineSteps({ ...window.ChessCore.posFromFen(P.fen), castle: P.castle, ep: P.ep }, deeper.pv) : null;
+  const deepLine = deeper && deeper.pv && deeper.pv.length && typeof engineSteps === 'function' ? deepLineSteps(P, deeper.pv) : null;
   const nextLegal = deepLine && deepLine.length ? deepLine : P.next ? playLineCached(M, c + 1, P.next.slice(0, 8)) : [];
   const nextMoves = deepLine && deepLine.length ? deepLine.map((s) => s.san) : P.next ? P.next.slice(0, 8) : [];
   // the chip of the line shown on the board, while that line is still the one listed (a deeper search can change it)
-  const nextSel = vline && vline.src === 'next' && nextMoves[vline.upto] === vline.moves[vline.upto].san ? vline.upto : null;
+  const nextSel = vline && vline.src === 'next' && vline.moves.slice(0, vline.upto + 1).every((s, j) => nextMoves[j] === s.san) ? vline.upto : null;
   const betterLegal = P.best && cls !== 'best' ? playLineCached(M, c, P.best.line.slice(0, 8)) : [];
   // name the engine (the analysis may come from another one), and say where Queen stands once it has looked
   const engName = P.tbBefore ? 'The tablebase' : (M.engine || '').split(' · ')[0] || 'The engine';
@@ -1248,17 +1256,20 @@ function useOwnLineEval(M, line, sf, tw) {
 
 // Go deeper's finished results on the loaded analysis's moves, for the session: by position (the start, the analysis's
 // engine, the moves), the deepest kept (whichever engine or the cloud gave it). The annotated PGN writes their evals
-// (withDeeper); a new analysis of the same game starts afresh, as Go deeper's presses do
+// (withDeeper); an analysis with other settings starts afresh, as Go deeper's presses do (one with the same settings
+// keeps them, as the panel does: they are deeper searches of the same positions)
 const DEEPER_SHOWN = new Map();
-const deeperKey = (M, c) => M.start.fen + '|' + M.engine + '|' + M.plies.slice(0, c + 1).map((q) => q.uci).join(' ');
+const deeperBase = (M) => M.start.fen + '|' + M.engine + '|';
+const deeperKey = (M, c) => deeperBase(M) + M.plies.slice(0, c + 1).map((q) => q.uci).join(' ');
 // M with Go deeper's evals in place of the analysis's on the moves it searched (the eval only: the marks, the better
 // lines and everything rated from the evals stay the analysis's)
 function withDeeper(M) {
   if (M.evalSource !== 'analysis' || !DEEPER_SHOWN.size) return M;
   const CC = window.ChessCore;
-  let any = false;
+  let any = false, key = deeperBase(M);
   const plies = M.plies.map((p, i) => {
-    const d = DEEPER_SHOWN.get(deeperKey(M, i));
+    key += (i ? ' ' : '') + p.uci; // deeperKey(M, i), built a move at a time
+    const d = DEEPER_SHOWN.get(key);
     if (!d) return p;
     any = true;
     return { ...p, cp: d.cp, mate: CC.isMateCp(d.cp) ? Math.sign(d.cp) * CC.mateIn(d.cp) : null };
