@@ -2247,7 +2247,7 @@ for (const name of BROWSERS) for (const site of SITES) {
     });
     // Go deeper's result gives the Best line and the eval bar too, not only the panel's eval: a faked cloud answer
     // (depth 60, +3.21, a rook-pawn move the analysis never chose) replaces the analysis's line once it shows
-    await t.test('desktop: Go deeper\'s answer replaces the Best line and the eval bar\'s eval', async () => {
+    await t.test('desktop: Go deeper\'s answer replaces the Best line, the eval bar\'s eval and the annotated PGN\'s', async () => {
       const gl = await open(browser, { width: 1440, height: 900 });
       const p = gl.page;
       // the page's own fetch answers for the cloud (a Playwright route in Firefox leaks into later contexts)
@@ -2276,6 +2276,17 @@ for (const name of BROWSERS) for (const site of SITES) {
       assert.match(await firstChip(), /^[ah][36]$/, 'the cloud\'s line');
       assert.equal(await bar(), '+3.21');
       await p.screenshot({ path: path.join(OUT, host + '-go-deeper-best-line.png') });
+      // the annotated PGN writes Go deeper's eval for 1. Nf3 in place of the analysis's, and the other moves' as they were
+      const annotated = async () => {
+        const share = await openShare(p);
+        const [dl] = await Promise.all([p.waitForEvent('download'), share.getByRole('button', { name: 'Download annotated' }).click()]);
+        const txt = fs.readFileSync(await dl.path(), 'utf8');
+        await p.keyboard.press('Escape');
+        return txt;
+      };
+      const pgn = await annotated();
+      assert.match(pgn, /1\. Nf3 (\$\d+ )*\{\[%eval 3\.21\]/, pgn.slice(0, 600));
+      assert.equal(pgn.split('[%eval 3.21]').length, 2, 'that move only');
       assert.deepEqual(gl.errors, []);
       await gl.ctx.close();
     });
