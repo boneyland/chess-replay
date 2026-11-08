@@ -1,0 +1,627 @@
+{
+  "white": "A",
+  "black": "B",
+  "white_elo": "",
+  "black_elo": "",
+  "event": "Lines",
+  "site": "?",
+  "date": "????.??.??",
+  "round_num": "?",
+  "result": "*",
+  "opening_name": "Unknown",
+  "opening_eco": "???",
+  "moves": [
+    {
+      "ply": 1,
+      "move_san": "e4",
+      "move_uci": "e2e4",
+      "is_white_move": true,
+      "eval_before": 30.0,
+      "eval_after": 32.0,
+      "best_move_san": "e4",
+      "best_move_uci": "e2e4",
+      "best_eval": 30.0,
+      "eval_loss": 0,
+      "classification": "best",
+      "is_capture": false,
+      "is_check": false,
+      "material_balance": 0,
+      "fen_after": "rnbqkbnr/pppppppp/8/8/4P3/8/PPPP1PPP/RNBQKBNR b KQkq - 0 1",
+      "pv_line": [
+        "c5",
+        "Nf3",
+        "d6"
+      ],
+      "alternative_moves": [
+        [
+          "Nf3",
+          17.0
+        ],
+        [
+          "d4",
+          15.0
+        ]
+      ],
+      "mate_advice": "",
+      "mate_line": "",
+      "search_depth": 12,
+      "search_depth_after": 12,
+      "search_lines": 3,
+      "best_line": [
+        "e4",
+        "e5",
+        "Nf3",
+        "Nc6",
+        "d4",
+        "exd4",
+        "Nxd4",
+        "Bc5",
+        "Nxc6",
+        "bxc6"
+      ],
+      "engine_lines": [
+        {
+          "move": "e4",
+          "eval": 30.0,
+          "depth": 12,
+          "line": [
+            "e4",
+            "e5",
+            "Nf3",
+            "Nc6",
+            "d4",
+            "exd4",
+            "Nxd4",
+            "Bc5",
+            "Nxc6",
+            "bxc6"
+          ]
+        },
+        {
+          "move": "Nf3",
+          "eval": 17.0,
+          "depth": 12,
+          "line": [
+            "Nf3",
+            "Nf6",
+            "c4",
+            "e6",
+            "d4",
+            "d5",
+            "Nc3",
+            "Bb4",
+            "Bd2",
+            "O-O",
+            "e3",
+            "c5"
+          ]
+        },
+        {
+          "move": "d4",
+          "eval": 15.0,
+          "depth": 12,
+          "line": [
+            "d4",
+            "d5",
+            "Nf3",
+            "Nf6",
+            "c4",
+            "e6",
+            "Nc3",
+            "Nbd7",
+            "e3",
+            "Be7",
+            "a3",
+            "O-O"
+          ]
+        }
+      ]
+    },
+    {
+      "ply": 2,
+      "move_san": "e5",
+      "move_uci": "e7e5",
+      "is_white_move": false,
+      "eval_before": 32.0,
+      "eval_after": 27.0,
+      "best_move_san": "c5",
+      "best_move_uci": "c7c5",
+      "best_eval": 32.0,
+      "eval_loss": 0,
+      "classification": "best",
+      "is_capture": false,
+      "is_check": false,
+      "material_balance": 0,
+      "fen_after": "rnbqkbnr/pppp1ppp/8/4p3/4P3/8/PPPP1PPP/RNBQKBNR w KQkq - 0 2",
+      "pv_line": [
+        "Nf3",
+        "Nc6",
+        "Bb5"
+      ],
+      "alternative_moves": [
+        [
+          "d6",
+          46.0
+        ]
+      ],
+      "mate_advice": "",
+      "mate_line": "",
+      "search_depth": 12,
+      "search_depth_after": 12,
+      "search_lines": 3,
+      "best_line": [
+        "c5",
+        "Nf3",
+        "d6",
+        "Nc3",
+        "Nf6",
+        "d4",
+        "cxd4",
+        "Qxd4"
+      ],
+      "engine_lines": [
+        {
+          "move": "c5",
+          "eval": 32.0,
+          "depth": 12,
+          "line": [
+            "c5",
+            "Nf3",
+            "d6",
+            "Nc3",
+            "Nf6",
+            "d4",
+            "cxd4",
+            "Qxd4"
+          ]
+        },
+        {
+          "move": "e5",
+          "eval": 41.0,
+          "depth": 12,
+          "line": [
+            "e5",
+            "Nf3",
+            "d6",
+            "Bc4",
+            "Be7",
+            "d4",
+            "exd4",
+            "Nxd4",
+            "Nf6",
+            "Nc3",
+            "O-O"
+          ]
+        },
+        {
+          "move": "d6",
+          "eval": 46.0,
+          "depth": 12,
+          "line": [
+            "d6",
+            "d4",
+            "Nf6",
+            "Bd3",
+            "g6",
+            "h3"
+          ]
+        }
+      ]
+    },
+    {
+      "ply": 3,
+      "move_san": "Nf3",
+      "move_uci": "g1f3",
+      "is_white_move": true,
+      "eval_before": 27.0,
+      "eval_after": 28.0,
+      "best_move_san": "Nf3",
+      "best_move_uci": "g1f3",
+      "best_eval": 27.0,
+      "eval_loss": 0,
+      "classification": "best",
+      "is_capture": false,
+      "is_check": false,
+      "material_balance": 0,
+      "fen_after": "rnbqkbnr/pppp1ppp/8/4p3/4P3/5N2/PPPP1PPP/RNBQKB1R b KQkq - 1 2",
+      "pv_line": [
+        "Nc6",
+        "Bc4",
+        "Nf6"
+      ],
+      "alternative_moves": [
+        [
+          "Nc3",
+          17.0
+        ],
+        [
+          "d4",
+          3.0
+        ]
+      ],
+      "mate_advice": "",
+      "mate_line": "",
+      "search_depth": 12,
+      "search_depth_after": 12,
+      "search_lines": 3,
+      "best_line": [
+        "Nf3",
+        "Nc6",
+        "Bb5",
+        "a6",
+        "Ba4",
+        "d6",
+        "d4",
+        "b5",
+        "Bb3",
+        "exd4",
+        "Nxd4",
+        "Nxd4"
+      ],
+      "engine_lines": [
+        {
+          "move": "Nf3",
+          "eval": 27.0,
+          "depth": 12,
+          "line": [
+            "Nf3",
+            "Nc6",
+            "Bb5",
+            "a6",
+            "Ba4",
+            "d6",
+            "d4",
+            "b5",
+            "Bb3",
+            "exd4",
+            "Nxd4",
+            "Nxd4"
+          ]
+        },
+        {
+          "move": "Nc3",
+          "eval": 17.0,
+          "depth": 12,
+          "line": [
+            "Nc3",
+            "Nc6",
+            "Nf3",
+            "Nf6",
+            "Bb5",
+            "Bd6",
+            "d4",
+            "exd4",
+            "Nxd4",
+            "O-O",
+            "Be2"
+          ]
+        },
+        {
+          "move": "d4",
+          "eval": 3.0,
+          "depth": 12,
+          "line": [
+            "d4",
+            "exd4",
+            "Nf3",
+            "Bc5",
+            "Nxd4",
+            "Nf6",
+            "Nc3",
+            "O-O"
+          ]
+        }
+      ]
+    },
+    {
+      "ply": 4,
+      "move_san": "Nc6",
+      "move_uci": "b8c6",
+      "is_white_move": false,
+      "eval_before": 28.0,
+      "eval_after": 31.0,
+      "best_move_san": "Nc6",
+      "best_move_uci": "b8c6",
+      "best_eval": 28.0,
+      "eval_loss": 0,
+      "classification": "best",
+      "is_capture": false,
+      "is_check": false,
+      "material_balance": 0,
+      "fen_after": "r1bqkbnr/pppp1ppp/2n5/4p3/4P3/5N2/PPPP1PPP/RNBQKB1R w KQkq - 2 3",
+      "pv_line": [
+        "Bb5",
+        "a6",
+        "Ba4"
+      ],
+      "alternative_moves": [
+        [
+          "Nf6",
+          29.0
+        ],
+        [
+          "d6",
+          45.0
+        ]
+      ],
+      "mate_advice": "",
+      "mate_line": "",
+      "search_depth": 12,
+      "search_depth_after": 12,
+      "search_lines": 3,
+      "best_line": [
+        "Nc6",
+        "Bc4",
+        "Nf6",
+        "d3",
+        "Bc5",
+        "c3"
+      ],
+      "engine_lines": [
+        {
+          "move": "Nc6",
+          "eval": 28.0,
+          "depth": 12,
+          "line": [
+            "Nc6",
+            "Bc4",
+            "Nf6",
+            "d3",
+            "Bc5",
+            "c3"
+          ]
+        },
+        {
+          "move": "Nf6",
+          "eval": 29.0,
+          "depth": 12,
+          "line": [
+            "Nf6",
+            "Nxe5",
+            "d6",
+            "Nf3",
+            "Nxe4",
+            "d4",
+            "d5",
+            "Bd3",
+            "Bd6",
+            "c4",
+            "Bb4+",
+            "Nbd2"
+          ]
+        },
+        {
+          "move": "d6",
+          "eval": 45.0,
+          "depth": 12,
+          "line": [
+            "d6",
+            "d4",
+            "Nd7",
+            "Bc4",
+            "exd4",
+            "Qxd4",
+            "Ngf6",
+            "Nc3",
+            "Be7"
+          ]
+        }
+      ]
+    },
+    {
+      "ply": 5,
+      "move_san": "Bb5",
+      "move_uci": "f1b5",
+      "is_white_move": true,
+      "eval_before": 31.0,
+      "eval_after": 32.0,
+      "best_move_san": "Bb5",
+      "best_move_uci": "f1b5",
+      "best_eval": 31.0,
+      "eval_loss": 0,
+      "classification": "best",
+      "is_capture": false,
+      "is_check": false,
+      "material_balance": 0,
+      "fen_after": "r1bqkbnr/pppp1ppp/2n5/1B2p3/4P3/5N2/PPPP1PPP/RNBQK2R b KQkq - 3 3",
+      "pv_line": [
+        "a6",
+        "Ba4",
+        "Nf6"
+      ],
+      "alternative_moves": [
+        [
+          "Bc4",
+          27.0
+        ],
+        [
+          "Nc3",
+          26.0
+        ]
+      ],
+      "mate_advice": "",
+      "mate_line": "",
+      "search_depth": 12,
+      "search_depth_after": 12,
+      "search_lines": 3,
+      "best_line": [
+        "Bb5",
+        "a6",
+        "Ba4",
+        "Nf6",
+        "O-O",
+        "d6"
+      ],
+      "engine_lines": [
+        {
+          "move": "Bb5",
+          "eval": 31.0,
+          "depth": 12,
+          "line": [
+            "Bb5",
+            "a6",
+            "Ba4",
+            "Nf6",
+            "O-O",
+            "d6"
+          ]
+        },
+        {
+          "move": "Bc4",
+          "eval": 27.0,
+          "depth": 12,
+          "line": [
+            "Bc4",
+            "Nf6",
+            "d3",
+            "Bc5",
+            "Nc3",
+            "d6",
+            "Na4",
+            "Bb6",
+            "O-O",
+            "O-O",
+            "Nxb6"
+          ]
+        },
+        {
+          "move": "Nc3",
+          "eval": 26.0,
+          "depth": 12,
+          "line": [
+            "Nc3",
+            "Nf6",
+            "Bb5",
+            "Bd6",
+            "d4",
+            "exd4",
+            "Nxd4",
+            "O-O",
+            "Nf5",
+            "Be5",
+            "O-O",
+            "Bxc3"
+          ]
+        }
+      ]
+    },
+    {
+      "ply": 6,
+      "move_san": "a6",
+      "move_uci": "a7a6",
+      "is_white_move": false,
+      "eval_before": 32.0,
+      "eval_after": 32.0,
+      "best_move_san": "a6",
+      "best_move_uci": "a7a6",
+      "best_eval": 32.0,
+      "eval_loss": 0,
+      "classification": "best",
+      "is_capture": false,
+      "is_check": false,
+      "material_balance": 0,
+      "fen_after": "r1bqkbnr/1ppp1ppp/p1n5/1B2p3/4P3/5N2/PPPP1PPP/RNBQK2R w KQkq - 0 4",
+      "pv_line": [
+        "Ba4",
+        "Nf6",
+        "O-O"
+      ],
+      "alternative_moves": [
+        [
+          "Nf6",
+          50.0
+        ],
+        [
+          "Bc5",
+          53.0
+        ]
+      ],
+      "mate_advice": "",
+      "mate_line": "",
+      "search_depth": 12,
+      "search_depth_after": 12,
+      "search_lines": 3,
+      "best_line": [
+        "a6",
+        "Ba4",
+        "Nf6",
+        "O-O",
+        "Nxe4",
+        "d4",
+        "b5",
+        "Bb3",
+        "d5",
+        "a4",
+        "Be6",
+        "axb5"
+      ],
+      "engine_lines": [
+        {
+          "move": "a6",
+          "eval": 32.0,
+          "depth": 12,
+          "line": [
+            "a6",
+            "Ba4",
+            "Nf6",
+            "O-O",
+            "Nxe4",
+            "d4",
+            "b5",
+            "Bb3",
+            "d5",
+            "a4",
+            "Be6",
+            "axb5"
+          ]
+        },
+        {
+          "move": "Nf6",
+          "eval": 50.0,
+          "depth": 12,
+          "line": [
+            "Nf6",
+            "O-O",
+            "Bc5",
+            "Nxe5",
+            "Nxe5",
+            "d4",
+            "a6",
+            "Be2",
+            "Nxe4",
+            "dxc5",
+            "Nxc5",
+            "f4"
+          ]
+        },
+        {
+          "move": "Bc5",
+          "eval": 53.0,
+          "depth": 12,
+          "line": [
+            "Bc5",
+            "c3",
+            "Bb6",
+            "d4",
+            "Nf6",
+            "a4"
+          ]
+        }
+      ]
+    }
+  ],
+  "white_stats": {
+    "accuracy": 100.0
+  },
+  "black_stats": {
+    "accuracy": 100.0
+  },
+  "engine": {
+    "name": "Stockfish 19",
+    "depth": 12,
+    "time_limit": null,
+    "lines": 3,
+    "threads": 1,
+    "hash_mb": 64
+  }
+}
