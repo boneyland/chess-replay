@@ -2304,7 +2304,7 @@ for (const name of BROWSERS) for (const site of SITES) {
         await p.keyboard.press('Escape');
         return { txt, file: dl.suggestedFilename() };
       };
-      const qxb5 = (txt) => txt.split('\n\n')[1].replace(/\n/g, ' ').match(/28\. Qxb5 [^}]*\}( \([^)]*\))*/)[0];
+      const qxb5 = (txt) => txt.split('\n\n')[1].replace(/\n/g, ' ').match(/28\. Qxb5\?\? [^}]*\}( \([^)]*\))*/)[0];
       const a = qxb5((await download('Download annotated')).txt);
       assert.match(a, /\{\[%eval [-\d.]+\] \[%clk 0:10:21\] Blunder\. Be3 was best\. Qxb5\?\? grabs/, a);
       assert.match(a, /\} \(28\. Be3 Ba5 29\. Bf3 [^)]*\)$/, 'the analysis\'s line alone: ' + a);

@@ -635,9 +635,9 @@
     if (cur) lines.push(cur);
     return head + '\n\n' + lines.join('\n').replace(/\u00a0/g, ' ') + '\n';
   }
-  // the game as PGN: marks and the source's other NAGs, evals and clocks as [%eval]/[%clk], the PGN's comments and a
+  // the game as PGN: marks after the moves and the source's other NAGs, evals and clocks as [%eval]/[%clk], the PGN's comments and a
   // notes file's (and Queen's sentence) as comments, the source's variations as written, and with an analysis's evals
-  // its better line on ?!/?/?? moves in place of the source's first variation there; wrapped at 80 columns.
+  // its line on every move it didn't rate best in place of the source's first variation there; wrapped at 80 columns.
   // raw: the tags and the moves alone (no comments, NAGs, evals, clocks or variations)
   function annotatedPgn(M, { raw = false } = {}) {
     const H = { ...(M.headers || {}) };
@@ -658,9 +658,10 @@
     if (intro.length && !raw) toks.push(`{${intro.join(' ')}}`);
     M.plies.forEach((p, i) => {
       const abs = (M.ply0 || 0) + i;
-      toks.push(pgnMoveNo(abs, !i || pgnReopens(toks[toks.length - 1])) + p.san);
+      // the mark after the move as it reads (Qb7?!), as Lichess and chess books write it; the other NAGs as $n
+      toks.push(pgnMoveNo(abs, !i || pgnReopens(toks[toks.length - 1])) + p.san + (raw || !NAG_OF[p.mark] ? '' : p.mark));
       if (raw) return;
-      (NAG_OF[p.mark] ? [NAG_OF[p.mark]] : []).concat(p.nags || []).forEach((g) => toks.push('$' + g));
+      (p.nags || []).forEach((g) => toks.push('$' + g));
       const tags = [];
       if (!p.checkmate && p.mate != null) tags.push(`[%eval #${p.mate}]`);
       else if (!p.checkmate && p.cp != null) tags.push(`[%eval ${(p.cp / 100).toFixed(2)}]`);
@@ -668,11 +669,11 @@
       const said = p.says ? both(p.says.pgn, p.says.notes) : both(null, null, p.comment);
       const words = tags.concat(said, p.queenText ? [pgnEsc('Queen: ' + p.queenText)] : []);
       if (words.length) toks.push(`{${words.join(' ')}}`);
-      // the PGN's own variations as written, and the better line of the evaluations shown (Game › Evaluations from), as
-      // the Analysis panel has it: with the analysis's, its better line on ?!/?/?? moves first, in place of the PGN's
-      // first variation there (the PGN's better line), so a move never carries two
+      // the PGN's own variations as written, and with the analysis's evals (Game › Evaluations from) the engine's line on
+      // every move it didn't rate best (the Analysis panel's Best line after the move before), first, in place of the
+      // PGN's first variation there (the PGN's better line), so a move never carries two
       let vars = p.pgnVars || [];
-      if (M.evalSource === 'analysis' && p.best && p.best.line && p.best.line.length && ['inaccuracy', 'mistake', 'blunder'].includes(p.cls)) {
+      if (M.evalSource === 'analysis' && p.best && p.best.line && p.best.line.length && p.cls !== 'best') {
         const before = i ? M.plies[i - 1] : null;
         const line = playLine(before ? before.fen : M.start.fen, p.best.line, before ? before.castle : M.start.pos.castle, before ? before.ep : M.start.pos.ep);
         const v = line.map((m, j) => pgnMoveNo(abs + j, j === 0) + m.san);
