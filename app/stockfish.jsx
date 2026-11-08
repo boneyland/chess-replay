@@ -296,7 +296,7 @@ function useGameAnalysis(M, files, getFiles, commit, engine, settings, tbOn) {
     } catch (e) {
       if (run.current !== me) return;
       run.current = null;
-      setSt({ ...idle, err: engine.status === 'unavailable' ? '' : `Analysis stopped: ${(e && e.message) || e}. The computer button by the engine starts it again.` });
+      setSt({ ...idle, err: engine.status === 'unavailable' ? '' : `Analysis stopped: ${(e && e.message) || e}. Press the computer button to start analysis again.` });
     }
   };
   // the run's hash table goes back to the live searches' once it ends, however it ends
