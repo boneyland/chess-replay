@@ -2243,6 +2243,11 @@ for (const name of BROWSERS) for (const site of SITES) {
       await p.waitForFunction(() => /cloud depth \d+/i.test(document.body.innerText), null, { timeout: 20000 });
       assert.equal(new Set(sent).size, 1, 'the move\'s position asked');
       await p.screenshot({ path: path.join(OUT, host + '-cloud-go-deeper.png') });
+      // Stockfish switched off (its deeper search likely still running): the cloud's answer stays, the + goes
+      await p.getByRole('switch', { name: 'Stockfish' }).click();
+      await p.waitForTimeout(500);
+      assert.match(await p.locator('.part-analysis').innerText(), /cloud depth \d+/i, 'the cloud\'s answer with Stockfish off');
+      assert.equal(await deeper.count(), 0, 'no Go deeper with Stockfish off');
       assert.deepEqual(gd.errors, []);
       await gd.ctx.close();
     });
