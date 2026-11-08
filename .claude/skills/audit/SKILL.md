@@ -18,7 +18,7 @@ Kinds of audit (the user may name one or several; with none named, do all of the
 - **security**: CSP and headers, OAuth (HF, Lichess PKCE), tokens and localStorage, pinned hashes, workers, `fetch` targets, file input
 - **debt**: duplication (above all copies that have already drifted apart), dead code, overgrown functions, inconsistent patterns, hand-synced lists
 - **tests**: behaviour in the cores and views that no test exercises
-- **docs**: CLAUDE.md, `docs/spec.md`, LAYOUT.md and README saying something the code no longer does
+- **docs**: CLAUDE.md, the spec (`docs/spec.md`, `docs/spec/`, `docs/roadmap.md`, `docs/known-gaps.md`, `docs/decisions.md`), LAYOUT.md and README saying something the code no longer does
 
 Say the scope in one line and go on; ask only when the request is genuinely unclear. Read the newest report in
 `docs/audits/` first, if there is one: its open findings and Fix plan feed step 5's "Since the last audit".

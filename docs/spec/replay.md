@@ -1,0 +1,97 @@
+# Replay
+
+[Spec](../spec.md) › what is built. The replay of a loaded game and its analysis: the video, the panels, Go deeper, the opening names, custom starts, piece sets, boards and drawing on the board.
+
+## Replay and browser analysis
+
+The page replays a game (the sample, or a loaded PGN) as an animated video with an eval bar and graph, move ratings, best lines, commentary and the opening name. Stockfish runs in the browser for two things the precomputed data can't cover:
+
+- **Own moves.** Drag a piece (or tap-tap) from any position. Stockfish evaluates the move as soon as it's dropped: the move in the "you" colour, the eval (streamed from ~0.5 s, final at the "Your moves" time limit, or its depth if one is set), "YOUR MOVE · −41 CP vs a4" with its rating colour, and a **Stockfish replies** row of up to 8 plies, clickable to play the line. Both sides of the comparison come from the browser engine (it searches the position before the move too, cached by position), so the lite engine's eval is never compared with the full engine's. Esc, a new move or stepping cancels a search.
+- **Games without evals.** The empty Analysis panel offers **Analyse with Stockfish · about N min** (only while paused). While it runs the panel shows "Analysing 31 / 80 · about 1 min left", a progress bar and Stop (Stop discards the partial run: a half-rated game would mislead). When done, the game is rebuilt as if an `--analyze` JSON had been loaded. Games that already have evals (the sample, Lichess `[%eval]` PGNs) keep them; a game with PGN variations but no evals still offers Analyse.
+- **Keeping it.** The result is stored with the loaded files (`files.analysis` in localStorage), so a reload keeps it, and **Save analysis** (in Settings) downloads it as `<White>-<Black>_analysis.json` in `--analyze` format.
+- **Start state.** The page opens paused on the starting position with every panel visible; the empty Analysis panel says "Press play to watch the game, or drag a piece to try your own move". The first Play from that frame starts at 0:00 (title card). Reload opens on the starting position (the playhead isn't saved).
+- **Analysis header** (the panel's title row): **Analysis** on the left; on the right Go deeper's green **+**, the depth the search behind the current eval reached ("depth 20", one number), the browser engine as a drop-down (**Stockfish 19 lite** / **Stockfish 19 full**; plain text where Full isn't offered, and while playing or exporting), which stays put while the + and the depth come and go, and last a **☰** that turns the whole panel into the engine settings (`AnalysisPanel`, `EngineMenuContext`). Time, nodes, lines and threads aren't shown, nor the engine summary of a loaded analysis or of PGN evals. The drop-down and ☰ show only while paused (and on the free board, not during a game).
+- **Search progress**: while Stockfish searches for the Analysis panel (the viewer's move, the free board, Go deeper), a green line grows along the panel's top border, through the searches still to run (the positions after and before the move); each search's share is its time limit or its depth limit, whichever it nears first, a depth taken as about 1.5 times the one before (`useMoveEval`'s `progress`, `Panel`'s `progress`). It's gone when the search ends. A game's analysis keeps its own bar in the panel.
+- **Analysis panel lines** (a replayed move): **Best line** is the engine's line from the position on the board, after the move, as Lichess shows it and as the eval beside it (`ply.next`: the next move's `best_line`, the same search, or after the last move its 3-ply `pv_line`); a move not rated best also shows **Better was**, the line the engine preferred to it (`ply.best`, the board's green arrow); Queen's line is from the position after the move too. A best move with no line after it (mate, stalemate) says the engine agrees.
+- **Board highlights**: last move in Lichess's green (`rgba(155,199,0,0.41)`); a rated move filled in its rating colour at 60%. Everything on the board uses the dark palette's colours in both themes.
+- **Mouse wheel** over the board steps the moves, as on Lichess: down the next move, up the previous (a shown line's moves while one is on the board, as ← →; on the free board too, but not during a game in progress or a video export). One notch is one move; a trackpad's stream or a fast spin adds up to a step every 60 px, at most one step per 90 ms (`BoardCore.wheel`), so it walks the moves rather than skipping. The page doesn't scroll while the pointer is over the board (a non-passive listener on `BoardSpace`) and still scrolls elsewhere; ctrl + wheel (zoom) and sideways scrolls are left to the browser.
+- **Ask Queen** stays in the dock (landscape) and the phone menu, not the Analysis panel (no room on small screens).
+
+**Parity with Python** (`chess_game_analyzer.py` in chess-animator: `analyze_game`, `_classify_move`, `mate_advice`, `_calculate_player_stats`, `winning_chances`, `_eval_to_cp`). Ported, not reinvented:
+
+- Every position searched once (start, then after each ply: N+1 searches); the search after ply i is the "before" of ply i+1.
+- Centipawns from White's point of view (UCI's side-to-move score negated for Black); mates as `±(10000 − 10·N)`.
+- `eval_loss` with the mate-in-N adjustment, ≥ 0, zero when the played move is the engine's, capped at 1500 for accuracy.
+- Ratings: `best` under 5 cp, else Lichess win-chance drops 0.10 / 0.20 / 0.30 (K = 0.00368208); mate rules override, with `mate_advice`/`mate_line` text.
+- Accuracy per side `100·exp(−0.005·avg_loss)`; `best_line` up to `BEST_LINE_MAX_PLIES` in SAN, stopping at the first illegal move; the best move is `pv[0]`.
+- JSON shape as `sample_game_analysis.json`; `engine` = `{name: "Stockfish 19 lite (browser)", depth, time_limit, lines: 1, threads: 1, hash_mb}`. Per move it adds `search_time_after_ms`, `search_nodes_after`, `search_maxdepth_after` (Python ignores them). Header fields come from the PGN (empty when absent); report-only fields may be empty but present. The engine label reads like Python's `describe_search`: "depth 22, max 3s per position".
+- Checked by `tests/check_browser_json.py`.
+
+**Engine plumbing.**
+
+- nmrugg/stockfish.js **v19.0.1 `stockfish-19-lite-single`** (28 KB `.js` + 1.8 MB `.wasm`, GPL-3.0), vendored in `vendor/`, SHA-256 pinned in LAYOUT.md, with a GPL source link in the page. The site can also run the full engine the viewer downloads (see [Full Stockfish download](engine.md#full-stockfish-download)). The site serves it next to the page and starts `new Worker(...)` lazily.
+- One engine for the page (`SFEngine`), Hash 64 MB set once, no `ucinewgame` within an analysis. Priorities: the Stockfish opponent's `play`, then own moves, then game analysis; a running search is never interrupted.
+- Search limits are Settings sliders (Game analysis, Your moves), defaults in `TWEAK_DEFAULTS`.
+- Robustness: 30 s start timeout, then the worker is terminated and "Try again" retries; a dead engine reports "Stockfish stopped (why) · play a move to restart it" and is replaced on next use (the reason, e.g. "Stockfish stopped answering" or a worker crash, in brackets wherever the panel says it stopped or can't run, so a failure on a device we can't test on can be read off its screen: `sfDownText`); a search still running 5 s past its movetime has hung (a threaded engine in WebKit or Firefox can, after passing its probe) and moves to a fresh worker, started and probed like the first, the same engine to the page; three hung workers in a row stop the engine as a dead one; a Go deeper whose engine doesn't start or stops says so in the Analysis header (*Stockfish didn't start* / *Stockfish stopped before it finished*, *Engine failed* in a narrow panel; the engine's reason in its tooltip, all of it at a tap) and undoes the press, so the + comes back; the site checks the wasm exists first; a run is dropped only when the game changes, and results merge into the current files.
+- Time estimate: ~1.3 s per position on a laptop; the ETA during a run comes from the measured rate; the worst case is the time cap × positions.
+
+Benchmarks behind the limits (2026-10-16, Node 22 on this laptop, reference native Stockfish 19 full net 4 s × 7 threads; game 1 Byrne–Fischer, 83 positions, 6 native marks; game 2 a Lichess bullet game, 63 positions, 4 marks):
+
+| Setting | Game 1 | Game 2 | Eval gap to native (g1 / g2) | Native marks matched (g1 / g2) |
+|---|---|---|---|---|
+| depth 20 / 3 s | 58 s | 76 s | 66 / 54 cp | 2/6 / 2/4 |
+| depth 22 / 3 s | 106 s | 112 s | 48 / 49 cp | 2/6 / 1/4 |
+| depth 24 / 5 s | 180 s | 189 s | 48 / 46 cp | 2/6 / 1/4 |
+| depth 24, no cap | 243 s | 275 s | 44 / 46 cp | 4/6 / 2/4 |
+
+Every setting flags all of game 2's blunders; none finds 30.Qf8?! or 35.Kg1?! (the lite net, not depth). Deeper search mostly narrows the eval gap; one-mark rating differences are run-to-run noise. Hash 16–128 MB made no difference at depth 20; at depth 24 uncapped 32 MB filled to 95%, hence 64 MB. Peak RSS ~210 MB.
+
+Hash re-checked with no depth limit (2026-10-25, Node 22 on this laptop, one search per fresh engine, `go movetime`, hashfull as Stockfish reports it; two made-up middlegames, one roughly ±6, and KBN v K `7k/8/8/8/8/8/8/KBN5 w`):
+
+| Search (middlegames) | Engine | 32 MB | 64 MB | 128 MB | 256 MB |
+|---|---|---|---|---|---|
+| 3 s (game analysis default) | lite | 30–36% | 16–18% | 9% | 4–5% |
+| | full | 16–17% | 8% | 4% | 2% |
+| 5 s (your moves default) | lite | 53–55% | 30% | 15–16% | 7–8% |
+| | full | 27–29% | 12–15% | 7% | 3–4% |
+| 20 s (Go deeper, 3rd press) | lite | 99% | 85% | 54% | 29% |
+| | full | 83–85% | 52–57% | 27–29% | 14% |
+
+Full searches about half the nodes a second of lite in a middlegame (0.25 M against 0.5 M), so it fills the hash half as fast. No size made a consistent difference to depth or eval. In KBN v K at 20 s both engines found mate in 30–33 only at 64 and 128 MB, not at 32 or 256 (single-threaded Stockfish is deterministic for one hash size, and the size changes the tree, so a deep mate turning up is luck of the size, not more memory). Peak RSS in Node, full: ~500 MB up to 64 MB of hash, ~640 MB at 128 MB, ~750 MB at 256 MB (above 64 MB each doubling adds its size). Hence 64 MB stays the default for both engines; the bigger sizes are in Settings for long searches on a desktop.
+
+60 s searches (2026-11-01, Node 22 on this laptop, 8 cores, the Sicilian Dragon middlegame, no depth limit), hashfull at 10 / 30 / 60 s: threaded lite, 7 threads (the most here), 256 MB: 60% / 96% / 99.9% (2.5–2.8 M nodes/s, depth 34; 512 MB: 31% / 68% / 94%, peak RSS 880 MB against 625); threaded lite, 4 threads, 256 MB: 49% / 91% / 99% (2.0–2.1 M nodes/s, depth 35); single-thread full, 256 MB: 8% / 22% / 41% (0.3 M nodes/s, depth 34, peak RSS 760 MB). So 256 MB holds a single-thread minute, but a threaded one fills it in about 30 s: hence a 512 MB choice (Lichess's maximum too). Every build (lite and full, single and threaded, asm.js) caps its memory at 2 GB; lite single, full single and asm.js each ran a 512 MB search in Node (peak RSS 650 MB, 1.0 GB and 1.2 GB).
+
+Hash table sizes by device (`AnalysisCore.hashChoices`): 256 and 512 MB are offered only where the device isn't touch only (a phone or tablet: `any-pointer: coarse` without `any-pointer: fine`; a touchscreen PC has a touchpad or mouse too, and headless Firefox reports no pointer at all, so "has a fine pointer" would hide them there) and, where the browser says (`navigator.deviceMemory`, Chromium only, rounded, at most 8), with 4 GB or more; a stored size not offered runs as 64 MB. A size the engine still can't get: Stockfish prints "Failed to allocate N MB for transposition table." (on stdout in every build: lite, full, threaded, asm.js) and answers nothing more, so `SFEngine` moves to a fresh worker with 64 MB, the running search starting again there, and `onHashFail` shows Hash table at 64 MB with a note under it ("This device couldn’t give Stockfish 512 MB for its hash table, so it uses 64 MB for this visit."). The saved setting is kept (the memory may be there next visit); for the rest of the visit the size that failed and bigger ones aren't offered. A game analysis running at the time records the size it ended with, and its partial run is kept under it, so it resumes. Whether to fall back is judged by the size last sent, not one asked for since; no memory even for 64 MB fails the engine ("Not enough memory for Stockfish’s 64 MB hash table"). A Hash of 4096 MB or more wraps around in the 32-bit builds (2³² bytes is 0) and silently runs with none, so the tests ask 2048.
+
+## Opening names
+
+`openings/*.tsv` is a verbatim copy of Lichess's chess-openings tables (CC0), shared with chess-animator; updating it updates both. `openings-core.js` ports chess-animator's `OpeningBook`: positions keyed by EPD (so move orders and FEN starts both match), each named by the deepest named position on its line.
+
+- A game whose PGN has no `Opening` header (or `?`/empty) gets its name and ECO from the book; the saved analysis JSON carries them.
+- The book name of the current position sits right of the **Commentary** heading while in book, also for explored lines.
+- The table is embedded in the page and built lazily on first need.
+
+## Custom starts and flip
+
+- `ChessCore.buildGame` accepts a `[FEN]` start: Black may move first, castling rights come from the FEN. Move numbers and sides come from `M.ply0` (`ChessCore.moveNo`), never `i % 2`.
+- The engine sends `position fen <fen> moves …`; caches (`SF_EVAL_CACHE`, partial runs) key on the start FEN too.
+- **Flip** turns the board, coordinates, player bars and eval bar, for loaded games and the free board; remembered like other settings. Squares become pixels only through `view()`.
+
+## Piece sets
+
+- Settings › View › Pieces: a grid of each set's white knight on a light square (as Lichess shows them; the name on hover and to screen readers, the chosen one outlined): cburnett (the default, in the page so the board draws at once) and 26 of Lichess's freely licensed sets (`PieceSets`, `app/piece-sets.js`; the list, licences and what was left out are in LAYOUT.md). Remembered like other settings. The grid's knights are fetched when the View tab first shows them (one small file a set); a knight that fails is asked for again after 5, 15, 30, 60 and 120 s, since right after a deploy Render's CDN can keep a 404 for a few minutes (seen on PR 161's preview, 2026-11-04).
+- A chosen set is fetched (12 SVGs from `pieces/<set>/`, about 30–90 KB) only when chosen, and drawn once all twelve have loaded, so the board never mixes sets or shows a broken one; until then it keeps the set it had. `sw.js` keeps a set when it's first drawn, not at install. If it can't be loaded (offline before it was ever kept), Settings says so and the board stays as it was.
+- Everywhere a piece is drawn (`img()` in `game-video-core.jsx`): the replay, the free board and games, Edit position, promotion and captured pieces. Exports draw it too, the 14 non-commercial (CC BY-NC-SA) sets included: with one chosen (or the lisp sounds, in an MP4 or WebM), the Share and export dialog warns that the video may not be used commercially and should credit them.
+- Credits: a line under the grid names the chosen set's author and licence; Settings › About, README's Credits and Licence.
+
+## Boards
+
+- Settings › View › Board: a grid of Lichess's 25 2D boards, each tile its two squares (lila's 64×32 thumbnails; newspaper, which has none, shows its own picture's corner), as Lichess's board menu has them, in its order; brown, the default, is the board as it was. Remembered like other settings (`boardTheme`). No 3D boards (the user's call: they need a second way of drawing the whole board).
+- Brightness (20–140 %), Contrast (40–200 %) and Hue (0–100, × 3.6°), Lichess's sliders and ranges (`boardBrightness`, `boardContrast`, `boardHue`), under the grid, with Reset colours to default once any is moved. They apply in Lichess's order (CSS's brightness(), contrast(), hue-rotate(), in sRGB) to the board and its coordinates, and the grid's tiles show them (through a CSS filter, close to the board's own).
+- `BoardThemes` (`app/board-themes.js`; the files and their licence in LAYOUT.md): the five flat boards (brown, blue, green, ic, purple) are two colours, put through the sliders' arithmetic (`filter`) and drawn as squares at once. The 20 picture boards are lila's files from `boards/`, fetched when chosen; on the page the board is lila's file through the same change as a CSS filter (`css`), so it follows a slider at once, as the tiles do, and never swaps pictures (an earlier version swapped in the worked-out picture once a slider stopped, which showed as a refresh, and before that flashed the board's own colours). An export can't paint a filter, so Export first has `render` draw the board through the sliders into a 1024 px PNG (a blob: URL; the last four kept), and the board shows that picture while the export runs (`useBoardLook`'s `exporting`; it waits for the page's pictures to decode before its first frame). The two differ by under a level in 255 on average. A newly chosen board keeps the last one until its file has loaded (or, offline before it was kept, says so in Settings). The picture lies under the squares as one `<img>`, so the export draws it itself like any other (`export-draw.js`), sliders included. The coordinates take Lichess's colours for each board (brown keeps its old ones) through the sliders. A flipped board's picture stays put, as on Lichess.
+- Everywhere the squares are drawn (`boardSquares()` in `game-video-core.jsx`): the replay, the free board and games, Edit position, and exports.
+
+## Drawing on the board
+
+As on Lichess, in the replay and the free board (games too; not Edit position or the video and its export): a right click on a square rings it, a right-button drag from one square to another draws an arrow. The modifier held as the button goes down picks the colour: none green, Shift or Ctrl red, Alt (⌘) blue, Shift or Ctrl with Alt yellow, as on Lichess (Ctrl is the easy red in Firefox: see Known gaps). Drawing a shape again in its colour takes it off, in another colour recolours it; an arrow let go off the board is dropped. A left click on the board clears them all, and they go when the position on the board changes (a step, a move, a line). They hide while the video plays or an Analysis line is previewed under the mouse. Colours are Lichess's brushes (`#15781b`, `#882020`, `#003088`, `#e68f00`), darker than the engine's and Queen's arrows; arrows reuse the engine arrows' shape, circles are rings. The browser's context menu is suppressed over the board only.
+- Rules in `DrawCore` (`app/draw-core.js`: `brush`, `shape`, `toggle`), tested in `tests/draw-core.test.cjs`; the hook `useBoardDraw` and the layer `BoardDraw` (`app/game-video-core.jsx`) wrap `BoardTouch`, taking the right button in the capture phase before `useBoardInput` sees it; squares through `view()`, so a flipped board draws under the pointer.
