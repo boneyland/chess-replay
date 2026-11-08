@@ -2477,6 +2477,29 @@ for (const name of BROWSERS) for (const site of SITES) {
         await ac.ctx.close();
       }
     });
+    // the Stockfish switch off stops only the local engine: Lichess's cloud evaluation (its setting on) still shows, and
+    // nothing is searched
+    await t.test('desktop: with Stockfish switched off, the cloud evaluation still shows', async () => {
+      const cloud = JSON.parse(fs.readFileSync(path.join(__dirname, '..', 'fixtures', 'cloud-e4-3lines.json'), 'utf8'));
+      const ac = await open(browser, { width: 1440, height: 900 });
+      const p = ac.page;
+      // the page's own fetch answers for the cloud (see Prefer cloud's test)
+      await ac.ctx.addInitScript((ans) => {
+        const f = window.fetch;
+        window.fetch = function (u) { return String(u).startsWith('https://lichess.org/api/cloud-eval') ? Promise.resolve(new Response(JSON.stringify(ans), { status: 200, headers: { 'Content-Type': 'application/json' } })) : f.apply(this, arguments); };
+      }, { ...cloud, depth: 25 });
+      await p.addInitScript(spyEngine, {});
+      await p.addInitScript(() => { try { localStorage.setItem('chess-video.tweaks.v1', JSON.stringify({ cloudEval: true, sfOn: false })); } catch (e) {} });
+      await p.goto(base, { waitUntil: 'load' });
+      await loadedOn(p);
+      await setUpFen(p, 'rnbqkbnr/pppppppp/8/8/4P3/8/PPPP1PPP/RNBQKBNR b KQkq - 0 1');
+      await p.waitForFunction(() => /cloud depth 25/i.test(document.body.innerText), null, { timeout: 20000 });
+      assert.equal(await p.getByRole('switch', { name: 'Stockfish' }).getAttribute('aria-checked'), 'false');
+      await p.waitForTimeout(1000);
+      assert.deepEqual(await p.evaluate(() => window.__sf.posted.filter((m) => m.startsWith('go'))), [], 'nothing searched');
+      assert.deepEqual(ac.errors, []);
+      await ac.ctx.close();
+    });
     // the tablebase in a game's analysis (the real service): every position of this KBN v K game has 7 pieces or fewer,
     // so the run asks Lichess (4 requests 4 s apart, the start's answer already shown) and searches none of them (with
     // 20 s a position, a search would show), and 2. Bc4+, which
