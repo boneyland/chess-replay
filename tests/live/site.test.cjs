@@ -2247,7 +2247,7 @@ for (const name of BROWSERS) for (const site of SITES) {
     });
     // Go deeper's result gives the Best line and the eval bar too, not only the panel's eval: a faked cloud answer
     // (depth 60, +3.21, a rook-pawn move the analysis never chose) replaces the analysis's line once it shows
-    await t.test('desktop: Go deeper\'s answer replaces the Best line, the eval bar\'s eval and the annotated PGN\'s', async () => {
+    await t.test('desktop: Go deeper\'s answer replaces the Best line, the eval bar\'s eval and the annotated PGN\'s eval and line', async () => {
       const gl = await open(browser, { width: 1440, height: 900 });
       const p = gl.page;
       // the page's own fetch answers for the cloud (a Playwright route in Firefox leaks into later contexts)
@@ -2287,6 +2287,13 @@ for (const name of BROWSERS) for (const site of SITES) {
       const pgn = await annotated();
       assert.match(pgn, /1\. Nf3 (\$\d+ )*\{\[%eval 3\.21\]/, pgn.slice(0, 600));
       assert.equal(pgn.split('[%eval 3.21]').length, 2, 'that move only');
+      // its line goes on the next move in place of the analysis's: after 2. g3 the cloud's 2... a6 is 2... Nf6's line
+      const nf6 = (txt) => txt.split('\n\n')[1].replace(/\n/g, ' ').match(/2\.\.\. Nf6 \{[^}]*\}( \([^)]*\))?/)[0];
+      assert.match(nf6(pgn), /\(2\.\.\. g6 /, 'the analysis\'s line before: ' + nf6(pgn));
+      await p.locator('[data-ply="2"]').click();
+      await p.getByRole('button', { name: /^Go deeper/ }).click();
+      await p.waitForFunction(() => /cloud depth 60/i.test(document.body.innerText), null, { timeout: 20000 });
+      assert.match(nf6(await annotated()), /\} \(2\.\.\. a6\)$/, 'Go deeper\'s line');
       assert.deepEqual(gl.errors, []);
       await gl.ctx.close();
     });

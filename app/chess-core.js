@@ -686,6 +686,29 @@
     return pgnText(keys.map((k) => [k, H[k]]), toks);
   }
 
+  // M with deeper searches of its positions in place of the analysis's (Go deeper): at(i) is the search of the position
+  // after ply i ({ cp, pv: UCI moves }, or null). Its eval goes on ply i; its line on ply i + 1 as the engine's better
+  // line there (what the annotated PGN writes), up to 12 plies, none where it starts with the move played (the search
+  // agrees with the game). The marks and everything rated from the evals stay the analysis's
+  function withSearches(M, at) {
+    let any = false;
+    const plies = M.plies.slice();
+    M.plies.forEach((p, i) => {
+      const d = at(i);
+      if (!d) return;
+      any = true;
+      plies[i] = { ...plies[i], cp: d.cp, mate: isMateCp(d.cp) ? Math.sign(d.cp) * mateIn(d.cp) : null };
+      const next = M.plies[i + 1];
+      if (!next || !d.pv || !d.pv.length) return;
+      if (d.pv[0] === next.uci) { plies[i + 1] = { ...plies[i + 1], best: null }; return; }
+      let pos = { ...posFromFen(p.fen), castle: p.castle, ep: p.ep };
+      const line = [];
+      for (const u of d.pv.slice(0, 12)) { const s = stepFromUci(pos, u); if (!s) break; line.push(s.san); pos = s.pos; }
+      if (line.length) plies[i + 1] = { ...plies[i + 1], best: { uci: d.pv[0], line } };
+    });
+    return any ? { ...M, plies } : M;
+  }
+
   // a game's notes (a notes file's, and the sample's own) as a notes file that parseNotes reads back: [INTRO], [n] for
   // the note after ply n, [CONCLUSION], each with its text on its line (a note is one line), so a note that starts like a
   // key ([RESULT], [12]) is never read as one; '' when the game has none
@@ -790,5 +813,5 @@
     for (let m = step; 2 * m - ply0 <= N; m += step) if (2 * (m - 1) - ply0 >= 0) ticks.push({ m, at: 2 * (m - 1) - ply0 });
     return ticks;
   }
-  window.ChessCore = { START_FEN, splitGames, fmtDate, fmtLen, hasLegal, inCheck, checkers, evalTicks, sqName: idxSq, CASTLE_HOME, canCastle, readFen, epFits, setupProblems, setupFen, epCapturable, fullFen, parseFen, fenAfter, moveNo, sqIndex: sqIdx, applySan, applyUci, stepFromUci, toFen, playLine, posFromFen, legalTargets, isPromotion, userMove, buildGame, withCommentary, commentarySources, classifyFile, plan, timing, schedule, cues, settledAt, clipRange, MATE_CP, MATE_STEP, MATE_MIN, mateCp, isMateCp, mateIn, WIN_K, WIN_DROP, winChance, plyCp, MARK_CLASS, pgnClk, pgnMoveNo, pgnReopens, pgnText, annotatedPgn, notesText };
+  window.ChessCore = { START_FEN, splitGames, fmtDate, fmtLen, hasLegal, inCheck, checkers, evalTicks, sqName: idxSq, CASTLE_HOME, canCastle, readFen, epFits, setupProblems, setupFen, epCapturable, fullFen, parseFen, fenAfter, moveNo, sqIndex: sqIdx, applySan, applyUci, stepFromUci, toFen, playLine, posFromFen, legalTargets, isPromotion, userMove, buildGame, withCommentary, commentarySources, classifyFile, plan, timing, schedule, cues, settledAt, clipRange, MATE_CP, MATE_STEP, MATE_MIN, mateCp, isMateCp, mateIn, WIN_K, WIN_DROP, winChance, plyCp, MARK_CLASS, pgnClk, pgnMoveNo, pgnReopens, pgnText, annotatedPgn, withSearches, notesText };
 })();
