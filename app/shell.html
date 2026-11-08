@@ -484,6 +484,8 @@ body:has(.stage.stage-short) .twk-panel { bottom: calc(44px + var(--safe-b)); ma
 .an-spin { width: 82%; height: 82%; border-radius: 50%; background: conic-gradient(#e4553f, #ec9442, #e3c25b, #62c483, #4aa3df, #8a6fdf, #e0609f, #e4553f);
   -webkit-mask: radial-gradient(farthest-side, transparent calc(100% - 3.5px), #000 calc(100% - 3px)); mask: radial-gradient(farthest-side, transparent calc(100% - 3.5px), #000 calc(100% - 3px));
   animation: an-spin 1.1s linear infinite; }
+.an-status { display: flex; align-items: center; gap: 8px; }
+.an-status .an-spin { flex: none; width: 1em; height: 1em; }
 @keyframes an-spin { to { transform: rotate(1turn); } }
 .q-fail { color: var(--danger); }
 .q-via-box { display: flex; flex-direction: column; gap: 8px; }

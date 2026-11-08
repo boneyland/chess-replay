@@ -650,12 +650,12 @@ const lineRow = (onLeave) => ({
 function LineChips({ name, nameColor, accent, moves, ply0, c, legal, sel, onPick, tip, onHover, bare }) {
   const what = tip || String(name).toLowerCase();
   return (
-    <div {...(bare ? {} : lineRow(onHover && (() => onHover(null))))} style={{ display: 'flex', flexWrap: 'wrap', alignItems: 'center', columnGap: tx(6), rowGap: tx(6) }}>
-      {name != null && <span style={{ color: nameColor, marginRight: tx(8) }}>{name}</span>}
+    <div {...(bare ? {} : lineRow(onHover && (() => onHover(null))))} style={{ display: 'flex', flexWrap: 'wrap', alignItems: 'center', columnGap: 0, rowGap: tx(6) }}>
+      {name != null && <span style={{ color: nameColor, marginRight: tx(14) }}>{name}</span>}
       {moves.map((m, j) => {
         const ply = ply0 + c + j, white = ply % 2 === 0, ok = j < legal, on = sel === j;
         return (
-          <span key={j} style={{ display: 'flex', alignItems: 'center', gap: tx(5) }}>
+          <span key={j} style={{ display: 'flex', alignItems: 'center', gap: tx(5), marginRight: white && j + 1 < moves.length ? tx(2) : tx(6) }}>
             {(white || j === 0) && <span style={{ color: C.dim, marginLeft: j ? tx(6) : 0, font: `500 ${tx(16)}px ${MONO}` }}>{window.ChessCore.moveNo(ply)}</span>}
             <span className={ok ? 'mv' : undefined} role={ok ? 'button' : undefined} title={ok ? `Show ${what} on the board up to ${m}` : 'Not a legal move in this line'}
               onClick={ok ? (e) => { e.stopPropagation(); onPick(j); } : undefined}
@@ -789,6 +789,8 @@ function MoveList({ M, T, S, a, paused, onPick, deadAt, end, startAt }) {
   // the move number before White's (and before the first, when the game starts on Black's). A line is a chip (CHIP)
   // and the gap under it: ROW, the line LayoutCore counts
   const ROW = tx(38), CHIP = tx(28), GAP = tx(6);
+  // a white move and the black one after it sit PAIR_GAP apart (each its own flex item, so a long list still wraps between them)
+  const PAIR_GAP = tx(2);
   // a flowing list grows up to maxRows lines, then scrolls; a placed one takes all the box's height under its title (the
   // tight panel's padding and title gap where it has them, as LayoutCore counts them)
   const listH = L.moves.flow ? null : Math.max(ROW, L.moves.h - 2 * tx(L.pad[0] * (tightAn() ? 0.6 : 1)) - tx(15) * 1.4 - (tightAn() ? anGap(12) : tx(12)) - 2);
@@ -839,7 +841,7 @@ function MoveList({ M, T, S, a, paused, onPick, deadAt, end, startAt }) {
     const shown = paused ? 1 : cl01((T - S.tp[i]) / 0.15);
     const edge = P.cls !== 'none' && P.cls !== 'best' ? `2px solid ${clsColor(P.cls)}` : chipEdge(white);
     moves.push(
-      <span key={i} style={{ display: 'flex', alignItems: 'center', gap: tx(5), opacity: shown }}>
+      <span key={i} style={{ display: 'flex', alignItems: 'center', gap: tx(5), opacity: shown, marginRight: white && i + 1 < S.N && i + 1 !== startAt ? PAIR_GAP : GAP }}>
         {startAt > 0 && i === startAt && <StartPill />}
         {(white || i === 0 || i === startAt) && <span style={{ color: i <= c ? C.ink : C.dim, marginLeft: i ? tx(6) : 0, font: `500 ${tx(16)}px ${MONO}` }}>{window.ChessCore.moveNo(M.ply0 + i)}</span>}
         <span className="mv" role="button" data-ply={i} tabIndex={i === focusPly ? 0 : -1} title={`Go to ${label(M, i)}`} onClick={(e) => { e.stopPropagation(); onPick(i); }}
@@ -862,7 +864,7 @@ function MoveList({ M, T, S, a, paused, onPick, deadAt, end, startAt }) {
   return (
     <Panel box={L.moves} part="moves" a={a} tight title="Moves" info={paused && <InfoTip label="Moves" info="Drag or tap a piece to try your own moves; click a move in Moves to jump to it." />}>
       <div ref={listRef} className="moves-list" style={{ position: 'relative', height: listH ?? 'auto', maxHeight: listH == null ? L.moves.maxRows * ROW : undefined, overflowY: 'auto', scrollbarWidth: 'thin' }}>
-        <div style={{ display: 'flex', flexWrap: 'wrap', alignItems: 'center', columnGap: GAP, rowGap: ROW - CHIP, padding: 4 }}>{moves}</div>
+        <div style={{ display: 'flex', flexWrap: 'wrap', alignItems: 'center', columnGap: 0, rowGap: ROW - CHIP, padding: 4 }}>{moves}</div>
       </div>
     </Panel>
   );

@@ -84,7 +84,7 @@ function GameAnalysisDialog({ t, setTweak, ES, sfKind, threading, hash, analysis
       <SfHashSelect id="tw-sf-ghash" value={ES.game.hash_mb} hash={hash} onChange={(v) => setTweak('sfGameHash', v)} />
       {changed && <TweakButton secondary label="Reset these settings" onClick={() => KEYS.forEach((k) => setTweak(k, window.TWEAK_DEFAULTS[k]))} />}
       <div className="twk-note">{engineLabel(ES.game.name)} runs in your browser, {ES.game.lines === 1 ? 'one line' : ES.game.lines + ' lines'} per position. New settings apply to the next analysis{files.analysis ? ', which replaces this one' : ''}; a stopped analysis resumes with its original settings. While it runs, Stockfish looks at nothing else: your moves and Go deeper wait until it ends.</div>
-      {running && <div className="twk-note" role="status">Analysing {analysis.done} of {analysis.total} positions{analysis.etaSec != null ? ' · ' + fmtEta(analysis.etaSec) : ''}</div>}
+      {running && <div className="twk-note an-status" role="status">Analysing {analysis.done} of {analysis.total} positions{analysis.etaSec != null ? ' · ' + fmtEta(analysis.etaSec) : ''}<span className="an-spin" aria-hidden="true" /></div>}
       {analysis.err && <div className="twk-note twk-err">{analysis.err}</div>}
       <div className="fen-btns">
         {files.analysis && !running && <button type="button" className="twk-btn secondary" onClick={onRemoveAnalysis}>Remove analysis</button>}
