@@ -233,7 +233,8 @@ function SideScroll({ style, children }) {
 // extra: a node after right that never scrolls with it (Analysis: Go deeper beside the search's depth)
 // head: the title row's own contents, in place of title, right and extra (the Analysis panel's)
 // part: the panel's name, as the class part-<part> (docs/parts.md)
-// progress: 0–1, drawn along the top border (the Analysis panel's while Stockfish searches); null draws none
+// progress: 0–1, drawn along the top border (the Analysis panel's while Stockfish searches for it, else while the game
+// analysis runs); null draws none
 function Panel({ box, part, title, info, right, extra, head, a, style, progress, tight, children }) {
   const { x, y, w, h } = box;
   // the entrance slide only while it fades in (a video's): a settled panel has no transform. A flowing panel (a paused
@@ -442,11 +443,13 @@ function AnalysisPanel({ box, a, depth, deep, paused, style, children }) {
             {pick.options.map((o) => <option key={o.value} value={o.value}>{o.label}</option>)}
           </select>
         : <span style={{ flex: '0 1 auto', minWidth: 0, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', textTransform: 'none', letterSpacing: '0.04em', color: C.ink }}>{name}</span>}
-      {/* the game analysis: its dialog, with its own settings; green while a run goes on */}
+      {/* the game analysis: its dialog, with its own settings; while a run goes on, a turning rainbow ring in place
+          of the computer, so a run going on isn't forgotten */}
       {live && E.analyse && (
-        <button type="button" aria-label="Analyse the game" title="Analyse the game" onClick={(e) => { e.stopPropagation(); E.analyse(); }} onPointerDown={stopHere}
-          style={{ ...headCtl(), width: '1.8em', padding: 0, display: 'grid', placeItems: 'center', color: E.analysing ? C.best : C.dim, borderColor: E.analysing ? C.best : C.ctlLine }}>
-          <svg viewBox="0 0 16 16" width="70%" height="70%" aria-hidden="true" fill="none" stroke="currentColor" strokeWidth="1.6" strokeLinejoin="round" strokeLinecap="round"><rect x="1.5" y="2.5" width="13" height="8.5" rx="1" /><path d="M5.5 14h5M8 11v3" /></svg>
+        <button type="button" aria-label="Analyse the game" title={E.run ? `Analysing the game: ${E.run.done} of ${E.run.total} positions` : 'Analyse the game'} onClick={(e) => { e.stopPropagation(); E.analyse(); }} onPointerDown={stopHere}
+          style={{ ...headCtl(), width: '1.8em', padding: 0, display: 'grid', placeItems: 'center', color: C.dim, borderColor: E.run ? 'transparent' : C.ctlLine }}>
+          {E.run ? <span className="an-spin" role="progressbar" aria-label="Analysing the game" />
+            : <svg viewBox="0 0 16 16" width="70%" height="70%" aria-hidden="true" fill="none" stroke="currentColor" strokeWidth="1.6" strokeLinejoin="round" strokeLinecap="round"><rect x="1.5" y="2.5" width="13" height="8.5" rx="1" /><path d="M5.5 14h5M8 11v3" /></svg>}
         </button>
       )}
       {live && (
@@ -459,7 +462,7 @@ function AnalysisPanel({ box, a, depth, deep, paused, style, children }) {
     </span>
   );
   return (
-    <Panel box={shown && !box.flow ? { ...box, scroll: true } : box} part="analysis" a={a} style={style} tight head={head} progress={!shown && deep && deep.pending ? deep.progress || 0 : null}>
+    <Panel box={shown && !box.flow ? { ...box, scroll: true } : box} part="analysis" a={a} style={style} tight head={head} progress={!shown && deep && deep.pending ? deep.progress || 0 : E && E.run ? E.run.k : null}>
       {shown ? <div className="an-engine part-engine-menu" onClick={stopHere} onPointerDown={stopHere}><div className="twk-flow">{E.body}</div></div>
         : <AnalysisStatContext.Provider value={{ depth, deep, paused }}><div className="an-lines" data-playing={paused ? undefined : '1'} style={{ display: 'contents' }}>{children}</div></AnalysisStatContext.Provider>}
     </Panel>

@@ -590,7 +590,9 @@ function GameApp() {
   const engineBody = <EngineSettings t={t} setTweak={setTweak} full={full} ES={ES} sfKind={sfKind} threading={threading} hash={hashProp} board={board} />;
   // picking Full before it is downloaded opens the menu, where its Download button is
   // on/setOn: the switch left of the engine; analyse: the computer button right of it (a loaded game only)
-  const engineMenu = { name: engineLabel(ES.game.name), body: engineBody, on: sfOn, setOn: (v) => setTweak('sfOn', v), analyse: board ? null : askAnalysis, analysing: analysis.state === 'running',
+  const engineMenu = { name: engineLabel(ES.game.name), body: engineBody, on: sfOn, setOn: (v) => setTweak('sfOn', v), analyse: board ? null : askAnalysis,
+    // run: the game analysis going on ({ done, total, k }), for the computer button's ring and the panel's progress line
+    run: !board && analysis.state === 'running' ? { done: analysis.done, total: analysis.total, k: analysis.total ? analysis.done / analysis.total : 0 } : null,
     pick: full.offered ? { value: t.sfEngine === 'Full' ? 'Full' : 'Lite', options: [{ value: 'Lite', label: engineLabel(window.AnalysisCore.ENGINE_NAMES.lite) }, { value: 'Full', label: engineLabel(window.AnalysisCore.ENGINE_NAMES.full) + ' full' }],
       onChange: (v) => { setTweak('sfEngine', v); return v === 'Full' && full.state === 'absent'; } } : null };
 
