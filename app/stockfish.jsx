@@ -412,11 +412,13 @@ function useMoveEval(engine, before, after, own, fen, stored, cloud, off) {
   // off: the deepest level pressed whose searches both finished (the stored result at 0)
   const linesOf = (which) => (which === 'after' || before.join(' ') === after.join(' ') ? own.lines || 1 : 1);
   const finished = (lv) => ['after', 'before'].every((w) => SF_EVAL_CACHE.has(keyOf(toSearch(A.deeperSearch(own, lv), linesOf(w)), w === 'after' ? after : before)));
-  let level = SF_DEEPER.get(baseKey) || 0;
+  const pressed = SF_DEEPER.get(baseKey) || 0;
+  let level = pressed;
   if (off && after) while (level > 0 && !finished(level)) level--;
   const search = toSearch(A.deeperSearch(own, level));
   const sfKey = (moves) => keyOf(search, moves);
-  const cloudOn = !!(cloud && cloud.on && CLOUD && after && (!stored || level > 0)), prefer = cloudOn && !!cloud.prefer;
+  // a stored result asks the cloud once Go deeper is pressed, whatever the local searches got to (off keeps it asked)
+  const cloudOn = !!(cloud && cloud.on && CLOUD && after && (!stored || pressed > 0)), prefer = cloudOn && !!cloud.prefer;
   const key = after ? sfKey(after) + (cloudOn ? (prefer ? '|cloud+' : '|cloud') : '') + (off ? '|off' : '') : '';
   const empty = { key: '', before: null, after: null, cloud: {}, pending: false, progress: 0 };
   const [st, setSt] = React.useState(empty);
