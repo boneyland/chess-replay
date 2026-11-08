@@ -71,7 +71,7 @@ function useExportSettings({ t, setTweak, M, MV, TM, frameW, stem, saveFile, pie
 // as a game; onExport runs the export
 function ShareDialog({ fen, board, pgn, x, setTweak, onFail, onReplay, onExport, onClose }) {
   return (
-    <DialogBox label="Share and export" className="xfer-box" onClose={onClose}>
+    <DialogBox label="Share and export" part="share" className="xfer-box" onClose={onClose}>
       <TweakSection label="FEN">
         <div className="xfer-row">
           <input className="xfer-field" type="text" readOnly value={fen} aria-label="FEN" spellCheck={false} onFocus={(e) => e.target.select()} />

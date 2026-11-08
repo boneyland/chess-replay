@@ -1504,7 +1504,9 @@ for (const name of BROWSERS) for (const site of SITES) {
       await assert.doesNotReject(p.locator('.game-clock').first().waitFor({ timeout: 5000 }));
       assert.deepEqual(await p.locator('.game-clock').allInnerTexts(), ['5:00', '5:00']);
       assert.equal((await boardBox(p)).n, 3, 'the game starts from the set-up position');
-      assert.match(await p.locator('body').innerText(), /Play vs human/);
+      // the Game details panel's title (upper case on the page); a game shows no Game info
+      assert.match(await p.locator('.part-game-details').innerText(), /play vs human/i);
+      assert.equal(await p.locator('.part-game-info').count(), 0, 'no Game info in a game');
       assert.deepEqual(ep.errors, []);
       await ep.ctx.close();
     });

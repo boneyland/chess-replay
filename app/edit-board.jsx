@@ -26,7 +26,7 @@ function TrayPiece({ p, size, held, handlers }) {
 
 function Tray({ size, held, trayHandlers, style }) {
   return (
-    <div role="group" aria-label="Pieces" style={{ display: 'grid', gridTemplateColumns: `repeat(6, ${size}px)`, justifyContent: 'space-between', rowGap: tx(4), ...style }}>
+    <div className="part-piece-tray" role="group" aria-label="Pieces" style={{ display: 'grid', gridTemplateColumns: `repeat(6, ${size}px)`, justifyContent: 'space-between', rowGap: tx(4), ...style }}>
       {TRAY.map((p) => <TrayPiece key={p} p={p} size={size} held={held} handlers={trayHandlers ? trayHandlers(p) : {}} />)}
     </div>
   );
@@ -224,7 +224,7 @@ function EditBoard({ setup, onChange, onDone, onCancel, fenText, onFenText, fenM
       {image && oneCol && showPic && <div style={{ position: 'absolute', left: 0, top: 0, width: BW, height: BW, background: C.bg, pointerEvents: 'none' }}>{pic({ width: '100%', height: '100%' })}</div>}
       </BoardSpace>
       {L.tray && <Tray size={Math.min(112, Math.floor((L.tray.w - 20) / 6), Math.floor((L.tray.h - 4) / 2))} held={held} trayHandlers={trayHandlers} style={L.tray.flow ? { order: L.tray.order, flex: 'none', height: L.tray.h } : { position: 'absolute', left: L.tray.x, top: L.tray.y, width: L.tray.w }} />}
-      <Panel box={P} a={1} title="Edit position" style={fill}>
+      <Panel box={P} part="edit-position" a={1} title="Edit position" style={fill}>
         <div style={{ display: 'flex', flexDirection: 'column', gap: tx(16), ...(side && { flex: '1 1 auto', minHeight: 0 }) }}>
           {side > 0 && (
             <div style={{ position: 'relative', flex: '0 1 auto', height: side, minHeight: Math.min(side, tx(96)) }}>

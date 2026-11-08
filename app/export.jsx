@@ -257,7 +257,7 @@ function ExportOverlay({ x }) {
   const s = x.state;
   if (!s) return null;
   if (s.phase === 'error') return (
-    <div className="export" role="alertdialog" aria-label="Export failed">
+    <div className="export part-export-failed-dialog" role="alertdialog" aria-label="Export failed">
       <div className="export-box">
         <div className="export-title">Export failed</div>
         <div className="export-line export-err">{s.msg.replace(/^Export failed: /, '')}</div>
@@ -272,7 +272,7 @@ function ExportOverlay({ x }) {
     : s.phase === 'save' ? 'Finishing the file…'
     : `Frame ${s.done} of ${s.N}` + (s.eta != null ? ` · about ${eta} left` : '');
   return (
-    <div className="export" role="dialog" aria-label="Exporting">
+    <div className="export part-exporting-dialog" role="dialog" aria-label="Exporting">
       <div className="export-box">
         <div className="export-title">Exporting {x.format === 'WebP' ? 'animated WebP' : 'video'}</div>
         <div className="export-bar"><div style={{ width: pct + '%' }} /></div>

@@ -106,7 +106,7 @@ function BoardSpace({ children, onStep }) {
     node.addEventListener('wheel', onWheel, { passive: false });
     return () => node.removeEventListener('wheel', onWheel);
   }, [on]);
-  return <div ref={el} style={{ position: 'absolute', left: L.board.x, top: L.board.y, width: BW, height: BW, transform: `scale(${L.board.size / BW})`, transformOrigin: '0 0' }}>{children}</div>;
+  return <div ref={el} className="part-board" style={{ position: 'absolute', left: L.board.x, top: L.board.y, width: BW, height: BW, transform: `scale(${L.board.size / BW})`, transformOrigin: '0 0' }}>{children}</div>;
 }
 
 // The side at the bottom ('b' turns the board round). view() maps a board column and row (0 = a, 0 = rank 8) to where it
@@ -232,8 +232,9 @@ function SideScroll({ style, children }) {
 // info: a node beside the title (an InfoTip); not part of the title's own text, which the live tests look panels up by
 // extra: a node after right that never scrolls with it (Analysis: Go deeper beside the search's depth)
 // head: the title row's own contents, in place of title, right and extra (the Analysis panel's)
+// part: the panel's name, as the class part-<part> (docs/parts.md)
 // progress: 0–1, drawn along the top border (the Analysis panel's while Stockfish searches); null draws none
-function Panel({ box, title, info, right, extra, head, a, style, progress, tight, children }) {
+function Panel({ box, part, title, info, right, extra, head, a, style, progress, tight, children }) {
   const { x, y, w, h } = box;
   // the entrance slide only while it fades in (a video's): a settled panel has no transform. A flowing panel (a paused
   // one-column page) takes its place in the view's column, as tall as its contents
@@ -244,7 +245,7 @@ function Panel({ box, title, info, right, extra, head, a, style, progress, tight
   // a box whose contents can outgrow it scrolls, and hands the wheel or finger on to the page at its ends
   return (
     <>
-    <div style={{ ...place, background: C.panel, border: `1px solid ${C.line}`, boxShadow: `${C.halo}0 0 0 transparent`, padding: tight && tightAn() ? `${tx(L.pad[0] * 0.6)}px ${tx(L.pad[1])}px` : panelPad(), ...(box.scroll && { overflowY: 'auto', scrollbarWidth: 'thin' }), ...style }}>
+    <div className={part && 'part-' + part} style={{ ...place, background: C.panel, border: `1px solid ${C.line}`, boxShadow: `${C.halo}0 0 0 transparent`, padding: tight && tightAn() ? `${tx(L.pad[0] * 0.6)}px ${tx(L.pad[1])}px` : panelPad(), ...(box.scroll && { overflowY: 'auto', scrollbarWidth: 'thin' }), ...style }}>
       {(title || head) && (
         <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: tx(16), font: `600 ${tx(16)}px ${MONO}`, letterSpacing: '0.12em', textTransform: 'uppercase', color: C.dim, marginBottom: tight ? anGap(12) : tx(12) }}>
           {head || <><span style={{ flex: '0 1 auto', minWidth: 0, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{title}</span>{info && <span style={{ flex: 'none', marginLeft: -tx(8) }}>{info}</span>}<SideScroll style={{ minWidth: 0, flex: 1, textAlign: 'right', letterSpacing: '0.04em' }}>{right}</SideScroll>{extra}</>}
@@ -452,8 +453,8 @@ function AnalysisPanel({ box, a, depth, deep, paused, style, children }) {
     </span>
   );
   return (
-    <Panel box={shown && !box.flow ? { ...box, scroll: true } : box} a={a} style={style} tight head={head} progress={!shown && deep && deep.pending ? deep.progress || 0 : null}>
-      {shown ? <div className="an-engine" onClick={stopHere} onPointerDown={stopHere}><div className="twk-flow">{E.body}</div></div> : <div className="an-lines" data-playing={paused ? undefined : '1'} style={{ display: 'contents' }}>{children}</div>}
+    <Panel box={shown && !box.flow ? { ...box, scroll: true } : box} part="analysis" a={a} style={style} tight head={head} progress={!shown && deep && deep.pending ? deep.progress || 0 : null}>
+      {shown ? <div className="an-engine part-engine-menu" onClick={stopHere} onPointerDown={stopHere}><div className="twk-flow">{E.body}</div></div> : <div className="an-lines" data-playing={paused ? undefined : '1'} style={{ display: 'contents' }}>{children}</div>}
     </Panel>
   );
 }
@@ -636,7 +637,7 @@ function EvalBarView({ cp, txt, a }) {
   if (!L.eval) return null;
   const H = L.board.size, ef = Math.round(L.eval.w * (L.tier === 'phone' ? 0.69 : 0.75) * 10) / 10; // the number, sized to the bar's width: its digits a little over half of it (less on a phone's thin bar)
   return (
-    <div style={{ ...NO_SELECT, position: 'absolute', left: L.eval.x, top: L.board.y, width: L.eval.w, height: H, borderRadius: 2, overflow: 'hidden', background: '#2a2320', boxShadow: `0 0 0 1px ${C.line}, ${C.halo}0 0 0 transparent`, opacity: a }}>
+    <div className="part-eval-bar" style={{ ...NO_SELECT, position: 'absolute', left: L.eval.x, top: L.board.y, width: L.eval.w, height: H, borderRadius: 2, overflow: 'hidden', background: '#2a2320', boxShadow: `0 0 0 1px ${C.line}, ${C.halo}0 0 0 transparent`, opacity: a }}>
       <div style={{ position: 'absolute', left: 0, right: 0, [flip ? 'top' : 'bottom']: 0, height: f * H, background: '#ffffff' }} />
       <div style={{ position: 'absolute', left: 0, right: 0, top: H / 2 - 1, height: 2, background: C.last, opacity: 0.5 }} />
       <div style={{ position: 'absolute', left: 0, right: 0, [top ? 'top' : 'bottom']: ef / 2, height: ef * 5, display: 'flex', alignItems: 'center', justifyContent: 'center', font: `700 ${ef}px ${MONO}`, color: inWhite ? '#2a2320' : '#f1ebe1' }}>
@@ -695,7 +696,7 @@ function SideBar({ side, a, name, rating, taken, pts, clock }) {
   const caps = fit(true) >= 0.6 || !shown.length;
   const k = Math.max(0.6, fit(caps));
   return (
-    <div style={{ ...barPlace(side), gap: tx(14), opacity: a }}>
+    <div className={'part-player-bar ' + (side === ORIENT ? 'bottom' : 'top')} style={{ ...barPlace(side), gap: tx(14), opacity: a }}>
       <span style={{ width: tx(14), height: tx(14), borderRadius: 2, background: side === 'w' ? '#fff' : '#1c1613', border: `1.5px solid ${C.dim}`, flex: 'none' }} />
       <span style={{ display: 'flex', alignItems: 'baseline', gap: tx(10) * k, minWidth: 0, whiteSpace: 'nowrap' }}>
         <span title={name} style={{ font: `600 ${tx(20) * k}px ${SANS}`, color: C.ink, overflow: 'hidden', textOverflow: 'ellipsis', minWidth: 0 }}>{name}</span>
@@ -715,7 +716,7 @@ function Header({ M, a }) {
   const teams = M.white.team && M.black.team ? `${M.white.team} vs ${M.black.team}` : M.white.team || M.black.team;
   const lines = [[M.event, M.round && 'Round ' + M.round, teams].filter(Boolean).join(' · '), [M.site, M.date].filter(Boolean).join(' · '), [M.eco, M.opening].filter(Boolean).join(' ')].filter(Boolean);
   return (
-    <Panel box={L.header} a={a} style={{ padding: `${tx(10)}px ${tx(L.pad[1])}px`, display: 'flex', flexDirection: 'column', justifyContent: 'center', gap: tx(4), font: `500 ${tx(16)}px/1.35 ${MONO}`, color: C.dim }}>
+    <Panel box={L.header} part="game-info" a={a} style={{ padding: `${tx(10)}px ${tx(L.pad[1])}px`, display: 'flex', flexDirection: 'column', justifyContent: 'center', gap: tx(4), font: `500 ${tx(16)}px/1.35 ${MONO}`, color: C.dim }}>
       {lines.map((t, i) => <SideScroll key={i} style={{ display: 'block', color: C.ink }}>{t}</SideScroll>)}
     </Panel>
   );
@@ -810,7 +811,7 @@ function MoveList({ M, T, S, a, paused, onPick, deadAt, end, startAt }) {
     );
   }
   return (
-    <Panel box={L.moves} a={a} tight title="Moves" info={paused && <InfoTip label="Moves" info="Drag or tap a piece to try your own moves; click a move in Moves to jump to it." />}>
+    <Panel box={L.moves} part="moves" a={a} tight title="Moves" info={paused && <InfoTip label="Moves" info="Drag or tap a piece to try your own moves; click a move in Moves to jump to it." />}>
       <div ref={listRef} className="moves-list" style={{ position: 'relative', height: listH ?? 'auto', maxHeight: listH == null ? L.moves.maxRows * ROW : undefined, overflowY: 'auto', scrollbarWidth: 'thin' }}>
         <div style={{ display: 'flex', flexWrap: 'wrap', alignItems: 'center', columnGap: GAP, rowGap: ROW - CHIP, padding: 4 }}>{moves}</div>
       </div>
@@ -839,7 +840,7 @@ function Commentary({ M, T, S, a, book, line }) {
   const size = tx(qtxt ? (txt.length > 90 ? 26 : 30) : txt.length > 140 ? 28 : 34) * ph;
   const qsize = tx(qtxt.length > 200 ? 20 : 22) * ph;
   return (
-    <Panel box={L.comment} a={a} tight title="Commentary" right={bookAt ? `${bookAt.eco} ${bookAt.name}` : null}>
+    <Panel box={L.comment} part="commentary" a={a} tight title="Commentary" right={bookAt ? `${bookAt.eco} ${bookAt.name}` : null}>
       {total ? (
         <div style={{ display: 'flex', flexDirection: 'column', gap: tx(14) }}>
           {/* the Analysis panel names the move, unless the game has no analysis */}
@@ -983,7 +984,7 @@ function EvalPlot({ M, T, S, a, paused, onPick }) {
   const area = `${line} L${last[0].toFixed(1)},${mid} L0,${mid} Z`;
   const ticks = window.ChessCore.evalTicks(M.ply0, N);
   return (
-    <div style={{ ...NO_SELECT, position: 'absolute', left: PLOT.x, top: PLOT.y, width: PLOT.w, height: PLOT.h, boxSizing: 'border-box', background: C.panel, border: `1px solid ${C.line}`, boxShadow: `${C.halo}0 0 0 transparent`, borderRadius: 4, padding: '10px 20px', opacity: a }}>
+    <div className="part-eval-graph" style={{ ...NO_SELECT, position: 'absolute', left: PLOT.x, top: PLOT.y, width: PLOT.w, height: PLOT.h, boxSizing: 'border-box', background: C.panel, border: `1px solid ${C.line}`, boxShadow: `${C.halo}0 0 0 transparent`, borderRadius: 4, padding: '10px 20px', opacity: a }}>
       <svg width={W} height={H + 14} style={{ display: 'block', overflow: 'visible', cursor: 'pointer', touchAction: 'none' }}
         onPointerDown={(e) => { try { e.currentTarget.setPointerCapture(e.pointerId); } catch (err) {} down.current = true; clearTimeout(fade.current); const j = plyAt(e); setHover(j); lastPick.current = j; onPick(j); }}
         onPointerMove={(e) => {

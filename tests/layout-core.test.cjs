@@ -112,7 +112,10 @@ test('game and edit views', () => {
   const g = LC.compute({ w: 1440, h: 818, view: 'game' });
   assert.equal(g.eval, null);
   assert.equal(g.plot, null);
-  const leftW = g.header.x - 10 - 12;
+  assert.equal(g.header, null, 'no Game info in a game');
+  assert.equal(LC.compute({ w: 390, h: 770, view: 'game' }).header, null);
+  assert.equal(LC.compute({ w: 390, h: 770, view: 'game', video: true }).header, null);
+  const leftW = g.moves.x - 10 - 12;
   assert.ok(Math.abs(g.board.x + g.board.size / 2 - (12 + leftW / 2)) <= 1);
   const e = LC.compute({ w: 390, h: 770, view: 'edit' });
   assert.ok(e.tray.y >= e.board.y + e.board.size);

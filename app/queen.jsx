@@ -348,7 +348,7 @@ function QueenPanel({ M, Q, hf, probe, onClose, onOverlay, onSave, left }) {
   const pick = (i) => { seekAfter(i); show(i); };
 
   return (
-    <aside className="twk-panel q-panel" aria-label="Queen" style={left == null ? undefined : { left }}>
+    <aside className="twk-panel q-panel part-ask-queen" aria-label="Queen" style={left == null ? undefined : { left }}>
       <div className="twk-hd"><span className="q-hd"><b>Queen</b><span className="q-exp">Experimental</span></span><button type="button" className="twk-x" aria-label="Close Queen" onClick={onClose}>✕</button></div>
       <div className="twk-body">
         <div className="twk-note">A chess language model on the <a href={QUEEN_SPACE} target="_blank" rel="noopener">boneyland/queen-pawn-8 Space</a>. It is not an engine: its evaluations are estimates and it can get tactics wrong. Each new position uses about 20–35 s of your daily Hugging Face ZeroGPU quota (5 min free, 40 min PRO); positions it has already answered are free.</div>

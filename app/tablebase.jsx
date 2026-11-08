@@ -118,7 +118,7 @@ function TablebaseExplorer({ t, posKey, onPlay }) {
     );
   }
   return (
-    <Panel box={{ ...L.comment, scroll: !L.comment.flow }} a={1} title="Endgame tablebase" right={right}>
+    <Panel box={{ ...L.comment, scroll: !L.comment.flow }} a={1} part="tablebase" title="Endgame tablebase" right={right}>
       <div ref={top}>{body}</div>
     </Panel>
   );

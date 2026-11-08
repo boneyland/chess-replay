@@ -68,7 +68,7 @@ function OpeningExplorer({ board, book, onPlay, onHover }) {
     body = <React.Fragment>{heading('Out of book', true)}{named && note(`last book position: ${named.eco} ${named.name}`)}</React.Fragment>;
   } else body = <span style={{ font: `italic 400 ${tx(30)}px/1.25 ${SERIF}`, color: C.dim }}>This position isn’t in the opening book.</span>;
   return (
-    <Panel box={{ ...L.comment, scroll: !L.comment.flow }} a={1} title="Opening explorer" right={named ? `${named.eco} ${named.name}` : null}>
+    <Panel box={{ ...L.comment, scroll: !L.comment.flow }} a={1} part="opening-explorer" title="Opening explorer" right={named ? `${named.eco} ${named.name}` : null}>
       <div ref={top}>{body}</div>
     </Panel>
   );
@@ -227,7 +227,7 @@ function GameInfo({ board }) {
     }
   }
   return (
-    <Panel box={{ ...L.comment, scroll: !L.comment.flow }} a={1} title={sfGame ? 'Play vs Stockfish' : 'Play vs human'} right={G.tc || 'No clock'}>
+    <Panel box={{ ...L.comment, scroll: !L.comment.flow }} a={1} part="game-details" title={sfGame ? 'Play vs Stockfish' : 'Play vs human'} right={G.tc || 'No clock'}>
       <div>{body}</div>
     </Panel>
   );
@@ -422,9 +422,9 @@ function FreeBoard({ board, onChange, tw, setTweak, onLichess, sf, nav, orient, 
   const end = G ? (G.result ? P.ending({ r: G.result }) : null) : steps.length ? P.ending({ pos: steps[last].pos, dead: deadAt != null }) : null;
   const S = React.useMemo(() => ({ N: steps.length, tp: steps.map((_, i) => i) }), [steps.length]);
   const named = boardOpening(board, book);
-  const from = G && G.from ? `from after ${B.label(board, G.from - 1)}` : board.fen === window.ChessCore.START_FEN ? 'from the starting position' : 'from a set-up position';
-  const HM = G ? { white: { name: playerName(G, 'w') }, black: { name: playerName(G, 'b') }, event: sfGame ? 'Play vs Stockfish' : 'Play vs human', site: `${G.tc || 'no clock'} · ${from}` }
-    : { white: { name: 'White' }, black: { name: 'Black' }, event: 'Free board', site: from, eco: named && named.eco, opening: named && named.name };
+  const from = board.fen === window.ChessCore.START_FEN ? 'from the starting position' : 'from a set-up position';
+  // the free board's Game info (a game's layout has none)
+  const HM = { white: { name: 'White' }, black: { name: 'Black' }, event: 'Free board', site: from, eco: named && named.eco, opening: named && named.name };
   // an upright phone (one column in the phone tier; a tablet held upright keeps them) drops the free board's info box
   const upright = L.cols === 1 && L.tier === 'phone';
   return (
@@ -438,10 +438,10 @@ function FreeBoard({ board, onChange, tw, setTweak, onLichess, sf, nav, orient, 
         </BoardDraw>
       </BoardSpace>
       <FreeBar pos={pos} side="w" a={1} clock={clockOf('w')} name={G ? playerName(G, 'w') : null} />
-      {L.header && !(upright && !G) && <Header M={HM} a={1} />}
+      {L.header && !upright && <Header M={HM} a={1} />}
       <MoveList M={MV} T={upto + 0.999} S={S} a={1} paused onPick={go} deadAt={deadAt} end={end} startAt={G && G.from} />
       {G ? <GameInfo board={board} /> : tb ? <TablebaseExplorer t={tb} posKey={boardKey} onPlay={onBook} /> : xl ? <LichessExplorer x={xl} tw={tw} setTweak={setTweak} onGame={onLichess} posKey={boardKey} onPlay={onBook} onHover={setHov} white={pos.turn === 'w'} fallback={<OpeningExplorer board={board} book={book} onPlay={onBook} onHover={setHov} />} /> : <OpeningExplorer board={board} book={book} onPlay={onBook} onHover={setHov} />}
-      {G ? <Panel box={L.analysis} a={1} style={NO_SELECT} title="Game"><GameStatus board={board} onChange={onChange} down={opponent.down} why={sf.why} /></Panel>
+      {G ? <Panel box={L.analysis} part="game" a={1} style={NO_SELECT} title="Game"><GameStatus board={board} onChange={onChange} down={opponent.down} why={sf.why} /></Panel>
         : <AnalysisPanel box={L.analysis} a={1} paused depth={down ? null : searchDepth(ev.after)} deep={ev}>
         {upto < 0
           ? <React.Fragment>
@@ -493,7 +493,7 @@ function ImportDialog({ text: text0, auto, onChoose, onPgn, onFen, onImage, onCl
   const back = () => { setList(null); setMsg(''); };
   const done = list && list.games.filter((g) => g.result).length;
   return (
-    <DialogBox label="Import game" className="import-box" onClose={close}>
+    <DialogBox label="Import game" part="import-game" className="import-box" onClose={close}>
       {list ? <>
         <div ref={body} className="fen-note">{done ? `${list.games.length} game${list.games.length === 1 ? '' : 's'}; pick one to open${done < list.games.length ? ' (the greyed ones are still being played)' : ''}.` : 'No game here has finished yet: they can be opened once they end.'}</div>
         <div className="import-list">
@@ -541,7 +541,8 @@ function ImportDialog({ text: text0, auto, onChoose, onPgn, onFen, onImage, onCl
 
 // A small dialog over a scrim: Esc or a press on the scrim closes it, Enter on `enter` runs onEnter,
 // and Tab goes round its controls; keys stop here, so the board's keys never see them
-function DialogBox({ label, className, onClose, children }) {
+// part: the dialog's name, as the class part-<part>-dialog (docs/parts.md)
+function DialogBox({ label, part, className, onClose, children }) {
   const box = React.useRef(null);
   React.useEffect(() => { const first = box.current && box.current.querySelector('[data-autofocus]'); if (first) first.focus(); }, []);
   const onKey = (e, root = e.currentTarget) => {
@@ -568,7 +569,7 @@ function DialogBox({ label, className, onClose, children }) {
   }, []);
   return (
     <div className="fen-scrim" onPointerDown={(e) => { if (e.target === e.currentTarget) onClose(); }}>
-      <div ref={box} className={className ? 'fen-box ' + className : 'fen-box'} role="dialog" aria-modal="true" aria-label={label} onKeyDown={onKey} onMouseDown={(e) => { if (!e.target.closest('input, textarea, select, button')) e.preventDefault(); }}>
+      <div ref={box} className={['fen-box', className, part && `part-${part}-dialog`].filter(Boolean).join(' ')} role="dialog" aria-modal="true" aria-label={label} onKeyDown={onKey} onMouseDown={(e) => { if (!e.target.closest('input, textarea, select, button')) e.preventDefault(); }}>
         <div className="fen-title">{label}</div>
         {children}
       </div>
@@ -611,7 +612,7 @@ function PlayDialog({ mode = 'human', setUpFen, here, clock, side, initial, onSt
   const froms = (at ? [{ label: 'This position', value: 'here' }] : []).concat([{ label: 'Starting position', value: 'start' }, { label: 'Set-up position', value: 'setup' }], onFromImage ? [{ label: 'From image', value: 'image' }] : []);
   const n = at ? at.moves.length : 0;
   return (
-    <DialogBox label={sfGame ? 'Play vs Stockfish' : 'Play vs human'} onClose={onClose}>
+    <DialogBox label={sfGame ? 'Play vs Stockfish' : 'Play vs human'} part="play" onClose={onClose}>
       <DialogChoice label="Start from" value={from} options={froms} onChange={setFrom} />
       {sfGame && <DialogChoice label="You play" value={you} options={[{ label: 'White', value: 'w' }, { label: 'Black', value: 'b' }, { label: 'Random', value: 'random' }]} onChange={setYou} />}
       <DialogChoice label="Time control" value={tc} options={[{ label: 'Off', value: null }].concat(window.PlayCore.TIME_CONTROLS.map((x) => ({ label: x, value: x })))} onChange={setTc} />
@@ -630,7 +631,7 @@ function PlayDialog({ mode = 'human', setUpFen, here, clock, side, initial, onSt
 // Asks before something leaves a game in progress (it stays in My games)
 function LeaveDialog({ onLeave, onStay }) {
   return (
-    <DialogBox label="Leave this game?" onClose={onStay}>
+    <DialogBox label="Leave this game?" part="leave-game" onClose={onStay}>
       <div className="fen-note">It stays in My games, to resume later; its clocks pause until the next move.</div>
       <div className="fen-btns">
         <button type="button" className="twk-btn secondary" data-autofocus onClick={onStay}>Keep playing</button>
@@ -656,7 +657,7 @@ function MyGamesDialog({ games, current, onReplay, onResume, onDelete, onClose }
   }, [focus]);
   const rows = React.useMemo(() => games.map((e) => ({ e, b: G.playable(e) })).filter((r) => r.b), [games]);
   return (
-    <DialogBox label="My games" onClose={onClose}>
+    <DialogBox label="My games" part="my-games" onClose={onClose}>
       {rows.length ? (
         <ul className="games-list">
           {rows.map(({ e, b }) => {
@@ -734,7 +735,7 @@ const SHORTCUTS = [
 ];
 function ShortcutsDialog({ onClose }) {
   return (
-    <DialogBox label="Keyboard shortcuts" onClose={onClose}>
+    <DialogBox label="Keyboard shortcuts" part="shortcuts" onClose={onClose}>
       <div className="keys-body">
         {SHORTCUTS.map((g) => (
           <section key={g.title} className="keys-group" aria-label={g.title}>

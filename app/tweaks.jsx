@@ -34,7 +34,7 @@ function TweaksPanel({ open, onClose, title = 'Settings', tabs, tab, onTab }) {
     strip.current.children[j % n].focus();
   };
   return (
-    <aside className="twk-panel twk-tabbed" aria-label={title}>
+    <aside className="twk-panel twk-tabbed part-settings" aria-label={title}>
       <div className="twk-hd">
         <b>{title}</b>
         <button type="button" className="twk-x" aria-label="Close settings" onClick={onClose}>✕</button>
