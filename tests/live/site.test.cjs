@@ -2243,10 +2243,18 @@ for (const name of BROWSERS) for (const site of SITES) {
       await p.waitForFunction(() => /cloud depth \d+/i.test(document.body.innerText), null, { timeout: 20000 });
       assert.equal(new Set(sent).size, 1, 'the move\'s position asked');
       await p.screenshot({ path: path.join(OUT, host + '-cloud-go-deeper.png') });
-      // Stockfish switched off (its deeper search likely still running): the cloud's answer stays, the + goes
+      // Stockfish switched off (its deeper search likely still running): the cloud's answer stays, the + goes, and no
+      // frame in between shows the analysis's or Stockfish's eval instead (sampled every frame for a second)
+      await p.evaluate(() => {
+        const a = document.querySelector('.part-analysis'), seen = window.__frames = [], t0 = performance.now();
+        const tick = () => { seen.push(/cloud depth \d+/i.test(a.innerText)); if (performance.now() - t0 < 1000) requestAnimationFrame(tick); };
+        requestAnimationFrame(tick);
+      });
       await p.getByRole('switch', { name: 'Stockfish' }).click();
-      await p.waitForTimeout(500);
+      await p.waitForTimeout(1200);
       assert.match(await p.locator('.part-analysis').innerText(), /cloud depth \d+/i, 'the cloud\'s answer with Stockfish off');
+      const frames = await p.evaluate(() => window.__frames);
+      assert.ok(frames.length > 10 && frames.every(Boolean), `every frame shows the cloud's answer (${frames.filter((x) => !x).length} of ${frames.length} didn't)`);
       assert.equal(await deeper.count(), 0, 'no Go deeper with Stockfish off');
       assert.deepEqual(gd.errors, []);
       await gd.ctx.close();
