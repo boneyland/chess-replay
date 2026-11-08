@@ -422,7 +422,9 @@ function useMoveEval(engine, before, after, own, fen, stored, cloud, off) {
   const key = after ? sfKey(after) + (cloudOn ? (prefer ? '|cloud+' : '|cloud') : '') + (off ? '|off' : '') : '';
   const empty = { key: '', before: null, after: null, cloud: {}, pending: false, progress: 0 };
   const [st, setSt] = React.useState(empty);
-  React.useEffect(() => {
+  // a layout effect: a new key's state (the cached results and cloud answers it starts with) replaces the old one
+  // before the page paints, so no frame shows the bare analysis in between (switching Stockfish off flashed it)
+  React.useLayoutEffect(() => {
     if (!after) { setSt(empty); return; }
     let live = true;
     // only after's lines are shown, so before (what the move is rated against) searches one line, as deep as it can;
