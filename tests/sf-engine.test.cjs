@@ -290,7 +290,7 @@ test('MultiPV is set before a search that asks for other lines than the last, an
   assert.deepEqual(mpv(), ['setoption name MultiPV value 3', 'setoption name MultiPV value 1']);
 });
 
-test('a MultiPV search keeps each line by rank; cp, pv and best stay line 1’s; a line left behind is dropped', async () => {
+test('a MultiPV search keeps each line by rank; cp, pv and best stay line 1’s; a line left behind is kept', async () => {
   let w;
   const e = SF.create(() => (w = fakeWorker()), {});
   await e.ready();
@@ -304,15 +304,107 @@ test('a MultiPV search keeps each line by rank; cp, pv and best stay line 1’s;
   say('info depth 11 multipv 1 score cp 28 nodes 400 pv e2e4 c7c5');
   say('info depth 11 multipv 2 score cp 26 upperbound nodes 450 pv d2d4');
   say('info depth 11 multipv 2 score cp 24 nodes 500 pv d2d4 g8f6');
-  // line 3 never reached depth 11, and line 1 went on to 12: line 3 is two depths behind
+  // line 3 never reached depth 11, and line 1 went on to 12: line 3 is two depths behind, and still listed
   say('info depth 12 multipv 1 score cp 27 nodes 600 pv e2e4 e7e6');
   say('bestmove e2e4');
   const r = await h.promise;
   assert.deepEqual([r.cp, r.pv, r.best, r.depth], [27, ['e2e4', 'e7e6'], 'e2e4', 12]);
-  assert.deepEqual(r.lines, [{ k: 1, cp: 27, depth: 12, pv: ['e2e4', 'e7e6'] }, { k: 2, cp: 24, depth: 11, pv: ['d2d4', 'g8f6'] }]);
+  assert.deepEqual(r.lines, [{ k: 1, cp: 27, depth: 12, pv: ['e2e4', 'e7e6'] }, { k: 2, cp: 24, depth: 11, pv: ['d2d4', 'g8f6'] }, { k: 3, cp: 20, depth: 10, pv: ['g1f3', 'g8f6'] }]);
   const at3 = seen.find((s) => s.lines.length === 3);
   assert.deepEqual(at3.lines.map((l) => l.pv[0]), ['e2e4', 'd2d4', 'g1f3']);
   assert.equal(at3.cp, 30, 'onInfo carries line 1’s score');
+});
+
+test('several threads: line 1 ends two depths past line 2, whose last report is a bound; line 2 is kept', async () => {
+  // as the real lite engine with 4 threads ended its 3 s search of the sample game's position after 24...Rb8 (2026-11-08)
+  let w;
+  const e = SF.create(() => (w = fakeWorker()), {});
+  await e.ready();
+  const h = e.search({ moves: [], depth: null, movetimeMs: 3000, lines: 2 });
+  await tick();
+  const say = (l) => w.onmessage({ data: l });
+  say('info depth 19 multipv 1 score cp 151 time 1870 pv b7b8 f8b8');
+  say('info depth 19 multipv 2 score cp -77 time 1871 pv a6b6 c6b7');
+  say('info depth 21 multipv 1 score cp 170 time 3001 pv b7b8 f8b8');
+  say('info depth 21 multipv 2 score cp -58 upperbound time 3001 pv a6b6 c6b7');
+  say('bestmove b7b8');
+  const r = await h.promise;
+  assert.deepEqual(r.lines.map((l) => [l.k, l.depth, l.pv[0]]), [[1, 21, 'b7b8'], [2, 19, 'a6b6']]);
+});
+
+test('line 1 turns to line 2’s move and line 2’s last report is a bound: line 2 is the move that bound names', async () => {
+  // as the page's 2-line, 4-thread, 2 s analysis ended its search after 19. Rd6 of the sample game (2026-11-08): before the
+  // fix the line kept at rank 2 was c5 again, at depth 20
+  let w;
+  const e = SF.create(() => (w = fakeWorker()), {});
+  await e.ready();
+  const h = e.search({ moves: [], depth: null, movetimeMs: 2000, lines: 2 });
+  await tick();
+  const say = (l) => w.onmessage({ data: l });
+  say('info depth 20 multipv 1 score cp 2 time 1436 pv f8d8 c3c5');
+  say('info depth 20 multipv 2 score cp 0 time 1436 pv c6c5 d6a6');
+  say('info depth 21 multipv 1 score cp 0 time 2002 pv c6c5 d6a6');
+  say('info depth 21 multipv 2 score cp 0 upperbound time 2002 pv f8d8 c3c5');
+  say('bestmove c6c5');
+  const r = await h.promise;
+  assert.deepEqual(r.lines.map((l) => [l.k, l.depth, l.cp, l.pv[0]]), [[1, 21, 0, 'c6c5'], [2, 20, 2, 'f8d8']]);
+});
+
+test('line 1’s last report is a bound on a new move, and line 2’s names line 1’s old move: line 2 is the new move', async () => {
+  // as the page's 2-line, 4-thread, 2 s analysis in Firefox ended its search after 3. Bg2 of the sample game (2026-11-09)
+  let w;
+  const e = SF.create(() => (w = fakeWorker()), {});
+  await e.ready();
+  const h = e.search({ moves: ['e2e4'], depth: null, movetimeMs: 2000, lines: 2 });
+  await tick();
+  const say = (l) => w.onmessage({ data: l });
+  say('info depth 22 multipv 1 score cp -17 time 1548 pv g7g6 e1g1');
+  say('info depth 22 multipv 2 score cp -20 time 1548 pv c7c5 e1g1');
+  say('info depth 23 multipv 1 score cp -18 lowerbound time 2001 pv c7c5 e1g1');
+  say('info depth 23 multipv 2 score cp -20 time 2001 pv g7g6 e1g1');
+  say('bestmove c7c5');
+  const r = await h.promise;
+  // Black to move: the scores are White's
+  assert.deepEqual(r.lines.map((l) => [l.k, l.depth, l.cp, l.pv[0]]), [[1, 22, 17, 'g7g6'], [2, 22, 20, 'c7c5']]);
+});
+
+test('line 2’s last report is a bound on a move never scored complete: line 2 is the deepest other move scored', async () => {
+  // as the page's analysis in Firefox ended its search after 11...c6 of the sample game (2026-11-09)
+  let w;
+  const e = SF.create(() => (w = fakeWorker()), {});
+  await e.ready();
+  const h = e.search({ moves: [], depth: null, movetimeMs: 2000, lines: 2 });
+  await tick();
+  const say = (l) => w.onmessage({ data: l });
+  say('info depth 17 multipv 1 score cp 22 time 1013 pv a2a4 b8d7');
+  say('info depth 17 multipv 2 score cp 8 time 1013 pv f1d1 b8d7');
+  say('info depth 18 multipv 1 score cp 9 time 1422 pv d2g5 e4f3');
+  say('info depth 18 multipv 2 score cp 6 time 1422 pv f1d1 b8d7');
+  say('info depth 19 multipv 1 score cp 9 time 2000 pv f1d1 b8d7');
+  say('info depth 19 multipv 2 score cp 7 lowerbound time 2000 pv d2e3');
+  say('bestmove f1d1');
+  const r = await h.promise;
+  assert.deepEqual(r.lines.map((l) => [l.k, l.depth, l.cp, l.pv[0]]), [[1, 19, 9, 'f1d1'], [2, 18, 9, 'd2g5']]);
+});
+
+test('a line whose move is already listed is left out, and an empty rank filled with the deepest other move scored', async () => {
+  let w;
+  const e = SF.create(() => (w = fakeWorker()), {});
+  await e.ready();
+  const h = e.search({ moves: [], depth: null, movetimeMs: 3000, lines: 3 });
+  await tick();
+  const say = (l) => w.onmessage({ data: l });
+  say('info depth 18 multipv 1 score cp 40 pv g1h1 f2e1');
+  say('info depth 18 multipv 2 score cp 30 pv g1f1 f2e1');
+  say('info depth 18 multipv 3 score cp 20 pv g1f2 b8b2');
+  // line 1 turns to g1f1; rank 2 is last reported with no pv, so all it has is g1f1's score from depth 18; g1h1, line 1
+  // at depth 18, is the other move scored
+  say('info depth 19 multipv 1 score cp 45 pv g1f1 b8b2');
+  say('info depth 19 multipv 2 score cp 35 upperbound');
+  say('info depth 19 multipv 3 score cp 15 pv g1f2 b8b2');
+  say('bestmove g1f1');
+  const r = await h.promise;
+  assert.deepEqual(r.lines.map((l) => [l.k, l.depth, l.pv[0]]), [[1, 19, 'g1f1'], [2, 19, 'g1f2'], [3, 18, 'g1h1']]);
 });
 
 test('lines are from White’s point of view with Black to move, and a one-line search lists its one line', async () => {

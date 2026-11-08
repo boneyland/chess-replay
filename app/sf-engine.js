@@ -10,12 +10,26 @@
     return moves.length ? base + ' moves ' + moves.join(' ') : base;
   };
 
-  // A search's lines in rank order, [{ k, cp, depth, pv }]: one still at a depth below line 1's last but one has
-  // stopped being reported (Stockfish reports every line at each depth, line 1 first), so it is dropped
+  // A search's lines in rank order, [{ k, cp, depth, pv }]. Line 1 is the search's result (its last complete score);
+  // each other line is the move last reported at its rank, bound-only reports included, with that move's last complete
+  // score, whatever its depth. With several threads Stockfish ends on the deepest thread's line 1 (19 → 21 at once), and
+  // the last depth can end mid-way, so the complete scores kept by rank can be stale: when line 1 turns to line 2's move,
+  // line 2's report there can be a bound, leaving at rank 2 the move now line 1; when line 1's last report is a bound
+  // on a new move, line 1 keeps the old move, which line 2's last report can also name. A move already listed is left
+  // out (k renumbered). A rank left empty takes a move another rank last named (line 1's new move), else the deepest other
+  // move with a complete score (a rank's last report can be a bound on a move never scored complete)
   const linesOf = (q) => {
-    const top = q.byK[1];
-    return top ? q.byK.filter((l) => l && l.depth >= top.depth - 1) : [];
+    if (!q.byK[1]) return [];
+    const seen = new Set(), out = [];
+    const add = (c) => { if (c && c.pv.length && !seen.has(c.pv[0])) { seen.add(c.pv[0]); out.push({ ...c, k: out.length + 1 }); return true; } return false; };
+    q.byK.forEach((l, k) => { if (k === 1) add(l); else if (!add(q.byMove[q.moveK[k]])) add(l); });
+    const ranks = q.byK.filter(Boolean).length;
+    const rest = Object.values(q.byMove).reverse().sort((a, b) => b.depth - a.depth); // deepest first, latest first within a depth
+    [...q.moveK.map((m) => q.byMove[m]), ...rest].forEach((c) => { if (out.length < ranks) add(c); });
+    return out;
   };
+  // the rank and first move of any info line with a pv (bound-only ones too): [k, uci], or null
+  const rankMove = (line) => { const k = / multipv (\d+)/.exec(line), m = / pv (\S+)/.exec(line); return m ? [k ? +k[1] : 1, m[1]] : null; };
 
   // makeWorker: () => a Worker (or anything with postMessage, onmessage, onerror, terminate)
   // the 1.8 MB wasm downloads and compiles inside this window, so it allows a slow phone connection
@@ -100,8 +114,15 @@
           if (st.timeMs != null) cur.timeMs = st.timeMs;
         }
         const s = window.AnalysisCore.infoToScore(line, (cur.moves.length % 2 === 0) === (cur.fen ? cur.fen.split(' ')[1] !== 'b' : true) ? 'w' : 'b');
-        // line 1 is the search's result; every line's last complete score is kept by its rank
-        if (s && s.multipv <= cur.lines) { cur.byK[s.multipv] = { k: s.multipv, cp: s.cp, depth: s.depth, pv: s.pv }; if (s.multipv === 1) cur.last = s; }
+        // line 1 is the search's result; every line's last complete score is kept by its rank and by its first move, and
+        // the move last reported at each rank (linesOf puts them together)
+        if (s && s.multipv <= cur.lines) {
+          cur.byK[s.multipv] = { k: s.multipv, cp: s.cp, depth: s.depth, pv: s.pv };
+          if (s.pv.length) cur.byMove[s.pv[0]] = cur.byK[s.multipv];
+          if (s.multipv === 1) cur.last = s;
+        }
+        const rm = rankMove(line);
+        if (rm && rm[0] <= cur.lines) cur.moveK[rm[0]] = rm[1];
         if (cur.onInfo && cur.last && (s || st)) cur.onInfo({ ...cur.last, lines: linesOf(cur), nodes: cur.nodes, timeMs: cur.timeMs, maxDepth: cur.maxDepth });
       } else if (line.startsWith('bestmove')) {
         const q = cur;
@@ -132,7 +153,7 @@
     // answers its last score); a boot under way goes on with the new worker
     const restart = (q) => {
       cur = null; isReady = false;
-      if (q) { clearTimeout(q.watch); if (q.stopped) q.resolve(resultOf(q, null)); else { Object.assign(q, { last: null, byK: [], maxDepth: null, nodes: null, timeMs: null }); queue.unshift(q); } }
+      if (q) { clearTimeout(q.watch); if (q.stopped) q.resolve(resultOf(q, null)); else { Object.assign(q, { last: null, byK: [], byMove: {}, moveK: [], maxDepth: null, nodes: null, timeMs: null }); queue.unshift(q); } }
       waiting.length = 0;
       bootTimers.forEach(clearTimeout);
       try { worker.terminate(); } catch (err) {}
@@ -198,7 +219,7 @@
     // threads: this search's (a game's analysis keeps the count it started with), else the engine's (setThreads)
     function search({ moves, fen, depth, movetimeMs, priority = 'game', onInfo, lines = 1, threads }) {
       let q;
-      const promise = new Promise((resolve) => { q = { moves, fen, depth, movetimeMs, priority, onInfo, resolve, last: null, lines, threads, byK: [] }; });
+      const promise = new Promise((resolve) => { q = { moves, fen, depth, movetimeMs, priority, onInfo, resolve, last: null, lines, threads, byK: [], byMove: {}, moveK: [] }; });
       if (failed) q.resolve(null); else { queue.push(q); pump(); }
       return {
         promise,
