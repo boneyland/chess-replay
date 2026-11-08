@@ -529,8 +529,9 @@ function GameApp() {
     const a = typeof files.analysis === 'string' ? files.analysis : JSON.stringify(files.analysis, null, 2);
     saveFile(files.analysisName || fileStem + '_analysis.json', a, 'application/json');
   };
-  // the whole annotation whatever the video shows: commentary even when hidden, Queen's answers even when out of the video
-  const annotatedPgn = () => window.ChessCore.annotatedPgn(withQueen(M, Q.resultAt));
+  // the whole annotation whatever the video shows: commentary even when hidden, Queen's answers even when out of the video,
+  // and Go deeper's evals in place of the analysis's on the moves it searched
+  const annotatedPgn = () => window.ChessCore.annotatedPgn(withQueen(withDeeper(M), Q.resultAt));
   const rawPgn = () => window.ChessCore.annotatedPgn(M, { raw: true });
   // a free board's moves (with a game's result and clocks)
   const boardPgn = () => (board.game ? window.PlayCore.pgn(board) : window.BoardCore.pgn(board));

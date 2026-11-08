@@ -622,9 +622,10 @@ function LineChips({ name, nameColor, accent, moves, ply0, c, legal, sel, onPick
 }
 
 // tb: the endgame tablebase's result for the position shown ({ cp, txt }, tbBar), drawn instead of the evals; dead: a dead
-// position's (deadBar), drawn instead of both
-function EvalBar({ M, T, S, a, tb, dead }) {
+// position's (deadBar), drawn instead of both; deep: Go deeper's eval of the move paused on, once it shows (as in Analysis)
+function EvalBar({ M, T, S, a, tb, dead, deep }) {
   if (dead || tb) return <EvalBarView cp={(dead || tb).cp} txt={(dead || tb).txt} a={a} />;
+  if (deep != null && M.hasEval) return <EvalBarView cp={deep} txt={fmtSf(deep)} a={a} />;
   const { c, cp } = evalNow(M, T, S);
   const shown = c >= 0 ? M.plies[c] : null;
   const txt = !M.hasEval ? '' : shown && shown.checkmate && T > S.tp[c] + 1 ? fmtEval(shown) : shown && (shown.mate != null || shown.won) ? fmtEval(shown) : fmtEval({ cp });
@@ -910,7 +911,13 @@ function Analysis({ M, T, S, a, vline, onLine, onPreview, onReplyHover, paused, 
   const Qp = P.queen || {};
   // the best line from the position on the board, as the eval's; and, where the move wasn't rated best, the line the
   // engine preferred to it (P.best is also an equally good move rated best with 0 cp lost: "as good as" says that one)
-  const nextLegal = P.next ? playLineCached(M, c + 1, P.next.slice(0, 8)) : [];
+  // Go deeper's result, once it shows, gives the best line too (as it gives the eval): the line streams in with its
+  // search, as on the viewer's own moves
+  const deepLine = deeper && deeper.pv && deeper.pv.length && typeof engineSteps === 'function' ? engineSteps({ ...window.ChessCore.posFromFen(P.fen), castle: P.castle, ep: P.ep }, deeper.pv) : null;
+  const nextLegal = deepLine && deepLine.length ? deepLine : P.next ? playLineCached(M, c + 1, P.next.slice(0, 8)) : [];
+  const nextMoves = deepLine && deepLine.length ? deepLine.map((s) => s.san) : P.next ? P.next.slice(0, 8) : [];
+  // the chip of the line shown on the board, while that line is still the one listed (a deeper search can change it)
+  const nextSel = vline && vline.src === 'next' && nextMoves[vline.upto] === vline.moves[vline.upto].san ? vline.upto : null;
   const betterLegal = P.best && cls !== 'best' ? playLineCached(M, c, P.best.line.slice(0, 8)) : [];
   // name the engine (the analysis may come from another one), and say where Queen stands once it has looked
   const engName = P.tbBefore ? 'The tablebase' : (M.engine || '').split(' · ')[0] || 'The engine';
@@ -937,8 +944,8 @@ function Analysis({ M, T, S, a, vline, onLine, onPreview, onReplyHover, paused, 
             sel={vline && vline.src === 'sf' ? vline.upto : null} onPick={(j) => onLine('sf', betterLegal, j)} onHover={(j) => onPreview('sf', betterLegal, j)} />
         )}
         {nextLegal.length ? (
-          <LineChips name="Best line" nameColor={C.ink} accent={C.best} moves={P.next.slice(0, 8)} ply0={M.ply0} c={c + 1} legal={nextLegal.length}
-            sel={vline && vline.src === 'next' ? vline.upto : null} onPick={(j) => onLine('next', nextLegal, j, c + 1)} onHover={(j) => onPreview('next', nextLegal, j, c + 1)} />
+          <LineChips name="Best line" tip={deepLine && deeper.source === 'cloud' ? 'Lichess cloud’s best line' : 'best line'} nameColor={C.ink} accent={C.best} moves={nextMoves} ply0={M.ply0} c={c + 1} legal={nextLegal.length}
+            sel={nextSel} onPick={(j) => onLine('next', nextLegal, j, c + 1)} onHover={(j) => onPreview('next', nextLegal, j, c + 1)} />
         ) : cls === 'best' ? <span>{agreeText}</span> : !betterLegal.length && <span />}
         {qLine.length > 0 && (
           <LineChips name="Queen line" nameColor={C.queen} accent={C.queen} moves={qLine} ply0={M.ply0} c={c + 1} legal={qLegal.length}
@@ -1239,8 +1246,29 @@ function useOwnLineEval(M, line, sf, tw) {
   return { ...ev, bestSan: bm ? bm.san : null };
 }
 
-// Go deeper on a move of the loaded analysis, while paused on it (on): from its own search (else the game settings), the
-// eval it shows only (the ratings, graph and accuracy stay the analysis's). Not on a PGN's own evals, which have no
+// Go deeper's finished results on the loaded analysis's moves, for the session: by position (the start, the analysis's
+// engine, the moves), the deepest kept (whichever engine or the cloud gave it). The annotated PGN writes their evals
+// (withDeeper); a new analysis of the same game starts afresh, as Go deeper's presses do
+const DEEPER_SHOWN = new Map();
+const deeperKey = (M, c) => M.start.fen + '|' + M.engine + '|' + M.plies.slice(0, c + 1).map((q) => q.uci).join(' ');
+// M with Go deeper's evals in place of the analysis's on the moves it searched (the eval only: the marks, the better
+// lines and everything rated from the evals stay the analysis's)
+function withDeeper(M) {
+  if (M.evalSource !== 'analysis' || !DEEPER_SHOWN.size) return M;
+  const CC = window.ChessCore;
+  let any = false;
+  const plies = M.plies.map((p, i) => {
+    const d = DEEPER_SHOWN.get(deeperKey(M, i));
+    if (!d) return p;
+    any = true;
+    return { ...p, cp: d.cp, mate: CC.isMateCp(d.cp) ? Math.sign(d.cp) * CC.mateIn(d.cp) : null };
+  });
+  return any ? { ...M, plies } : M;
+}
+
+// Go deeper on a move of the loaded analysis, while paused on it (on): from its own search (else the game settings),
+// what describes the position after the move (the eval, the Best line, the eval bar, and the eval in the annotated
+// PGN: DEEPER_SHOWN); the ratings, graph and accuracy stay the analysis's. Not on a PGN's own evals, which have no
 // best lines for it to go with (those come from analysing the game), nor on a position the tablebase answered (its
 // result is final): on says when
 function useGoDeeper(M, c, on, sf, tw) {
@@ -1248,7 +1276,14 @@ function useGoDeeper(M, c, on, sf, tw) {
   // name: the engine running keys Go deeper's results, so lite and full ones never mix
   const base = { name: settings.name, depth: p && p.search ? p.search.depth : settings.depth, time_limit: settings.time_limit };
   const moves = on ? M.plies.slice(0, c + 1).map((q) => q.uci) : null;
-  return useMoveEval(sf ? sf.engine : null, moves, moves, base, M.start.fen, on ? { cp: cpOf(M, c), depth: base.depth, pv: [], stored: true, src: M.engine } : null, cloudSetting(tw));
+  const ev = useMoveEval(sf ? sf.engine : null, moves, moves, base, M.start.fen, on ? { cp: cpOf(M, c), depth: base.depth, pv: [], stored: true, src: M.engine } : null, cloudSetting(tw));
+  const r = on && ev.after && !ev.after.stored && !ev.after.partial && ev.after.cp != null ? ev.after : null;
+  React.useEffect(() => {
+    if (!r) return;
+    const k = deeperKey(M, c), had = DEEPER_SHOWN.get(k);
+    if (!had || r.depth > had.depth) DEEPER_SHOWN.set(k, { cp: r.cp, depth: r.depth });
+  }, [r]);
+  return ev;
 }
 
 // The transport bar (nav: its label, buttons and Copy FEN) and the keys for the replay: ← → step through a shown line's
@@ -1353,7 +1388,7 @@ function GameVideo({ M, tw, d, probe, queen, nav, scheme, sf, orient }) {
       <div style={{ position: 'absolute', inset: 0, opacity: fade }}>
         {/* an export keeps the page still and has the compositor zoom the layers in here (data-push, export-draw.js) */}
         <div ref={flowRef} data-push={f > 0 && tw.exporting ? `${sc} ${cx} ${cy}` : undefined} style={{ position: 'absolute', inset: 0, transformOrigin: '0 0', ...flowStyle(), ...(f > 0 && !tw.exporting && { transform: `translate(${cx}px,${cy}px) scale(${sc}) translate(${-cx}px,${-cy}px)` }) }}>
-          <EvalBar M={M} T={T} S={S} a={enter(1)} tb={tbBar(tb)} dead={deadBar(dead)} />
+          <EvalBar M={M} T={T} S={S} a={enter(1)} tb={tbBar(tb)} dead={deadBar(dead)} deep={!playing && gameEval.after && !gameEval.after.stored && gameEval.after.cp != null ? gameEval.after.cp : null} />
           <PlayerBar M={M} T={T} S={S} side="b" a={enter(1)} pieces={pieces} />
           <BoardSpace onStep={tw.exporting ? null : stepBy}>
             <Board M={M} T={T} S={S} a={enter(0)} arrows={tw.bestArrows} pieces={pieces} queen={queen} vline={pv || vline} hide={input.drag && input.drag.moved ? input.drag.from : null} lines={tw.bestArrows && own ? lineArrows(own.after) : null} sel={input.sel} />
