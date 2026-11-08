@@ -82,7 +82,7 @@ What each part of the repo is, with the pinned SHA-256 of every vendored file. B
 - `openings-data.cjs`: embeds `openings/*.tsv` (Lichess chess-openings, CC0; a copy of chess-animator's) into the page
 - `tools/chasolver-wasm/`: the crate and `build.sh` that build `vendor/chasolver.wasm` (Rust; run by hand, never by Render)
 - `render.yaml`: the Render static site's settings (a Blueprint: Render syncs them from this file); `render-headers.cjs` reads its headers for `build.cjs`, `tests/live/serve.cjs` and the tests
-- `docs/`: `spec.md`, the one spec (principles, what's built, roadmap, known gaps, decisions log), `audits/`, dated audit reports with their fix plans, and `plans/`, the implementation plans of built features, kept as written (the oldest, browser Stockfish of 2026-10-16, was written when this was `artifact/` in chess-animator; its paths are now repo-root paths)
+- `docs/`: the spec: `spec.md` (principles and contents), `spec/` (what's built, one file per area), `roadmap.md`, `known-gaps.md` and `decisions.md` (the decisions log); `audits/`, dated audit reports with their fix plans, and `plans/`, the implementation plans of built features, kept as written (the oldest, browser Stockfish of 2026-10-16, was written when this was `artifact/` in chess-animator; its paths are now repo-root paths)
 - `media/`: the README's pictures and video
   - `preview.webp`: the preview from the sample game (scaled to 1676 wide to fill GitHub's 838 px README column on 2× screens; 8 fps, WebP quality 80)
   - `demo.mp4`: the ~65 s showcase video (Byrne–Fischer 1956, `demo-game.pgn`), re-recorded by `record-demo.cjs`

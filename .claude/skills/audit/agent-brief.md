@@ -11,7 +11,7 @@ and note any part you could not read:
 <file list>
 
 First read for context: the "Workflow" and "Gotchas" sections of /home/yh/projects/chess-replay/CLAUDE.md, and the
-"## Decisions log" section of /home/yh/projects/chess-replay/docs/spec.md to its end. Read them with the Read tool,
+decisions log, /home/yh/projects/chess-replay/docs/decisions.md, to its end. Read them with the Read tool,
 not grep or sed: some entries are longer than a shell output line and get cut. They record deliberate choices. Don't
 report a recorded decision as a fault; report only where the code contradicts it (that contradiction is worth
 reporting). The long one-line statements (some over 200 characters) are known, recorded debt: don't list them one by

@@ -53,6 +53,6 @@ Before committing new or changed text, read it once for each:
 1. **Purpose**: does it help the viewer do what they came to do, or answer the question they'll have here?
 2. **Length**: cut words that add nothing; put the important word first. Notes may run longer when they explain a real constraint (the export's "Keep this tab active…"): length is fine, padding isn't.
 3. **Read aloud**: would a person say it? Active voice unless passive is clearer.
-4. **Consistency**: the same name for the same thing as the rest of the page and `docs/spec.md` (Full / Lite, Import game, My games, Share and export). A rename changes every place it appears, the spec and the live tests' selectors included.
+4. **Consistency**: the same name for the same thing as the rest of the page and the spec, `docs/spec.md` and the files it links (Full / Lite, Import game, My games, Share and export). A rename changes every place it appears, the spec and the live tests' selectors included.
 
 Adapted from content-designer/ux-writing-skill (MIT, © 2026 Christopher Greer): the message kinds, the screen-reader notes and the four-pass review.
