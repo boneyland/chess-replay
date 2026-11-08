@@ -537,6 +537,9 @@ function GameApp() {
   const boardPgn = () => (board.game ? window.PlayCore.pgn(board) : window.BoardCore.pgn(board));
   const savePgn = () => saveFile(fileStem + '_annotated.pgn', annotatedPgn(), 'application/x-chess-pgn');
   const saveRawPgn = () => saveFile(fileStem + '.pgn', rawPgn(), 'application/x-chess-pgn');
+  // the game's notes (a loaded notes file's, or the sample's own) as a notes file; none without notes
+  const notes = React.useMemo(() => window.ChessCore.notesText(M), [M]);
+  const saveNotes = () => saveFile(fileStem + '_notes.txt', notes, 'text/plain');
   const saveBoardPgn = () => saveFile(board.game ? `my-game-${board.game.date}.pgn` : 'free-board.pgn', boardPgn(), 'application/x-chess-pgn');
   const saveQueen = () => saveFile(fileStem + '_queen.json', JSON.stringify(Q.saved(), null, 1), 'application/json');
   const analysis = useGameAnalysis(M, files, () => filesRef.current, (next) => commit(next, true), engine, ES.game, t.tablebase !== false);
@@ -700,7 +703,7 @@ function GameApp() {
       {keysOpen && <ShortcutsDialog onClose={closeKeys} />}
       {shareOpen && <ShareDialog fen={shareOpen.fen} board={board} x={X} setTweak={setTweak} onFail={copyFailed} onClose={closeShare} onExport={exportVideo}
         onReplay={() => { setShareOpen(null); boardAsGame(); }}
-        pgn={{ board: boardPgn, saveBoard: saveBoardPgn, annotated: annotatedPgn, saveAnnotated: savePgn, raw: rawPgn, saveRaw: saveRawPgn, saveAnalysis: browserAnalysis ? saveAnalysis : null }} />}
+        pgn={{ board: boardPgn, saveBoard: saveBoardPgn, annotated: annotatedPgn, saveAnnotated: savePgn, raw: rawPgn, saveRaw: saveRawPgn, saveAnalysis: browserAnalysis ? saveAnalysis : null, notes: notes ? () => notes : null, saveNotes }} />}
       {gamesOpen && <MyGamesDialog games={gamesOpen} current={board && window.PlayCore.inProgress(board) ? board.game.id : null} onReplay={replayGame} onResume={resumeGame} onDelete={deleteGame} onClose={closeGames} />}
       {leave && <LeaveDialog onStay={() => setLeave(null)} onLeave={() => { const run = leave.run; setLeave(null); keepLeft(board); run(); }} />}
       {queenOpen && !board && <QueenPanel M={M} Q={Q} hf={hf} probe={probe} onClose={closeQueen} onOverlay={setQueenArrow} onSave={saveQueen} left={queenLeft} />}
