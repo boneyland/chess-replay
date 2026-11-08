@@ -91,7 +91,8 @@ function useStoredFiles({ stored, setErr, onCommit, clockRef }) {
     }
     setErr(''); setFiles(withLast); onCommit(keep);
     try {
-      if (next.sample && !next.evalSource) localStorage.removeItem(STORE);
+      // the sample as it comes needs no storing; once its analysis is replaced (a run, Remove analysis) the change is kept
+      if (next.sample && !next.evalSource && next.analysis === SAMPLE.analysis) localStorage.removeItem(STORE);
       else try { localStorage.setItem(STORE, JSON.stringify(withLast)); } catch (e) { if (withLast === next) throw e; setFiles(next); localStorage.setItem(STORE, JSON.stringify(next)); }
     } catch (e) { setErr(next.board ? 'The board couldn’t be remembered after reload: the browser’s storage is full.' : 'Loaded, but the files are too large to remember after reload.'); return false; }
     return true;
