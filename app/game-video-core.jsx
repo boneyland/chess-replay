@@ -404,7 +404,7 @@ function deepLineSteps(P, pv) {
 }
 // The lines of the position after ply P on the loaded analysis (several searched lines: Go deeper's once it shows, else the
 // analysis file's engine_lines), each { k, cp, depth, pv: uci }; null with one line or none
-const nextLinesOf = (P, deeper) => (deeper && deeper.lines && deeper.lines.length > 1 ? deeper.lines : P && P.nextLines && P.nextLines.length > 1 ? P.nextLines : null);
+const nextLinesOf = (P, deeper) => (deeper ? (deeper.lines && deeper.lines.length > 1 ? deeper.lines : null) : P && P.nextLines && P.nextLines.length > 1 ? P.nextLines : null);
 const lineLabel = (M, c, j, san) => `${window.ChessCore.moveNo(M.ply0 + c + j)} ${san}`;
 
 // What a search actually did: "Stockfish 19 lite · depth 22 (23 unfinished) · 3.0 s · 1.5M nodes" (the eval is from depth 22)
@@ -1334,7 +1334,7 @@ function useGoDeeper(M, c, on, sf, tw) {
   React.useEffect(() => {
     if (!r) return;
     const k = deeperKey(M, c), had = DEEPER_SHOWN.get(k);
-    if (!had || r.depth > had.depth) DEEPER_SHOWN.set(k, { cp: r.cp, depth: r.depth, pv: r.pv || [], lines: r.lines && r.lines.length > 1 ? r.lines : null });
+    if (!had || r.depth > had.depth || (r.lines && r.lines.length > 1 && !(had.lines && had.lines.length > 1))) DEEPER_SHOWN.set(k, { cp: r.cp, depth: r.depth, pv: r.pv || [], lines: r.lines && r.lines.length > 1 ? r.lines : null });
   }, [r]);
   return ev;
 }
