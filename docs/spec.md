@@ -12,11 +12,11 @@ The one spec for the app: what it does now, what is planned, and the decisions b
   - [Import](spec/import.md): import game, Lichess game import
   - [Position from image](spec/position-from-image.md)
   - [Free board and games](spec/free-board.md): free board and explorer, Edit position, Play vs human, My games, Play vs Stockfish, dead positions with chasolver
-  - [Engine](spec/engine.md): Full Stockfish download, lines (MultiPV), multi-threaded Stockfish, asm.js Stockfish (no WebAssembly SIMD)
+  - [Engine](spec/engine.md): Full Stockfish download, lines (MultiPV), engine lines in analysis files, multi-threaded Stockfish, asm.js Stockfish (no WebAssembly SIMD)
   - [Lichess data](spec/lichess.md): endgame tablebase, Lichess cloud evaluation, Lichess opening explorer
   - [Share and export](spec/export.md): the dialog, video and WebP export
   - [Responsive layout](spec/layout.md)
-- [Roadmap](roadmap.md): engine lines in analysis files, and Go deeper's lines; square layouts and breakpoints; player names; Chess960; typed commentary; Maia3; background music; peer-to-peer online play; app walk-through
+- [Roadmap](roadmap.md): square layouts and breakpoints; player names; Chess960; typed commentary; Maia3; background music; peer-to-peer online play; app walk-through
 - [Known gaps](known-gaps.md)
 - [Decisions log](decisions.md)
 
