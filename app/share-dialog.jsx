@@ -66,7 +66,8 @@ function useExportSettings({ t, setTweak, M, MV, TM, frameW, stem, saveFile, pie
 }
 
 // fen: the position's, as it was when the dialog opened; board: a free board (its moves are the PGN), else the loaded
-// game's annotated and raw PGN. pgn: { board, saveBoard, annotated, saveAnnotated, raw, saveRaw, saveAnalysis (or null) },
+// game's annotated and raw PGN. pgn: { board, saveBoard, annotated, saveAnnotated, raw, saveRaw, saveAnalysis (or null),
+// notes (or null: the game has none), saveNotes },
 // each text a function. x: useExportSettings. onFail(what) is the copy button's onFail; onReplay replays a board's moves
 // as a game; onExport runs the export
 function ShareDialog({ fen, board, pgn, x, setTweak, onFail, onReplay, onExport, onClose }) {
@@ -93,9 +94,16 @@ function ShareDialog({ fen, board, pgn, x, setTweak, onFail, onReplay, onExport,
             <TweakButton secondary label="Download raw" onClick={pgn.saveRaw} />
             <CopyButton label="Copy raw PGN" text={pgn.raw} onFail={onFail('PGN')} />
           </div>
-          <div className="twk-note">Annotated: the marks, evals, clocks, commentary, Queen’s answers and better lines. Raw: the tags and the moves alone.</div>
+          <div className="twk-note">Annotated: the marks, evals, clocks, commentary, Queen’s answers and better lines (the PGN’s or the analysis’s, as Game › Evaluations from is set). Raw: the tags and the moves alone.</div>
         </>}
       </TweakSection>
+      {!board && pgn.notes && <TweakSection label="Notes">
+        <div className="xfer-row">
+          <TweakButton secondary label="Download notes" onClick={pgn.saveNotes} />
+          <CopyButton label="Copy notes" text={pgn.notes} onFail={onFail('notes file')} />
+        </div>
+        <div className="twk-note">The game’s notes, as a notes file that Import game reads back.</div>
+      </TweakSection>}
       {!board && pgn.saveAnalysis && <TweakSection label="Analysis">
         <TweakButton secondary label="Download analysis" onClick={pgn.saveAnalysis} />
       </TweakSection>}

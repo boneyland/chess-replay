@@ -2290,6 +2290,37 @@ for (const name of BROWSERS) for (const site of SITES) {
       assert.deepEqual(gl.errors, []);
       await gl.ctx.close();
     });
+    // the sample's annotated PGN: one better line after 28. Qxb5 (the analysis's, as Evaluations from is Analysis; the
+    // PGN's own after switching to PGN), its own comment beside the notes'; and its notes as a notes file
+    await t.test('desktop: the annotated PGN follows Evaluations from and keeps the PGN\'s comments; Download notes', async () => {
+      const sn = await open(browser, { width: 1440, height: 900 });
+      const p = sn.page;
+      await p.goto(base, { waitUntil: 'load' });
+      await loadedOn(p);
+      const download = async (name) => {
+        const share = await openShare(p);
+        const [dl] = await Promise.all([p.waitForEvent('download'), share.getByRole('button', { name }).click()]);
+        const txt = fs.readFileSync(await dl.path(), 'utf8');
+        await p.keyboard.press('Escape');
+        return { txt, file: dl.suggestedFilename() };
+      };
+      const qxb5 = (txt) => txt.split('\n\n')[1].replace(/\n/g, ' ').match(/28\. Qxb5 [^}]*\}( \([^)]*\))*/)[0];
+      const a = qxb5((await download('Download annotated')).txt);
+      assert.match(a, /\{\[%eval [-\d.]+\] \[%clk 0:10:21\] Blunder\. Be3 was best\. Qxb5\?\? grabs/, a);
+      assert.match(a, /\} \(28\. Be3 Ba5 29\. Bf3 [^)]*\)$/, 'the analysis\'s line alone: ' + a);
+      await p.locator('.pdock').getByRole('button', { name: 'Settings' }).click();
+      await p.getByRole('tab', { name: 'Game' }).click();
+      await p.getByRole('radiogroup', { name: 'Evaluations from' }).getByRole('radio', { name: 'PGN' }).click();
+      await p.getByRole('button', { name: 'Close settings' }).click();
+      const b = qxb5((await download('Download annotated')).txt);
+      assert.match(b, /\} \(28\. Be3 Ba5 29\. h4 [^)]*\)$/, 'the PGN\'s line alone: ' + b);
+      const notes = await download('Download notes');
+      assert.match(notes.file, /_notes\.txt$/);
+      assert.match(notes.txt, /^\[INTRO\]\nFinal, game 2\./);
+      assert.match(notes.txt, /\n\[55\]\nQxb5\?\? grabs a second pawn/);
+      assert.deepEqual(sn.errors, []);
+      await sn.ctx.close();
+    });
     // Go deeper where the engine won't start (as on a tablet whose + only vanished): the press says so and the + comes back
     await t.test('desktop: Go deeper says when Stockfish doesn\'t start', async () => {
       const gd = await open(browser, { width: 1440, height: 900 });
@@ -3127,6 +3158,7 @@ for (const name of BROWSERS) for (const site of SITES) {
       assert.match(raw.suggestedFilename(), /^[\w-]+\.pgn$/);
       assert.match(rawText, /^\[Event /);
       assert.ok(!/[{}$(]/.test(rawText.split('\n\n')[1]), 'raw: the moves alone');
+      assert.equal(await share.getByRole('button', { name: 'Download notes' }).count(), 0, 'no notes, no Notes section');
       await assert.doesNotReject(share.getByRole('button', { name: /^Export (video|animated WebP)/ }).waitFor({ timeout: 5000 }));
       // a drop-down opens to the real mouse: the dialog keeps a press on its text from taking focus, never one on a select
       // (it did, and the export's drop-downs wouldn't open, 2026-11-04)

@@ -620,9 +620,10 @@
     if (cur) lines.push(cur);
     return head + '\n\n' + lines.join('\n').replace(/\u00a0/g, ' ') + '\n';
   }
-  // the game as PGN: marks and the source's other NAGs, evals and clocks as [%eval]/[%clk], commentary (and
-  // Queen's sentence) as comments, the source's variations as written plus the engine's better line on ?!/?/??
-  // moves; wrapped at 80 columns. raw: the tags and the moves alone (no comments, NAGs, evals, clocks or variations)
+  // the game as PGN: marks and the source's other NAGs, evals and clocks as [%eval]/[%clk], the PGN's comments and a
+  // notes file's (and Queen's sentence) as comments, and the better lines of the evaluations shown: the source's
+  // variations as written, or with an analysis's evals its better line on ?!/?/?? moves; wrapped at 80 columns.
+  // raw: the tags and the moves alone (no comments, NAGs, evals, clocks or variations)
   function annotatedPgn(M, { raw = false } = {}) {
     const H = { ...(M.headers || {}) };
     const set = (k, v) => { if (!H[k] && v) H[k] = v; };
@@ -635,7 +636,11 @@
     const order = ['Event', 'Site', 'Date', 'Round', 'White', 'Black', 'Result'];
     const keys = order.filter((k) => H[k] != null).concat(Object.keys(H).filter((k) => !order.includes(k)));
     const toks = [];
-    if (M.intro && !raw) toks.push(`{${pgnEsc(M.intro)}}`);
+    // the PGN's own words and a notes file's, the PGN's first (the same words once): a note sits beside the PGN's
+    // comment, never in its place
+    const both = (pgn, notes, fallback) => (M.says ? [...new Set([pgn, notes].filter(Boolean))] : [fallback].filter(Boolean)).map(pgnEsc);
+    const intro = both(M.says && M.says.pgn.intro, M.says && M.says.notes.intro, M.intro);
+    if (intro.length && !raw) toks.push(`{${intro.join(' ')}}`);
     M.plies.forEach((p, i) => {
       const abs = (M.ply0 || 0) + i;
       toks.push(pgnMoveNo(abs, !i || pgnReopens(toks[toks.length - 1])) + p.san);
@@ -645,12 +650,13 @@
       if (!p.checkmate && p.mate != null) tags.push(`[%eval #${p.mate}]`);
       else if (!p.checkmate && p.cp != null) tags.push(`[%eval ${(p.cp / 100).toFixed(2)}]`);
       if (p.clk != null) tags.push(`[%clk ${pgnClk(p.clk)}]`);
-      const words = tags.concat([p.comment, p.queenText ? 'Queen: ' + p.queenText : ''].filter(Boolean).map(pgnEsc));
+      const said = p.says ? both(p.says.pgn, p.says.notes) : both(null, null, p.comment);
+      const words = tags.concat(said, p.queenText ? [pgnEsc('Queen: ' + p.queenText)] : []);
       if (words.length) toks.push(`{${words.join(' ')}}`);
-      (p.pgnVars || []).forEach((v) => toks.push(flatVar(v)));
-      // without an analysis file the better line is the source's first variation, written just above
-      const fromPgn = p.pgnVars && M.evalSource !== 'analysis';
-      if (!fromPgn && p.best && p.best.line && p.best.line.length && ['inaccuracy', 'mistake', 'blunder'].includes(p.cls)) {
+      // the better lines of the evaluations shown (Game › Evaluations from), as the Analysis panel has them: the PGN's
+      // own variations as written (its first is the better line), or the analysis's better line in their place
+      if (M.evalSource !== 'analysis') (p.pgnVars || []).forEach((v) => toks.push(flatVar(v)));
+      else if (p.best && p.best.line && p.best.line.length && ['inaccuracy', 'mistake', 'blunder'].includes(p.cls)) {
         const before = i ? M.plies[i - 1] : null;
         const line = playLine(before ? before.fen : M.start.fen, p.best.line, before ? before.castle : M.start.pos.castle, before ? before.ep : M.start.pos.ep);
         const v = line.map((m, j) => pgnMoveNo(abs + j, j === 0) + m.san);
@@ -660,6 +666,16 @@
     if (M.conclusion && !raw) toks.push(`{${pgnEsc(M.conclusion)}}`);
     toks.push(H.Result);
     return pgnText(keys.map((k) => [k, H[k]]), toks);
+  }
+
+  // a game's notes (a notes file's, and the sample's own) as a notes file that parseNotes reads back: [INTRO], [n] for
+  // the note after ply n, [CONCLUSION]; '' when the game has none
+  function notesText(M) {
+    const N = (M.says && M.says.notes) || {}, out = [];
+    if (N.intro) out.push(`[INTRO]\n${N.intro}`);
+    M.plies.forEach((p, i) => { if (p.says && p.says.notes) out.push(`[${i + 1}]\n${p.says.notes}`); });
+    if (N.conclusion) out.push(`[CONCLUSION]\n${N.conclusion}`);
+    return out.length ? out.join('\n\n') + '\n' : '';
   }
 
   // castle: the castling rights before the line (the page's FENs don't carry them); omitted = all
@@ -755,5 +771,5 @@
     for (let m = step; 2 * m - ply0 <= N; m += step) if (2 * (m - 1) - ply0 >= 0) ticks.push({ m, at: 2 * (m - 1) - ply0 });
     return ticks;
   }
-  window.ChessCore = { START_FEN, splitGames, fmtDate, fmtLen, hasLegal, inCheck, checkers, evalTicks, sqName: idxSq, CASTLE_HOME, canCastle, readFen, epFits, setupProblems, setupFen, epCapturable, fullFen, parseFen, fenAfter, moveNo, sqIndex: sqIdx, applySan, applyUci, stepFromUci, toFen, playLine, posFromFen, legalTargets, isPromotion, userMove, buildGame, withCommentary, commentarySources, classifyFile, plan, timing, schedule, cues, settledAt, clipRange, MATE_CP, MATE_STEP, MATE_MIN, mateCp, isMateCp, mateIn, WIN_K, WIN_DROP, winChance, plyCp, MARK_CLASS, pgnClk, pgnMoveNo, pgnReopens, pgnText, annotatedPgn };
+  window.ChessCore = { START_FEN, splitGames, fmtDate, fmtLen, hasLegal, inCheck, checkers, evalTicks, sqName: idxSq, CASTLE_HOME, canCastle, readFen, epFits, setupProblems, setupFen, epCapturable, fullFen, parseFen, fenAfter, moveNo, sqIndex: sqIdx, applySan, applyUci, stepFromUci, toFen, playLine, posFromFen, legalTargets, isPromotion, userMove, buildGame, withCommentary, commentarySources, classifyFile, plan, timing, schedule, cues, settledAt, clipRange, MATE_CP, MATE_STEP, MATE_MIN, mateCp, isMateCp, mateIn, WIN_K, WIN_DROP, winChance, plyCp, MARK_CLASS, pgnClk, pgnMoveNo, pgnReopens, pgnText, annotatedPgn, notesText };
 })();
