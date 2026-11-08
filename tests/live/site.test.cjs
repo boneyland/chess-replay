@@ -2245,6 +2245,40 @@ for (const name of BROWSERS) for (const site of SITES) {
       assert.deepEqual(gd.errors, []);
       await gd.ctx.close();
     });
+    // Go deeper's result gives the Best line and the eval bar too, not only the panel's eval: a faked cloud answer
+    // (depth 60, +3.21, a rook-pawn move the analysis never chose) replaces the analysis's line once it shows
+    await t.test('desktop: Go deeper\'s answer replaces the Best line and the eval bar\'s eval', async () => {
+      const gl = await open(browser, { width: 1440, height: 900 });
+      const p = gl.page;
+      // the page's own fetch answers for the cloud (a Playwright route in Firefox leaks into later contexts)
+      await gl.ctx.addInitScript(() => {
+        const f = window.fetch;
+        window.fetch = function (u) {
+          if (!String(u).startsWith('https://lichess.org/api/cloud-eval')) return f.apply(this, arguments);
+          const fen = new URL(String(u)).searchParams.get('fen'), pos = window.ChessCore.posFromFen(fen);
+          const move = ['a2a3', 'h2h3', 'a7a6', 'h7h6'].find((m) => window.ChessCore.applyUci(pos, m));
+          return Promise.resolve(new Response(JSON.stringify({ fen, knodes: 1000, depth: 60, pvs: [{ moves: move, cp: 321 }] }), { status: 200, headers: { 'Content-Type': 'application/json' } }));
+        };
+      });
+      await p.addInitScript(() => { try { localStorage.setItem('chess-video.tweaks.v1', JSON.stringify({ cloudEval: true })); } catch (e) {} });
+      await p.goto(base, { waitUntil: 'load' });
+      await loadedOn(p);
+      await p.locator('[data-ply="0"]').click();
+      const firstChip = () => p.locator('.part-analysis').locator('div', { has: p.locator('span', { hasText: /^Best line$/ }) }).last().locator('.mv').first().innerText();
+      const bar = () => p.locator('.part-eval-bar').innerText();
+      const deeper = p.getByRole('button', { name: /^Go deeper/ });
+      await deeper.waitFor({ timeout: 20000 });
+      const before = await firstChip();
+      assert.doesNotMatch(before, /^[ah][36]$/, 'the analysis\'s own line first');
+      assert.notEqual(await bar(), '+3.21');
+      await deeper.click();
+      await p.waitForFunction(() => /cloud depth 60/i.test(document.body.innerText), null, { timeout: 20000 });
+      assert.match(await firstChip(), /^[ah][36]$/, 'the cloud\'s line');
+      assert.equal(await bar(), '+3.21');
+      await p.screenshot({ path: path.join(OUT, host + '-go-deeper-best-line.png') });
+      assert.deepEqual(gl.errors, []);
+      await gl.ctx.close();
+    });
     // Go deeper where the engine won't start (as on a tablet whose + only vanished): the press says so and the + comes back
     await t.test('desktop: Go deeper says when Stockfish doesn\'t start', async () => {
       const gd = await open(browser, { width: 1440, height: 900 });
