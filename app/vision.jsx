@@ -336,7 +336,7 @@ function VisionDialog({ again, onRead, onClose }) {
     </>;
   }
   return (
-    <DialogBox label="Position from image" className="vision-box" onClose={onClose}>
+    <DialogBox label="Position from image" part="position-from-image" className="vision-box" onClose={onClose}>
       <div ref={wrap} style={{ display: 'contents' }}>{body}</div>
     </DialogBox>
   );

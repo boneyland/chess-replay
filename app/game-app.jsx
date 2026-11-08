@@ -601,7 +601,7 @@ function GameApp() {
   </div>);
   const fsLabel = fullscreen.on ? 'Exit full screen' : 'Full screen';
   const dockItems = (
-    <div id="dock-items" className="dock-items">
+    <div id="dock-items" className="dock-items part-dock">
       {phone && <span className="dock-menu-status">{shownErr || status}</span>}
       <button type="button" className="dock-btn dock-primary" onClick={importGame}>Import game</button>
       {/* a list of starting points and tools in groups, each under its heading; on the phone they sit in the folded menu */}
@@ -609,7 +609,7 @@ function GameApp() {
         <div ref={newRef} className="dock-new">
           <button ref={newBtn} type="button" className="dock-btn" aria-expanded={newMenu} aria-controls="dock-new-items" onClick={() => { setNewMenu((m) => !m); setPanel(false); setQueenOpen(false); }}>Menu</button>
           {newMenu && (
-            <div id="dock-new-items" className="dock-pop">
+            <div id="dock-new-items" className="dock-pop part-play-explore-menu">
               {newItems}
             </div>
           )}
@@ -634,7 +634,7 @@ function GameApp() {
     </div>
   );
   const menuEl = (
-    <div ref={dockRef} className={'pmenu' + (shownErr ? ' pmenu-err' : '') + (menu ? ' pmenu-open' : '')}>
+    <div ref={dockRef} className={'pmenu part-menu' + (shownErr ? ' pmenu-err' : '') + (menu ? ' pmenu-open' : '')}>
       <button ref={menuBtn} type="button" className="pbtn dock-menu" aria-label="Menu" aria-expanded={menu} aria-controls="dock-items" onClick={() => { setMenu((m) => !m); setPanel(false); setQueenOpen(false); }}>
         <svg width="16" height="16" viewBox="0 0 18 18" fill="none" aria-hidden="true">
           {menu
@@ -686,7 +686,7 @@ function GameApp() {
       <ExportOverlay x={video} />
       {importOpen && <ImportDialog text={importOpen.text} auto={importOpen.auto} onChoose={chooseFiles} onPgn={pgnLoad} onFen={fenLoad} onImage={visionOk ? importImage : null} onClose={closeImport} />}
       {resetOpen && (
-        <DialogBox label="Reset all settings" onClose={() => setResetOpen(false)}>
+        <DialogBox label="Reset all settings" part="reset-settings" onClose={() => setResetOpen(false)}>
           <div className="fen-note">Every setting goes back to its default. Your saved games and the downloaded engine are kept.</div>
           <div className="fen-btns">
             <button type="button" className="twk-btn secondary" data-autofocus onClick={() => setResetOpen(false)}>Cancel</button>

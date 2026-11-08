@@ -174,7 +174,7 @@ function LichessExplorer({ x, tw, setTweak, onGame, posKey, onPlay, onHover, whi
     );
   }
   return (
-    <Panel box={{ ...L.comment, scroll: !L.comment.flow }} a={1} title="Opening explorer" right={right} progress={loading ? pr : null}>
+    <Panel box={{ ...L.comment, scroll: !L.comment.flow }} a={1} part="opening-explorer" title="Opening explorer" right={right} progress={loading ? pr : null}>
       <div ref={top}>{body}</div>
     </Panel>
   );
