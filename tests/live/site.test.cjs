@@ -2335,6 +2335,7 @@ for (const name of BROWSERS) for (const site of SITES) {
     await t.test('desktop: the Stockfish switch and the game analysis dialog\'s own settings', async () => {
       const g = await open(browser, { width: 1440, height: 900 });
       const p = g.page;
+      await p.addInitScript(spyEngine, {});
       await p.goto(base, { waitUntil: 'load' });
       await loadedOn(p);
       const sw = p.getByRole('switch', { name: 'Stockfish' });
@@ -2347,6 +2348,8 @@ for (const name of BROWSERS) for (const site of SITES) {
       await p.mouse.move(to.x, to.y, { steps: 8 });
       await p.mouse.up();
       await p.getByText(/Stockfish is off/i).first().waitFor({ timeout: 5000 });
+      await p.waitForTimeout(1500);
+      assert.deepEqual(await p.evaluate(() => window.__sf.posted.filter((m) => m.startsWith('go'))), [], 'nothing searched');
       await p.getByRole('button', { name: 'Analyse the game' }).click();
       const dlg = p.getByRole('dialog', { name: 'Analyse the game' });
       await dlg.locator('#tw-sf-ghash').selectOption('32 MB');
@@ -2360,6 +2363,44 @@ for (const name of BROWSERS) for (const site of SITES) {
       await p.getByRole('button', { name: 'Engine options' }).click();
       assert.equal(await p.locator('#tw-sf-hash').inputValue(), '64 MB', 'the live searches keep theirs');
       assert.equal(await p.locator('#tw-sf-depth').count(), 0, 'no game analysis sliders in the engine menu');
+      assert.deepEqual(g.errors, []);
+      await g.ctx.close();
+    });
+    // while a game analysis runs, nothing else is searched (the engine never switches between its threads and the live
+    // searches'): a move tried meanwhile says so and is rated once the run ends; the run's hash table is the engine's
+    // while it lasts, the live searches' after
+    await t.test('desktop: a running game analysis pauses the live searches and lends the engine its hash table', async () => {
+      const g = await open(browser, { width: 1440, height: 900 });
+      const p = g.page;
+      await p.addInitScript(spyEngine, {});
+      await p.addInitScript(() => { try { if (!sessionStorage.getItem('seeded')) { sessionStorage.setItem('seeded', '1'); localStorage.setItem('chess-video.tweaks.v1', JSON.stringify({ sfTime: 2, sfGameHash: 32, sfGameThreads: 2, sfThreads: 1 })); } } catch (e) {} });
+      await p.goto(base, { waitUntil: 'load' });
+      await loadedOn(p);
+      await p.getByRole('button', { name: 'Import game' }).click();
+      await p.getByRole('textbox', { name: 'PGN, FEN or Lichess link' }).click();
+      await p.keyboard.type('1. e4 e5 2. Nf3 Nc6 *');
+      await p.getByRole('button', { name: 'Open', exact: true }).click();
+      await p.getByRole('button', { name: /^Analyse with Stockfish/ }).first().click();
+      await p.getByRole('dialog', { name: 'Analyse the game' }).getByRole('button', { name: /^Analyse with Stockfish/ }).click();
+      await p.getByRole('button', { name: /^Analyse the game: analysing/ }).waitFor({ timeout: 15000 });
+      const b = await boardBox(p);
+      const from = square(b, 'd2'), to = square(b, 'd4');
+      await p.mouse.move(from.x, from.y);
+      await p.mouse.down();
+      await p.mouse.move(to.x, to.y, { steps: 8 });
+      await p.mouse.up();
+      await p.getByText(/Stockfish is analysing the game/i).first().waitFor({ timeout: 5000 });
+      await p.getByRole('button', { name: /^Analyse the game: analysing/ }).waitFor({ state: 'detached', timeout: 60000 });
+      const rated = /your move · .*(stockfish’s choice|cp vs|as good as)/i;
+      await p.waitForFunction((re) => new RegExp(re, 'i').test(document.body.innerText), rated.source, { timeout: 30000 });
+      const sf = await p.evaluate(() => window.__sf.posted);
+      const hashes = sf.filter((m) => m.startsWith('setoption name Hash'));
+      assert.equal(hashes[0], 'setoption name Hash value 32', 'the run\'s hash table');
+      assert.equal(hashes[hashes.length - 1], 'setoption name Hash value 64', 'the live searches\' after it');
+      // the run's two threads, then the live searches' one after it: no switching back and forth during the run
+      // (a page that can't run threads sends none)
+      const threads = sf.filter((m) => m.startsWith('setoption name Threads')).map((m) => +m.split(' ').pop());
+      assert.ok(threads.length <= 3 && threads.indexOf(1, threads.indexOf(2)) >= threads.lastIndexOf(2), 'threads set: ' + threads.join(', '));
       assert.deepEqual(g.errors, []);
       await g.ctx.close();
     });
