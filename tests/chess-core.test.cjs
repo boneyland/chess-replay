@@ -287,6 +287,27 @@ test('annotatedPgn writes the analysis\'s line on every move not rated best, and
   assert.equal(CC.buildGame({ pgn: CC.annotatedPgn(M) }).plies[1].mark, '!?');
 });
 
+// Go deeper's search of the position after ply i: its eval for ply i, and its line on ply i + 1 in place of the analysis's
+// (the line the annotated PGN writes there), none where its first move is the move played; marks and ratings stay
+test('withSearches puts a deeper search\'s eval on its move and its line on the next', () => {
+  const A = { white: 'A', black: 'B', engine: { name: 'Stockfish 19' }, moves: [
+    { ply: 1, move_san: 'e4', move_uci: 'e2e4', eval_before: 20, eval_after: 30, classification: 'best', eval_loss: 0, best_move_uci: 'e2e4', best_line: ['e4'] },
+    { ply: 2, move_san: 'e5', move_uci: 'e7e5', eval_before: 30, eval_after: 60, classification: 'inaccuracy', eval_loss: 30, best_move_uci: 'c7c5', best_line: ['c5', 'Nf3'] },
+    { ply: 3, move_san: 'Nf3', move_uci: 'g1f3', eval_before: 60, eval_after: 50, classification: 'inaccuracy', eval_loss: 40, best_move_uci: 'f1c4', best_line: ['Bc4'] }] };
+  const M = CC.buildGame({ pgn: '[White "A"]\n[Black "B"]\n[Result "*"]\n\n1. e4 e5 2. Nf3 *', analysis: A });
+  const moves = (G) => CC.annotatedPgn(G).split('\n\n')[1].replace(/\n/g, ' ');
+  assert.equal(moves(M), '1. e4 {[%eval 0.30]} 1... e5?! {[%eval 0.60]} (1... c5 2. Nf3) 2. Nf3?! {[%eval 0.50]} (2. Bc4) * ');
+  // after 1. e4 the deeper search prefers 1... e6 (its line on 1... e5); after 1... e5 it agrees with 2. Nf3 (no line)
+  const at = { 0: { cp: 25, pv: ['e7e6', 'd2d4', 'd7d5'] }, 1: { cp: CC.mateCp(-3), pv: ['g1f3', 'b8c6'] } };
+  const G = CC.withSearches(M, (i) => at[i] || null);
+  assert.equal(moves(G), '1. e4 {[%eval 0.25]} 1... e5?! {[%eval #-3]} (1... e6 2. d4 d5) 2. Nf3?! {[%eval 0.50]} * ');
+  assert.equal(G.plies[1].cls, 'inaccuracy');
+  assert.equal(CC.withSearches(M, () => null), M);
+  // a line that doesn't play from the position is cut where it stops, and an empty one leaves the analysis's
+  assert.deepEqual(CC.withSearches(M, (i) => (i === 0 ? { cp: 25, pv: ['e7e6', 'e1e8'] } : null)).plies[1].best, { uci: 'e7e6', line: ['e6'] });
+  assert.deepEqual(CC.withSearches(M, (i) => (i === 0 ? { cp: 25, pv: [] } : null)).plies[1].best, M.plies[1].best);
+});
+
 // a note that starts like a key ([RESULT], [12]) stays that move's note: the key and its text share a line
 test('notesText reads back a note that starts like a notes key', () => {
   const M = CC.buildGame({ pgn: '1. e4 e5 *', notes: '[1]\nfirst\n[2]\nsecond' });

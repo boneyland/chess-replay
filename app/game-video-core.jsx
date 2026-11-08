@@ -1255,31 +1255,27 @@ function useOwnLineEval(M, line, sf, tw) {
 }
 
 // Go deeper's finished results on the loaded analysis's moves, for the session: by position (the start, the analysis's
-// engine, the moves), the deepest kept (whichever engine or the cloud gave it). The annotated PGN writes their evals
-// (withDeeper); an analysis with other settings starts afresh, as Go deeper's presses do (one with the same settings
+// engine, the moves), the deepest kept (whichever engine or the cloud gave it), its eval and line. The annotated PGN
+// writes their evals and lines (withDeeper); an analysis with other settings starts afresh, as Go deeper's presses do (one with the same settings
 // keeps them, as the panel does: they are deeper searches of the same positions)
 const DEEPER_SHOWN = new Map();
 const deeperBase = (M) => M.start.fen + '|' + M.engine + '|';
 const deeperKey = (M, c) => deeperBase(M) + M.plies.slice(0, c + 1).map((q) => q.uci).join(' ');
-// M with Go deeper's evals in place of the analysis's on the moves it searched (the eval only: the marks, the better
-// lines and everything rated from the evals stay the analysis's)
+// M with Go deeper's results in place of the analysis's on the moves it searched (ChessCore.withSearches: the eval on
+// the move, the line on the next one; the marks and everything rated from the evals stay the analysis's)
 function withDeeper(M) {
   if (M.evalSource !== 'analysis' || !DEEPER_SHOWN.size) return M;
-  const CC = window.ChessCore;
-  let any = false, key = deeperBase(M);
-  const plies = M.plies.map((p, i) => {
+  let key = deeperBase(M);
+  const found = M.plies.map((p, i) => {
     key += (i ? ' ' : '') + p.uci; // deeperKey(M, i), built a move at a time
-    const d = DEEPER_SHOWN.get(key);
-    if (!d) return p;
-    any = true;
-    return { ...p, cp: d.cp, mate: CC.isMateCp(d.cp) ? Math.sign(d.cp) * CC.mateIn(d.cp) : null };
+    return DEEPER_SHOWN.get(key) || null;
   });
-  return any ? { ...M, plies } : M;
+  return window.ChessCore.withSearches(M, (i) => found[i]);
 }
 
 // Go deeper on a move of the loaded analysis, while paused on it (on): from its own search (else the game settings),
-// what describes the position after the move (the eval, the Best line, the eval bar, and the eval in the annotated
-// PGN: DEEPER_SHOWN); the ratings, graph and accuracy stay the analysis's. Not on a PGN's own evals, which have no
+// what describes the position after the move (the eval, the Best line, the eval bar, and in the annotated PGN the
+// eval and, on the next move, the line: DEEPER_SHOWN); the ratings, graph and accuracy stay the analysis's. Not on a PGN's own evals, which have no
 // best lines for it to go with (those come from analysing the game), nor on a position the tablebase answered (its
 // result is final): on says when
 function useGoDeeper(M, c, on, sf, tw) {
@@ -1292,7 +1288,7 @@ function useGoDeeper(M, c, on, sf, tw) {
   React.useEffect(() => {
     if (!r) return;
     const k = deeperKey(M, c), had = DEEPER_SHOWN.get(k);
-    if (!had || r.depth > had.depth) DEEPER_SHOWN.set(k, { cp: r.cp, depth: r.depth });
+    if (!had || r.depth > had.depth) DEEPER_SHOWN.set(k, { cp: r.cp, depth: r.depth, pv: r.pv || [] });
   }, [r]);
   return ev;
 }
