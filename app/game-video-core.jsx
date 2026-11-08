@@ -1246,8 +1246,29 @@ function useOwnLineEval(M, line, sf, tw) {
   return { ...ev, bestSan: bm ? bm.san : null };
 }
 
-// Go deeper on a move of the loaded analysis, while paused on it (on): from its own search (else the game settings), the
-// eval it shows only (the ratings, graph and accuracy stay the analysis's). Not on a PGN's own evals, which have no
+// Go deeper's finished results on the loaded analysis's moves, for the session: by position (the start, the analysis's
+// engine, the moves), the deepest kept (whichever engine or the cloud gave it). The annotated PGN writes their evals
+// (withDeeper); a new analysis of the same game starts afresh, as Go deeper's presses do
+const DEEPER_SHOWN = new Map();
+const deeperKey = (M, c) => M.start.fen + '|' + M.engine + '|' + M.plies.slice(0, c + 1).map((q) => q.uci).join(' ');
+// M with Go deeper's evals in place of the analysis's on the moves it searched (the eval only: the marks, the better
+// lines and everything rated from the evals stay the analysis's)
+function withDeeper(M) {
+  if (M.evalSource !== 'analysis' || !DEEPER_SHOWN.size) return M;
+  const CC = window.ChessCore;
+  let any = false;
+  const plies = M.plies.map((p, i) => {
+    const d = DEEPER_SHOWN.get(deeperKey(M, i));
+    if (!d) return p;
+    any = true;
+    return { ...p, cp: d.cp, mate: CC.isMateCp(d.cp) ? Math.sign(d.cp) * CC.mateIn(d.cp) : null };
+  });
+  return any ? { ...M, plies } : M;
+}
+
+// Go deeper on a move of the loaded analysis, while paused on it (on): from its own search (else the game settings),
+// what describes the position after the move (the eval, the Best line, the eval bar, and the eval in the annotated
+// PGN: DEEPER_SHOWN); the ratings, graph and accuracy stay the analysis's. Not on a PGN's own evals, which have no
 // best lines for it to go with (those come from analysing the game), nor on a position the tablebase answered (its
 // result is final): on says when
 function useGoDeeper(M, c, on, sf, tw) {
@@ -1255,7 +1276,14 @@ function useGoDeeper(M, c, on, sf, tw) {
   // name: the engine running keys Go deeper's results, so lite and full ones never mix
   const base = { name: settings.name, depth: p && p.search ? p.search.depth : settings.depth, time_limit: settings.time_limit };
   const moves = on ? M.plies.slice(0, c + 1).map((q) => q.uci) : null;
-  return useMoveEval(sf ? sf.engine : null, moves, moves, base, M.start.fen, on ? { cp: cpOf(M, c), depth: base.depth, pv: [], stored: true, src: M.engine } : null, cloudSetting(tw));
+  const ev = useMoveEval(sf ? sf.engine : null, moves, moves, base, M.start.fen, on ? { cp: cpOf(M, c), depth: base.depth, pv: [], stored: true, src: M.engine } : null, cloudSetting(tw));
+  const r = on && ev.after && !ev.after.stored && !ev.after.partial && ev.after.cp != null ? ev.after : null;
+  React.useEffect(() => {
+    if (!r) return;
+    const k = deeperKey(M, c), had = DEEPER_SHOWN.get(k);
+    if (!had || r.depth > had.depth) DEEPER_SHOWN.set(k, { cp: r.cp, depth: r.depth });
+  }, [r]);
+  return ev;
 }
 
 // The transport bar (nav: its label, buttons and Copy FEN) and the keys for the replay: ← → step through a shown line's
