@@ -157,7 +157,8 @@
       dock: dock ? box(sx, h - MARGIN - DOCK_H, sw, DOCK_H) : null,
     };
     if (view === 'edit') { L.panel = box(sx, top, sw, bottom - top); return L; }
-    L.header = dock ? null : box(sx, top, sw, HEADER_H * text);
+    // no Game info in a game (vs human or vs Stockfish): the panels under it move up
+    L.header = dock || view === 'game' ? null : box(sx, top, sw, HEADER_H * text);
     let rest = L.header ? bottom - top - L.header.h - GAP : bottom - top; // under the header
     let plotSide = false;
     if (view === 'replay' && !plotBelow && !square && h >= PLOT_MIN_H && rest - GAP - PLOT_SIDE_H >= 190 * text) { plotSide = true; rest -= GAP + PLOT_SIDE_H; }
@@ -197,7 +198,7 @@
       // Commentary last, at the bottom
       parts = [['moves', movesMax(text, MOVE_LINES_ONE), Math.min(movesMax(text, MOVE_LINES_ONE), Math.max(VIDEO_PREF[2] * text, movesMin)), movesMin],
         ['analysis', ONE_COL.analysis * text, VIDEO_PREF[1] * text, PANEL_FLOOR * text], ['comment', ONE_COL.comment * text, VIDEO_PREF[0] * text, PANEL_FLOOR * text]];
-      if (!video) parts.unshift(['header', HEADER_H * text]);
+      if (!video && view !== 'game') parts.unshift(['header', HEADER_H * text]); // no Game info in a game
     }
     const cell = Math.min(56, Math.floor((pw - 5 * 4) / 6));
     const trayH = 2 * cell + 4;
