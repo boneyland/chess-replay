@@ -237,6 +237,39 @@ test('annotatedPgn keeps the source PGN variations and other NAGs, and clocks in
   assert.equal(back.plies[3].clk, 5.3);
 });
 
+// the better lines follow Game › Evaluations from, as the Analysis panel does: one source's, never both
+test('annotatedPgn writes the better lines of the evaluations shown: the analysis\'s, or the PGN\'s own variations', () => {
+  const pgn = '[White "A"]\n[Black "B"]\n[Result "*"]\n\n1. e4?! { [%eval 0.1] } (1. d4 {the classical move} d5) e5 { [%eval 0.2] } *';
+  const A = analysis({ name: 'Stockfish 19' });
+  A.moves[0] = { ...A.moves[0], classification: 'inaccuracy', eval_loss: 60, best_move_uci: 'd2d4', best_line: ['d4', 'Nf6', 'c4'] };
+  const moves = (M) => CC.annotatedPgn(M).split('\n\n')[1].replace(/\n/g, ' ');
+  const fromA = CC.buildGame({ pgn, analysis: A });
+  assert.equal(fromA.evalSource, 'analysis');
+  assert.match(moves(fromA), /1\. e4 \$6 \{\[%eval 0\.30\]\} \(1\. d4 Nf6 2\. c4\) 1\.\.\. e5/);
+  assert.doesNotMatch(moves(fromA), /classical/);
+  const fromPgn = CC.buildGame({ pgn, analysis: A, evalSource: 'pgn' });
+  assert.equal(fromPgn.evalSource, 'pgn');
+  assert.match(moves(fromPgn), /1\. e4 \$6 \{\[%eval 0\.10\]\} \(1\. d4 \{the classical move\} d5\) 1\.\.\. e5/);
+  assert.doesNotMatch(moves(fromPgn), /Nf6/);
+});
+
+// a notes file's note sits beside the PGN's own comment (the PGN's first), never in its place; the same words once
+test('annotatedPgn keeps the PGN\'s own comments beside a notes file\'s', () => {
+  const M = CC.buildGame({ pgn: '{PGN intro} 1. e4 {pgn 1} e5 {same} 2. Nf3 {pgn 3} *', notes: '[INTRO]\nNotes intro\n[1]\nnotes 1\n[2]\nsame\n[CONCLUSION]\nNotes end' });
+  const moves = CC.annotatedPgn(M).split('\n\n')[1].replace(/\n/g, ' ');
+  assert.equal(moves, '{PGN intro Notes intro} 1. e4 {pgn 1 notes 1} 1... e5 {same} 2. Nf3 {pgn 3} {Notes end} * ');
+});
+
+test('notesText writes a game\'s notes as a notes file that reads back the same', () => {
+  const notes = '[INTRO]\nNotes intro\n[1]\nnotes 1\n[3]\nnotes {3}\n[CONCLUSION]\nNotes end';
+  const M = CC.buildGame({ pgn: '{PGN intro} 1. e4 {pgn 1} e5 2. Nf3 *', notes });
+  const out = CC.notesText(M);
+  assert.equal(out, '[INTRO]\nNotes intro\n\n[1]\nnotes 1\n\n[3]\nnotes {3}\n\n[CONCLUSION]\nNotes end\n');
+  assert.equal(CC.classifyFile('a_notes.txt', out), 'notes');
+  assert.deepEqual(CC.buildGame({ pgn: '1. e4 e5 2. Nf3 *', notes: out }).plies.map((p) => p.comment), ['notes 1', '', 'notes {3}']);
+  assert.equal(CC.notesText(CC.buildGame({ pgn: '1. e4 {pgn 1} *' })), '');
+});
+
 test('annotatedPgn raw writes the tags and bare moves: no comments, NAGs, evals, clocks or variations', () => {
   const pgn = '[White "A"]\n[Black "B"]\n[Result "*"]\n\n1. e4 { [%eval 0.3] [%clk 0:05:00] } e5 { [%eval 0.25] } 2. Qh5 $10 { A queen. } Ke7?? ( 2... Nc6 3. Bc4 ) *';
   const M = CC.buildGame({ pgn, notes: '[INTRO]\nA game.\n[4]\nThe king walks.' });
