@@ -2316,8 +2316,8 @@ for (const name of BROWSERS) for (const site of SITES) {
       assert.match(b, /\} \(28\. Be3 Ba5 29\. h4 [^)]*\)$/, 'the PGN\'s line alone: ' + b);
       const notes = await download('Download notes');
       assert.match(notes.file, /_notes\.txt$/);
-      assert.match(notes.txt, /^\[INTRO\]\nFinal, game 2\./);
-      assert.match(notes.txt, /\n\[55\]\nQxb5\?\? grabs a second pawn/);
+      assert.match(notes.txt, /^\[INTRO\] Final, game 2\./);
+      assert.match(notes.txt, /\n\[55\] Qxb5\?\? grabs a second pawn/);
       assert.deepEqual(sn.errors, []);
       await sn.ctx.close();
     });

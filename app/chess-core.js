@@ -358,6 +358,17 @@
     };
   }
 
+  // text without the words an annotated PGN added after it (annotatedPgn writes the PGN's words, then the note's): the
+  // same words alone stay unless whole (the conclusion after the last move, which no PGN comment matches by chance)
+  function unsaid(text, added, whole = false) {
+    if (!text || !added) return text;
+    for (const t of new Set([added, pgnEsc(added)])) {
+      if (whole && text === t) return '';
+      if (text.endsWith(' ' + t)) return text.slice(0, -t.length - 1);
+    }
+    return text;
+  }
+
   function buildGame(files) {
     const { pgn, analysis, notes } = files;
     const gameIndex = files.gameIndex || 0;
@@ -428,12 +439,15 @@
       if (ply.tb) ply.search = { tablebase: true };
       else if (am && am.search_depth_after) ply.search = { depth: am.search_depth_after, maxDepth: am.search_maxdepth_after || am.search_depth_after, timeMs: am.search_time_after_ms == null ? null : am.search_time_after_ms, nodes: am.search_nodes_after == null ? null : am.search_nodes_after };
       if (pp.clk != null) ply.clk = pp.clk;
-      const note = NT && NT.plies[i + 1];
+      const note = (NT && NT.plies[i + 1]) || '';
       if (pp.vars) ply.pgnVars = pp.vars;
       if (pp.nags) ply.nags = pp.nags;
-      ply.pgnComment = pp.comment || '';
-      ply.comment = note || pp.comment || '';
-      ply.says = { pgn: pp.comment || '', notes: (NT && NT.plies[i + 1]) || '' };
+      // an annotated PGN imported with its notes file: the note (and after the last move the conclusion) it wrote into
+      // the PGN's comment is the notes file's, not the PGN's
+      const own = unsaid(i === sans.length - 1 ? unsaid(pp.comment || '', NT && ends(NT).conclusion, true) : pp.comment || '', note);
+      ply.pgnComment = own;
+      ply.comment = note || own;
+      ply.says = { pgn: own, notes: note };
       plies.push(ply);
     });
     // PGN-only evals: rate unmarked moves by win-chance drop (Lichess thresholds)
@@ -480,12 +494,13 @@
     if (!opening && window.Openings) { try { opening = window.Openings.book().identify(plies.map((p) => p.uci), start.fen); } catch (e) {} }
     if (!opening) opening = { eco: clean(H.ECO), name: '' };
     const round = clean(H.Round) || (A && clean(A.round_num)) || '';
+    const pgnIntro = unsaid((P && P.intro) || '', NT && NT.intro);
     return {
       white: player('w'), black: player('b'),
       event: clean(H.Event) || (A && A.event) || '', round, site: clean(H.Site) || (A && A.site) || '', date: fmtDate(clean(H.Date) || (A && A.date)), pgnDate: clean(H.Date) || (A && clean(A.date)) || '',
       eco: opening.eco, opening: opening.name,
-      result, intro: (NT && NT.intro) || (P && P.intro) || '', conclusion: (NT && (NT.conclusion || NT.result)) || '',
-      says: { pgn: { intro: (P && P.intro) || '', conclusion: '' }, notes: ends(NT) },
+      result, intro: (NT && NT.intro) || pgnIntro, conclusion: ends(NT).conclusion,
+      says: { pgn: { intro: pgnIntro, conclusion: '' }, notes: ends(NT) },
       engine, engineName: eng ? eng.name || '' : '', start: { fen: start.fen, pos: start.pos }, ply0, plies, evalStart, evalStartKnown, hasEval, hasClock, clockStart, gameCount, hasAnalysis: !!A, hasNotes: !!notes, headers: H, evalSource: useA ? 'analysis' : pgnHasEval ? 'pgn' : 'none', canChooseSource: !!A && pgnHasEval,
     };
   }
@@ -621,8 +636,8 @@
     return head + '\n\n' + lines.join('\n').replace(/\u00a0/g, ' ') + '\n';
   }
   // the game as PGN: marks and the source's other NAGs, evals and clocks as [%eval]/[%clk], the PGN's comments and a
-  // notes file's (and Queen's sentence) as comments, and the better lines of the evaluations shown: the source's
-  // variations as written, or with an analysis's evals its better line on ?!/?/?? moves; wrapped at 80 columns.
+  // notes file's (and Queen's sentence) as comments, the source's variations as written, and with an analysis's evals
+  // its better line on ?!/?/?? moves in place of the source's first variation there; wrapped at 80 columns.
   // raw: the tags and the moves alone (no comments, NAGs, evals, clocks or variations)
   function annotatedPgn(M, { raw = false } = {}) {
     const H = { ...(M.headers || {}) };
@@ -653,15 +668,17 @@
       const said = p.says ? both(p.says.pgn, p.says.notes) : both(null, null, p.comment);
       const words = tags.concat(said, p.queenText ? [pgnEsc('Queen: ' + p.queenText)] : []);
       if (words.length) toks.push(`{${words.join(' ')}}`);
-      // the better lines of the evaluations shown (Game › Evaluations from), as the Analysis panel has them: the PGN's
-      // own variations as written (its first is the better line), or the analysis's better line in their place
-      if (M.evalSource !== 'analysis') (p.pgnVars || []).forEach((v) => toks.push(flatVar(v)));
-      else if (p.best && p.best.line && p.best.line.length && ['inaccuracy', 'mistake', 'blunder'].includes(p.cls)) {
+      // the PGN's own variations as written, and the better line of the evaluations shown (Game › Evaluations from), as
+      // the Analysis panel has it: with the analysis's, its better line on ?!/?/?? moves first, in place of the PGN's
+      // first variation there (the PGN's better line), so a move never carries two
+      let vars = p.pgnVars || [];
+      if (M.evalSource === 'analysis' && p.best && p.best.line && p.best.line.length && ['inaccuracy', 'mistake', 'blunder'].includes(p.cls)) {
         const before = i ? M.plies[i - 1] : null;
         const line = playLine(before ? before.fen : M.start.fen, p.best.line, before ? before.castle : M.start.pos.castle, before ? before.ep : M.start.pos.ep);
         const v = line.map((m, j) => pgnMoveNo(abs + j, j === 0) + m.san);
-        if (v.length) toks.push('(' + v.join(' ') + ')');
+        if (v.length) { toks.push('(' + v.join(' ') + ')'); vars = vars.slice(1); }
       }
+      vars.forEach((v) => toks.push(flatVar(v)));
     });
     if (M.conclusion && !raw) toks.push(`{${pgnEsc(M.conclusion)}}`);
     toks.push(H.Result);
@@ -669,12 +686,13 @@
   }
 
   // a game's notes (a notes file's, and the sample's own) as a notes file that parseNotes reads back: [INTRO], [n] for
-  // the note after ply n, [CONCLUSION]; '' when the game has none
+  // the note after ply n, [CONCLUSION], each with its text on its line (a note is one line), so a note that starts like a
+  // key ([RESULT], [12]) is never read as one; '' when the game has none
   function notesText(M) {
     const N = (M.says && M.says.notes) || {}, out = [];
-    if (N.intro) out.push(`[INTRO]\n${N.intro}`);
-    M.plies.forEach((p, i) => { if (p.says && p.says.notes) out.push(`[${i + 1}]\n${p.says.notes}`); });
-    if (N.conclusion) out.push(`[CONCLUSION]\n${N.conclusion}`);
+    if (N.intro) out.push(`[INTRO] ${N.intro}`);
+    M.plies.forEach((p, i) => { if (p.says && p.says.notes) out.push(`[${i + 1}] ${p.says.notes}`); });
+    if (N.conclusion) out.push(`[CONCLUSION] ${N.conclusion}`);
     return out.length ? out.join('\n\n') + '\n' : '';
   }
 
