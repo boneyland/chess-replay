@@ -210,7 +210,7 @@ test('schedule: a move that ends a section holds no longer than its own time', (
   for (const i of ends) assert.ok(Math.abs(S.tp[i + 1] - S.tp[i] - TM.d[i]) < 0.06, `ply ${i} holds ${S.tp[i + 1] - S.tp[i]} s, not ${TM.d[i]} s`);
 });
 
-test('annotatedPgn writes marks as NAGs, evals, clocks, notes and the better line, and reads back the same game', () => {
+test('annotatedPgn writes marks after the moves, evals, clocks, notes and the better line, and reads back the same game', () => {
   const pgn = '[White "A"]\n[Black "B"]\n[Result "*"]\n\n1. e4 { [%eval 0.3] [%clk 0:05:00] } e5 { [%eval 0.25] [%clk 0:04:58] } 2. Qh5 { [%eval -0.1] } Ke7?? { [%eval 5.0] } ( 2... Nc6 3. Bc4 ) *';
   const M = CC.buildGame({ pgn, notes: '[INTRO]\nA {short} game.\n[4]\nThe king walks.' });
   const out = CC.annotatedPgn(M);
@@ -218,7 +218,7 @@ test('annotatedPgn writes marks as NAGs, evals, clocks, notes and the better lin
   const moves = out.split('\n\n')[1].replace(/\n/g, ' ');
   assert.ok(out.split('\n').every((l) => l.length <= 80));
   assert.match(moves, /^\{A \(short\) game\.\} 1\. e4 \{\[%eval 0\.30\] \[%clk 0:05:00\]\} 1\.\.\. e5/);
-  assert.match(moves, /Ke7 \$4 \{\[%eval 5\.00\] The king walks\.\} \(2\.\.\. Nc6 3\. Bc4\) \* $/);
+  assert.match(moves, /Ke7\?\? \{\[%eval 5\.00\] The king walks\.\} \(2\.\.\. Nc6 3\. Bc4\) \* $/);
   const back = CC.buildGame({ pgn: out });
   assert.deepEqual(back.plies.map((p) => p.san + (p.mark || '')), ['e4', 'e5', 'Qh5', 'Ke7??']);
   assert.equal(back.plies[3].cp, 500);
@@ -230,7 +230,7 @@ test('annotatedPgn keeps the source PGN variations and other NAGs, and clocks in
   const out = CC.annotatedPgn(M);
   assert.match(out, /\[Date "\?\?\?\?\.\?\?\.\?\?"\]\n\[Round "\?"\]\n\[White "\?"\]\n\[Black "\?"\]/);
   const moves = out.split('\n\n')[1].replace(/\n/g, ' ');
-  assert.equal(moves, '1. a3 $2 (1. e4 e5 (1... c5 {Sicilian}) 2. Nf3 {a line comment}) 1... e5 2. h3 $14 $10 (2. Nf3) 2... Nc6 {[%clk 0:00:05.3]} * ');
+  assert.equal(moves, '1. a3? (1. e4 e5 (1... c5 {Sicilian}) 2. Nf3 {a line comment}) 1... e5 2. h3 $14 $10 (2. Nf3) 2... Nc6 {[%clk 0:00:05.3]} * ');
   const back = CC.buildGame({ pgn: out });
   assert.deepEqual(back.plies[2].nags, [14, 10]);
   assert.equal(back.plies[0].pgnVars.length, 1);
@@ -246,11 +246,11 @@ test('annotatedPgn writes the better line of the evaluations shown and keeps the
   const moves = (M) => CC.annotatedPgn(M).split('\n\n')[1].replace(/\n/g, ' ');
   const fromA = CC.buildGame({ pgn, analysis: A });
   assert.equal(fromA.evalSource, 'analysis');
-  assert.match(moves(fromA), /1\. e4 \$6 \{\[%eval 0\.30\]\} \(1\. d4 Nf6 2\. c4\) \(1\. c4 \{English\}\) 1\.\.\. e5 \{\[%eval 0\.25\]\} \(1\.\.\. c5 \{Sicilian\}\)/);
+  assert.match(moves(fromA), /1\. e4\?! \{\[%eval 0\.30\]\} \(1\. d4 Nf6 2\. c4\) \(1\. c4 \{English\}\) 1\.\.\. e5 \{\[%eval 0\.25\]\} \(1\.\.\. c5 \{Sicilian\}\)/);
   assert.doesNotMatch(moves(fromA), /classical/);
   const fromPgn = CC.buildGame({ pgn, analysis: A, evalSource: 'pgn' });
   assert.equal(fromPgn.evalSource, 'pgn');
-  assert.match(moves(fromPgn), /1\. e4 \$6 \{\[%eval 0\.10\]\} \(1\. d4 \{the classical move\} d5\) \(1\. c4 \{English\}\) 1\.\.\. e5 \{\[%eval 0\.20\]\} \(1\.\.\. c5 \{Sicilian\}\)/);
+  assert.match(moves(fromPgn), /1\. e4\?! \{\[%eval 0\.10\]\} \(1\. d4 \{the classical move\} d5\) \(1\. c4 \{English\}\) 1\.\.\. e5 \{\[%eval 0\.20\]\} \(1\.\.\. c5 \{Sicilian\}\)/);
   // an analysis without a better line on a move leaves its variations alone
   const plain = CC.buildGame({ pgn, analysis: analysis({ name: 'Stockfish 19' }) });
   assert.match(moves(plain), /\(1\. d4 \{the classical move\} d5\) \(1\. c4 \{English\}\)/);
@@ -272,6 +272,19 @@ test('notesText writes a game\'s notes as a notes file that reads back the same'
   assert.equal(CC.classifyFile('a_notes.txt', out), 'notes');
   assert.deepEqual(CC.buildGame({ pgn: '1. e4 e5 2. Nf3 *', notes: out }).plies.map((p) => p.comment), ['notes 1', '', 'notes {3}']);
   assert.equal(CC.notesText(CC.buildGame({ pgn: '1. e4 {pgn 1} *' })), '');
+});
+
+// the engine's line goes on every move the analysis didn't rate best (an unmarked small loss too), never on one it rated
+// best (an equally good move: the line would only stand beside it), as the Analysis panel shows its line; the marks follow
+// the SAN as ?!, ?, ??, !, !!, !?
+test('annotatedPgn writes the analysis\'s line on every move not rated best, and the marks after the moves', () => {
+  const A = analysis({ name: 'Stockfish 19' });
+  A.moves[0] = { ...A.moves[0], classification: 'best', best_move_uci: 'd2d4', best_line: ['d4', 'd5'] };
+  A.moves[1] = { ...A.moves[1], classification: 'good', eval_loss: 15, best_move_uci: 'c7c5', best_line: ['c5', 'Nf3'] };
+  const M = CC.buildGame({ pgn: '[White "A"]\n[Black "B"]\n[Result "*"]\n\n1. e4 e5!? *', analysis: A });
+  const moves = CC.annotatedPgn(M).split('\n\n')[1].replace(/\n/g, ' ');
+  assert.equal(moves, '1. e4 {[%eval 0.30]} 1... e5!? {[%eval 0.25]} (1... c5 2. Nf3) * ');
+  assert.equal(CC.buildGame({ pgn: CC.annotatedPgn(M) }).plies[1].mark, '!?');
 });
 
 // a note that starts like a key ([RESULT], [12]) stays that move's note: the key and its text share a line
