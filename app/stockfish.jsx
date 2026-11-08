@@ -397,12 +397,12 @@ const CLOUD_DEBOUNCE_MS = 300; // after the last position change (stepping throu
 // shows, and a finished local search replaces the cloud's only when deeper. prefer: a position the cloud has as deep
 // as the local depth limit (AnalysisCore.cloudEnough: with No limit, 35, or 22 for asm.js) isn't searched locally. A miss falls back silently
 const cloudSetting = (tw) => ({ on: !!(tw && tw.cloudEval), prefer: !!(tw && tw.cloudPrefer) });
-// off: no live searches (the Analysis panel's switch off, or a game analysis running): nothing is searched or asked and
-// Go deeper isn't offered; a stored result shows with the deepest Go deeper level whose local searches finished (and
-// the cloud's answers already cached there), as the annotated PGN writes it
+// off: no live Stockfish searches (the Analysis panel's switch off, or a game analysis running): nothing is searched
+// locally and Go deeper isn't offered, but the cloud (its setting on) is still asked and shown, and finished searches
+// still show; a stored result shows with the deepest Go deeper level whose local searches finished (and the cloud's
+// answers there), as the annotated PGN writes it
 function useMoveEval(engine, before, after, own, fen, stored, cloud, off) {
   const A = window.AnalysisCore;
-  if (off && !stored) after = null;
   // a search of several lines (Analysis › ☰ › Lines) is cached apart from one of one line
   const keyOf = (s, moves) => (own.name ? own.name + '|' : '') + (sfStartFen(fen) ? fen + '|' : '') + `${s.depth}/${s.movetimeMs}${s.lines > 1 ? '/' + s.lines : ''}:` + moves.join(' ');
   const toSearch = (o, lines = own.lines || 1) => ({ depth: o.depth, movetimeMs: o.time_limit * 1000, lines });
@@ -434,7 +434,6 @@ function useMoveEval(engine, before, after, own, fen, stored, cloud, off) {
     if (cloudOn) for (const which of ['after', 'before']) {
       const f = fenOf(moves[which]), n = lines(which), hit = f ? CLOUD.cloudCached(f, n) : null;
       if (hit !== undefined) { cloudHit[which] = hit; asked[which] = Promise.resolve(hit); continue; }
-      if (off) continue; // only what the cloud already answered
       asked[which] = new Promise((res) => { timers.push(setTimeout(() => CLOUD.cloudEval(f, n, { signal: ctl.signal }).then(res), CLOUD_DEBOUNCE_MS)); })
         .then((r) => { if (live && r) setSt((s) => ({ ...s, cloud: { ...s.cloud, [which]: r } })); return r; });
     }
@@ -446,7 +445,8 @@ function useMoveEval(engine, before, after, own, fen, stored, cloud, off) {
     const prev = (which) => (level > 0 ? at(level - 1, which) : null);
     const shown = (which) => cached(which) || (prev(which) && { ...prev(which), partial: true, held: true });
     setSt({ key, before: shown('before'), after: shown('after'), cloud: { before: cloudHit.before || null, after: cloudHit.after || null }, pending: !off && (!cached('after') || !cached('before')), progress: 0 });
-    if (off) return () => { live = false; };
+    // no local search: the cloud's answers (asked above) are all that can come
+    if (off) return () => { live = false; timers.forEach(clearTimeout); ctl.abort(); };
     // the searches to run (the start position's two are one)
     const todo = [...new Set(['after', 'before'].filter((w) => !cached(w)).map((w) => keyAt(level, w)))].length;
     let ran = 0;

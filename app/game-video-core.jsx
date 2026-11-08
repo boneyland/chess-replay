@@ -927,7 +927,7 @@ function Analysis({ M, T, S, a, vline, onLine, onPreview, onReplyHover, paused, 
   const depth = searchDepth(deeper || (c >= 0 ? M.plies[c].search : null));
   if (own && vline && vline.src === 'you' && vline.upto >= 0) {
     return (
-      <AnalysisPanel box={box} a={a} paused={paused} depth={sf && (sf.off || sf.status === 'unavailable' || sf.status === 'stopped') ? null : searchDepth(own.after)} deep={own}>
+      <AnalysisPanel box={box} a={a} paused={paused} depth={sf && !sf.off && (sf.status === 'unavailable' || sf.status === 'stopped') ? null : searchDepth(own.after)} deep={own}>
         <OwnMoveAnalysis M={M} vline={vline} own={own} status={!sf ? 'idle' : sf.busy ? 'busy' : sf.off ? 'off' : sf.status} why={sf ? sf.why : ''} onReply={onReply} onHover={onReplyHover} />
         {tbEl}
         <span style={{ display: 'block', marginTop: tx(8), font: `500 ${tx(15)}px ${MONO}`, color: C.dim }}>
