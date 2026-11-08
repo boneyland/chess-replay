@@ -525,3 +525,39 @@ test('square names, and castling rights lost from the homes', () => {
   for (const u of ['e2e3', 'e7e6', 'e1e2']) pos = CC.applyUci(pos, u).pos;
   assert.equal(pos.castle, 'k');
 });
+
+// ---------- engine lines read from an analysis file ----------
+test('buildGame reads engine_lines: the next position\'s lines, and the other lines of a move not rated best', () => {
+  const C = window.ChessCore;
+  const mv = (o) => ({ is_white_move: true, eval_before: 0, eval_after: 0, eval_loss: 0, classification: 'best', best_line: [], pv_line: [], ...o });
+  const A = { white: 'W', black: 'B', moves: [
+    mv({ move_san: 'e4', move_uci: 'e2e4', best_move_uci: 'd2d4', best_move_san: 'd4', classification: 'inaccuracy', eval_loss: 30, best_line: ['d4', 'd5'],
+      engine_lines: [{ move: 'd4', eval: 30, depth: 20, line: ['d4', 'd5'] }, { move: 'e4', eval: 20, depth: 19, line: ['e4', 'e5'] }, { move: 'c4', eval: 15, depth: 18, line: ['c4', 'e5', 'Nc3'] }] }),
+    mv({ move_san: 'e5', move_uci: 'e7e5', is_white_move: false, best_move_uci: 'e7e5', best_line: ['e5', 'Nf3'],
+      engine_lines: [{ move: 'e5', eval: 20, depth: 20, line: ['e5', 'Nf3'] }, { move: 'c5', eval: 25, depth: 19, line: ['c5'] }] }),
+  ] };
+  const M = C.buildGame({ pgn: '1. e4 e5 *', analysis: A });
+  assert.deepEqual(M.plies[0].best.more, [['c4', 'e5', 'Nc3']]);
+  assert.deepEqual(M.plies[0].nextLines.map((l) => [l.k, l.cp, l.depth, l.pv]), [[1, 20, 20, ['e7e5', 'g1f3']], [2, 25, 19, ['c7c5']]]);
+  assert.equal(M.plies[1].nextLines, undefined);
+  const pgn = C.annotatedPgn(M);
+  assert.match(pgn, /\(1\. d4 d5\) \(1\. c4 e5 2\. Nc3\)/);
+});
+
+test('buildGame reads a file without engine_lines as before', () => {
+  const C = window.ChessCore;
+  const A = { white: 'W', black: 'B', moves: [{ move_san: 'e4', move_uci: 'e2e4', is_white_move: true, eval_before: 0, eval_after: 0, eval_loss: 0, classification: 'best', best_line: [], pv_line: [] }] };
+  const M = C.buildGame({ pgn: '1. e4 *', analysis: A });
+  assert.equal(M.plies[0].nextLines, undefined);
+});
+
+test('buildGame reads chess_game_analyzer.py\'s engine_lines (3 lines)', () => {
+  const { fixture } = require('./load.cjs');
+  const M = CC.buildGame({ pgn: require('fs').readFileSync(require('path').join(__dirname, 'fixtures', 'lines.pgn'), 'utf8'), analysis: fixture('lines_analysis.json') });
+  // after 1. e4: the lines of the position after it are move 2's engine_lines
+  const ls = M.plies[0].nextLines;
+  assert.equal(ls.length, 3);
+  assert.deepEqual(ls.map((l) => l.k), [1, 2, 3]);
+  assert.ok(ls.every((l) => l.depth > 0 && l.pv.length > 1 && typeof l.cp === 'number'));
+  assert.equal(M.plies[5].nextLines, undefined); // after the last move: pv_line alone
+});

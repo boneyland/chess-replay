@@ -43,7 +43,7 @@ test('infoToScore converts to White POV and encodes mates', () => {
 });
 
 test('buildAnalysisJson has every key the --analyze JSON has', () => {
-  const ref = fixture('byrne-fischer_analysis.json');
+  const ref = fixture('lines_analysis.json'); // chess_game_analyzer.py --lines 3: has engine_lines
   const out = A.buildAnalysisJson({
     headers: { White: 'W', Black: 'B' }, opening: null,
     engine: { name: 'Stockfish 19 lite (browser)', depth: 22, time_limit: 3, lines: 1, threads: 1, hash_mb: 64 },
@@ -143,6 +143,24 @@ test('runAnalysis with the real engine rates a mating game like Python', { timeo
     const dir = path.join(__dirname, 'out');
     fs.mkdirSync(dir, { recursive: true });
     fs.writeFileSync(path.join(dir, 'scholar_analysis.json'), JSON.stringify(out));
+  } finally { engine.quit(); }
+});
+
+test('runAnalysis with the real engine and three lines writes engine_lines like Python', { timeout: 120000 }, async () => {
+  const engine = window.SFEngine.create(nodeWorker, {});
+  try {
+    await engine.ready();
+    const settings = { ...A.ENGINE, depth: 10, time_limit: 2, lines: 3 };
+    const out = await A.runAnalysis({ engine, ...SCHOLAR, headers: { White: 'Scholar', Black: 'Victim' }, signal: { aborted: false }, onProgress: () => {}, settings });
+    const m = out.moves[0];
+    assert.equal(m.search_lines, 3);
+    assert.equal(m.engine_lines.length, 3);
+    assert.deepEqual(m.engine_lines[0].line, m.best_line);
+    assert.ok(m.engine_lines.every((l, i) => l.move === l.line[0] && l.depth > 0 && l.line.length <= 12 && (!i || l.eval <= m.engine_lines[0].eval)));
+    assert.equal(out.engine.lines, 3);
+    const dir = path.join(__dirname, 'out');
+    fs.mkdirSync(dir, { recursive: true });
+    fs.writeFileSync(path.join(dir, 'lines_analysis.json'), JSON.stringify(out));
   } finally { engine.quit(); }
 });
 
@@ -320,4 +338,39 @@ test('the mate-score encoding and win chances are ChessCore\'s, and AnalysisCore
   assert.equal(C.WIN_CHANCES_K, CC.WIN_K);
   assert.deepEqual([C.WIN_DROP_INACCURACY, C.WIN_DROP_MISTAKE, C.WIN_DROP_BLUNDER], [CC.WIN_DROP.inaccuracy, CC.WIN_DROP.mistake, CC.WIN_DROP.blunder]);
   assert.equal(window.AnalysisCore.infoToScore('info depth 20 score mate 2 pv e2e4', 'w').cp, CC.mateCp(2));
+});
+
+// ---------- engine lines (chess-animator's engine_lines) ----------
+test('runAnalysis with several lines writes engine_lines, search_lines and alternative_moves as chess_game_analyzer.py does', async () => {
+  const reqs = [];
+  const eng = { search(req) { reqs.push(req); const lines = [
+    { k: 1, cp: 30, depth: 20, pv: ['e2e4', 'e7e5', 'g1f3'] }, { k: 2, cp: 10, depth: 19, pv: ['d2d4', 'd7d5'] }, { k: 3, cp: -60, depth: 18, pv: ['a2a3'] }];
+    return { promise: Promise.resolve({ cp: 30, depth: 20, pv: lines[0].pv, lines }), cancel() {} }; } };
+  const settings = { ...A.ENGINE, lines: 3 };
+  const json = await A.runAnalysis({ engine: eng, ucis: ['d2d4'], sans: ['d4'], headers: {}, signal: { aborted: false }, onProgress: () => {}, settings });
+  assert.ok(reqs.every((r) => r.lines === 3));
+  const m = json.moves[0];
+  assert.equal(m.search_lines, 3);
+  assert.deepEqual(m.engine_lines, [
+    { move: 'e4', eval: 30, depth: 20, line: ['e4', 'e5', 'Nf3'] }, { move: 'd4', eval: 10, depth: 19, line: ['d4', 'd5'] }, { move: 'a3', eval: -60, depth: 18, line: ['a3'] }]);
+  // the move played (d4) is no alternative to itself; a3 is 90 cp off, past the 50 cp threshold
+  assert.deepEqual(m.alternative_moves, []);
+  assert.deepEqual(m.best_line, ['e4', 'e5', 'Nf3']);
+});
+
+test('runAnalysis with one line writes the one engine line', async () => {
+  const json = await A.runAnalysis({ engine: { search: () => ({ promise: Promise.resolve({ cp: 5, depth: 12, pv: ['e2e4', 'e7e5'] }), cancel() {} }) }, ucis: ['e2e4'], sans: ['e4'], headers: {}, signal: { aborted: false }, onProgress: () => {} });
+  assert.deepEqual(json.moves[0].engine_lines, [{ move: 'e4', eval: 5, depth: 12, line: ['e4', 'e5'] }]);
+  assert.equal(json.moves[0].search_lines, 1);
+});
+
+test('alternativesOf keeps the playable lines other than the move played', () => {
+  const ls = [{ move: 'e4', eval: 30 }, { move: 'd4', eval: 10 }, { move: 'c4', eval: -10 }, { move: 'Nf3', eval: 25 }];
+  assert.deepEqual(A.alternativesOf(ls, 'd4', 30), [['c4', -10], ['Nf3', 25]]);
+});
+
+test('engineSettings: the game analysis lines setting', () => {
+  assert.equal(A.engineSettings({ sfGameLines: 3 }).game.lines, 3);
+  assert.equal(A.engineSettings({ sfGameLines: 9 }).game.lines, 1);
+  assert.equal(A.engineSettings({}).game.lines, 1);
 });

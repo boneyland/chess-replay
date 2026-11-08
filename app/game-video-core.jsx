@@ -342,7 +342,7 @@ function boardSquares() {
 
 // lines: the engine lines' arrows on the viewer's own line (lineArrows)
 // sel: the square of the piece picked to move (useBoardInput)
-function Board({ M, T, S, a, arrows, pieces, queen, vline, hide, lines, sel }) {
+function Board({ M, T, S, a, arrows, pieces, queen, vline, hide, lines, sel, idle }) {
   const c = lastPly(T, S);
   const sq = boardSquares();
   if (vline) return <LineBoard a={a} sq={sq} v={vline} hide={hide} arrows={lines} sel={sel} />;
@@ -378,6 +378,7 @@ function Board({ M, T, S, a, arrows, pieces, queen, vline, hide, lines, sel }) {
       {pieces.map((p) => <Piece key={p.id} p={p} T={T} S={S} />)}
       <svg width={BW} height={BW} style={{ position: 'absolute', left: 0, top: 0, zIndex: 6, pointerEvents: 'none' }}>
         {best}
+        {idle && lines && lines.slice().reverse().map((r) => <Arrow key={r.k} from={r.uci.slice(0, 2)} to={r.uci.slice(2, 4)} color={BOARD.best} a={r.k === 1 ? 1 : 0.5} grow={1} thin={r.k > 1} />)}
         {queen && (queen.at === c + 1 || queen.at === c) && queen.best && <Arrow from={queen.best.slice(0, 2)} to={queen.best.slice(2, 4)} color={BOARD.queen} a={1} grow={1} />}
       </svg>
       {badge}
@@ -401,6 +402,9 @@ function deepLineSteps(P, pv) {
   if (DEEP_LINE.key !== key) Object.assign(DEEP_LINE, { key, steps: engineSteps({ ...window.ChessCore.posFromFen(P.fen), castle: P.castle, ep: P.ep }, pv) });
   return DEEP_LINE.steps;
 }
+// The lines of the position after ply P on the loaded analysis (several searched lines: Go deeper's once it shows, else the
+// analysis file's engine_lines), each { k, cp, depth, pv: uci }; null with one line or none
+const nextLinesOf = (P, deeper) => (deeper ? (deeper.lines && deeper.lines.length > 1 ? deeper.lines : null) : P && P.nextLines && P.nextLines.length > 1 ? P.nextLines : null);
 const lineLabel = (M, c, j, san) => `${window.ChessCore.moveNo(M.ply0 + c + j)} ${san}`;
 
 // What a search actually did: "Stockfish 19 lite · depth 22 (23 unfinished) · 3.0 s · 1.5M nodes" (the eval is from depth 22)
@@ -962,6 +966,8 @@ function Analysis({ M, T, S, a, vline, onLine, onPreview, onReplyHover, paused, 
   const nextMoves = deepLine && deepLine.length ? deepLine.map((s) => s.san) : P.next ? P.next.slice(0, 8) : [];
   // the chip of the line shown on the board, while that line is still the one listed (a deeper search can change it)
   const nextSel = vline && vline.src === 'next' && vline.moves.slice(0, vline.upto + 1).every((s, j) => nextMoves[j] === s.san) ? vline.upto : null;
+  // several lines: listed as the Lines of a search of the viewer's own moves, line 1 the Best line (moves along the board's arrows)
+  const manyLines = typeof EngineLines === 'function' ? nextLinesOf(P, deeper) : null;
   const betterLegal = P.best && cls !== 'best' ? playLineCached(M, c, P.best.line.slice(0, 8)) : [];
   // name the engine (the analysis may come from another one), and say where Queen stands once it has looked
   const engName = P.tbBefore ? 'The tablebase' : (M.engine || '').split(' · ')[0] || 'The engine';
@@ -987,7 +993,10 @@ function Analysis({ M, T, S, a, vline, onLine, onPreview, onReplyHover, paused, 
           <LineChips name="Better was" tip="better line" nameColor={C.ink} accent={C.best} moves={P.best.line.slice(0, 8)} ply0={M.ply0} c={c} legal={betterLegal.length}
             sel={vline && vline.src === 'sf' ? vline.upto : null} onPick={(j) => onLine('sf', betterLegal, j)} onHover={(j) => onPreview('sf', betterLegal, j)} />
         )}
-        {nextLegal.length ? (
+        {manyLines ? (
+          <EngineLines lines={manyLines} pos={{ ...window.ChessCore.posFromFen(P.fen), castle: P.castle, ep: P.ep }} ply0={M.ply0} c={c + 1} cloud={!!deeper && deeper.source === 'cloud'}
+            onPick={(st) => onLine('next', st, st.length - 1, c + 1)} onHover={(st) => onPreview('next', st || [], st ? st.length - 1 : null, c + 1)} />
+        ) : nextLegal.length ? (
           <LineChips name="Best line" tip={deepLine && deeper.source === 'cloud' ? 'Lichess cloud’s best line' : 'best line'} nameColor={C.ink} accent={C.best} moves={nextMoves} ply0={M.ply0} c={c + 1} legal={nextLegal.length}
             sel={nextSel} onPick={(j) => onLine('next', nextLegal, j, c + 1)} onHover={(j) => onPreview('next', nextLegal, j, c + 1)} />
         ) : cls === 'best' ? <span>{agreeText}</span> : !betterLegal.length && <span />}
@@ -1317,14 +1326,15 @@ function withDeeper(M) {
 function useGoDeeper(M, c, on, sf, tw) {
   const p = on ? M.plies[c] : null, settings = sf ? sf.game : window.AnalysisCore.ENGINE;
   // name: the engine running keys Go deeper's results, so lite and full ones never mix
-  const base = { name: settings.name, depth: p && p.search ? p.search.depth : settings.depth, time_limit: settings.time_limit };
+  // lines: as many as the Lines setting asks (the live searches', the same as for the viewer's own moves)
+  const base = { name: settings.name, depth: p && p.search ? p.search.depth : settings.depth, time_limit: settings.time_limit, lines: sf && sf.own ? sf.own.lines : 1 };
   const moves = on ? M.plies.slice(0, c + 1).map((q) => q.uci) : null;
   const ev = useMoveEval(sf ? sf.engine : null, moves, moves, base, M.start.fen, on ? { cp: cpOf(M, c), depth: base.depth, pv: [], stored: true, src: M.engine } : null, cloudSetting(tw), !sf || sf.off);
   const r = on && ev.after && !ev.after.stored && !ev.after.partial && ev.after.cp != null ? ev.after : null;
   React.useEffect(() => {
     if (!r) return;
     const k = deeperKey(M, c), had = DEEPER_SHOWN.get(k);
-    if (!had || r.depth > had.depth) DEEPER_SHOWN.set(k, { cp: r.cp, depth: r.depth, pv: r.pv || [] });
+    if (!had || r.depth > had.depth || (r.lines && r.lines.length > 1 && !(had.lines && had.lines.length > 1))) DEEPER_SHOWN.set(k, { cp: r.cp, depth: r.depth, pv: r.pv || [], lines: r.lines && r.lines.length > 1 ? r.lines : null });
   }, [r]);
   return ev;
 }
@@ -1434,7 +1444,7 @@ function GameVideo({ M, tw, d, probe, queen, nav, scheme, sf, orient }) {
           <EvalBar M={M} T={T} S={S} a={enter(1)} tb={tbBar(tb)} dead={deadBar(dead)} deep={!playing && gameEval.after && !gameEval.after.stored && gameEval.after.cp != null ? gameEval.after.cp : null} />
           <PlayerBar M={M} T={T} S={S} side="b" a={enter(1)} pieces={pieces} />
           <BoardSpace onStep={tw.exporting ? null : stepBy}>
-            <Board M={M} T={T} S={S} a={enter(0)} arrows={tw.bestArrows} pieces={pieces} queen={queen} vline={pv || vline} hide={input.drag && input.drag.moved ? input.drag.from : null} lines={tw.bestArrows && own ? lineArrows(own.after) : null} sel={input.sel} />
+            <Board M={M} T={T} S={S} a={enter(0)} arrows={tw.bestArrows} pieces={pieces} queen={queen} vline={pv || vline} hide={input.drag && input.drag.moved ? input.drag.from : null} lines={tw.bestArrows ? (own ? lineArrows(own.after) : !playing && !pv && !vline && cNow >= 0 ? lineArrows({ lines: nextLinesOf(M.plies[cNow], gameEval.after && !gameEval.after.stored ? gameEval.after : null) }) : null) : null} idle={!playing && !pv && !vline} sel={input.sel} />
             <BoardDraw draw={draw} hidden={playing || !!pv}>
               <BoardTouch pos={touchPos} targets={input.targets} drag={input.drag} promo={input.promo} {...input.handlers} />
             </BoardDraw>

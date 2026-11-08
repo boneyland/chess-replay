@@ -369,6 +369,20 @@
     return text;
   }
 
+  // chess-animator's engine_lines of an analysis move: [{ move, eval, depth, line }], best first; [] where the file has none
+  const engineLinesOf = (am) => (am && Array.isArray(am.engine_lines) ? am.engine_lines.filter((l) => l && Array.isArray(l.line) && l.line.length) : []);
+  const engineLinesSan = (am) => engineLinesOf(am).map((l) => l.line);
+  // those lines from pos as { k, cp, depth, pv: uci moves }, each cut at its first illegal move; a line that doesn't start legally is left out
+  function linesFromSan(pos, ls) {
+    const out = [];
+    ls.forEach((l) => {
+      const pv = []; let p = pos;
+      for (const san of l.line) { try { const mv = sanToMove(p, san); pv.push(idxSq(mv.from) + idxSq(mv.to) + (mv.promo || '')); p = applyMove(p, mv.from, mv.to, mv.promo); } catch (e) { break; } }
+      if (pv.length) out.push({ k: out.length + 1, cp: l.eval, depth: l.depth, pv });
+    });
+    return out;
+  }
+
   function buildGame(files) {
     const { pgn, analysis, notes } = files;
     const gameIndex = files.gameIndex || 0;
@@ -427,13 +441,20 @@
       ply.mark = pp.mark || ENGINE_MARK[eng] || null;
       ply.cls = ply.mark ? MARK_CLASS[ply.mark] : eng === 'best' ? 'best' : 'none';
       if (am && am.eval_loss) ply.loss = Math.round(am.eval_loss);
-      if (am && am.best_move_uci && am.best_move_uci !== ply.uci) ply.best = { uci: am.best_move_uci, line: am.best_line || [] };
+      if (am && am.best_move_uci && am.best_move_uci !== ply.uci) {
+        ply.best = { uci: am.best_move_uci, line: am.best_line || [] };
+        // the search's other lines (chess-animator's engine_lines, line 1 the best line), each from the position before the move, none starting with the move played
+        const more = engineLinesSan(am).slice(1).filter((l) => bare(l[0]) !== bare(san) && bare(l[0]) !== bare(std));
+        if (more.length) ply.best.more = more;
+      }
       else if (!useA && pp.variation && pp.variation.length) {
         try { const bm = sanToMove(before, pp.variation[0]); ply.best = { uci: idxSq(bm.from) + idxSq(bm.to) + (bm.promo || ''), line: pp.variation }; } catch (e) {}
       }
       // the engine's line from the position after the move, as Lichess shows it: the next move's best line (one search a
       // position, so the same search), or after the last move its short pv_line
       if (am) { const an = A.moves[i + 1], next = an ? an.best_line : am.pv_line; if (next && next.length) ply.next = next; }
+      // the search's several lines from the position after the move (the next move's engine_lines), as { k, cp, depth, pv: uci }, none when it has one
+      if (am && A.moves[i + 1]) { const ls = linesFromSan(pos, engineLinesOf(A.moves[i + 1])); if (ls.length > 1) ply.nextLines = ls; }
       if (am && am.mate_advice) ply.advice = am.mate_advice;
       // the search of the position after the move, as it actually ran
       if (ply.tb) ply.search = { tablebase: true };
@@ -677,7 +698,14 @@
         const before = i ? M.plies[i - 1] : null;
         const line = playLine(before ? before.fen : M.start.fen, p.best.line, before ? before.castle : M.start.pos.castle, before ? before.ep : M.start.pos.ep);
         const v = line.map((m, j) => pgnMoveNo(abs + j, j === 0) + m.san);
-        if (v.length) { toks.push('(' + v.join(' ') + ')'); vars = vars.slice(1); }
+        if (v.length) {
+          toks.push('(' + v.join(' ') + ')'); vars = vars.slice(1);
+          // the search's other lines follow, by rank
+          (p.best.more || []).forEach((sans) => {
+            const o = playLine(before ? before.fen : M.start.fen, sans, before ? before.castle : M.start.pos.castle, before ? before.ep : M.start.pos.ep);
+            if (o.length) toks.push('(' + o.map((m, j) => pgnMoveNo(abs + j, j === 0) + m.san).join(' ') + ')');
+          });
+        }
       }
       vars.forEach((v) => toks.push(flatVar(v)));
     });
@@ -698,13 +726,20 @@
       if (!d) return;
       any = true;
       plies[i] = { ...plies[i], cp: d.cp, mate: isMateCp(d.cp) ? Math.sign(d.cp) * mateIn(d.cp) : null };
+      // several lines (Go deeper with Lines above one) replace the analysis's lines of this position
+      if (d.lines && d.lines.length > 1) plies[i].nextLines = d.lines; else delete plies[i].nextLines;
       const next = M.plies[i + 1];
       if (!next || !d.pv || !d.pv.length) return;
       if (d.pv[0] === next.uci) { plies[i + 1] = { ...plies[i + 1], best: null }; return; }
       let pos = { ...posFromFen(p.fen), castle: p.castle, ep: p.ep };
       const line = [];
       for (const u of d.pv.slice(0, 12)) { const s = stepFromUci(pos, u); if (!s) break; line.push(s.san); pos = s.pos; }
-      if (line.length) plies[i + 1] = { ...plies[i + 1], best: { uci: d.pv[0], line } };
+      if (!line.length) return;
+      const best = { uci: d.pv[0], line };
+      const sansOfPv = (pv) => { let q = { ...posFromFen(p.fen), castle: p.castle, ep: p.ep }; const out = []; for (const u of pv.slice(0, 12)) { const s = stepFromUci(q, u); if (!s) break; out.push(s.san); q = s.pos; } return out; };
+      const more = (d.lines || []).slice(1).filter((l) => l.pv && l.pv[0] && l.pv[0] !== next.uci).map((l) => sansOfPv(l.pv)).filter((l) => l.length);
+      if (more.length) best.more = more;
+      plies[i + 1] = { ...plies[i + 1], best };
     });
     return any ? { ...M, plies } : M;
   }

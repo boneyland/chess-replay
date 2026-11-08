@@ -17,6 +17,11 @@ JSON = Path(__file__).parent / "out" / "scholar_analysis.json"
 TB_JSON = Path(__file__).parent / "out" / "tb_analysis.json"
 
 
+# three lines a move from the real engine (tests/analysis-core.test.cjs): the same engine_lines shape chess_game_analyzer.py writes
+LINES_JSON = Path(__file__).parent / "out" / "lines_analysis.json"
+LINES_REF = Path(__file__).parent / "fixtures" / "lines_analysis.json"  # chess_game_analyzer.py --lines 3
+
+
 class BrowserJsonTest(unittest.TestCase):
     def test_animator_loads_browser_analysis(self):
         data = AnalysisData.from_json_file(JSON)
@@ -33,6 +38,23 @@ class BrowserJsonTest(unittest.TestCase):
         self.assertEqual([m.classification for m in data.moves], ["best", "best", "blunder", "best"])
         self.assertTrue(all(m.search_depth == 0 for m in data.moves))
         self.assertTrue(data.engine_summary().startswith("Stockfish 19 lite (browser)"), data.engine_summary())
+
+    def test_animator_loads_engine_lines(self):
+        data = AnalysisData.from_json_file(LINES_JSON)
+        self.assertEqual(len(data.moves), 7)
+        self.assertTrue(all(m.search_lines == 3 for m in data.moves))
+
+    def test_engine_lines_match_the_analyzers_shape(self):
+        import json
+        ours = json.loads(LINES_JSON.read_text())["moves"][0]
+        ref = json.loads(LINES_REF.read_text())["moves"][0]
+        self.assertLessEqual(set(ref), set(ours))  # the browser adds its own search stats
+        for line in ours["engine_lines"] + ref["engine_lines"]:
+            self.assertEqual(sorted(line), ["depth", "eval", "line", "move"])
+            self.assertEqual(line["move"], line["line"][0])
+            self.assertLessEqual(len(line["line"]), 12)
+        self.assertEqual(ours["engine_lines"][0]["line"], ours["best_line"])
+        self.assertEqual(ref["engine_lines"][0]["line"], ref["best_line"])
 
 
 if __name__ == "__main__":

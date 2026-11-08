@@ -105,7 +105,7 @@
   }
 
   const MISSING_OPENING = ['', '?', 'Unknown'];
-  const MOVE_DEFAULTS = { is_capture: false, is_check: false, material_balance: 0, fen_after: '', pv_line: [], alternative_moves: [], mate_advice: '', mate_line: '', search_depth: 0, search_depth_after: 0, search_lines: 1, best_line: [] };
+  const MOVE_DEFAULTS = { is_capture: false, is_check: false, material_balance: 0, fen_after: '', pv_line: [], alternative_moves: [], engine_lines: [], mate_advice: '', mate_line: '', search_depth: 0, search_depth_after: 0, search_lines: 1, best_line: [] };
 
   // The JSON run_animator.py --analyze writes. opening: the book's {eco, name}, used when the PGN names none.
   function buildAnalysisJson({ headers, moves, opening, engine, startFen }) {
@@ -182,14 +182,15 @@
     // the game analysis (its dialog: sfDepth, sfTime, sfGameThreads, sfGameHash) and the live searches (the Analysis
     // panel's ☰: your moves, the free board, Go deeper) each have their own threads and hash table
     return {
-      game: { ...ENGINE, name, threads: threadsOf(t.sfGameThreads), depth: pickDepth(t.sfDepth, ENGINE.depth), time_limit: pickTime(t.sfTime, ENGINE.time_limit), hash_mb: hashOf(t.sfGameHash) },
+      game: { ...ENGINE, name, lines: LINES.includes(+t.sfGameLines) ? +t.sfGameLines : ENGINE.lines, threads: threadsOf(t.sfGameThreads), depth: pickDepth(t.sfDepth, ENGINE.depth), time_limit: pickTime(t.sfTime, ENGINE.time_limit), hash_mb: hashOf(t.sfGameHash) },
       own: { name, depth: pickDepth(t.sfOwnDepth, OWN.depth), time_limit: pickTime(t.sfOwnTime, OWN.time_limit), lines: LINES.includes(+t.sfLines) ? +t.sfLines : OWN.lines, threads: threadsOf(t.sfThreads), hash_mb: hashOf(t.sfHash) },
     };
   }
   // Rough seconds a game position takes: 1.3 s measured on a laptop at depth 22 / 3 s, each depth about 1.45 times
   // the one before, never more than the time limit (all of it with no depth limit). factor: this device's pace against
   // that laptop's (paceFactor)
-  const secondsPerPosition = (g, factor = 1) => (g.depth == null ? g.time_limit : Math.min(g.time_limit, factor * 1.3 * Math.pow(1.45, g.depth - 22)));
+  // (at a set depth, 3 lines took about 4.5 times as long as 1 in chess-animator's analyzer: lines ^ 1.37)
+  const secondsPerPosition = (g, factor = 1) => (g.depth == null ? g.time_limit : Math.min(g.time_limit, factor * 1.3 * Math.pow(g.lines || 1, 1.37) * Math.pow(1.45, g.depth - 22)));
   // A finished run's seconds per position → its device's factor for secondsPerPosition, within reason
   const paceFactor = (g, sec) => Math.min(4, Math.max(0.25, sec / secondsPerPosition(g)));
   // A running analysis's seconds per position: the estimate before it started, giving way to the run's own pace as it
@@ -209,6 +210,18 @@
   const CLOUD_ENOUGH = 35, CLOUD_ENOUGH_ASM = 22;
   const cloudEnough = (depth, name) => (name === ENGINE_NAMES.asm ? Math.min(depth == null ? CLOUD_ENOUGH_ASM : depth, CLOUD_ENOUGH_ASM) : depth == null ? CLOUD_ENOUGH : depth);
   const canGoDeeper = (own, level) => { const a = deeperSearch(own, level), b = deeperSearch(own, level + 1); return a.depth !== b.depth || a.time_limit !== b.time_limit; };
+
+  // chess-animator's PLAYABLE_THRESHOLD: a line after the first is an alternative when within this many cp of the best
+  const PLAYABLE_CP = 50;
+  // Every line a search returned (line 1 alone for a search of one line or a tablebase's answer) from pos, best first, as
+  // chess_game_analyzer.py's engine_lines: { move (SAN), eval (cp, White's side), depth, line (SANs from move on, 12 plies at most) }
+  function engineLines(pos, r) {
+    const ls = r.lines && r.lines.length ? r.lines : [{ cp: r.cp, depth: r.depth, pv: r.pv }];
+    return ls.map((l) => ({ l, line: sansOf(pos, l.pv || [], C.BEST_LINE_MAX_PLIES) })).filter((x) => x.line.length)
+      .map(({ l, line }) => ({ move: line[0], eval: l.cp, depth: l.depth, line }));
+  }
+  // The playable alternatives to the move played: [[SAN, cp]] of the lines after the first, within PLAYABLE_CP of the best
+  const alternativesOf = (lines, played, bestCp) => lines.slice(1).filter((l) => l.move !== played && Math.abs(bestCp - l.eval) <= PLAYABLE_CP).map((l) => [l.move, l.eval]);
 
   // A line of uci moves from pos → its SANs, stopping at the first illegal move
   function sansOf(pos, ucis, max) {
@@ -239,7 +252,7 @@
     const backedOff = () => !!(tablebase.backedOff && tablebase.backedOff('tablebase'));
     let searches = 0, tbMs = 0, tbAsks = 0;
     const search = async (k) => {
-      const r = await engine.search({ moves: ucis.slice(0, k), fen: startFen, depth: settings.depth, movetimeMs: settings.time_limit * 1000, threads: settings.threads, priority: 'game' }).promise;
+      const r = await engine.search({ moves: ucis.slice(0, k), fen: startFen, depth: settings.depth, movetimeMs: settings.time_limit * 1000, threads: settings.threads, lines: settings.lines || 1, priority: 'game' }).promise;
       searches++;
       if (!signal.aborted && (!r || r.cp == null)) throw new Error('Stockfish stopped before the analysis finished');
       return r;
@@ -280,6 +293,7 @@
       const played = CC.applyUci(pos, uci);
       const san = played ? played.san : sans[i];
       const bestLine = sansOf(pos, before.pv, C.BEST_LINE_MAX_PLIES);
+      const engLines = engineLines(pos, before);
       // between two tablebase positions the outcome rates the move; a capture into the tablebase is rated as ever, on
       // searches of both where the tablebase only says won
       const rated = (before.tb && after.tb && rateByOutcome({ bestEval: before.cp, currentEval: after.cp, isWhite, before: before.tb, after: after.tb }))
@@ -293,7 +307,8 @@
         pv_line: played ? sansOf(played.pos, after.pv, 3) : [],
         mate_advice: rated.mateAdvice,
         mate_line: rated.mateAdvice === C.MATE_LOST || rated.mateAdvice === C.MATE_DELAYED ? mateLine(rateCp(before), bestLine) : '',
-        search_depth: before.depth, search_depth_after: after.depth, search_lines: 1, best_line: bestLine,
+        search_depth: before.depth, search_depth_after: after.depth, search_lines: engLines.length || 1, best_line: bestLine,
+        engine_lines: engLines, alternative_moves: alternativesOf(engLines, san, before.cp),
         // what the search of the position after the move actually did (the Python video ignores these)
         search_maxdepth_after: after.maxDepth == null ? after.depth : after.maxDepth, search_time_after_ms: after.timeMs, search_nodes_after: after.nodes,
         // the positions the tablebase answered (each for its side to move), their search depths 0
@@ -335,5 +350,5 @@
     return { result: { cp, depth: 0, pv: best ? [best] : [], best, nodes: null, timeMs: null, tb: { category: t.category, dtz: t.dtz, dtm: t.dtm } }, failed: false };
   }
 
-  window.AnalysisCore = { C, TB_GAP_MS, ENGINE, ENGINE_NAMES, SEARCH_LIMITS, DEPTHS, SECONDS, HASH_MB, hashChoices, LINES, threadChoices, defaultThreads, engineSettings, secondsPerPosition, paceFactor, blendPace, deeperSearch, canGoDeeper, cloudEnough, bestOf, winningChances, infoToScore, infoStats, rateMove, rateByOutcome, tbWonOnly, mateLine, positionFens, playerStats, buildAnalysisJson, runAnalysis };
+  window.AnalysisCore = { C, TB_GAP_MS, ENGINE, ENGINE_NAMES, SEARCH_LIMITS, DEPTHS, SECONDS, HASH_MB, hashChoices, LINES, threadChoices, defaultThreads, engineSettings, secondsPerPosition, paceFactor, blendPace, deeperSearch, canGoDeeper, cloudEnough, bestOf, winningChances, infoToScore, infoStats, rateMove, rateByOutcome, tbWonOnly, mateLine, positionFens, playerStats, engineLines, alternativesOf, buildAnalysisJson, runAnalysis };
 })();
