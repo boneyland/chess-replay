@@ -77,7 +77,7 @@ function OpeningExplorer({ board, book, onPlay, onHover }) {
 // The Analysis panel before the first move: the start position's eval and Stockfish's best line, whose moves play
 // on the board when picked (as its replies do after a move)
 function StartAnalysis({ board, ev, status, why, onLine, onHover }) {
-  const after = ev.after, down = status === 'unavailable' || status === 'stopped' || status === 'off';
+  const after = ev.after, down = status === 'unavailable' || status === 'stopped' || status === 'off' || status === 'busy';
   const line = engineSteps(board.start.pos, after && after.pv);
   const turn = board.start.pos.turn === 'w' ? 'White' : 'Black';
   return (
@@ -352,7 +352,7 @@ function FreeBoard({ board, onChange, tw, setTweak, onLichess, sf, nav, orient, 
   // a book move from the explorer, or a tablebase move in its place, goes the way of a drag
   const onBook = (uci) => { const step = window.ChessCore.stepFromUci(pos, uci); if (step) onChange(B.play(board, step)); };
   const onReply = (replies) => { let b = board; for (const s of replies) b = B.play(b, s); onChange(b); };
-  const down = sf.off || sf.status === 'unavailable' || sf.status === 'stopped', sfStatus = sf.off ? 'off' : sf.status;
+  const down = sf.off || sf.status === 'unavailable' || sf.status === 'stopped', sfStatus = sf.busy ? 'busy' : sf.off ? 'off' : sf.status;
   const cp = ev.after && ev.after.cp != null ? ev.after.cp : null;
   // the endgame tablebase for the position on the board (never in a game): it takes the explorer's place, and its
   // result replaces the eval in the bar. chasolver on it: in a game it ends the game (the answer may come after the

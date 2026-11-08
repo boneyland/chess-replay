@@ -203,7 +203,10 @@ function useScheme(pref) {
 }
 
 function GameApp() {
-  const [t, setTweak] = useTweaks(window.TWEAK_DEFAULTS);
+  // the game analysis's Threads and Hash table were the live searches' until it had its own (2026-11-08): a viewer
+  // who stored those keeps them for the game analysis too (and a stopped run, keyed by them, still resumes), once
+  const [t, setTweak] = useTweaks(window.TWEAK_DEFAULTS, (s) => ('sfGameThreads' in s || 'sfGameHash' in s ? null
+    : { ...('sfThreads' in s && { sfGameThreads: s.sfThreads }), ...('sfHash' in s && { sfGameHash: s.sfHash }) }));
   const scheme = useScheme(t.scheme || 'Auto');
   setPalette(scheme);
   // the stored files are read first: reading them says (storedNote) when a kept game was dropped
@@ -251,6 +254,7 @@ function GameApp() {
   // the Keyboard shortcuts dialog
   const [keysOpen, setKeysOpen] = React.useState(false);
   const [analyseOpen, setAnalyseOpen] = React.useState(false); // the Analyse the game dialog (GameAnalysisDialog)
+  React.useEffect(() => { if (board) setAnalyseOpen(false); }, [!!board]); // a loaded game's only
   const [shareOpen, setShareOpen] = React.useState(null); // the Share and export dialog: { fen } of the position it opened on
   // leaving a game in progress asks first: { run } is what waits on the answer
   const [leave, setLeave] = React.useState(null);
@@ -580,9 +584,11 @@ function GameApp() {
     return () => window.removeEventListener('resize', place);
   }, [queenOpen, phone]);
   // sfOn: the Analysis panel's switch; off, Stockfish searches nothing live (your moves, the free board, Go deeper),
-  // while a loaded analysis still shows and the game analysis still runs from its dialog (ask opens it)
-  const sfOn = t.sfOn !== false, askAnalysis = () => { closeOverlays(); setAnalyseOpen(true); };
-  const sf = { engine, own: ES.own, game: ES.game, book, status: engine.status, why: engine.why, off: !sfOn, run: analysis, start: analysis.start, stop: analysis.stop, ask: askAnalysis, estimateMin: analysis.estimateMin };
+  // while a loaded analysis still shows and the game analysis still runs from its dialog (ask opens it). A running game
+  // analysis turns the live searches off too (busy: the panel says why), so the engine never switches between the
+  // run's threads and theirs (Stockfish resizes its thread pool and clears its hash table on each change)
+  const sfOn = t.sfOn !== false, running = analysis.state === 'running', askAnalysis = () => { closeOverlays(); setAnalyseOpen(true); };
+  const sf = { engine, own: ES.own, game: ES.game, book, status: engine.status, why: engine.why, off: !sfOn || running, busy: running, run: analysis, start: analysis.start, stop: analysis.stop, ask: askAnalysis, estimateMin: analysis.estimateMin };
 
   // the Analysis panel's engine menu (EngineMenuContext): the Lite/Full choice in its title row, and EngineSettings in the
   // panel while the menu is open
@@ -592,6 +598,8 @@ function GameApp() {
   // on/setOn: the switch left of the engine; analyse: the computer button right of it (a loaded game only)
   const engineMenu = { name: engineLabel(ES.game.name), body: engineBody, on: sfOn, setOn: (v) => setTweak('sfOn', v), analyse: board ? null : askAnalysis,
     // run: the game analysis going on ({ done, total, k }), for the computer button's ring and the panel's progress line
+    // runErr: why the last run stopped, shown at the top of the panel (the dialog it started from has closed)
+    runErr: !board && analysis.err ? analysis.err : '',
     run: !board && analysis.state === 'running' ? { done: analysis.done, total: analysis.total, k: analysis.total ? analysis.done / analysis.total : 0 } : null,
     pick: full.offered ? { value: t.sfEngine === 'Full' ? 'Full' : 'Lite', options: [{ value: 'Lite', label: engineLabel(window.AnalysisCore.ENGINE_NAMES.lite) }, { value: 'Full', label: engineLabel(window.AnalysisCore.ENGINE_NAMES.full) + ' full' }],
       onChange: (v) => { setTweak('sfEngine', v); return v === 'Full' && full.state === 'absent'; } } : null };

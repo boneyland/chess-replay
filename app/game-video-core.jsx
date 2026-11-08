@@ -434,7 +434,7 @@ function AnalysisPanel({ box, a, depth, deep, paused, style, children }) {
       <span style={{ flex: 'none' }}>Analysis</span>
       {/* spaced as the desktop's heading whatever the layout's title gap (the phone's wide one left no room) */}
       <span style={{ flex: '1 1 auto', minWidth: 0, display: 'flex', alignItems: 'center', justifyContent: 'flex-end', gap: tx(12) }}>
-      {live && E.setOn && <button type="button" className="twk-toggle an-switch" data-on={E.on ? '1' : '0'} role="switch" aria-checked={!!E.on} aria-label="Stockfish" title={E.on ? 'Stockfish on: turn it off' : 'Stockfish off: turn it on'}
+      {live && E.setOn && <button type="button" className="twk-toggle an-switch" data-on={E.on ? '1' : '0'} role="switch" aria-checked={!!E.on} aria-label="Stockfish" title={E.run && E.on ? 'Stockfish on, looking only at the game while it is analysed: turn it off' : E.on ? 'Stockfish on: turn it off' : 'Stockfish off: turn it on'}
         onClick={(e) => { e.stopPropagation(); E.setOn(!E.on); }} onPointerDown={stopHere}><i /></button>}
       {/* smaller on the phone, where the row is tight */}
       {pick
@@ -446,9 +446,9 @@ function AnalysisPanel({ box, a, depth, deep, paused, style, children }) {
       {/* the game analysis: its dialog, with its own settings; while a run goes on, a turning rainbow ring in place
           of the computer, so a run going on isn't forgotten */}
       {live && E.analyse && (
-        <button type="button" aria-label="Analyse the game" title={E.run ? `Analysing the game: ${E.run.done} of ${E.run.total} positions` : 'Analyse the game'} onClick={(e) => { e.stopPropagation(); E.analyse(); }} onPointerDown={stopHere}
+        <button type="button" aria-label={E.run ? `Analyse the game: analysing, ${E.run.done} of ${E.run.total} positions` : 'Analyse the game'} title={E.run ? `Analysing the game: ${E.run.done} of ${E.run.total} positions` : 'Analyse the game'} onClick={(e) => { e.stopPropagation(); E.analyse(); }} onPointerDown={stopHere}
           style={{ ...headCtl(), width: '1.8em', padding: 0, display: 'grid', placeItems: 'center', color: C.dim, borderColor: E.run ? 'transparent' : C.ctlLine }}>
-          {E.run ? <span className="an-spin" role="progressbar" aria-label="Analysing the game" />
+          {E.run ? <span className="an-spin" aria-hidden="true" />
             : <svg viewBox="0 0 16 16" width="70%" height="70%" aria-hidden="true" fill="none" stroke="currentColor" strokeWidth="1.6" strokeLinejoin="round" strokeLinecap="round"><rect x="1.5" y="2.5" width="13" height="8.5" rx="1" /><path d="M5.5 14h5M8 11v3" /></svg>}
         </button>
       )}
@@ -464,7 +464,10 @@ function AnalysisPanel({ box, a, depth, deep, paused, style, children }) {
   return (
     <Panel box={shown && !box.flow ? { ...box, scroll: true } : box} part="analysis" a={a} style={style} tight head={head} progress={!shown && deep && deep.pending ? deep.progress || 0 : E && E.run ? E.run.k : null}>
       {shown ? <div className="an-engine part-engine-menu" onClick={stopHere} onPointerDown={stopHere}><div className="twk-flow">{E.body}</div></div>
-        : <AnalysisStatContext.Provider value={{ depth, deep, paused }}><div className="an-lines" data-playing={paused ? undefined : '1'} style={{ display: 'contents' }}>{children}</div></AnalysisStatContext.Provider>}
+        : <AnalysisStatContext.Provider value={{ depth, deep, paused }}>
+          {E && E.runErr && <div role="alert" style={{ marginBottom: tx(10), font: `500 ${tx(15)}px ${MONO}`, color: C.blunder }}>{E.runErr}</div>}
+          <div className="an-lines" data-playing={paused ? undefined : '1'} style={{ display: 'contents' }}>{children}</div>
+        </AnalysisStatContext.Provider>}
     </Panel>
   );
 }
@@ -476,17 +479,17 @@ function AnalysisStat() {
   const failed = X && X.deep && X.deep.failed;
   React.useEffect(() => setWhyOpen(false), [failed]); // a new failure starts short again
   if (!X) return null;
+  // a narrow panel shortens Go deeper's failure to its first words ("Engine failed" on a phone)
   const { depth, deep, paused } = X, roomy = !L.analysis || L.analysis.w >= 440 * TEXT;
-  const depthText = depth;
   const depthTip = depth && depth.startsWith('cloud ') ? 'Lichess cloud, depth ' + depth.slice(12) : depth;
-  if (!depthText && !(paused && deep && (deep.deeper || failed))) return null;
+  if (!depth && !(paused && deep && (deep.deeper || failed))) return null;
   return (
     <span style={{ ...NO_SELECT, flex: '0 1 auto', minWidth: 0, display: 'flex', alignItems: 'center', gap: tx(12), font: `600 ${tx(15)}px ${MONO}`, letterSpacing: '0.04em', color: C.dim, flexWrap: whyOpen ? 'wrap' : 'nowrap' }}>
       {paused && <DeeperButton ev={deep} />}
       {/* Go deeper's failure: short, its reason in the tooltip, and all of it at a tap */}
       {failed && <span role="status" title={failed} onClick={(e) => { e.stopPropagation(); setWhyOpen((o) => !o); }} onPointerDown={stopHere}
         style={{ flex: whyOpen ? '1 1 100%' : '0 1 auto', minWidth: 0, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: whyOpen ? 'normal' : 'nowrap', color: C.blunder, cursor: 'pointer' }}>{whyOpen ? failed : roomy ? failed.split(':')[0] : 'Engine failed'}</span>}
-      {depthText && <span title={depthTip} style={{ flex: 'none', whiteSpace: 'nowrap' }}>{depthText}</span>}
+      {depth && <span title={depthTip} style={{ flex: 'none', whiteSpace: 'nowrap' }}>{depth}</span>}
     </span>
   );
 }
@@ -925,7 +928,7 @@ function Analysis({ M, T, S, a, vline, onLine, onPreview, onReplyHover, paused, 
   if (own && vline && vline.src === 'you' && vline.upto >= 0) {
     return (
       <AnalysisPanel box={box} a={a} paused={paused} depth={sf && (sf.off || sf.status === 'unavailable' || sf.status === 'stopped') ? null : searchDepth(own.after)} deep={own}>
-        <OwnMoveAnalysis M={M} vline={vline} own={own} status={!sf ? 'idle' : sf.off ? 'off' : sf.status} why={sf ? sf.why : ''} onReply={onReply} onHover={onReplyHover} />
+        <OwnMoveAnalysis M={M} vline={vline} own={own} status={!sf ? 'idle' : sf.busy ? 'busy' : sf.off ? 'off' : sf.status} why={sf ? sf.why : ''} onReply={onReply} onHover={onReplyHover} />
         {tbEl}
         <span style={{ display: 'block', marginTop: tx(8), font: `500 ${tx(15)}px ${MONO}`, color: C.dim }}>
           <span style={{ color: lineAccent('you') }}>Your moves: {vline.moves.slice(0, vline.upto + 1).map((m, j) => (j === 0 || (M.ply0 + vline.at + j) % 2 === 0 ? lineLabel(M, vline.at, j, m.san) : m.san)).join(' ')}</span>

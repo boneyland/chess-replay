@@ -53,6 +53,7 @@ const sfReason = (e) => (!e ? '' : e.message ? String(e.message) : e.type === 'e
 // a device we can't test on can be read off the screen. then: what to do next, after a stop
 function sfDownText(status, why, then = 'play a move to restart it') {
   if (status === 'off') return 'Stockfish is off: turn it on with the switch by the engine';
+  if (status === 'busy') return 'Stockfish is analysing the game: it looks at your moves again once that ends';
   const r = why ? ` (${why})` : '';
   return status === 'unavailable' ? 'Stockfish can’t run here' + r : `Stockfish stopped${r} · ${then}`;
 }
@@ -295,7 +296,7 @@ function useGameAnalysis(M, files, getFiles, commit, engine, settings, tbOn) {
     } catch (e) {
       if (run.current !== me) return;
       run.current = null;
-      setSt({ ...idle, err: engine.status === 'unavailable' ? '' : 'Analysis stopped: ' + ((e && e.message) || e) });
+      setSt({ ...idle, err: engine.status === 'unavailable' ? '' : `Analysis stopped: ${(e && e.message) || e}. The computer button by the engine starts it again.` });
     }
   };
   // the run's hash table goes back to the live searches' once it ends, however it ends
@@ -357,7 +358,7 @@ function EngineEmptyState({ M, sf, paused, compact }) {
       <div style={{ display: 'flex', flexDirection: 'column', gap: tx(12) }}>
         {text}
         <span style={{ font: `500 ${tx(17)}px ${MONO}`, color: C.dim }}>Stockfish can't run here.</span>
-        <div><FrameButton onClick={sf.start} label="Try starting Stockfish again">Try again</FrameButton></div>
+        <div><FrameButton onClick={() => sf.engine.get().catch(() => {})} label="Try starting Stockfish again">Try again</FrameButton></div>
       </div>
     );
   }
@@ -371,7 +372,6 @@ function EngineEmptyState({ M, sf, paused, compact }) {
       {run.resumeAt > 0 && <span style={{ ...NO_SELECT, font: `500 ${tx(15)}px ${MONO}`, color: C.dim }}>{run.resumeAt} of {run.plies} moves analysed so far.</span>}
       {!compact && <span style={{ ...NO_SELECT, font: `500 ${tx(15)}px ${MONO}`, color: C.dim }}>{engineLabel(sf.game.name)} runs in your browser.</span>}
       {!SF_SIMD && <span style={{ ...NO_SELECT, font: `500 ${tx(15)}px ${MONO}`, color: C.blunder }}>{SF_ASM_NOTE}</span>}
-      {run.err && <span style={{ font: `500 ${tx(15)}px ${MONO}`, color: C.blunder }}>{run.err}</span>}
     </div>
   );
 }
@@ -397,8 +397,9 @@ const CLOUD_DEBOUNCE_MS = 300; // after the last position change (stepping throu
 // shows, and a finished local search replaces the cloud's only when deeper. prefer: a position the cloud has as deep
 // as the local depth limit (AnalysisCore.cloudEnough: with No limit, 35, or 22 for asm.js) isn't searched locally. A miss falls back silently
 const cloudSetting = (tw) => ({ on: !!(tw && tw.cloudEval), prefer: !!(tw && tw.cloudPrefer) });
-// off: Stockfish switched off (the Analysis panel's switch): nothing is searched or asked, a stored result stands alone
-// and Go deeper isn't offered
+// off: no live searches (the Analysis panel's switch off, or a game analysis running): nothing is searched or asked and
+// Go deeper isn't offered; a stored result shows with the deepest Go deeper level whose local searches finished (and
+// the cloud's answers already cached there), as the annotated PGN writes it
 function useMoveEval(engine, before, after, own, fen, stored, cloud, off) {
   const A = window.AnalysisCore;
   if (off && !stored) after = null;
@@ -408,11 +409,15 @@ function useMoveEval(engine, before, after, own, fen, stored, cloud, off) {
   const baseKey = after ? keyOf(toSearch(own), after) + (stored ? '|' + stored.src : '') : '';
   const [, bump] = React.useState(0);
   const [fail, setFail] = React.useState(null); // { key: baseKey, msg }
-  const level = off ? 0 : SF_DEEPER.get(baseKey) || 0;
+  // off: the deepest level pressed whose searches both finished (the stored result at 0)
+  const linesOf = (which) => (which === 'after' || before.join(' ') === after.join(' ') ? own.lines || 1 : 1);
+  const finished = (lv) => ['after', 'before'].every((w) => SF_EVAL_CACHE.has(keyOf(toSearch(A.deeperSearch(own, lv), linesOf(w)), w === 'after' ? after : before)));
+  let level = SF_DEEPER.get(baseKey) || 0;
+  if (off && after) while (level > 0 && !finished(level)) level--;
   const search = toSearch(A.deeperSearch(own, level));
   const sfKey = (moves) => keyOf(search, moves);
   const cloudOn = !!(cloud && cloud.on && CLOUD && after && (!stored || level > 0)), prefer = cloudOn && !!cloud.prefer;
-  const key = after ? sfKey(after) + (cloudOn ? (prefer ? '|cloud+' : '|cloud') : '') : '';
+  const key = after ? sfKey(after) + (cloudOn ? (prefer ? '|cloud+' : '|cloud') : '') + (off ? '|off' : '') : '';
   const empty = { key: '', before: null, after: null, cloud: {}, pending: false, progress: 0 };
   const [st, setSt] = React.useState(empty);
   React.useEffect(() => {
@@ -420,7 +425,7 @@ function useMoveEval(engine, before, after, own, fen, stored, cloud, off) {
     let live = true;
     // only after's lines are shown, so before (what the move is rated against) searches one line, as deep as it can;
     // the start position is both, and searches after's lines
-    const lines = (which) => (which === 'after' || before.join(' ') === after.join(' ') ? own.lines || 1 : 1);
+    const lines = linesOf;
     const moves = { after, before };
     // the cloud's answers, as promises (null: a miss); a cached one shows at once
     const ctl = new AbortController(), timers = [], asked = {};
@@ -429,6 +434,7 @@ function useMoveEval(engine, before, after, own, fen, stored, cloud, off) {
     if (cloudOn) for (const which of ['after', 'before']) {
       const f = fenOf(moves[which]), n = lines(which), hit = f ? CLOUD.cloudCached(f, n) : null;
       if (hit !== undefined) { cloudHit[which] = hit; asked[which] = Promise.resolve(hit); continue; }
+      if (off) continue; // only what the cloud already answered
       asked[which] = new Promise((res) => { timers.push(setTimeout(() => CLOUD.cloudEval(f, n, { signal: ctl.signal }).then(res), CLOUD_DEBOUNCE_MS)); })
         .then((r) => { if (live && r) setSt((s) => ({ ...s, cloud: { ...s.cloud, [which]: r } })); return r; });
     }
@@ -439,7 +445,8 @@ function useMoveEval(engine, before, after, own, fen, stored, cloud, off) {
     // the result a press of Go deeper started from, shown until the deeper search passes its depth
     const prev = (which) => (level > 0 ? at(level - 1, which) : null);
     const shown = (which) => cached(which) || (prev(which) && { ...prev(which), partial: true, held: true });
-    setSt({ key, before: shown('before'), after: shown('after'), cloud: { before: cloudHit.before || null, after: cloudHit.after || null }, pending: !cached('after') || !cached('before'), progress: 0 });
+    setSt({ key, before: shown('before'), after: shown('after'), cloud: { before: cloudHit.before || null, after: cloudHit.after || null }, pending: !off && (!cached('after') || !cached('before')), progress: 0 });
+    if (off) return () => { live = false; };
     // the searches to run (the start position's two are one)
     const todo = [...new Set(['after', 'before'].filter((w) => !cached(w)).map((w) => keyAt(level, w)))].length;
     let ran = 0;
@@ -549,7 +556,7 @@ function OwnMoveAnalysis({ M, vline, own, status, why, onReply, onHover }) {
   const bad = rated && ['inaccuracy', 'mistake', 'blunder'].includes(rated.classification);
   const col = bad ? clsColor(rated.classification) : lineAccent('you');
   const who = step.byEngine ? 'STOCKFISH’S REPLY' : 'YOUR MOVE';
-  const down = status === 'unavailable' || status === 'stopped' || status === 'off';
+  const down = status === 'unavailable' || status === 'stopped' || status === 'off' || status === 'busy';
   const verdict = !rated ? (down ? sfDownText(status, why) : 'Stockfish is thinking…')
     : step.uci === before.best ? 'Stockfish’s choice'
     : rated.evalLoss > 0 ? `−${Math.round(rated.evalLoss)} cp vs ${own.bestSan || before.best}` : `as good as ${own.bestSan || before.best}`;
