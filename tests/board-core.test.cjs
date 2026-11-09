@@ -38,6 +38,16 @@ test('save and restore round-trip; restore keeps the legal prefix', () => {
   assert.deepEqual(B.ucis(r), ['e2e4']); assert.equal(r.steps.length, 1);
   assert.equal(B.restore({ fen: 'nonsense', moves: [], upto: -1 }), null);
 });
+test('Stockfish\'s replies (byEngine) are still its replies after a save and restore', () => {
+  let b = B.fromFen();
+  b = B.play(b, step(b, 'e2e4'));
+  b = B.play(b, { ...step(b, 'e7e5'), byEngine: true });
+  b = B.play(b, step(b, 'g1f3'));
+  const saved = B.save(b);
+  assert.deepEqual(saved.engine, [1]);
+  assert.deepEqual(B.restore(saved).steps.map((s) => !!s.byEngine), [false, true, false]);
+  assert.equal(B.restore({ ...saved, engine: 'x' }).steps.filter((s) => s.byEngine).length, 0, 'a damaged list marks none');
+});
 test('restore never throws on a damaged stored board', () => {
   for (const bad of [null, undefined, 3, 'x', [], {}, { fen: 5 }, { fen: null }, { fen: '' }]) assert.equal(B.restore(bad), null);
   const odd = [{ fen: CC.START_FEN }, { fen: CC.START_FEN, moves: 'e2e4' }, { fen: CC.START_FEN, moves: [null, 7, {}], upto: 'x' }];
