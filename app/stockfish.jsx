@@ -218,7 +218,8 @@ const SF_TB_LOST = 'Lichess’s tablebase stopped answering: Stockfish searched 
 const SF_PACE_STORE = 'chess-video.sf-pace.v1', SF_PACE_MIN_POSITIONS = 10;
 // and thread count (one thread keeps the key it always had)
 const sfPaceKey = (name, threads) => (name === window.AnalysisCore.ENGINE_NAMES.full ? SF_PACE_STORE + '.full' : name === window.AnalysisCore.ENGINE_NAMES.asm ? SF_PACE_STORE + '.asm' : SF_PACE_STORE) + (threads > 1 ? '.t' + threads : '');
-function readSfPace(name, threads) { try { const f = +localStorage.getItem(sfPaceKey(name, threads)); return f > 0 ? f : 1; } catch (e) { return 1; } }
+// (the engine's starting factor, AnalysisCore.paceStart, until a run has timed enough positions)
+function readSfPace(name, threads) { const k = window.AnalysisCore.paceStart(name); try { const f = +localStorage.getItem(sfPaceKey(name, threads)); return f > 0 ? f : k; } catch (e) { return k; } }
 function writeSfPace(name, threads, f) { try { localStorage.setItem(sfPaceKey(name, threads), String(f)); } catch (e) {} }
 
 // The full-game analysis. Loading other files (another game, the sample) abandons a run in progress; its searches

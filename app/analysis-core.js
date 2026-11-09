@@ -191,8 +191,14 @@
   // that laptop's (paceFactor)
   // (at a set depth, 3 lines took about 4.5 times as long as 1 in chess-animator's analyzer: lines ^ 1.37)
   const secondsPerPosition = (g, factor = 1) => (g.depth == null ? g.time_limit : Math.min(g.time_limit, factor * 1.3 * Math.pow(g.lines || 1, 1.37) * Math.pow(1.45, g.depth - 22)));
-  // A finished run's seconds per position → its device's factor for secondsPerPosition, within reason
-  const paceFactor = (g, sec) => Math.min(4, Math.max(0.25, sec / secondsPerPosition(g)));
+  // Each engine's factor before this device has timed a run with it, against the lite engine's model: the asm.js build
+  // took 8.3 times as long as lite-single to depth 16 on three positions, Full's single-thread build 1.3 times
+  // (Chromium on a laptop, 2026-11-09)
+  const PACE_START = { [ENGINE_NAMES.asm]: 8, [ENGINE_NAMES.full]: 1.3 };
+  const paceStart = (name) => PACE_START[name] || 1;
+  // A finished run's seconds per position → its device's factor for secondsPerPosition, within reason (around the
+  // engine's starting factor: g.name)
+  const paceFactor = (g, sec) => { const k = paceStart(g.name); return Math.min(4 * k, Math.max(0.25 * k, sec / secondsPerPosition(g))); };
   // A running analysis's seconds per position: the estimate before it started, giving way to the run's own pace as it
   // times more positions (sumSec over n of them); a run's first few searches alone are a poor guide to the rest
   const PACE_PRIOR_WEIGHT = 3;
@@ -352,5 +358,5 @@
     return { result: { cp, depth: 0, pv: best ? [best] : [], best, nodes: null, timeMs: null, tb: { category: t.category, dtz: t.dtz, dtm: t.dtm } }, failed: false };
   }
 
-  window.AnalysisCore = { C, TB_GAP_MS, ENGINE, ENGINE_NAMES, SEARCH_LIMITS, DEPTHS, SECONDS, HASH_MB, hashChoices, LINES, threadChoices, defaultThreads, engineSettings, secondsPerPosition, paceFactor, blendPace, deeperSearch, canGoDeeper, cloudEnough, bestOf, winningChances, infoToScore, infoStats, rateMove, rateByOutcome, tbWonOnly, mateLine, positionFens, playerStats, engineLines, alternativesOf, buildAnalysisJson, runAnalysis };
+  window.AnalysisCore = { C, paceStart, TB_GAP_MS, ENGINE, ENGINE_NAMES, SEARCH_LIMITS, DEPTHS, SECONDS, HASH_MB, hashChoices, LINES, threadChoices, defaultThreads, engineSettings, secondsPerPosition, paceFactor, blendPace, deeperSearch, canGoDeeper, cloudEnough, bestOf, winningChances, infoToScore, infoStats, rateMove, rateByOutcome, tbWonOnly, mateLine, positionFens, playerStats, engineLines, alternativesOf, buildAnalysisJson, runAnalysis };
 })();

@@ -236,6 +236,14 @@ test('secondsPerPosition: 1.3 s at depth 22 / 3 s, faster when shallower, near t
   assert.equal(A.secondsPerPosition({ depth: 30, time_limit: 4 }), 4);
 });
 
+test('asm.js and Full start from their own pace (paceStart), and paceFactor keeps within 0.25–4 times it', () => {
+  const N = A.ENGINE_NAMES;
+  assert.equal(A.paceStart(N.lite), 1); assert.equal(A.paceStart(N.asm), 8); assert.equal(A.paceStart(N.full), 1.3);
+  const g = { depth: 22, time_limit: 30, lines: 1, name: N.asm };
+  assert.equal(A.paceFactor(g, 1000), 32);
+  assert.equal(A.paceFactor(g, 0.01), 2);
+  assert.ok(Math.abs(A.paceFactor(g, 1.3 * 10) - 10) < 1e-9, 'a measured 10 kept');
+});
 test('secondsPerPosition scales by a device factor; paceFactor measures it, within 0.25–4', () => {
   assert.equal(A.secondsPerPosition(MEASURED, 2), 2.6);
   assert.equal(A.secondsPerPosition(MEASURED, 4), 3); // still capped by the time limit
