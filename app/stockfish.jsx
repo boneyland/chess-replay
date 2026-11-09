@@ -504,7 +504,9 @@ function useMoveEval(engine, before, after, own, fen, stored, cloud, off, auto) 
     })();
     return () => { live = false; handles.forEach((h) => h.cancel()); timers.forEach(clearTimeout); ctl.abort(); };
   }, [key]);
-  const raw = st.key === key ? st : { ...empty, pending: !!after };
+  // a new key's first render, before its layout effect: pending only where it will search (off, as while a game analysis
+  // runs, never does, so the Analysis panel's progress line keeps showing the run's rather than starting over at each move)
+  const raw = st.key === key ? st : { ...empty, pending: !!after && !off };
   // the cloud's answer stands until a finished local search goes deeper; it replaces the result a Go deeper started
   // from (the stored analysis's among them) only when deeper
   const pick = (loc, cl) => (cl && (!loc || cl.depth >= loc.depth || (loc.partial && !loc.held)) ? cl : loc);
@@ -580,7 +582,7 @@ function OwnMoveAnalysis({ M, vline, own, status, why, onReply, onHover, top, wh
   const done = before && after && !before.partial && !after.partial;
   const rated = done ? window.AnalysisCore.rateMove({ bestEval: before.cp, currentEval: after.cp, isWhite, playedIsBest: step.uci === before.best, isCheckmate: step.san.endsWith('#') }) : null;
   const bad = rated && ['inaccuracy', 'mistake', 'blunder'].includes(rated.classification);
-  const col = bad ? clsColor(rated.classification) : lineAccent('you');
+  const col = bad ? clsColor(rated.classification) : lineAccent(vline.src || 'you');
   const who = whoIs !== undefined ? whoIs : step.byEngine ? 'STOCKFISH’S REPLY' : 'YOUR MOVE';
   const down = status === 'unavailable' || status === 'stopped' || status === 'off' || status === 'busy';
   const verdict = !rated ? (down ? sfDownText(status, why) : 'Stockfish is thinking…')
