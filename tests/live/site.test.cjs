@@ -336,6 +336,32 @@ for (const name of BROWSERS) for (const site of SITES) {
       await g.ctx.close();
     });
 
+    // a move pressed in Better was (its last one here) or the Best line (one in the middle) is rated by Stockfish, as
+    // the viewer's own moves are
+    await t.test('desktop: a move picked from Better was or the Best line gets a Stockfish verdict', async () => {
+      const g = await open(browser, { width: 1440, height: 900 });
+      const p = g.page, panel = p.locator('.part-analysis');
+      // a short time limit per search, so each verdict comes quickly
+      await p.addInitScript(() => { try { localStorage.setItem('chess-video.tweaks.v1', JSON.stringify({ sfTime: 1 })); } catch (e) {} });
+      await p.goto(base, { waitUntil: 'load' });
+      await loadedOn(p);
+      const better = p.locator('.mv[role="button"][title^="Show better line"]');
+      for (let i = 0; i < 60 && !(await better.count()); i++) await p.keyboard.press('ArrowRight');
+      assert.ok(await better.count() > 0, 'a move with a better line');
+      await settled(p);
+      await better.last().click();
+      await p.mouse.move(5, 5);
+      await assert.doesNotReject(panel.filter({ hasText: /better line · .*(stockfish’s choice|cp vs|as good as)/i }).waitFor({ timeout: 60000 }), 'the better line\'s last move rated');
+      await p.keyboard.press('Escape');
+      const best = p.locator('.mv[role="button"][title^="Show best line"]');
+      await best.first().waitFor({ timeout: 5000 });
+      await best.nth(Math.floor((await best.count()) / 2)).click();
+      await p.mouse.move(5, 5);
+      await assert.doesNotReject(panel.filter({ hasText: /best line · .*(stockfish’s choice|cp vs|as good as)/i }).waitFor({ timeout: 60000 }), 'the best line\'s move rated');
+      assert.deepEqual(g.errors, []);
+      await g.ctx.close();
+    });
+
     // another game loaded while the replay shows a move and a line of its own opens paused at its start, the old line gone
     await t.test('desktop: a newly loaded game opens at its start, not at the old game\'s move or line', async () => {
       const g = await open(browser, { width: 1440, height: 900 });

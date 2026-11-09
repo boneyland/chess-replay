@@ -519,6 +519,16 @@ function EvalWithStat({ children }) {
   );
 }
 const lineAccent = (src) => (src === 'queen' ? C.queen : src === 'you' ? C.last : C.best);
+// the name of the panel's line a shown line was picked from
+const lineName = (src) => (src === 'queen' ? 'Queen line' : src === 'sf' ? 'better line' : 'best line');
+// under the Analysis panel's lines while a line is shown: the viewer's moves, or the picked line's move on the board
+const shownLineNote = (M, vline) => (
+  <span style={{ color: lineAccent(vline.src) }}>
+    {vline.src === 'you'
+      ? (vline.upto < 0 ? 'Your moves: drag a piece to play' : `Your moves: ${vline.moves.slice(0, vline.upto + 1).map((m, j) => (j === 0 || (M.ply0 + vline.at + j) % 2 === 0 ? lineLabel(M, vline.at, j, m.san) : m.san)).join(' ')}`)
+      : `On the board: ${lineName(vline.src)} to ${lineLabel(M, vline.at, vline.upto, vline.moves[vline.upto].san)} · drag a piece to branch off`}
+  </span>
+);
 // arrows: the engine lines' first moves from the position shown ([{ uci, k }], lineArrows), line 1 the strongest
 function LineBoard({ a, sq, v, hide, arrows, sel }) {
   // the ring around the board says whose line it is; its last move gets the same tint as the game's
@@ -961,14 +971,13 @@ function Analysis({ M, T, S, a, vline, onLine, onPreview, onReplyHover, paused, 
   const deeper = paused && deep && deep.after && !deep.after.stored ? deep.after : null;
   // this move's own search when the analysis recorded it, else the engine settings
   const depth = searchDepth(deeper || (c >= 0 ? M.plies[c].search : null));
-  if (own && vline && vline.src === 'you' && vline.upto >= 0) {
+  // the viewer's own move, or a move picked from a line (Better was, Best line, Queen line): Stockfish rates it and plays on
+  if (own && vline && vline.upto >= 0) {
     return (
       <AnalysisPanel box={box} a={a} paused={paused} depth={sf && !sf.off && (sf.status === 'unavailable' || sf.status === 'stopped') ? null : searchDepth(own.after)} deep={own}>
-        <OwnMoveAnalysis M={M} vline={vline} own={own} status={!sf ? 'idle' : sf.busy ? 'busy' : sf.off ? 'off' : sf.status} why={sf ? sf.why : ''} onReply={onReply} onHover={onReplyHover} top={tbAt(false)} />
+        <OwnMoveAnalysis M={M} vline={vline} own={own} who={vline.src === 'you' ? undefined : lineName(vline.src).toUpperCase()} status={!sf ? 'idle' : sf.busy ? 'busy' : sf.off ? 'off' : sf.status} why={sf ? sf.why : ''} onReply={onReply} onHover={onReplyHover} top={tbAt(false)} />
         {deadEl}
-        <span style={{ display: 'block', marginTop: tx(8), font: `500 ${tx(15)}px ${MONO}`, color: C.dim }}>
-          <span style={{ color: lineAccent('you') }}>Your moves: {vline.moves.slice(0, vline.upto + 1).map((m, j) => (j === 0 || (M.ply0 + vline.at + j) % 2 === 0 ? lineLabel(M, vline.at, j, m.san) : m.san)).join(' ')}</span>
-        </span>
+        <span style={{ display: 'block', marginTop: tx(8), font: `500 ${tx(15)}px ${MONO}`, color: C.dim }}>{shownLineNote(M, vline)}</span>
       </AnalysisPanel>
     );
   }
@@ -1056,13 +1065,7 @@ function Analysis({ M, T, S, a, vline, onLine, onPreview, onReplyHover, paused, 
         {P.advice && <span style={{ color: C.inaccuracy }}>{P.advice}</span>}
         {rule && <div style={{ paddingTop: tx(8), borderTop: `1px solid ${C.line}` }}><RuleBlock w={rule} /></div>}
         {vline && (
-          <span style={{ font: `500 ${tx(15)}px ${MONO}`, color: C.dim }}>
-            <span style={{ color: lineAccent(vline.src) }}>
-              {vline.src === 'you'
-                ? (vline.upto < 0 ? 'Your moves: drag a piece to play' : `Your moves: ${vline.moves.slice(0, vline.upto + 1).map((m, j) => (j === 0 || (M.ply0 + vline.at + j) % 2 === 0 ? lineLabel(M, vline.at, j, m.san) : m.san)).join(' ')}`)
-                : `On the board: ${vline.src === 'queen' ? 'Queen line' : vline.src === 'sf' ? 'better line' : 'best line'} to ${lineLabel(M, vline.at, vline.upto, vline.moves[vline.upto].san)} · drag a piece to branch off`}
-            </span>
-          </span>
+          <span style={{ font: `500 ${tx(15)}px ${MONO}`, color: C.dim }}>{shownLineNote(M, vline)}</span>
         )}
         {/* a running analysis's progress; Analyse with Stockfish itself only at the start */}
         {sf && !M.hasAnalysis && sf.run.state === 'running' && <EngineEmptyState M={M} sf={sf} paused={paused} compact />}
@@ -1334,11 +1337,11 @@ function useBoardFacts({ pos, fen, tbOn, tablebase, known }) {
   return { tb, dead, fifty: pos ? window.PlayCore.fiftyRule(f, pos) : null, fen: f };
 }
 
-// Stockfish on the viewer's own line (vline from useShownLine): the positions before and after its move on the board,
-// with the best move's SAN; null when no own move is shown
+// Stockfish on the line shown (vline from useShownLine: the viewer's own, or one picked from the panel): the positions
+// before and after its move on the board, with the best move's SAN; null when no line's move is shown
 function useOwnLineEval(M, line, sf, tw) {
   const { vline, gamePos } = line;
-  const on = !!(sf && vline && vline.src === 'you' && vline.upto >= 0);
+  const on = !!(sf && vline && vline.upto >= 0);
   const before = on ? M.plies.slice(0, vline.at).map((p) => p.uci).concat(vline.moves.slice(0, vline.upto).map((m) => m.uci)) : null;
   const after = on ? before.concat([vline.moves[vline.upto].uci]) : null;
   const ev = useMoveEval(sf ? sf.engine : null, before, after, sf ? sf.own : window.AnalysisCore.engineSettings().own, M.start.fen, null, cloudSetting(tw), !sf || sf.off);
@@ -1471,9 +1474,9 @@ function GameVideo({ M, tw, d, probe, queen, nav, scheme, sf, orient }) {
   const onTb = (uci) => { const step = window.ChessCore.stepFromUci(touchPos, uci); if (step) { tl.setPlaying(false); input.clear(); playOwn(step); } };
   React.useEffect(() => { if (!vline) input.clear(); }, [vline]);
   const own = useOwnLineEval(M, line, sf, tw);
-  const gameEval = useGoDeeper(M, cNow, !!(sf && M.evalSource !== 'none' && !playing && cNow >= 0 && !M.plies[cNow].tb && !(vline && vline.src === 'you')), sf, tw);
+  const gameEval = useGoDeeper(M, cNow, !!(sf && M.evalSource !== 'none' && !playing && cNow >= 0 && !M.plies[cNow].tb && !vline), sf, tw);
   // a game without an analysis: the move paused on searched live (the Stockfish switch on), while no game analysis runs
-  const moveEval = useGameMoveEval(M, cNow, !!(sf && bareGame(M) && !sf.off && !playing && cNow >= 0 && !(vline && vline.src === 'you')), sf, tw, line.gamePos);
+  const moveEval = useGameMoveEval(M, cNow, !!(sf && bareGame(M) && !sf.off && !playing && cNow >= 0 && !vline), sf, tw, line.gamePos);
   // the live eval of the position shown, for the eval bar and the arrows: the bare game's search, else Go deeper's
   const liveAfter = moveEval ? moveEval.after : gameEval.after && !gameEval.after.stored ? gameEval.after : null;
   const onReply = (steps) => { setPv(null); setVline((v) => v && { ...v, moves: [...v.moves.slice(0, v.upto + 1), ...steps], upto: v.upto + steps.length }); };
