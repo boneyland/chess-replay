@@ -13,7 +13,8 @@ A plain board with Stockfish, separate from the replay (`app/free-board.jsx`, st
 - **Opening explorer** in the Commentary box: the opening's name and the book moves that continue from the position (`openings-core.js` continuations), each clickable; a short note once out of book. No win rates or game counts (that is the Lichess explorer on the roadmap). At 7 pieces or fewer, with the tablebase setting on, the endgame tablebase takes its place (see Endgame tablebase).
 - **Replay these moves as a game** (Settings) opens the board's moves as a loaded game for replay, analysis and MP4, WebM or WebP export, with "Back to the free board" to return.
 - **Back to the loaded game** (Settings › Game, shown on a free board) returns to the game left for it, paused at the move it was on: the loaded game's files are kept in the stored board as `lastGame` (survives a reload; one game only; loading another game, Back to sample game or Clear saved data drops it).
-- The board (start FEN, moves, position in the line) survives a reload: `{ board: { fen, moves, upto } }` in the stored files.
+- The board (start FEN, moves, position in the line) survives a reload: `{ board: { fen, moves, upto, engine } }` in the stored files, `engine` the indexes of the moves played from Stockfish's reply chips (`byEngine`), so they are still labelled as its replies.
+- A book or explorer move played by Enter or Space hands the focus to the next position's first row (`useRowFocus`), not the page.
 
 ## Edit position
 
@@ -48,6 +49,7 @@ The viewer sees a position or puzzle somewhere (a book diagram, a screen, someon
 
 ## Play vs Stockfish
 
+- **Stockfish can't answer** (won't start, or stopped): the Game box says so with why, and **Try again** (beside Take back and Resign, "Try again, Take back or Resign") asks it again, so a player whose Stockfish dies before its first move, with nothing to take back, needn't resign (`useEngineOpponent`'s `retry`).
 - The player picks White, Black or random; the board is drawn from the player's side and never turns. Stockfish plays at full strength (no strength setting: "prepare to get crushed") at the engine's `play` priority, after a short pause; its think time is capped so its clock doesn't flag.
 - Same ends, Take back (back to the player's previous turn, Stockfish's reply included) and time controls as vs human, minus draw offers and claims: threefold repetition and the fifty-move rule end the game by themselves.
 - Stockfish quietly rates the player's moves (`critique`: `{ j, cls, best, text }`); an inaccuracy, mistake or blunder is flagged in the Commentary box with a short line, and the better move and evals show only after the game. A move is rated when the search before it and Stockfish's reply search both reach depth 15; short of that (a slow engine), only a blunder losing 300 cp or more (about a piece, or a mate) is flagged, once both reach depth 8 (`PlayCore.rateMove`).

@@ -12,12 +12,9 @@ Deferred by the per-plan reviews; each was true when recorded and may since have
 - The service worker is slow to take over in the Simulator (often still installing after 60 s, its cache not yet opened); Playwright's WebKit runs the same worker, so this isn't asserted there.
 
 **Custom starts and flip** (2026-10-19)
-- The player bars' "+N" counts captures during the game only, so a FEN start with a material edge shows none.
 - Untested by the live suite: the sideways phone layout flipped, flipped arrows and line board, a flipped or FEN-start video export, and the F key's guards.
 
 **Free board** (2026-10-19)
-- A Stockfish reply played from the reply chips is labelled "Your move" after a reload: the stored board keeps UCI moves only, not who played them.
-- After Enter plays an explorer row, focus drops to the page; the next Tab lands on the new list's first row.
 - Playwright's Firefox drops mouse drags when `hasTouch` is on, so the phone parts of the free-board live tests tap or check layout only.
 
 **Play vs human** (2026-10-19)
@@ -30,30 +27,24 @@ Deferred by the per-plan reviews; each was true when recorded and may since have
 - The same game open in two tabs is one entry; each tab's moves replace the other's.
 
 **Play vs Stockfish** (2026-10-21)
-- Playing Black, if the engine dies before Stockfish's first move there is nothing to take back: only Resign or a reload restarts it.
 - A move played before the "before" search reaches depth 15 (just after the engine loads; depth 8 for a blunder of a piece or more), and the move before a reload, go unrated. On a slow engine (the asm.js one, a slow phone) the reply search often stops short of depth 15 in its 3 s, so smaller inaccuracies, mistakes and blunders go unflagged, silently.
 - On the phone the Commentary box cuts the how-it-works text short (it scrolls).
 - No draw offers against Stockfish; the player can resign while Stockfish thinks.
 
 **Endgame tablebase** (2026-10-24)
-- In the replay on the phone the Tablebase block sits below the engine lines, so the Analysis panel has to be scrolled to it (the free board shows it in the Commentary box).
 - In the replay's Tablebase block a cursed win's moves are all listed as draws; which keep the cursed win shows only in a move's tooltip (on the free board too, where the moves are buttons alone).
-- The live test asks the real service: a Lichess outage fails it.
-- A game analysis that loses Lichess part-way leaves the rest of its endgame positions to Stockfish without saying so; only the Analysis panel's header ("Tablebase" or a depth) tells them apart.
 
 **asm.js Stockfish** (2026-10-31)
 - **Verify** on the SM-T510 itself: checked only with SIMD faked off in desktop Chromium and Firefox. How slow it is on the tablet, and whether its 30 s start timeout is enough there, is unknown.
-- The WebP export's encoder (`webp_enc_simd`) needs WebAssembly SIMD too, so the export likely fails on such a browser; untouched.
 - The line under the Analysis panel hides where it doesn't fit (a narrow phone panel), as the tip did; the engine menu's note always shows.
-- Its pace estimate starts from the lite engine's model (factor 1), far too fast, until a run has timed enough positions.
 
 **Position from image** (2026-11-03)
 - `tests/fixtures/vision-diagram.png` (a book-style diagram drawn here) reads its c4 bishop as a pawn in both browsers, framed or cropped, though the 2026-11-03 tests found real diagrams exact once cropped; and its read rarely marks a square to check (only cropped, in Chromium at 1440×900). The live test asserts no read of it, and doesn't cover the outlines: an edit dropping one was checked by hand in Chromium, a typed FEN dropping one (the same rule, `sureOf` in `GameApp`) not in a browser.
 - Reading speed on a phone is unmeasured.
 - Board auto-crop: the rank labels are told apart by ink alone. A labelled diagram turned a quarter (its file letters down the side) came out at 1.21 against the 1.35 needed to count as "8" over "1", so an unusual font could still pass letters for digits and turn a good read without a word; reading the digits themselves (matching them against "1" and "8" drawn in the page's fonts, or the whole 1–8 sequence) would be safer. The tilted-board test picture's noise layer doesn't show in its screenshot (the tilt alone keeps it from being an upright grid); the picture with no board has noise.
-- After the dialog closes, focus goes back to Menu, also after Back to crop › Cancel, where going back to Back to crop would be nicer.
 
 **Full Stockfish download** (2026-10-24)
-- The time estimate for Full starts from the lite engine's model until a run with Full has timed enough positions; the benchmarks behind the limits were not redone for Full.
+- The benchmarks behind the limits were not redone for Full, and the starting pace factors (asm.js 8, Full 1.3: `AnalysisCore.paceStart`) come from one laptop in Chromium, three positions to depth 16 (2026-11-09).
+- The tablebase live tests answer from `tests/fixtures/tb-live.json`: a change in Lichess's answers isn't noticed until `tests/fixtures/fetch-tb-live.cjs` is run again.
 - A cancelled or failed download starts over (no resume), and the whole 99 MB is held in memory while it is checked.
 - The live suite downloads the 99 MB from unpkg in each browser on every run (a Playwright route can't answer with a body that big: Chromium drops the connection).
