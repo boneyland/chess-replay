@@ -10,9 +10,8 @@
   // checked, as this runs on every move: whether a board still restores is the list's reader's business (playable), so a
   // game a later version can't read isn't dropped from storage by the next write.
   function read(raw) {
-    let list;
-    try { list = JSON.parse(raw || '[]'); } catch (e) { return []; }
-    if (!Array.isArray(list)) return [];
+    const list = parse(raw);
+    if (!list) return [];
     const seen = new Set(), out = [];
     for (const e of list) {
       if (!e || typeof e !== 'object' || typeof e.id !== 'string' || seen.has(e.id) || !Number.isFinite(e.updated)) continue;
@@ -23,6 +22,13 @@
     }
     return out.sort((a, b) => b.updated - a.updated).slice(0, KEEP);
   }
+
+  // The stored text as an array, or null when there is text that isn't one (a write would replace every game in it)
+  function parse(raw) {
+    if (raw == null || raw === '') return [];
+    try { const list = JSON.parse(raw); return Array.isArray(list) ? list : null; } catch (e) { return null; }
+  }
+  const readable = (raw) => parse(raw) != null;
 
   // An entry's board restored, when it is still a game with moves; null otherwise
   function playable(e) {
@@ -41,5 +47,5 @@
 
   const remove = (list, id) => list.filter((e) => e.id !== id);
 
-  window.GamesCore = { KEEP, read, playable, keep, remove };
+  window.GamesCore = { KEEP, read, readable, playable, keep, remove };
 })();

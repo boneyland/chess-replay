@@ -16,7 +16,7 @@ Deferred by the per-plan reviews; each was true when recorded and may since have
 
 **Play vs human** (2026-10-19)
 - A draw can only be claimed in the position on the board, not by announcing the move that would make the repetition or the fiftieth move.
-- Dead positions need chasolver's worker: before its module loads (the first move of a game), offline before it was ever kept, or for a position it gives up on (5 s), only `PlayCore.canMate` and `lockedDead` end a game, and a flag fall against mating material is a loss (the flag rule asks the prover's cache, so a position it has proved dead draws).
+- Dead positions need chasolver's worker: before its module loads (the first move of a game), offline before it was ever kept, or for a position it gives up on (5 s), only `PlayCore.canMate` and `lockedDead` end a game, and a flag fall against mating material is a loss (the flag rule asks the prover's cache about every position of the game so far, as a side unable to mate stays so: a proof from an earlier move draws though the position now has no answer).
 
 **My games** (2026-10-20)
 - A replayed game's Stockfish analysis, Queen answers and commentary stay with the loaded game: opening it from My games again starts without them.

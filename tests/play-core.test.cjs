@@ -439,6 +439,19 @@ test('a flag fall is a draw when the prover says the opponent can\'t mate', (t) 
   assert.deepEqual(P.flag(black, 300001).game.result, { result: '1-0', reason: 'time', side: 'b' });
 });
 
+test('a side proven unable to mate stays so: a later flag fall or dead draw reads earlier proofs', (t) => {
+  t.after(() => P.setProver(null));
+  const g = game('5+0', [['g1f3', 0], ['e8d8', 0], ['f3g5', 0]], LOCK);
+  const afterNf3 = keyOf(B.pos(B.go(g, 0))), afterKd8 = keyOf(B.pos(B.go(g, 1)));
+  assert.deepEqual(P.flag(g, 300001).game.result, { result: '1-0', reason: 'time', side: 'b' });
+  // White proven unable after Nf3; the position now has no answer yet
+  P.setProver(proverFrom({ [afterNf3]: { w: true, b: null } }));
+  assert.deepEqual(P.flag(g, 300001).game.result, { result: '1/2-1/2', reason: 'time', side: 'b' });
+  assert.equal(P.outcome(g), null, 'only one side proven');
+  P.setProver(proverFrom({ [afterNf3]: { w: true, b: null }, [afterKd8]: { w: null, b: true } }));
+  assert.deepEqual(P.outcome(g), { result: '1/2-1/2', reason: 'dead' }, 'each side proven in a different position');
+});
+
 test('recheck ends a game whose position the prover has since called dead', (t) => {
   t.after(() => P.setProver(null));
   const g0 = P.start(B.fromFen(LOCK), '5+3', '2026.11.02');

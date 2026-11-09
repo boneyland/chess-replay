@@ -110,7 +110,7 @@
     // castling is checked in full (rights, rook, empty squares, no check on the king's path): a PGN's O-O isn't trusted
     if (/^O-O(-O)?$/.test(s)) {
       const y = color === 'w' ? 7 : 0, from = at(4, y), to = at(s.length > 3 ? 2 : 6, y);
-      if (!legalMove(pos, from, to)) throw new Error(`"${san}" is not a legal move here`);
+      if (pos.b[from] !== (color === 'w' ? 'K' : 'k') || !legalMove(pos, from, to)) throw new Error(`"${san}" is not a legal move here`);
       return { from, to, promo: null };
     }
     const m = s.match(/^([NBRQK])?([a-h])?([1-8])?x?([a-h][1-8])(?:=?([NBRQnbrq]))?$/);
@@ -132,12 +132,28 @@
     return { from: cands[0], to, promo };
   }
 
+  // Games split at a tag line that follows moves, or at the next text after a game's result. A tag line inside a
+  // {comment} stays text, and a result inside a comment or a variation ends nothing
   function splitGames(text) {
-    const games = []; let cur = [], inMoves = false;
+    const games = []; let cur = [], inMoves = false, ended = false, inComment = false, depth = 0;
+    const flush = () => { games.push(cur.join('\n')); cur = []; inMoves = false; ended = false; };
     text.replace(/\r/g, '').split('\n').forEach((line) => {
-      const hdr = /^\s*\[\w+\s+".*"\]\s*$/.test(line);
-      if (hdr && inMoves) { games.push(cur.join('\n')); cur = []; inMoves = false; }
-      if (!hdr && line.trim()) inMoves = true;
+      const hdr = !inComment && /^\s*\[\w+\s+".*"\]\s*$/.test(line);
+      let outside = '';
+      if (!hdr) {
+        for (let i = 0; i < line.length; i++) {
+          const ch = line[i];
+          if (inComment) { if (ch === '}') inComment = false; continue; }
+          if (ch === '{') { inComment = true; outside += ' '; continue; }
+          if (ch === ';') break;
+          if (ch === '(') depth++;
+          else if (ch === ')') depth = Math.max(0, depth - 1);
+          else if (depth === 0) outside += ch;
+        }
+      }
+      if ((hdr && inMoves) || (ended && outside.trim())) flush();
+      if (outside.trim()) inMoves = true;
+      if (depth === 0 && /(?:^|\s)(?:1-0|0-1|1\/2-1\/2|\*)\s*$/.test(outside)) ended = true;
       cur.push(line);
     });
     if (cur.join('').trim()) games.push(cur.join('\n'));
@@ -156,7 +172,7 @@
       const ev = raw.match(/\[%eval\s+([^\]\s]+)/), ck = raw.match(/\[%clk\s+([\d:.]+)/);
       // cutechess engine comments: {+0.25/20 1.2s}, {+M5/30 0.8s} (M counts plies), {book}; cutechess
       // stores them for the side that just moved (its whitepov option only fixes engines that report White's view)
-      const ae = ev ? null : raw.match(/^\s*([+-]?)(?:(\d+(?:\.\d+)?)|M(\d+))\/\d+(?:\s+[\d.]+s\b)?/);
+      const ae = ev ? null : raw.match(/^\s*([+-]?)(?:(\d+(?:\.\d+)?)|M(\d+))\/\d+(?:\s+[\d.]+s\b|\s*$)/);
       const txt = (ae ? raw.slice(ae[0].length) : raw).replace(/\[%[^\]]*\]/g, '').replace(/^\s*book\s*$/, '').replace(/\s+/g, ' ').trim();
       const t = plies[plies.length - 1];
       if (!t) { if (txt) intro = (intro + ' ' + txt).trim(); return; }
@@ -496,7 +512,8 @@
     // the checkmate on the last move is a fact of the game, not an engine eval
     const hasEval = plies.some((p) => p.cp != null || (p.mate != null && !p.checkmate));
     const hasClock = plies.some((p) => p.clk != null);
-    const tc = (H.TimeControl || '').match(/^(\d+)/);
+    // the first period's seconds: 300+2, 40/7200:3600 (40 moves in 7200 s), not a sandclock (*60)
+    const tc = (H.TimeControl || '').match(/^(?:\d+\/)?(\d+)/);
     const clockStart = tc ? +tc[1] : hasClock ? Math.ceil(Math.max(plies[0].clk || 0, (plies[1] && plies[1].clk) || 0) / 60) * 60 : 0;
     const eng = useA && A.engine;
     // search as Python's describe_search; one line and one thread (the browser engine) go unsaid
@@ -772,8 +789,12 @@
   }
 
   // ---------- moves the viewer plays on the board ----------
-  // castling rights from the FEN's third field; a FEN without one (the page's own) allows every castle
-  const posFromFen = (fen) => { const f = fen.split(' '); return { b: fromFen(fen), ep: -1, turn: f[1] || 'w', castle: f[2] == null ? 'KQkq' : f[2].replace('-', '') }; };
+  // castling rights from the FEN's third field; a FEN without one (the page's own) allows every castle. The en passant
+  // field is kept only where a pawn just moved two squares past it (epFits)
+  const posFromFen = (fen) => {
+    const f = fen.split(' '), b = fromFen(fen), turn = f[1] || 'w', ep = /^[a-h][1-8]$/.test(f[3] || '') ? sqIdx(f[3]) : -1;
+    return { b, ep: ep >= 0 && epFits(b, turn, ep) ? ep : -1, turn, castle: f[2] == null ? 'KQkq' : f[2].replace('-', '') };
+  };
   // A legal move from `from` to `to` (square indices, 0 = a8), or null. A pawn reaching the last rank becomes `promo`
   // (q, r, b or n; a queen by default).
   function legalMove(pos, from, to, promo = 'q') {

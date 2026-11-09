@@ -56,6 +56,8 @@ const droppedFiles = (e) => {
 // My games (GamesCore), read afresh for each change, so games kept by another tab stay
 const GAMES = 'chess-video.games.v1';
 const readGames = () => { try { return window.GamesCore.read(localStorage.getItem(GAMES)); } catch (e) { return []; } };
+// a stored list that can't be read is set aside here, once, before the next write replaces it
+const GAMES_UNREADABLE = 'chess-video.games.v1.unreadable';
 
 // The loaded game or board, as stored (STORE): files, the game they build (M; while a board shows, the last good game,
 // the sample on a fresh page, for the hooks that want one), the board restored from them, and the commits that store a
@@ -100,6 +102,10 @@ function useStoredFiles({ stored, setErr, onCommit, clockRef }) {
   // a game is kept in My games as it goes; a full storage doesn't stop the board. The new list, or null when it couldn't
   // be stored (with `fail` shown, unless null)
   const updateGames = (fn, fail) => {
+    try {
+      const raw = localStorage.getItem(GAMES);
+      if (!window.GamesCore.readable(raw) && localStorage.getItem(GAMES_UNREADABLE) == null) localStorage.setItem(GAMES_UNREADABLE, raw);
+    } catch (e) { if (fail) setErr(fail); return null; }
     const next = fn(readGames());
     try { localStorage.setItem(GAMES, JSON.stringify(next)); return next; } catch (e) { if (fail) setErr(fail); return null; }
   };
@@ -760,7 +766,7 @@ class Recover extends React.Component {
   render() {
     if (!this.state.error) return this.props.children;
     const reset = () => {
-      try { Object.keys(localStorage).filter((k) => k.startsWith('chess-video.') && k !== AUTH_STORE && k !== LI_AUTH_STORE && k !== GAMES).forEach((k) => localStorage.removeItem(k)); } catch (e) {}
+      try { Object.keys(localStorage).filter((k) => k.startsWith('chess-video.') && k !== AUTH_STORE && k !== LI_AUTH_STORE && k !== GAMES && k !== GAMES_UNREADABLE).forEach((k) => localStorage.removeItem(k)); } catch (e) {}
       location.reload();
     };
     return (
