@@ -1419,9 +1419,9 @@ function GameVideo({ M, tw, d, probe, queen, nav, scheme, sf, orient }) {
   const cNow = lastPly(T, S);
   const line = useShownLine(M, cNow, playing), { vline, setVline, pv, setPv, playOwn } = line;
   useMoveSounds(M, T, S, tw, playing, vline);
-  const onPreview = (src, moves, j, at = cNow) => setPv(!playing && j != null && j < moves.length ? { c: cNow, at, src, moves, upto: j } : null);
+  const onPreview = (src, moves, j, at = cNow) => setPv(!playing && j != null && j < moves.length ? { c: cNow, at, src, moves, upto: j, base: line.gamePos(at - 1) } : null);
   const onReplyHover = (steps) => setPv(!playing && steps && steps.length && vline ? { ...vline, moves: [...vline.moves.slice(0, vline.upto + 1), ...steps], upto: vline.upto + steps.length } : null);
-  const onLine = (src, moves, j, at = cNow) => { setPv(null); if (j < moves.length) { tl.setPlaying(false); input.clear(); setVline({ c: cNow, at, src, moves, upto: j }); } };
+  const onLine = (src, moves, j, at = cNow) => { setPv(null); if (j < moves.length) { tl.setPlaying(false); input.clear(); setVline({ c: cNow, at, src, moves, upto: j, base: line.gamePos(at - 1) }); } };
   // ---- moves the viewer plays on the board ----
   const explore = () => { tl.setPlaying(false); if (!vline) setVline(line.newLine()); };
   const touchPos = line.pos;
@@ -1449,8 +1449,9 @@ function GameVideo({ M, tw, d, probe, queen, nav, scheme, sf, orient }) {
   const settled = (i) => window.ChessCore.settledAt(S, CUES, i);
   const goTo = (i) => { setVline(null); tl.setPlaying(false); tl.setTime(settled(Math.max(-1, Math.min(S.N - 1, i)))); };
   // open on the starting position, paused, with every panel in place
-  // (before the first paint, so the title card never flashes)
-  React.useLayoutEffect(() => { if (tl.setStart) tl.setStart(settled(-1)); }, []);
+  // (before the first paint, so the title card never flashes); GameApp keys this view on the game, so another game
+  // loaded opens the same way, not at the old game's move with its line still shown
+  React.useLayoutEffect(() => { if (tl.setPlaying) tl.setPlaying(false); if (tl.setStart) tl.setStart(settled(-1)); }, []);
   const stepBy = useReplayNav({ nav, M, S, c: cNow, line, input, goTo, fen: shownFen });
   const pieces = React.useMemo(() => simulate(M), [M]);
   // the video touches (panels fading in, the camera push, the blunder glow, the final fade, the title and end cards)

@@ -299,6 +299,68 @@ for (const name of BROWSERS) for (const site of SITES) {
       await g.ctx.close();
     });
 
+    // a best line picked from the panel, branched off with the viewer's own move and stepped back past its first move,
+    // shows the position it started from (it had none, and the page crashed to Recover)
+    await t.test('desktop: an own move off a picked best line steps back to where the line started', async () => {
+      const g = await open(browser, { width: 1440, height: 900 });
+      const p = g.page;
+      await p.goto(base, { waitUntil: 'load' });
+      await loadedOn(p);
+      const chips = p.locator('.mv[role="button"][title^="Show best line"]');
+      for (let i = 0; i < 20 && (await chips.count()) < 2; i++) await p.keyboard.press('ArrowRight');
+      assert.ok(await chips.count() > 1, 'a move with a best line of two or more moves');
+      await settled(p);
+      // the ply on the board: the Moves list's chip whose title names the playhead's label
+      const c = await p.evaluate(() => { const l = document.querySelector('.plabel').textContent; return +document.querySelector(`.mv[data-ply][title="Go to ${l}"]`).dataset.ply; });
+      const sig = () => p.evaluate(() => [...document.querySelectorAll('img')].map((i) => i.getBoundingClientRect()).filter((r) => r.width > 10).map((r) => Math.round(r.left) + ',' + Math.round(r.top)).sort().join(';'));
+      const start = await sig();
+      // the line's second move, as squares: the line starts from the position after ply c
+      const [m0, m1] = [await chips.nth(0).innerText(), await chips.nth(1).innerText()];
+      const uci = await p.evaluate(({ c, m0, m1 }) => {
+        const C = window.ChessCore, M = C.buildGame({ pgn: window.SAMPLE_PGN, analysis: window.SAMPLE_ANALYSIS, sampleNotes: window.SAMPLE_NOTES });
+        const q = M.plies[c], pos = { ...C.posFromFen(q.fen), castle: q.castle, ep: q.ep };
+        return C.applySan(C.applySan(pos, m0).pos, m1).uci;
+      }, { c, m0: m0.trim(), m1: m1.trim() });
+      await chips.nth(0).click();
+      await p.waitForFunction((s) => [...document.querySelectorAll('img')].map((i) => i.getBoundingClientRect()).filter((r) => r.width > 10).map((r) => Math.round(r.left) + ',' + Math.round(r.top)).sort().join(';') !== s, start, { timeout: 5000 });
+      const b = await boardBox(p), from = square(b, uci.slice(0, 2)), to = square(b, uci.slice(2, 4));
+      await p.mouse.move(from.x, from.y);
+      await p.mouse.down();
+      await p.mouse.move(to.x, to.y, { steps: 8 });
+      await p.mouse.up();
+      await p.mouse.move(5, 5);
+      for (let i = 0; i < 2; i++) await p.keyboard.press('ArrowLeft');
+      await assert.doesNotReject(p.waitForFunction((s) => [...document.querySelectorAll('img')].map((i) => i.getBoundingClientRect()).filter((r) => r.width > 10).map((r) => Math.round(r.left) + ',' + Math.round(r.top)).sort().join(';') === s, start, { timeout: 5000 }), 'back on the position the line started from');
+      assert.equal(await p.getByText(/Something on this page broke/i).count(), 0, 'no Recover screen');
+      assert.deepEqual(g.errors, []);
+      await g.ctx.close();
+    });
+
+    // another game loaded while the replay shows a move and a line of its own opens paused at its start, the old line gone
+    await t.test('desktop: a newly loaded game opens at its start, not at the old game\'s move or line', async () => {
+      const g = await open(browser, { width: 1440, height: 900 });
+      const p = g.page, label = p.locator('.plabel');
+      await p.goto(base, { waitUntil: 'load' });
+      await loadedOn(p);
+      await settled(p);
+      const sig = () => p.evaluate(() => [...document.querySelectorAll('img')].map((i) => i.getBoundingClientRect()).filter((r) => r.width > 10).map((r) => Math.round(r.left) + ',' + Math.round(r.top)).sort().join(';'));
+      const start = await sig();
+      const chips = p.locator('.mv[role="button"][title^="Show best line"]');
+      for (let i = 0; i < 20 && !(await chips.count()); i++) await p.keyboard.press('ArrowRight');
+      assert.ok(await chips.count() > 0, 'a move with a best line');
+      await chips.nth(0).click();
+      await p.mouse.move(5, 5);
+      await p.setInputFiles('#game-files', { name: 'other.pgn', mimeType: 'text/plain', buffer: Buffer.from('[White "Gamma Tester"]\n[Black "Delta Tester"]\n\n1. d4 d5 2. c4 e6 3. Nc3 Nf6 4. Bg5 Be7 5. e3 O-O 6. Nf3 Nbd7 7. Rc1 c6 8. Bd3 dxc4 9. Bxc4 Nd5 10. Bxe7 Qxe7 11. O-O Nxc3 12. Rxc3 e5 *') });
+      await p.waitForFunction(() => /Gamma Tester/.test(document.body.innerText), null, { timeout: 10000 });
+      await assert.doesNotReject(label.filter({ hasText: 'Start' }).waitFor({ timeout: 5000 }), 'at the start');
+      assert.ok(await p.getByRole('button', { name: 'Back to start (Home)' }).isDisabled(), 'Home is disabled at the start');
+      assert.equal(await p.getByRole('button', { name: 'Play (space)' }).count(), 1, 'paused');
+      await settled(p);
+      assert.equal(await sig(), start, 'the starting position, not the old game\'s line');
+      assert.deepEqual(g.errors, []);
+      await g.ctx.close();
+    });
+
     await t.test('desktop: an own move gets a Stockfish verdict', async () => {
       const b = await boardBox(page);
       const from = square(b, 'e2'), to = square(b, 'e4');
