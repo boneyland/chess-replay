@@ -2575,6 +2575,14 @@ for (const name of BROWSERS) for (const site of SITES) {
       await p.waitForFunction(() => /Blunder/i.test(document.body.innerText), null, { timeout: 5000 });
       assert.match(await p.evaluate(() => document.body.innerText), /Tablebase/i);
       await p.screenshot({ path: path.join(OUT, host + '-tablebase-analysis.png') });
+      // the mouse wheel over the Tablebase block's rows scrolls the panel on (with nothing of their own to scroll)
+      const panelTop = () => p.evaluate(() => document.querySelector('.part-analysis').scrollTop);
+      await p.evaluate(() => { document.querySelector('.part-analysis').scrollTop = 0; });
+      const rows = await p.locator('.tb-rows').boundingBox();
+      await p.mouse.move(rows.x + rows.width - 20, rows.y + rows.height / 2);
+      await p.mouse.wheel(0, 120);
+      await p.waitForFunction(() => document.querySelector('.part-analysis').scrollTop > 0, null, { timeout: 3000 }).catch(() => {});
+      assert.ok(await panelTop() > 0, 'the panel scrolls under the wheel over the Tablebase rows');
       await p.locator('[data-ply="0"]').click();
       await p.waitForFunction(() => /The tablebase agrees/.test(document.body.innerText) || /Best line/.test(document.body.innerText), null, { timeout: 5000 });
       assert.equal(await p.getByRole('button', { name: /^Go deeper/ }).count(), 0, 'nothing to go deeper on');
