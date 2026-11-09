@@ -267,7 +267,7 @@ function GameStatus({ board, onChange, down, why, retry }) {
   }
   const check = last && last.checkSq;
   const now = () => Date.now();
-  const clockNote = G.clock && !P.played(board) ? 'The clocks start with the first move' : ' ';
+  const clockNote = G.clock && !P.begun(board) ? 'The clocks start with the first move' : ' ';
   // stepped back to an earlier move: the game waits at its last move, where End or a press on the board goes
   const behind = board.upto < board.steps.length - 1;
   const backNote = behind && hint(`Looking at ${board.upto < 0 ? 'the start' : window.BoardCore.label(board, board.upto)} · End or a press on the board goes back to the game`);
@@ -665,7 +665,7 @@ function MyGamesDialog({ games, current, onReplay, onResume, onDelete, onClose }
       {rows.length ? (
         <ul className="games-list">
           {rows.map(({ e, b }) => {
-            const g = b.game, n = b.steps.length, own = P.played(b), r = g.result && P.resultText(g.result), turn = b.steps[n - 1].pos.turn === 'w' ? 'White' : 'Black';
+            const g = b.game, own = P.played(b), r = g.result && P.resultText(g.result), turn = gameTurn(b) === 'w' ? 'White' : 'Black';
             const head = r ? `${r.score} · ${r.why}` : `In progress · ${turn} to move`;
             const meta = [g.mode === 'stockfish' && `vs Stockfish · you played ${sideName(g.you)}`, window.ChessCore.fmtDate(g.date), g.tc || 'no clock', `${own} move${own === 1 ? '' : 's'}`,
               g.from ? `from after ${window.BoardCore.label(b, g.from - 1)}` : b.fen === window.ChessCore.START_FEN ? 'from the starting position' : 'from a set-up position'].filter(Boolean).join(' · ');

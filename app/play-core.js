@@ -2,7 +2,8 @@
 // critique of the player's moves. A game is a BoardCore board with a game record, board.game = { mode, id, tc, date, clock,
 // result } for mode 'human', { mode: 'stockfish', you, id, tc, date, clock, result, critique } against Stockfish: id names it
 // in My games (GamesCore), tc a time control ('10+0') or null, clock { left: { w, b } ms at `since`, since: when the side to
-// move's clock started (null: stopped), clk: the mover's time left after each move }, result null while the game goes on,
+// move's clock started (null: stopped), clk: the mover's time left after each move, begun: true once a move was played,
+// so the clocks run on when every move is taken back }, result null while the game goes on,
 // else { result, reason, side } (side: who resigned or whose flag fell; none for a draw by agreement); you the player's side
 // ('w' or 'b'), critique the player's flagged moves [{ j, cls, best }] (j the step, cls inaccuracy, mistake or blunder,
 // best Stockfish's move instead, in UCI). A game played on from a position (Play from This position) keeps the moves
@@ -172,6 +173,8 @@
   // the steps before the game (none for a game from a start), and the game's own moves
   const fromOf = (b) => (b && b.game && b.game.from) || 0;
   const played = (b) => (b ? b.steps.length - fromOf(b) : 0);
+  // a game that has begun: a move on the board, or every move taken back on a clock that has run since (clock.begun)
+  const begun = (b) => !!(b && b.game && (played(b) || (b.game.clock && b.game.clock.begun)));
   // who played step j: the side to move before it, from the positions (a start may have Black to move)
   const moverOf = (b, j) => (j === 0 ? b.start.pos : b.steps[j - 1].pos).turn;
   const CLASSES = ['inaccuracy', 'mistake', 'blunder'];
@@ -220,7 +223,7 @@
     let clock = b.game.clock;
     if (clock) {
       const c = charged(b, now), left = c.left[side] + parseTc(b.game.tc).inc;
-      clock = { left: { ...c.left, [side]: left }, since: now, clk: [...c.clk, left] };
+      clock = { left: { ...c.left, [side]: left }, since: now, clk: [...c.clk, left], begun: true };
     }
     const result = outcome(next, claims(b));
     if (result && clock) clock = { ...clock, since: null };
@@ -244,7 +247,7 @@
   }
 
   // The last move taken back, while the game goes on: the time used stays used (a takeback never buys time), the move's
-  // increment goes with it, and taking back every move stops the clocks again
+  // increment goes with it, and the side to move's clock runs on, every move taken back too (the game has begun)
   function takeOne(b, now) {
     const flagged = flag(b, now);
     if (flagged !== b) return flagged;
@@ -252,7 +255,7 @@
     let clock = b.game.clock;
     if (clock) {
       const c = charged(b, now), mover = other(lastPos(b).turn);
-      clock = { left: { ...c.left, [mover]: c.left[mover] - parseTc(b.game.tc).inc }, since: played(prev) ? now : null, clk: c.clk.slice(0, -1) };
+      clock = { ...c, left: { ...c.left, [mover]: c.left[mover] - parseTc(b.game.tc).inc }, since: now, clk: c.clk.slice(0, -1) };
     }
     return withGame(prev, { clock });
   }
@@ -418,7 +421,7 @@
   // clocks are stopped; the board as it was otherwise
   function runClock(b, now) {
     const c = b && b.game && b.game.clock;
-    if (!inProgress(b) || !c || c.since != null || !played(b)) return b;
+    if (!inProgress(b) || !c || c.since != null || !begun(b)) return b;
     return withGame(b, { clock: { ...c, since: now } });
   }
 
@@ -435,8 +438,8 @@
     let clock = null;
     if (t) {
       const c = g.clock || {}, ms = (x) => (Number.isFinite(x) ? Math.max(0, x) : t.base);
-      const since = !Number.isFinite(now) || !m ? null : Number.isFinite(c.since) && c.since > 0 && c.since <= now ? c.since : now;
-      clock = { left: { w: ms(c.left && c.left.w), b: ms(c.left && c.left.b) }, since, clk: (Array.isArray(c.clk) ? c.clk : []).filter(Number.isFinite).slice(0, m) };
+      const since = !Number.isFinite(now) || !(m || c.begun === true) ? null : Number.isFinite(c.since) && c.since > 0 && c.since <= now ? c.since : now;
+      clock = { left: { w: ms(c.left && c.left.w), b: ms(c.left && c.left.b) }, since, clk: (Array.isArray(c.clk) ? c.clk : []).filter(Number.isFinite).slice(0, m), ...(c.begun === true || m ? { begun: true } : {}) };
     }
     const human = g.mode === 'human', claimed = human && { ...board, game: { mode: 'human', ...at } };
     const r = g.result, kept = !r ? null : r.reason === 'agreement' && r.result === '1/2-1/2' ? { result: r.result, reason: r.reason }
@@ -470,7 +473,7 @@
   }
 
   window.PlayCore = {
-    canMate, lockedDead, positionKey, outcome, TIME_CONTROLS, parseTc, start, inProgress, played, move, canTakeback, takeback, thinkMs, MIN_RATED_DEPTH, SHALLOW_DEPTH, BIG_LOSS_CP, rateMove, addCritique, critiqueText,
+    canMate, lockedDead, positionKey, outcome, TIME_CONTROLS, parseTc, start, inProgress, played, begun, move, canTakeback, takeback, thinkMs, MIN_RATED_DEPTH, SHALLOW_DEPTH, BIG_LOSS_CP, rateMove, addCritique, critiqueText,
     resign, agreeDraw, claimable, claimDraw, fiftyRule, flag, recheck, setProver, pause, runClock, timeLeft, resultText, ending, resume, pgn,
   };
 })();

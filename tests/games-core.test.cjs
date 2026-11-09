@@ -29,11 +29,19 @@ test('a game is kept from its first move, newest first, updated in place', () =>
   assert.deepEqual(list[0].board.moves, ['e2e4', 'e7e5']);
   assert.equal(list.length, 2);
 });
-test('taking every move back drops the game; a board without a game changes nothing', () => {
+test('taking every move back drops an untimed game, keeps a timed one (its clocks run on); a board without a game changes nothing', () => {
   const g = game(['e2e4']);
   const list = G.keep([], g, 1);
   assert.deepEqual(G.keep(list, P.takeback(g, 2), 2), []);
   assert.equal(G.keep(list, B.fromFen(), 3), list);
+  const t = game(['e2e4'], '5+0'), back = P.takeback(t, 2);
+  assert.equal(P.played(back), 0); assert.equal(P.begun(back), true);
+  const kept = G.keep(G.keep([], t, 1), back, 2);
+  assert.deepEqual(kept.map((e) => e.id), [t.game.id]);
+  assert.deepEqual(G.read(JSON.stringify(kept)).map((e) => e.id), [t.game.id], 'and read back with no moves');
+  const open = G.playable(JSON.parse(JSON.stringify(kept[0])));
+  assert.ok(open, 'it opens from My games'); assert.equal(open.steps.length, 0);
+  assert.equal(P.begun(P.start(B.fromFen(), '5+0')), false, 'a new game hasn\'t begun');
 });
 test('the list keeps the newest 50', () => {
   let list = [];

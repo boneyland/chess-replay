@@ -205,6 +205,8 @@ function useSchedule(M, CUES, d) {
 }
 const lastPly = (T, S) => { let k = -1; for (let i = 0; i < S.N; i++) { if (T >= S.tp[i]) k = i; else break; } return k; };
 const cpOf = (M, i) => (i < 0 ? M.evalStart : plyCp(M.plies[i]));
+// a game without an analysis: no evals and no best lines (a PGN's own evals count as one)
+const bareGame = (M) => !M.hasEval && !M.plies.some((p) => p.best);
 // a move on screen for under a second (a short Seconds per move, or a long game squeezed into the video) shows its
 // analysis at once: the eval count and the panel's fade would end too late to read
 const QUICK_MOVE = 1;
@@ -680,10 +682,11 @@ function LineChips({ name, nameColor, accent, moves, ply0, c, legal, sel, onPick
 }
 
 // tb: the endgame tablebase's result for the position shown ({ cp, txt }, tbBar), drawn instead of the evals; dead: a dead
-// position's (deadBar), drawn instead of both; deep: Go deeper's eval of the move paused on, once it shows (as in Analysis)
+// position's (deadBar), drawn instead of both; deep: the live eval of the move paused on, once it shows (as in Analysis):
+// Go deeper's on an analysis, the move's own search on a game without one
 function EvalBar({ M, T, S, a, tb, dead, deep }) {
   if (dead || tb) return <EvalBarView cp={(dead || tb).cp} txt={(dead || tb).txt} a={a} />;
-  if (deep != null && M.hasEval) return <EvalBarView cp={deep} txt={fmtSf(deep)} a={a} />;
+  if (deep != null) return <EvalBarView cp={deep} txt={fmtSf(deep)} a={a} />;
   const { c, cp } = evalNow(M, T, S);
   const shown = c >= 0 ? M.plies[c] : null;
   const txt = !M.hasEval ? '' : shown && shown.checkmate && T > S.tp[c] + 1 ? fmtEval(shown) : shown && (shown.mate != null || shown.won) ? fmtEval(shown) : fmtEval({ cp });
@@ -918,7 +921,7 @@ function Commentary({ M, T, S, a, book, line }) {
       {total ? (
         <div style={{ display: 'flex', flexDirection: 'column', gap: tx(14) }}>
           {/* the Analysis panel names the move, unless the game has no analysis */}
-          {c >= 0 && !M.hasEval && !M.plies.some((p) => p.best) && <span style={{ font: `600 ${tx(18)}px ${MONO}`, color: M.plies[c].mark ? clsColor(M.plies[c].cls) : C.last }}>{label(M, c)}</span>}
+          {c >= 0 && bareGame(M) && <span style={{ font: `600 ${tx(18)}px ${MONO}`, color: M.plies[c].mark ? clsColor(M.plies[c].cls) : C.last }}>{label(M, c)}</span>}
           {txt && <span style={{ font: `400 ${size}px/1.14 ${SERIF}`, color: C.ink, textWrap: 'pretty' }}>{txt.slice(0, nh)}<span style={{ opacity: 0 }}>{txt.slice(nh)}</span></span>}
           {qtxt && (
             <div style={{ display: 'flex', flexDirection: 'column', gap: tx(6), opacity: nq > 0 || !txt ? 1 : 0 }}>
@@ -941,7 +944,9 @@ function Commentary({ M, T, S, a, book, line }) {
 // tb: the endgame tablebase's answer for the position on the board (useTablebase); onTb plays one of its moves
 // dead: chasolver's answers for the position on the board (useDead), for the dead-position block above the tablebase's
 // fifty: PlayCore.fiftyRule's note for the position on the board, shown where no dead-position block is
-function Analysis({ M, T, S, a, vline, onLine, onPreview, onReplyHover, paused, sf, own, onReply, deep, tb, onTb, dead, fifty }) {
+// moveEval: Stockfish's search of the move paused on, in a game without an analysis (useGameMoveEval); gamePos(c): the
+// position after ply c
+function Analysis({ M, T, S, a, vline, onLine, onPreview, onReplyHover, paused, sf, own, onReply, deep, moveEval, gamePos, tb, onTb, dead, fifty }) {
   const c = lastPly(T, S);
   // Stockfish runs as asm.js here (stockfish.jsx, which a page without the engine doesn't load)
   const sfAsm = typeof SF_SIMD !== 'undefined' && !SF_SIMD;
@@ -967,8 +972,21 @@ function Analysis({ M, T, S, a, vline, onLine, onPreview, onReplyHover, paused, 
       </AnalysisPanel>
     );
   }
-  if (!M.hasEval && !M.plies.some((p) => p.best)) {
-    return <AnalysisPanel box={box} a={a} paused={paused} depth={depth}>{tbAt(true)}{sf ? <EngineEmptyState M={M} sf={sf} paused={paused} /> : <span style={{ font: `400 ${tx(26)}px ${SERIF}`, color: C.dim, fontStyle: 'italic' }}>No engine analysis loaded.</span>}{deadEl}</AnalysisPanel>;
+  if (moveEval && c >= 0 && paused) {
+    // the game's move rated as the viewer's own are; its lines play on from the position after it
+    const P = M.plies[c], mv = { at: c, moves: [{ san: P.san, uci: P.uci, pos: gamePos(c) }], upto: 0 };
+    const fromHere = (steps) => (steps && steps.length ? steps : null);
+    return (
+      <AnalysisPanel box={box} a={a} paused={paused} depth={sf.status === 'unavailable' || sf.status === 'stopped' ? null : searchDepth(moveEval.after)} deep={moveEval}>
+        <OwnMoveAnalysis M={M} vline={mv} own={moveEval} who={null} status={sf.busy ? 'busy' : sf.off ? 'off' : sf.status} why={sf.why} top={tbAt(false)}
+          onReply={(steps) => { const st = fromHere(steps); if (st) onLine('next', st, st.length - 1, c + 1); }}
+          onHover={(steps) => { const st = fromHere(steps); onPreview('next', st || [], st ? st.length - 1 : null, c + 1); }} />
+        {deadEl}
+      </AnalysisPanel>
+    );
+  }
+  if (bareGame(M)) {
+    return <AnalysisPanel box={box} a={a} paused={paused} depth={depth}>{tbAt(true)}{sf ? <EngineEmptyState M={M} sf={sf} paused={paused} ask={c < 0} /> : <span style={{ font: `400 ${tx(26)}px ${SERIF}`, color: C.dim, fontStyle: 'italic' }}>No engine analysis loaded.</span>}{deadEl}</AnalysisPanel>;
   }
   if (c < 0) return (
     <AnalysisPanel box={box} a={a} paused={paused} depth={depth}>
@@ -1046,7 +1064,8 @@ function Analysis({ M, T, S, a, vline, onLine, onPreview, onReplyHover, paused, 
             </span>
           </span>
         )}
-        {sf && !M.hasAnalysis && (sf.run.state === 'running' || paused) && <EngineEmptyState M={M} sf={sf} paused={paused} compact />}
+        {/* a running analysis's progress; Analyse with Stockfish itself only at the start */}
+        {sf && !M.hasAnalysis && sf.run.state === 'running' && <EngineEmptyState M={M} sf={sf} paused={paused} compact />}
         {!vline && paused && M.hasEval && sfAsm && <FitOrHide style={{ ...NO_SELECT, font: `500 ${tx(15)}px ${MONO}`, color: C.blunder }}>{SF_ASM_SHORT}</FitOrHide>}
       </div>
     </AnalysisPanel>
@@ -1350,23 +1369,37 @@ function withDeeper(M) {
 
 // Go deeper on a move of the loaded analysis, while paused on it (on): from its own search (else the game settings),
 // what describes the position after the move (the eval, the Best line, the eval bar, and in the annotated PGN the
-// eval and, on the next move, the line: DEEPER_SHOWN); the ratings, graph and accuracy stay the analysis's. Not on a PGN's own evals, which have no
-// best lines for it to go with (those come from analysing the game), nor on a position the tablebase answered (its
-// result is final): on says when
+// eval and, on the next move, the line: DEEPER_SHOWN); the ratings, graph and accuracy stay the analysis's. On a PGN's own
+// evals (Lichess's [%eval]s) too, as the Stockfish switch searches every move: the PGN's eval stands until the search
+// passes it, and the annotated PGN, marks and graph stay the PGN's (nothing goes into DEEPER_SHOWN). Not on a position
+// the tablebase answered (its result is final): on says when
 function useGoDeeper(M, c, on, sf, tw) {
   const p = on ? M.plies[c] : null, settings = sf ? sf.game : window.AnalysisCore.ENGINE;
   // name: the engine running keys Go deeper's results, so lite and full ones never mix
   // lines: as many as the Lines setting asks (the live searches', the same as for the viewer's own moves)
   const base = { name: settings.name, depth: p && p.search ? p.search.depth : settings.depth, time_limit: settings.time_limit, lines: sf && sf.own ? sf.own.lines : 1 };
   const moves = on ? M.plies.slice(0, c + 1).map((q) => q.uci) : null;
-  const ev = useMoveEval(sf ? sf.engine : null, moves, moves, base, M.start.fen, on ? { cp: cpOf(M, c), depth: base.depth, pv: [], stored: true, src: M.engine } : null, cloudSetting(tw), !sf || sf.off);
-  const r = on && ev.after && !ev.after.stored && !ev.after.partial && ev.after.cp != null ? ev.after : null;
+  // the Stockfish switch on searches every move deeper by itself (auto), as a press of Go deeper would
+  const src = M.evalSource === 'pgn' ? 'pgn' : M.engine;
+  const ev = useMoveEval(sf ? sf.engine : null, moves, moves, base, M.start.fen, on ? { cp: cpOf(M, c), depth: base.depth, pv: [], stored: true, src } : null, cloudSetting(tw), !sf || sf.off, !!sf && !sf.off);
+  const r = on && M.evalSource === 'analysis' && ev.after && !ev.after.stored && !ev.after.partial && ev.after.cp != null ? ev.after : null;
   React.useEffect(() => {
     if (!r) return;
     const k = deeperKey(M, c), had = DEEPER_SHOWN.get(k);
     if (!had || r.depth > had.depth || (r.lines && r.lines.length > 1 && !(had.lines && had.lines.length > 1))) DEEPER_SHOWN.set(k, { cp: r.cp, depth: r.depth, pv: r.pv || [], lines: r.lines && r.lines.length > 1 ? r.lines : null });
   }, [r]);
   return ev;
+}
+
+// Stockfish on a move of a loaded game without an analysis, while paused on it (on), as the free board rates a move: the
+// positions before and after it, at the live searches' settings, with the best move's SAN; null when not on (on needs sf)
+const NO_OWN = { depth: null, time_limit: 1, lines: 1 }; // the settings when there's no engine (on needs sf: nothing searched)
+function useGameMoveEval(M, c, on, sf, tw, gamePos) {
+  const after = on ? M.plies.slice(0, c + 1).map((q) => q.uci) : null, before = on ? after.slice(0, -1) : null;
+  const ev = useMoveEval(sf ? sf.engine : null, before, after, sf ? sf.own : NO_OWN, M.start.fen, null, cloudSetting(tw), !sf || sf.off);
+  if (!on) return null;
+  const bm = ev.before && ev.before.best ? window.ChessCore.applyUci(gamePos(c - 1), ev.before.best) : null;
+  return { ...ev, bestSan: bm ? bm.san : null };
 }
 
 // The transport bar (nav: its label, buttons and Copy FEN) and the keys for the replay: ← → step through a shown line's
@@ -1438,7 +1471,11 @@ function GameVideo({ M, tw, d, probe, queen, nav, scheme, sf, orient }) {
   const onTb = (uci) => { const step = window.ChessCore.stepFromUci(touchPos, uci); if (step) { tl.setPlaying(false); input.clear(); playOwn(step); } };
   React.useEffect(() => { if (!vline) input.clear(); }, [vline]);
   const own = useOwnLineEval(M, line, sf, tw);
-  const gameEval = useGoDeeper(M, cNow, !!(sf && M.evalSource === 'analysis' && !playing && cNow >= 0 && !M.plies[cNow].tb && !(vline && vline.src === 'you')), sf, tw);
+  const gameEval = useGoDeeper(M, cNow, !!(sf && M.evalSource !== 'none' && !playing && cNow >= 0 && !M.plies[cNow].tb && !(vline && vline.src === 'you')), sf, tw);
+  // a game without an analysis: the move paused on searched live (the Stockfish switch on), while no game analysis runs
+  const moveEval = useGameMoveEval(M, cNow, !!(sf && bareGame(M) && !sf.off && !playing && cNow >= 0 && !(vline && vline.src === 'you')), sf, tw, line.gamePos);
+  // the live eval of the position shown, for the eval bar and the arrows: the bare game's search, else Go deeper's
+  const liveAfter = moveEval ? moveEval.after : gameEval.after && !gameEval.after.stored ? gameEval.after : null;
   const onReply = (steps) => { setPv(null); setVline((v) => v && { ...v, moves: [...v.moves.slice(0, v.upto + 1), ...steps], upto: v.upto + steps.length }); };
   // the book name of the position on the board while a line is shown (it can reach openings the game never played)
   const lineKey = vline && vline.upto >= 0 ? line.moves().map((p) => p.uci).join(' ') : null;
@@ -1472,10 +1509,10 @@ function GameVideo({ M, tw, d, probe, queen, nav, scheme, sf, orient }) {
       <div style={{ position: 'absolute', inset: 0, opacity: fade }}>
         {/* an export keeps the page still and has the compositor zoom the layers in here (data-push, export-draw.js) */}
         <div ref={flowRef} data-push={f > 0 && tw.exporting ? `${sc} ${cx} ${cy}` : undefined} style={{ position: 'absolute', inset: 0, transformOrigin: '0 0', ...flowStyle(), ...(f > 0 && !tw.exporting && { transform: `translate(${cx}px,${cy}px) scale(${sc}) translate(${-cx}px,${-cy}px)` }) }}>
-          <EvalBar M={M} T={T} S={S} a={enter(1)} tb={tbBar(tb)} dead={deadBar(dead)} deep={!playing && gameEval.after && !gameEval.after.stored && gameEval.after.cp != null ? gameEval.after.cp : null} />
+          <EvalBar M={M} T={T} S={S} a={enter(1)} tb={tbBar(tb)} dead={deadBar(dead)} deep={!playing && liveAfter && liveAfter.cp != null ? liveAfter.cp : null} />
           <PlayerBar M={M} T={T} S={S} side="b" a={enter(1)} pieces={pieces} />
           <BoardSpace onStep={tw.exporting ? null : stepBy}>
-            <Board M={M} T={T} S={S} a={enter(0)} arrows={tw.bestArrows} pieces={pieces} queen={queen} vline={pv || vline} hide={input.drag && input.drag.moved ? input.drag.from : null} lines={tw.bestArrows ? (own ? lineArrows(own.after) : !playing && !pv && !vline && cNow >= 0 ? nextArrows(M, cNow, gameEval.after && !gameEval.after.stored ? gameEval.after : null) : null) : null} idle={!playing && !pv && !vline} sel={input.sel} />
+            <Board M={M} T={T} S={S} a={enter(0)} arrows={tw.bestArrows} pieces={pieces} queen={queen} vline={pv || vline} hide={input.drag && input.drag.moved ? input.drag.from : null} lines={tw.bestArrows ? (own ? lineArrows(own.after) : !playing && !pv && !vline && cNow >= 0 ? (moveEval ? lineArrows(moveEval.after) : nextArrows(M, cNow, liveAfter)) : null) : null} idle={!playing && !pv && !vline} sel={input.sel} />
             <BoardDraw draw={draw} hidden={playing || !!pv}>
               <BoardTouch pos={touchPos} targets={input.targets} drag={input.drag} promo={input.promo} {...input.handlers} />
             </BoardDraw>
@@ -1484,7 +1521,7 @@ function GameVideo({ M, tw, d, probe, queen, nav, scheme, sf, orient }) {
           {L.header && <Header M={M} a={enter(2)} />}
           <MoveList M={M} T={T} S={S} a={enter(3)} paused={!playing} onPick={goTo} deadAt={deadAt} end={end} />
           <Commentary M={M} T={T} S={S} a={enter(4)} book={sf ? sf.book : null} line={lineKey ? { book: lineBook } : null} />
-          <Analysis M={M} T={T} S={S} a={enter(5)} vline={vline} onLine={onLine} onPreview={onPreview} onReplyHover={onReplyHover} paused={!playing} sf={sf} own={own} onReply={onReply} deep={gameEval} tb={tb} onTb={onTb} dead={dead} fifty={fifty} />
+          <Analysis M={M} T={T} S={S} a={enter(5)} vline={vline} onLine={onLine} onPreview={onPreview} onReplyHover={onReplyHover} paused={!playing} sf={sf} own={own} onReply={onReply} deep={gameEval} moveEval={moveEval} gamePos={line.gamePos} tb={tb} onTb={onTb} dead={dead} fifty={fifty} />
           {L.plot && <EvalPlot M={M} T={T} S={S} a={enter(6)} paused={!playing} onPick={goTo} />}
         </div>
         <div style={{ position: 'absolute', inset: 0, pointerEvents: 'none', boxShadow: `inset 0 0 220px rgba(228,85,63,${0.55 * flash})` }} />

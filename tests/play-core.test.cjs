@@ -88,7 +88,8 @@ test('takebacks only in a game in progress', () => {
   assert.deepEqual(t.game.clock.left, { w: 907000, b: 905000 - 10000 }, 'White\'s time used stays used; Black\'s increment goes');
   assert.equal(t.game.clock.since, 8000);
   const none = P.takeback(t, 9000);
-  assert.equal(none.steps.length, 0); assert.equal(none.game.clock.since, null, 'every move taken back stops the clocks');
+  assert.equal(none.steps.length, 0); assert.equal(none.game.clock.since, 9000, 'every move taken back: the clock of the side to move runs on');
+  assert.equal(P.timeLeft(none, 'w', 12000), 907000 - 10000 - 3000, 'White\'s clock ticks before any move');
   assert.deepEqual(none.game.clock.left, { w: 907000 - 10000, b: 895000 - 1000 }, 'no time comes back, however far back');
   assert.equal(P.takeback(none, 9000), none);
   const mate = game(null, [['f2f3', 0], ['e7e5', 0], ['g2g4', 0], ['d8h4', 0]]);
@@ -122,7 +123,7 @@ test('resume pauses the clocks and trims what doesn\'t fit', () => {
   assert.equal(P.timeLeft(back, 'w', 1e9), 300000, 'paused');
   const odd = B.restore({ fen: CC.START_FEN, moves: ['e2e4', 'e2e4'], upto: 0, game: { mode: 'human', tc: '5+0', date: 'x', clock: { left: { w: 'x' }, clk: [1, 2, 3], since: 5 }, result: { result: '1-0', reason: 'checkmate' } } });
   assert.equal(odd.steps.length, 1); assert.equal(odd.upto, 0);
-  assert.deepEqual(odd.game.clock, { left: { w: 300000, b: 300000 }, since: null, clk: [1] });
+  assert.deepEqual(odd.game.clock, { left: { w: 300000, b: 300000 }, since: null, clk: [1], begun: true });
   assert.equal(odd.game.result, null, 'a result the moves don\'t give is dropped');
   assert.match(odd.game.date, /^\d{4}\.\d\d\.\d\d$/);
   assert.equal(B.restore({ fen: CC.START_FEN, moves: [], upto: -1, game: 'junk' }).game, undefined);
@@ -177,7 +178,7 @@ test('a Stockfish takeback goes back to the player\'s turn, one of the player\'s
   assert.deepEqual(B.ucis(P.takeback(thinking, 0)), ['e2e4', 'e7e5']);
   // the last of the player's moves: back to the start
   const first = P.takeback(sfGame('w', '5+0', [['e2e4', 0], ['e7e5', 1000]]), 2000);
-  assert.equal(first.steps.length, 0); assert.equal(first.game.clock.since, null);
+  assert.equal(first.steps.length, 0); assert.equal(first.game.clock.since, 2000, 'the player\'s clock runs on');
   assert.equal(P.canTakeback(first), false); assert.equal(P.takeback(first, 3000), first);
 });
 test('as Black, Stockfish\'s first move alone can\'t be taken back; from a FEN with Black to move, sides come from the positions', () => {
@@ -298,6 +299,15 @@ test('a reload charges the running clock for the time away; a game opened from M
   assert.equal(opened.game.clock.since, 50000);
   assert.equal(P.timeLeft(opened, 'w', 52000), 300000 - 2000, 'the time away isn\'t charged, the time since is');
   assert.equal(P.runClock(opened, 60000), opened, 'a running clock is left alone');
+  // a game whose every move was taken back has begun: its clock runs on after a reload and when opened again
+  const none = P.takeback(P.takeback(g, 5000), 5000), kept = JSON.parse(JSON.stringify(B.save(none)));
+  assert.equal(none.steps.length, 0); assert.equal(none.game.clock.begun, true);
+  assert.equal(B.restore(kept, 9000).game.clock.since, 5000);
+  assert.equal(P.runClock(B.restore(kept), 9000).game.clock.since, 9000);
+  // a new game's clocks stay stopped until its first move
+  const unplayed = JSON.parse(JSON.stringify(B.save(P.start(B.fromFen(), '5+0'))));
+  assert.equal(B.restore(unplayed, 9000).game.clock.since, null);
+  assert.equal(P.runClock(B.restore(unplayed), 9000).game.clock.since, null);
   // left for another board: charged up to then and stopped, so Resume goes on from there
   const left = P.pause(g, 9000);
   assert.deepEqual(left.game.clock.left, { w: 300000 - 5000, b: 297000 }); assert.equal(left.game.clock.since, null);
@@ -534,7 +544,7 @@ test('a game from a position: takebacks stop where it began, clocks and critique
   assert.equal(P.canTakeback(g), true);
   const back = P.takeback(g, 2000);
   assert.equal(back.steps.length, 2);
-  assert.equal(back.game.clock.since, null, 'every move of the game taken back: the clocks stop again');
+  assert.equal(back.game.clock.since, 2000, 'every move of the game taken back: the clock runs on');
   assert.equal(P.canTakeback(back), false, 'the moves before the game stay');
   assert.equal(P.takeback(back, 3000), back);
   // against Stockfish, as Black: White's earlier move isn't the player's, and the player's first move is step 2

@@ -119,7 +119,7 @@ function useStoredFiles({ stored, setErr, onCommit, clockRef }) {
   };
   // a game left (for another board, a loaded game, or by closing the page) is kept with its clock charged up to then, so
   // Resume goes on from there; the stored board keeps its running clock, which a reload charges for the time away
-  const keepLeft = (b) => { if (b && window.PlayCore.inProgress(b) && window.PlayCore.played(b)) updateGames((list) => window.GamesCore.keep(list, window.PlayCore.pause(b, Date.now()), Date.now()), null); };
+  const keepLeft = (b) => { if (b && window.PlayCore.inProgress(b) && window.PlayCore.begun(b)) updateGames((list) => window.GamesCore.keep(list, window.PlayCore.pause(b, Date.now()), Date.now()), null); };
   const boardRef = React.useRef(board);
   boardRef.current = board;
   React.useEffect(() => {
@@ -276,7 +276,8 @@ function GameApp() {
     if (e.repeat || (e.key || '').toLowerCase() !== 'f' || hasModifier(e) || X.video.busy || (board && board.game)) return;
     setTweak('flip', !t.flip);
   });
-  // a game with moves and no result yet is thrown away only after asking
+  // a game with moves and no result yet is thrown away only after asking (one with every move taken back is kept in My
+  // games already, PlayCore.begun)
   const playing = !!(board && window.PlayCore.inProgress(board) && window.PlayCore.played(board));
   // (a game left to open the editor was kept then, and isn't asked about again)
   const guard = (run) => { if (playing && !editing) setLeave({ run }); else run(); };

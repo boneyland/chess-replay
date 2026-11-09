@@ -2515,8 +2515,9 @@ for (const name of BROWSERS) for (const site of SITES) {
       assert.deepEqual(ex.errors.filter((e) => !/status of 401/.test(e)), []);
       await ex.ctx.close();
     });
-    // Go deeper on a loaded analysis's move asks the cloud (the setting on): stepping onto the move sends nothing, the
-    // analysis's eval stands until the press, and the cloud's deeper answer then shows, labelled
+    // Go deeper on a loaded analysis's move asks the cloud (the setting on): with Stockfish off, stepping onto the move
+    // sends nothing and the analysis's eval stands; with it on, Go deeper's first level runs by itself (auto) and the
+    // cloud's deeper answer shows, labelled
     await t.test('desktop: Go deeper on an analysed move takes the cloud\'s answer', async () => {
       const gd = await open(browser, { width: 1440, height: 900 });
       const p = gd.page, sent = [];
@@ -2527,12 +2528,13 @@ for (const name of BROWSERS) for (const site of SITES) {
       await p.getByRole('tab', { name: 'Online' }).click();
       await p.getByRole('switch', { name: /Lichess cloud evaluation/ }).click();
       await p.keyboard.press('Escape');
+      const sfSwitch = p.getByRole('switch', { name: 'Stockfish' });
+      await sfSwitch.click();
       await p.locator('[data-ply="0"]').click();
       const deeper = p.getByRole('button', { name: /^Go deeper/ });
-      await deeper.waitFor({ timeout: 20000 });
       await p.waitForTimeout(800);
-      assert.deepEqual(sent, [], 'the analysis\'s eval stands until Go deeper');
-      await deeper.click();
+      assert.deepEqual(sent, [], 'with Stockfish off, the analysis\'s eval stands');
+      await sfSwitch.click();
       await p.waitForFunction(() => /cloud depth \d+/i.test(document.body.innerText), null, { timeout: 20000 });
       assert.equal(new Set(sent).size, 1, 'the move\'s position asked');
       await p.screenshot({ path: path.join(OUT, host + '-cloud-go-deeper.png') });
@@ -2547,7 +2549,7 @@ for (const name of BROWSERS) for (const site of SITES) {
         const tick = () => { look(); if (performance.now() - t0 < 1000) requestAnimationFrame(tick); else mo.disconnect(); };
         requestAnimationFrame(tick);
       });
-      await p.getByRole('switch', { name: 'Stockfish' }).click();
+      await sfSwitch.click();
       await p.waitForTimeout(1200);
       assert.match(await p.locator('.part-analysis').innerText(), /cloud depth \d+/i, 'the cloud\'s answer with Stockfish off');
       const frames = await p.evaluate(() => window.__frames);
@@ -2574,15 +2576,18 @@ for (const name of BROWSERS) for (const site of SITES) {
       await p.addInitScript(() => { try { localStorage.setItem('chess-video.tweaks.v1', JSON.stringify({ cloudEval: true })); } catch (e) {} });
       await p.goto(base, { waitUntil: 'load' });
       await loadedOn(p);
+      // Stockfish off while stepping onto a move: the analysis's line and eval, nothing deeper asked
+      const sfSwitch = p.getByRole('switch', { name: 'Stockfish' });
+      await sfSwitch.click();
       await p.locator('[data-ply="0"]').click();
       const firstChip = () => p.locator('.part-analysis').locator('div', { has: p.locator('span', { hasText: /^Best line$/ }) }).last().locator('.mv').first().innerText();
       const bar = () => p.locator('.part-eval-bar').innerText();
-      const deeper = p.getByRole('button', { name: /^Go deeper/ });
-      await deeper.waitFor({ timeout: 20000 });
+      await p.waitForTimeout(800);
       const before = await firstChip();
       assert.doesNotMatch(before, /^[ah][36]$/, 'the analysis\'s own line first');
       assert.notEqual(await bar(), '+3.21');
-      await deeper.click();
+      // on: Go deeper's first level runs by itself and the cloud answers it
+      await sfSwitch.click();
       await p.waitForFunction(() => /cloud depth 60/i.test(document.body.innerText), null, { timeout: 20000 });
       assert.match(await firstChip(), /^[ah][36]$/, 'the cloud\'s line');
       assert.equal(await bar(), '+3.21');
@@ -2601,12 +2606,48 @@ for (const name of BROWSERS) for (const site of SITES) {
       // its line goes on the next move in place of the analysis's: after 2. g3 the cloud's 2... a6 is 2... Nf6's line
       const nf6 = (txt) => txt.split('\n\n')[1].replace(/\n/g, ' ').match(/2\.\.\. Nf6 \{[^}]*\}( \([^)]*\))?/)[0];
       assert.match(nf6(pgn), /\(2\.\.\. g6 /, 'the analysis\'s line before: ' + nf6(pgn));
+      await sfSwitch.click();
       await p.locator('[data-ply="2"]').click();
-      await p.getByRole('button', { name: /^Go deeper/ }).click();
-      await p.waitForFunction(() => /cloud depth 60/i.test(document.body.innerText), null, { timeout: 20000 });
+      await p.waitForFunction(() => !/cloud depth 60/i.test(document.querySelector('.part-analysis').innerText), null, { timeout: 5000 });
+      await sfSwitch.click();
+      await p.waitForFunction(() => /cloud depth 60/i.test(document.querySelector('.part-analysis').innerText), null, { timeout: 20000 });
       assert.match(nf6(await annotated()), /\} \(2\.\.\. a6\)$/, 'Go deeper\'s line');
       assert.deepEqual(gl.errors, []);
       await gl.ctx.close();
+    });
+    // a game whose only evals are the PGN's own (Lichess's [%eval]s, no engine lines): the Stockfish switch on searches the
+    // move paused on as it does an analysis's; off, the PGN's eval stands. The PGN's evals are all +9.99, far from the truth
+    await t.test('desktop: the Stockfish switch searches a move of a game with only the PGN\'s evals', async () => {
+      const pe = await open(browser, { width: 1440, height: 900 });
+      const p = pe.page, dialog = p.getByRole('dialog', { name: 'Import game' });
+      await p.goto(base, { waitUntil: 'load' });
+      await loadedOn(p);
+      const sfSwitch = p.getByRole('switch', { name: 'Stockfish' });
+      await sfSwitch.click();
+      await p.getByRole('button', { name: 'Import game' }).click();
+      await dialog.waitFor({ timeout: 5000 });
+      await dialog.getByRole('textbox', { name: 'PGN, FEN or Lichess link' }).click();
+      await p.keyboard.type('[White "Evals White"]\n[Black "Evals Black"]\n[Result "*"]\n\n1. e4 { [%eval 9.99] } 1... e5 { [%eval 9.99] } 2. Nf3 { [%eval 9.99] } 2... Nc6 { [%eval 9.99] } *');
+      await p.keyboard.press('ControlOrMeta+Enter');
+      await dialog.waitFor({ state: 'detached', timeout: 5000 });
+      await p.waitForFunction(() => /Evals White/.test(document.body.innerText), null, { timeout: 5000 });
+      // Analyse with Stockfish only before the first move
+      const analyse = p.locator('.part-analysis').getByRole('button', { name: /^Analyse with Stockfish/ });
+      await analyse.waitFor({ timeout: 5000 });
+      await p.locator('[data-ply="2"]').click();
+      await analyse.waitFor({ state: 'detached', timeout: 3000 });
+      const bar = () => p.locator('.part-eval-bar').innerText(), panel = p.locator('.part-analysis');
+      await p.waitForTimeout(800);
+      assert.equal(await bar(), '+9.99', 'off: the PGN\'s eval');
+      assert.doesNotMatch(await panel.innerText(), /depth \d+/, 'off: nothing searched');
+      await sfSwitch.click();
+      await p.waitForFunction(() => /depth \d+/.test(document.querySelector('.part-analysis').innerText) && document.querySelector('.part-eval-bar').innerText !== '+9.99', null, { timeout: 20000 });
+      assert.match(await panel.innerText(), /Best line/, 'the search\'s best line');
+      await p.getByRole('button', { name: /^Go deeper/ }).waitFor({ timeout: 30000 });
+      assert.equal(await analyse.count(), 0, 'no Analyse with Stockfish on a move');
+      await p.screenshot({ path: path.join(OUT, host + '-pgn-evals-live.png') });
+      assert.deepEqual(pe.errors, []);
+      await pe.ctx.close();
     });
     // the sample's annotated PGN: one better line after 28. Qxb5 (the analysis's, as Evaluations from is Analysis; the
     // PGN's own after switching to PGN), its own comment beside the notes'; and its notes as a notes file
