@@ -31,7 +31,7 @@ jobs:
   # part, side by side: the engine part is the tests that wait out engines starting (Stockfish's threads failing and
   # falling back, the full engine's 99 MB download), the rest is everything else. Failures are also reported as
   # annotations (@reporters/github), which a token that can't read the job's log can still read. WebKit's main part
-  # takes 12–19 minutes, so the limit leaves room for a page that keeps a test waiting out its 30 s load timeout
+  # takes about 15 minutes and its heavy part about 15 (2026-11-09), so the limit leaves room for a page that keeps a test waiting out its 30 s load timeout
   browsers:
     runs-on: ubuntu-24.04
     timeout-minutes: 30
@@ -45,8 +45,10 @@ jobs:
       LIVE_BROWSERS: ${{ matrix.browser }}
       ENGINE_TESTS: '^desktop: (a threaded engine that never|Full whose threaded engine|the full engine downloads)'
       # the slowest subtests (each opens its own page), a part of their own: in WebKit the rest ran about 29 minutes, and a
-      # slow runner went past the 30-minute limit (2026-11-03)
-      HEAVY_TESTS: '^(desktop: Position from image: download|desktop: a variable frame rate MP4|layout: nothing cut off|desktop: Play vs human turns the board|desktop: My games keeps|phone: an export is|desktop: an export is|desktop: the export.s own drawing)'
+      # slow runner went past the 30-minute limit (2026-11-03). WebKit's main part grew back to 23–30 minutes (2 of 5 runs
+      # cancelled at the limit, 2026-11-09), so its 14 slowest non-engine tests, about 10 minutes there, moved here too
+      # (the second line). Play vs (Stockfish|computer): the tests' names before and after the rename
+      HEAVY_TESTS: '^(desktop: Position from image: download|desktop: a variable frame rate MP4|layout: nothing cut off|desktop: Play vs human turns the board|desktop: My games keeps|phone: an export is|desktop: an export is|desktop: the export.s own drawing|desktop: a WebM export|desktop: the explorer names the opening|desktop: Play vs (Stockfish|computer) (flags|replies)|desktop: dead positions end a game|desktop: the free board sets up|desktop: a picture board with its hue|desktop: the cloud evaluation shows|desktop: Prefer cloud takes|desktop: a running game analysis pauses|desktop: Import game opens a PGN|desktop: without WebAssembly SIMD, Go deeper|desktop: the start shows Stockfish|desktop: the Lichess explorer asks)'
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
       - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
