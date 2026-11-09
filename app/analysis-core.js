@@ -243,7 +243,7 @@
   // tablebase calls won without a distance to mate (tbWonOnly) next to a searched one is searched too (kept as its sf),
   // so the move between them is rated on two searches. onSearched(R, { searches, tbMs, tbAsks }): the engine searches made,
   // and the time spent on the tablebase and its requests since the last call, for the run's pace. now, sleep: the clock, for tests
-  async function runAnalysis({ engine, ucis, sans, headers, signal, onProgress, earlier = [], onSearched, settings = ENGINE, startFen = window.ChessCore.START_FEN, tablebase = null, tablebaseOn = () => true, tbGapMs = TB_GAP_MS, now = Date.now, sleep = (ms) => new Promise((r) => setTimeout(r, ms)) }) {
+  async function runAnalysis({ engine, ucis, sans, headers, signal, onProgress, onTablebaseLost, earlier = [], onSearched, settings = ENGINE, startFen = window.ChessCore.START_FEN, tablebase = null, tablebaseOn = () => true, tbGapMs = TB_GAP_MS, now = Date.now, sleep = (ms) => new Promise((r) => setTimeout(r, ms)) }) {
     const LC = window.LichessCore;
     const N = ucis.length, R = earlier.slice(0, N + 1);
     const fens = tablebase && LC ? positionFens(startFen, ucis) : null;
@@ -266,7 +266,9 @@
         const got = await tablebaseResult(tablebase, fens[k], pace, tablebaseOn);
         tbMs += now() - t0; tbAsks++;
         if (signal.aborted) return null;
-        if (got.failed && !backedOff()) tbFailed = true;
+        // a failed request (not a back-off, which ends): the rest is searched, and the page is told (onTablebaseLost), as
+        // only the Analysis panel's header would otherwise tell the searched positions from the tablebase's
+        if (got.failed && !backedOff()) { tbFailed = true; if (onTablebaseLost) onTablebaseLost(); }
         r = got.result;
       }
       if (!r) r = await search(k);

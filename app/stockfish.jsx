@@ -210,6 +210,9 @@ const SF_TB_SECONDS = window.AnalysisCore.TB_GAP_MS / 1000;
 // which of a game's positions (0: the start, k: after k moves) are small enough for the tablebase
 const sfTbPositions = (M) => [M.start.fen, ...M.plies.map((p) => p.fen)].map((f) => window.LichessCore.pieceCount(f) <= window.LichessCore.TB_MAX_PIECES);
 
+// a game analysis whose tablebase requests stopped answering part-way (runAnalysis's onTablebaseLost)
+const SF_TB_LOST = 'Lichess’s tablebase stopped answering: Stockfish searched the endgame positions after that';
+
 // This device's pace against the model's (AnalysisCore.paceFactor), from the last run that timed enough positions, for
 // each engine (name: the settings' engine name; the full engine searches fewer nodes a second)
 const SF_PACE_STORE = 'chess-video.sf-pace.v1', SF_PACE_MIN_POSITIONS = 10;
@@ -228,7 +231,9 @@ function useGameAnalysis(M, files, getFiles, commit, engine, settings, tbOn) {
   const [pace, setPace] = React.useState(() => readSfPace(settings.name, settings.threads));
   React.useEffect(() => { setPace(readSfPace(settings.name, settings.threads)); }, [settings.name, settings.threads]);
   const perPos = A.secondsPerPosition(settings, pace);
-  const idle = { state: 'idle', done: 0, total: 0, etaSec: null, err: '' };
+  // note: what the viewer should know about the run that isn't a failure (Lichess's tablebase lost part-way), kept after it
+  // ends until the next run starts
+  const idle = { state: 'idle', done: 0, total: 0, etaSec: null, err: '', note: '' };
   const [st, setSt] = React.useState(idle);
   const run = React.useRef(null);
   const ucisKey = M.plies.map((p) => p.uci).join(' ');
@@ -256,7 +261,7 @@ function useGameAnalysis(M, files, getFiles, commit, engine, settings, tbOn) {
     const timed = { n: 0, sec: 0, last: 0, tbN: 0, tbSec: 0 };
     // { sec, at }: the latest estimate and when it was made; a timer counts it down in between
     me.eta = { sec: secondsFrom(earlier.length, prior), at: Date.now() };
-    setSt({ state: 'running', done: d0, total: N, etaSec: Math.round(me.eta.sec), err: '' });
+    setSt({ state: 'running', done: d0, total: N, etaSec: Math.round(me.eta.sec), err: '', note: '' });
     if (engine.holdHash) engine.holdHash(S.hash_mb);
     try {
       const eng = await engine.get();
@@ -282,21 +287,22 @@ function useGameAnalysis(M, files, getFiles, commit, engine, settings, tbOn) {
           me.eta = { sec: secondsFrom(R.length, A.blendPace(prior, timed.sec, timed.n), timed.tbN ? Math.max(SF_TB_SECONDS, timed.tbSec / timed.tbN) : SF_TB_SECONDS), at: now };
         },
         onProgress: (d, n) => { if (run.current === me && d > d0 && me.eta) setSt((s) => ({ ...s, done: d, total: n, etaSec: Math.round(me.eta.sec) })); },
+        onTablebaseLost: () => { if (run.current === me) setSt((s) => ({ ...s, note: SF_TB_LOST })); },
       });
       if (run.current !== me) return;
       run.current = null;
-      if (!json) { setSt(idle); return; }
+      if (!json) { setSt((s) => ({ ...idle, note: s.note })); return; }
       writeSfPartial(ucis, S, null, M.start.fen, T);
       setResumeAt(0);
       // with no depth limit every position takes its time limit, which says nothing about this device's pace
       if (S.depth != null && timed.n >= SF_PACE_MIN_POSITIONS) { const f = A.paceFactor(S, timed.sec / timed.n); writeSfPace(S.name, S.threads, f); setPace(f); }
       const name = (M.white.short + '_' + M.black.short).replace(/[^\w-]+/g, '_') + '_analysis.json';
-      setSt(idle);
+      setSt((s) => ({ ...idle, note: s.note }));
       commit({ ...getFiles(), analysis: json, analysisName: name, evalSource: null }); // shown, even over PGN evals
     } catch (e) {
       if (run.current !== me) return;
       run.current = null;
-      setSt({ ...idle, err: engine.status === 'unavailable' ? '' : `Analysis stopped: ${(e && e.message) || e}. Press the computer button to start analysis again.` });
+      setSt((s) => ({ ...idle, note: s.note, err: engine.status === 'unavailable' ? '' : `Analysis stopped: ${(e && e.message) || e}. Press the computer button to start analysis again.` }));
     }
   };
   // the run's hash table goes back to the live searches' once it ends, however it ends

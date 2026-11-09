@@ -97,9 +97,11 @@ test('a cursed win given up the fifty-move rule is no loss; a real win given up 
 test('an uncertain answer is searched; a failed request is searched and the run asks no more', async () => {
   const eng = fakeEngine();
   const tb = fakeTb([WINNING[0], WINNING[1], answer('maybe-win', 90, null, 'e2d3'), null, WINNING[4]]);
-  const out = await run(eng, tb);
+  let lost = 0;
+  const out = await run(eng, tb, { onTablebaseLost: () => lost++ });
   assert.deepEqual(eng.calls, [2, 3, 4]);
   assert.deepEqual(tb.asked, [0, 1, 2, 3], 'nothing asked after the failure');
+  assert.equal(lost, 1, 'the page told once');
   assert.equal(out.moves[2].tb_before, undefined);
   assert.equal(out.moves[1].tb_after, undefined);
   assert.equal(out.moves[1].search_depth_after, 20);
@@ -168,9 +170,11 @@ test('a 429 back-off: the positions during it are searched, then the tablebase i
   tb.tablebase = async (fen) => { if (FENS.indexOf(fen) === 2) { tb.asked.push(2); off = true; return null; } return ask(fen); };
   const search = eng.search.bind(eng);
   eng.search = (req) => { if (req.moves.length === 3) off = false; return search(req); };
-  const out = await run(eng, tb);
+  let lost = 0;
+  const out = await run(eng, tb, { onTablebaseLost: () => lost++ });
   assert.deepEqual(eng.calls, [2, 3]);
   assert.deepEqual(tb.asked, [0, 1, 2, 4]);
+  assert.equal(lost, 0, 'a back-off ends: not lost');
   assert.ok(out.moves[3].tb_after, 'asked again after the back-off');
 });
 

@@ -470,6 +470,7 @@ function AnalysisPanel({ box, a, depth, deep, paused, style, children }) {
       {shown ? <div className="an-engine part-engine-menu" onClick={stopHere} onPointerDown={stopHere}><div className="twk-flow">{E.body}</div></div>
         : <AnalysisStatContext.Provider value={{ depth, deep, paused }}>
           {E && E.runErr && <div role="alert" style={{ marginBottom: tx(10), font: `500 ${tx(15)}px ${MONO}`, color: C.blunder }}>{E.runErr}</div>}
+          {E && E.runNote && <div role="status" style={{ marginBottom: tx(10), font: `500 ${tx(15)}px ${MONO}`, color: C.dim }}>{E.runNote}</div>}
           <div className="an-lines" data-playing={paused ? undefined : '1'} style={{ display: 'contents' }}>{children}</div>
         </AnalysisStatContext.Provider>}
     </Panel>

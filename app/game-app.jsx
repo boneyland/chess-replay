@@ -601,6 +601,8 @@ function GameApp() {
     // run: the game analysis going on ({ done, total, k }), for the computer button's ring and the panel's progress line
     // runErr: why the last run stopped, shown at the top of the panel (the dialog it started from has closed)
     runErr: !board && analysis.err ? analysis.err : '',
+    // runNote: what the run going on or the last one has to say (Lichess's tablebase lost part-way), under runErr
+    runNote: !board && analysis.note ? analysis.note : '',
     run: !board && analysis.state === 'running' ? { done: analysis.done, total: analysis.total, k: analysis.total ? analysis.done / analysis.total : 0 } : null,
     pick: full.offered ? { value: t.sfEngine === 'Full' ? 'Full' : 'Lite', options: [{ value: 'Lite', label: engineLabel(window.AnalysisCore.ENGINE_NAMES.lite) }, { value: 'Full', label: engineLabel(window.AnalysisCore.ENGINE_NAMES.full) + ' full' }],
       onChange: (v) => { setTweak('sfEngine', v); return v === 'Full' && full.state === 'absent'; } } : null };
