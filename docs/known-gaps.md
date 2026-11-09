@@ -9,12 +9,7 @@ Deferred by the per-plan reviews; each was true when recorded and may since have
 
 **iOS Safari** (2026-11-02, the `ios` job: Safari 26.5 on an iPhone 17 Simulator)
 - **Verify** on a real iPhone that tap-tap and drag moves work: in the Simulator, WebDriver's touch taps reach the board's handler and select e2 in its state, but the page never draws the selection and the second tap plays nothing; pointer events dispatched by the page's own script play the move. The job fails on this until it's settled.
-- Safari 26.5 has element full screen on iPhone, and the Full screen item works there; the comment in `app/game-app.jsx` saying iPhone Safari has none is out of date.
 - The service worker is slow to take over in the Simulator (often still installing after 60 s, its cache not yet opened); Playwright's WebKit runs the same worker, so this isn't asserted there.
-
-**Responsive layout** (2026-10-26)
-- The Analysis panel hides the search depth when narrower than 440·text px (at 1024×768, for one).
-- `tests/live/android.test.cjs` wasn't run locally for this change (no device); GitHub Actions' `android` job covers it.
 
 **Custom starts and flip** (2026-10-19)
 - The player bars' "+N" counts captures during the game only, so a FEN start with a material edge shows none.
@@ -22,14 +17,12 @@ Deferred by the per-plan reviews; each was true when recorded and may since have
 
 **Free board** (2026-10-19)
 - A Stockfish reply played from the reply chips is labelled "Your move" after a reload: the stored board keeps UCI moves only, not who played them.
-- Desktop board mode leaves empty space under the board where the eval graph was.
 - After Enter plays an explorer row, focus drops to the page; the next Tab lands on the new list's first row.
 - Playwright's Firefox drops mouse drags when `hasTouch` is on, so the phone parts of the free-board live tests tap or check layout only.
 
 **Play vs human** (2026-10-19)
 - A draw can only be claimed in the position on the board, not by announcing the move that would make the repetition or the fiftieth move.
-- Dead positions need chasolver's worker: before its module loads (the first move of a game), offline before it was ever kept, or for a position it gives up on (5 s), only `PlayCore.canMate` and `lockedDead` end a game, and a flag fall against mating material is a loss.
-- A flag fall in a dead position the check can't prove (see above) still loses: the flag rule looks at material only. Positions it proves dead have already ended the game.
+- Dead positions need chasolver's worker: before its module loads (the first move of a game), offline before it was ever kept, or for a position it gives up on (5 s), only `PlayCore.canMate` and `lockedDead` end a game, and a flag fall against mating material is a loss (the flag rule asks the prover's cache, so a position it has proved dead draws).
 
 **My games** (2026-10-20)
 - A replayed game's Stockfish analysis, Queen answers and commentary stay with the loaded game: opening it from My games again starts without them.
