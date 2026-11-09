@@ -717,14 +717,27 @@ const barPlace = (side) => ({
   position: 'absolute', left: barLeft(), width: barWidth(), height: L.bars.h, display: 'flex', alignItems: 'center',
   top: side === ORIENT ? L.board.y + L.board.size + L.bars.gap : L.board.y - L.bars.gap - L.bars.h,
 });
-// A game's player bar: the captures counted from the pieces taken by time T, the clock from the clocks in the PGN
+// The pieces a side has taken and its material edge, counted from the pieces on the board (left(colour, type)) against a
+// full set, so a position set up with an edge shows it: { taken, pts } for SideBar
+const FULL_SET = { q: 1, r: 2, b: 2, n: 2, p: 8 };
+function materialOf(side, left) {
+  const lost = (col, t) => Math.max(0, FULL_SET[t] - left(col, t));
+  const worth = (col) => Object.keys(FULL_SET).reduce((s, t) => s + left(col, t) * VALUE[t], 0);
+  const opp = side === 'w' ? 'b' : 'w', taken = {};
+  Object.keys(FULL_SET).forEach((t) => { taken[t] = lost(opp, t) - lost(side, t); });
+  return { taken, pts: worth(side) - worth(opp) };
+}
+// A game's player bar: the captures and material edge from the pieces on the board at time T (taken off as they are
+// captured, a pawn counted as its new piece once it has promoted, as the board draws them), the clock from the PGN's clocks
 function PlayerBar({ M, T, S, side, a, pieces }) {
   const P = side === 'w' ? M.white : M.black;
-  const cap = { w: {}, b: {} };
-  pieces.forEach((p) => { if (p.captured >= 0 && T >= S.tp[p.captured] + S.md[p.captured] * 0.6) cap[p.color][p.type] = (cap[p.color][p.type] || 0) + 1; });
-  const opp = side === 'w' ? 'b' : 'w', taken = {};
-  let pts = 0;
-  ['q', 'r', 'b', 'n', 'p'].forEach((t) => { taken[t] = (cap[opp][t] || 0) - (cap[side][t] || 0); pts += taken[t] * VALUE[t]; });
+  const count = { w: {}, b: {} };
+  pieces.forEach((p) => {
+    if (p.captured >= 0 && T >= S.tp[p.captured] + S.md[p.captured] * 0.6) return;
+    const type = p.promo && T >= S.tp[p.promo.ply] + S.md[p.promo.ply] ? p.promo.type : p.type;
+    count[p.color][type] = (count[p.color][type] || 0) + 1;
+  });
+  const { taken, pts } = materialOf(side, (col, t) => count[col][t] || 0);
   return <SideBar side={side} a={a} name={P.name} rating={[P.title, P.elo].filter(Boolean).join(' ')} taken={taken} pts={pts} clock={M.hasClock ? clockOf(M, side, T, S) : null} />;
 }
 

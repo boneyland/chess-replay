@@ -2,17 +2,12 @@
 // A board without a game (Play/Explore → Starting position): the viewer plays both sides and Stockfish rates every move. A view of its own
 // rather than a zero-ply GameVideo, so the replay's timeline never has to handle it; it shares the frame's layout,
 // panels, board drawing and input. The board (BoardCore) lives in GameApp's files, so it is stored like a loaded game.
-const FULL_SET = { q: 1, r: 2, b: 2, n: 2, p: 8 };
 
-// A player bar for "White" or "Black" (or name: "You", "Stockfish 19"): the pieces taken and the material edge, counted from the pieces on the board
-// against a full set (so a position set up with an edge shows it), and in a clocked game the clock ({ s, active })
+// A player bar for "White" or "Black" (or name: "You", "Stockfish 19"): the pieces taken and the material edge, counted from
+// the pieces on the board (materialOf), and in a clocked game the clock ({ s, active })
 function FreeBar({ pos, side, a, clock, name }) {
-  const left = (col, t) => pos.b.filter((p) => p === (col === 'w' ? t.toUpperCase() : t)).length;
-  const lost = (col, t) => Math.max(0, FULL_SET[t] - left(col, t));
-  const worth = (col) => Object.keys(FULL_SET).reduce((s, t) => s + left(col, t) * VALUE[t], 0);
-  const opp = side === 'w' ? 'b' : 'w', taken = {};
-  Object.keys(FULL_SET).forEach((t) => { taken[t] = lost(opp, t) - lost(side, t); });
-  return <SideBar side={side} a={a} name={name || (side === 'w' ? 'White' : 'Black')} taken={taken} pts={worth(side) - worth(opp)} clock={clock} />;
+  const { taken, pts } = materialOf(side, (col, t) => pos.b.filter((p) => p === (col === 'w' ? t.toUpperCase() : t)).length);
+  return <SideBar side={side} a={a} name={name || (side === 'w' ? 'White' : 'Black')} taken={taken} pts={pts} clock={clock} />;
 }
 
 // the book's name for the position on the board (the last named one on the way there, the start included), or null
