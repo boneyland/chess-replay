@@ -246,6 +246,7 @@ function GameApp() {
   // Position from image's dialog while it is open: { play, again, back }, play the Play dialog's choices it came from (or null),
   // again the picture, box, greyscale copy and found squares for Back to crop (or null), back true when Import game opened it
   const [vision, setVision] = React.useState(null);
+  const focusBack = React.useRef(null); // see the focus's return when a dialog closes
   const [fenNote, setFenNote] = React.useState(null); // { fen, ok } after Copy FEN; a copy that failed stays up to select
 
   // the Play dialog's mode while it is open: 'human' or 'stockfish'
@@ -375,6 +376,7 @@ function GameApp() {
   const visionClose = () => {
     const v = vision;
     setVision(null);
+    if (v && v.again) focusBack.current = '.edit-back-to-crop'; // Back to crop › Cancel: back on the button that opened it
     if (v && v.back) setImportOpen({ text: '' });
     if (v && !v.again && v.play) { setPlayInit({ from: 'image', tc: v.play.tc, you: v.play.you }); setPlayOpen(v.play.mode); }
   };
@@ -476,10 +478,16 @@ function GameApp() {
     const time = seekAfter.current; seekAfter.current = null;
     window.dispatchEvent(new CustomEvent('chess-video:seek', { detail: { time } }));
   }, [files]);
-  // a dialog closed (Esc, Cancel, Set up, Start game): focus goes back to what opened it, Menu
+  // a dialog closed (Esc, Cancel, Set up, Start game): focus goes back to what opened it, Menu, or the control focusBack
+  // names (a selector) where that is what opened it and it still shows
   const newBtn = React.useRef(null), menuBtn = React.useRef(null), fenWasOpen = React.useRef(false), dialogOpen = !!importOpen || !!playOpen || !!gamesOpen || keysOpen || !!vision;
   React.useEffect(() => {
-    if (fenWasOpen.current && !dialogOpen) { const b = phone ? menuBtn.current : newBtn.current; if (b) b.focus(); }
+    if (fenWasOpen.current && !dialogOpen) {
+      const back = focusBack.current && document.querySelector(focusBack.current);
+      const b = back || (phone ? menuBtn.current : newBtn.current);
+      if (b) b.focus();
+    }
+    focusBack.current = null;
     fenWasOpen.current = dialogOpen;
   }, [dialogOpen]);
   const loadFiles = async (list) => {

@@ -323,10 +323,10 @@ function useGameAnalysis(M, files, getFiles, commit, engine, settings, tbOn) {
 
 // A button inside a panel (theme colours, sized with the panel text)
 // compact: a size down, for a phone's tight panels (Edit position held sideways)
-function FrameButton({ primary, color, onClick, children, label, disabled, compact }) {
+function FrameButton({ primary, color, onClick, children, label, disabled, compact, className }) {
   const c = color || C.best;
   return (
-    <button type="button" aria-label={label} disabled={disabled} onClick={(e) => { e.stopPropagation(); onClick(); }} onPointerDown={(e) => e.stopPropagation()}
+    <button type="button" className={className} aria-label={label} disabled={disabled} onClick={(e) => { e.stopPropagation(); onClick(); }} onPointerDown={(e) => e.stopPropagation()}
       style={{ whiteSpace: 'nowrap', font: `600 ${tx(primary ? (compact ? 17 : 20) : (compact ? 14 : 15))}px ${MONO}`, letterSpacing: primary ? '0.02em' : '0.1em', textTransform: primary ? 'none' : 'uppercase', padding: primary ? (compact ? `${tx(7)}px ${tx(18)}px` : `${tx(12)}px ${tx(22)}px`) : (compact ? `${tx(4)}px ${tx(10)}px` : `${tx(5)}px ${tx(12)}px`), borderRadius: 4, cursor: disabled ? 'default' : 'pointer', opacity: disabled ? 0.4 : 1, userSelect: 'none', WebkitUserSelect: 'none', border: `1.5px solid ${c}`, background: primary ? c : 'transparent', color: primary ? C.bg : c }}>
       {children}
     </button>

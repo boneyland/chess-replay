@@ -1693,6 +1693,8 @@ for (const name of BROWSERS) for (const site of SITES) {
       assert.ok(Math.abs(again.width - pulled.width) <= 1 && Math.abs(again.height - pulled.height) <= 1, 'the box as pulled');
       await dialog.getByRole('button', { name: 'Cancel' }).click();
       await dialog.waitFor({ state: 'detached', timeout: 5000 });
+      // Cancel there goes back to the button that opened it
+      await p.waitForFunction(() => document.activeElement && document.activeElement.textContent === 'Back to crop', null, { timeout: 3000 });
       await p.getByRole('button', { name: 'Cancel' }).click();
       await assert.doesNotReject(field.waitFor({ state: 'detached', timeout: 5000 }));
       // the greyscale copy failing (a canvas that can't be read back): the picture is still taken, the box around all of it
