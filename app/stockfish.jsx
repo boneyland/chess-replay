@@ -408,7 +408,9 @@ const cloudSetting = (tw) => ({ on: !!(tw && tw.cloudEval), prefer: !!(tw && tw.
 // locally and Go deeper isn't offered, but the cloud (its setting on) is still asked and shown, and finished searches
 // still show; a stored result shows with the deepest Go deeper level whose local searches finished (and the cloud's
 // answers there), as the annotated PGN writes it
-function useMoveEval(engine, before, after, own, fen, stored, cloud, off) {
+// auto: with stored, Go deeper's first level runs without a press (the Stockfish switch searching every move of a loaded
+// analysis, as Lichess's local engine does): the stored result shows until the search passes its depth
+function useMoveEval(engine, before, after, own, fen, stored, cloud, off, auto) {
   const A = window.AnalysisCore;
   // a search of several lines (Analysis › ☰ › Lines) is cached apart from one of one line
   const keyOf = (s, moves) => (own.name ? own.name + '|' : '') + (sfStartFen(fen) ? fen + '|' : '') + `${s.depth}/${s.movetimeMs}${s.lines > 1 ? '/' + s.lines : ''}:` + moves.join(' ');
@@ -419,7 +421,7 @@ function useMoveEval(engine, before, after, own, fen, stored, cloud, off) {
   // off: the deepest level pressed whose searches both finished (the stored result at 0)
   const linesOf = (which) => (which === 'after' || before.join(' ') === after.join(' ') ? own.lines || 1 : 1);
   const finished = (lv) => ['after', 'before'].every((w) => SF_EVAL_CACHE.has(keyOf(toSearch(A.deeperSearch(own, lv), linesOf(w)), w === 'after' ? after : before)));
-  const pressed = SF_DEEPER.get(baseKey) || 0;
+  const pressed = SF_DEEPER.has(baseKey) ? SF_DEEPER.get(baseKey) : auto && stored ? 1 : 0;
   let level = pressed;
   if (off && after) while (level > 0 && !finished(level)) level--;
   const search = toSearch(A.deeperSearch(own, level));
@@ -497,7 +499,10 @@ function useMoveEval(engine, before, after, own, fen, stored, cloud, off) {
   // the cloud's answer stands until a finished local search goes deeper; it replaces the result a Go deeper started
   // from (the stored analysis's among them) only when deeper
   const pick = (loc, cl) => (cl && (!loc || cl.depth >= loc.depth || (loc.partial && !loc.held)) ? cl : loc);
-  const out = { ...raw, before: pick(raw.before, raw.cloud.before), after: pick(raw.after, raw.cloud.after) };
+  // a finished search that reached less deep than the stored result it set out to pass (its time ran out first, as on
+  // fewer threads than the analysis had) leaves the stored result showing: a shallower eval isn't a better one
+  const notPast = (r) => (stored && r && !r.partial && !r.stored && r.source !== 'cloud' && stored.depth && r.depth < stored.depth ? stored : r);
+  const out = { ...raw, before: pick(notPast(raw.before), raw.cloud.before), after: pick(notPast(raw.after), raw.cloud.after) };
   const fromCloud = (r) => !!(r && r.source === 'cloud');
   const done = out.after && !out.after.partial && out.before && !out.before.partial && !out.pending;
   const next = A.deeperSearch(own, level + 1);
@@ -559,14 +564,15 @@ const fmtSf = (cp) => {
 
 // The Analysis panel while the viewer plays their own line: their move, its eval, what it costs, Stockfish's reply; top:
 // what goes between the verdict and the lines (the replay's Tablebase block)
-function OwnMoveAnalysis({ M, vline, own, status, why, onReply, onHover, top }) {
+// who: the words before the verdict (null: none, for a loaded game's move); by default YOUR MOVE or STOCKFISH'S REPLY
+function OwnMoveAnalysis({ M, vline, own, status, why, onReply, onHover, top, who: whoIs }) {
   const step = vline.moves[vline.upto], ply = vline.at + vline.upto, isWhite = (M.ply0 + ply) % 2 === 0;
   const { before, after } = own;
   const done = before && after && !before.partial && !after.partial;
   const rated = done ? window.AnalysisCore.rateMove({ bestEval: before.cp, currentEval: after.cp, isWhite, playedIsBest: step.uci === before.best, isCheckmate: step.san.endsWith('#') }) : null;
   const bad = rated && ['inaccuracy', 'mistake', 'blunder'].includes(rated.classification);
   const col = bad ? clsColor(rated.classification) : lineAccent('you');
-  const who = step.byEngine ? 'STOCKFISH’S REPLY' : 'YOUR MOVE';
+  const who = whoIs !== undefined ? whoIs : step.byEngine ? 'STOCKFISH’S REPLY' : 'YOUR MOVE';
   const down = status === 'unavailable' || status === 'stopped' || status === 'off' || status === 'busy';
   const verdict = !rated ? (down ? sfDownText(status, why) : 'Stockfish is thinking…')
     : step.uci === before.best ? 'Stockfish’s choice'
@@ -580,7 +586,7 @@ function OwnMoveAnalysis({ M, vline, own, status, why, onReply, onHover, top }) 
         <EvalWithStat>{down && !(after && !after.partial) ? '—' : fmtSf(after && after.cp)}</EvalWithStat>
       </div>
       {/* the verdict spans the panel, under the move and the eval, so it fits on one line in the phone layout */}
-      <div style={{ marginTop: anGap(6), font: `600 ${tx(16)}px ${MONO}`, letterSpacing: '0.08em', textTransform: 'uppercase', color: col }}>{who} · {bad ? CLASS_LABEL[rated.classification] + ' · ' : ''}{verdict}</div>
+      <div style={{ marginTop: anGap(6), font: `600 ${tx(16)}px ${MONO}`, letterSpacing: '0.08em', textTransform: 'uppercase', color: col }}>{who && who + ' · '}{bad ? CLASS_LABEL[rated.classification] + ' · ' : ''}{verdict}</div>
       {top}
       <div style={{ marginTop: anGap(16), paddingTop: anGap(14), borderTop: `1px solid ${C.line}`, font: `500 ${tx(18)}px ${MONO}`, color: C.dim, display: 'flex', flexDirection: 'column', gap: anGap(8) }}>
         {many ? <EngineLines lines={after.lines} pos={step.pos} ply0={M.ply0} c={ply + 1} onPick={onReply} onHover={onHover} cloud={after.source === 'cloud'} />
