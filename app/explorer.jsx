@@ -101,12 +101,27 @@ function ResultBar({ w, d, b, height }) {
   );
 }
 
+// A move row played from the keyboard (Enter or Space) is replaced by the next position's list, which would drop the focus
+// to the page: the new list's first row takes it once it shows (an answer still loading waits), unless the focus has
+// gone somewhere else meanwhile. top: the list's container; returns the row's onKeyDown, given play(event, uci)
+function useRowFocus(top) {
+  const want = React.useRef(false);
+  React.useLayoutEffect(() => {
+    if (!want.current || !top.current) return;
+    const act = document.activeElement;
+    if (act && act !== document.body && !top.current.contains(act)) { want.current = false; return; }
+    const row = top.current.querySelector('.expl-row');
+    if (row) { want.current = false; row.focus(); }
+  });
+  return (play, uci) => (ev) => { if (ev.key === 'Enter' || ev.key === ' ') { want.current = true; play(ev, uci); } };
+}
+
 // The Commentary box on the free board while the explorer is on: the opening's name, then the moves with their game
 // counts and results, each a button that plays the move as a drag would. x: useExplorer's answer; fallback: the local book's
 // panel, for an answer that can't come (offline, a back-off)
 function LichessExplorer({ x, tw, setTweak, onGame, posKey, onPlay, onHover, white, fallback }) {
   const LA = useLichessAuth();
-  const top = React.useRef(null), loading = x.state === 'loading';
+  const top = React.useRef(null), loading = x.state === 'loading', rowKey = useRowFocus(top);
   React.useLayoutEffect(() => { const box = top.current && top.current.parentElement; if (box) box.scrollTop = 0; }, [posKey]);
   // the progress line under the title, as the Analysis panel's: the answer's time isn't known, so it creeps towards the end
   const [pr, setPr] = React.useState(0);
@@ -146,7 +161,7 @@ function LichessExplorer({ x, tw, setTweak, onGame, posKey, onPlay, onHover, whi
             return (
               <div key={m.uci} className="mv expl-row" role="button" tabIndex={0} title={tip} aria-label={tip} onClick={(ev) => play(ev, m.uci)}
                 onMouseEnter={() => onHover(m.uci)} onMouseLeave={() => onHover(null)} onFocus={() => onHover(m.uci)} onBlur={() => onHover(null)}
-                onKeyDown={(ev) => { if (ev.key === 'Enter' || ev.key === ' ') play(ev, m.uci); }}
+                onKeyDown={rowKey(play, m.uci)}
                 style={{ display: 'flex', alignItems: 'center', gap: tx(10), minWidth: 0, padding: `${tx(3)}px ${tx(6)}px`, borderRadius: 2, cursor: 'pointer' }}>
                 <span style={rowChip(white)}>{m.san}</span>
                 <span style={{ flex: 'none', minWidth: tx(44), textAlign: 'right', font: `500 ${tx(15)}px ${MONO}`, color: C.dim }}>{nf(m.total)}</span>

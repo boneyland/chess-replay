@@ -36,7 +36,7 @@ function OpeningExplorer({ board, book, onPlay, onHover }) {
   const note = (txt) => <span style={{ display: 'block', marginTop: tx(8), font: `500 ${tx(15)}px ${MONO}`, color: C.dim }}>{txt}</span>;
   const play = (e, uci) => { e.preventDefault(); e.stopPropagation(); onPlay(uci); };
   // each position's list starts at its top, not where the last one was scrolled to (the panel's box stays the same node)
-  const top = React.useRef(null), posKey = board.fen + '|' + ucis.join(' ');
+  const top = React.useRef(null), posKey = board.fen + '|' + ucis.join(' '), rowKey = useRowFocus(top);
   React.useLayoutEffect(() => { const box = top.current && top.current.parentElement; if (box) box.scrollTop = 0; }, [posKey]);
   let body;
   if (!book) body = <span style={{ font: `italic 400 ${tx(30)}px/1.25 ${SERIF}`, color: C.dim }}>Loading the opening book…</span>;
@@ -49,7 +49,7 @@ function OpeningExplorer({ board, book, onPlay, onHover }) {
               // the name stays beside its move, cut short with an ellipsis when it doesn't fit
               <div key={m.uci} className="mv expl-row" role="button" tabIndex={0} title={`Play ${m.san}`} onClick={(e) => play(e, m.uci)}
                 onMouseEnter={() => onHover(m.uci)} onMouseLeave={() => onHover(null)} onFocus={() => onHover(m.uci)} onBlur={() => onHover(null)}
-                onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') play(e, m.uci); }}
+                onKeyDown={rowKey(play, m.uci)}
                 style={{ display: 'flex', alignItems: 'center', gap: tx(14), minWidth: 0, padding: `${tx(3)}px ${tx(6)}px`, borderRadius: 2, cursor: 'pointer' }}>
                 <span style={rowChip(white)}>{m.san}</span>
                 <span style={{ flex: '1 1 auto', minWidth: 0, font: `400 ${tx(17)}px ${SANS}`, color: C.dim, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{m.name || ''}</span>
