@@ -649,6 +649,210 @@ for (const name of BROWSERS) for (const site of SITES) {
       assert.deepEqual(ph.errors, []);
       await ph.ctx.close();
     });
+    // the squares a board's images stand on, as names, seen flipped or not: { e1: 'wK', … } (the default set's pieces)
+    const piecesOn = (p, b, flipped) => p.evaluate(({ b, flipped }) => {
+      const kind = Object.fromEntries(Object.entries(window.PIECE_IMG).map(([k, v]) => [v, k])), out = {};
+      for (const i of document.querySelectorAll('img')) {
+        const r = i.getBoundingClientRect(), c = Math.floor((r.left + r.width / 2 - b.x0) / b.sq), w = Math.floor((r.top + r.height / 2 - b.y0) / b.sq);
+        if (!kind[i.src] || r.width < 10 || c < 0 || c > 7 || w < 0 || w > 7) continue;
+        out[flipped ? 'hgfedcba'[c] + (w + 1) : 'abcdefgh'[c] + (8 - w)] = kind[i.src];
+      }
+      return out;
+    }, { b, flipped });
+    // the board's arrows, each as the squares its tail and tip stand on and their heights on the screen (the
+    // polygon's first and last points flank the tail, its fourth is the tip)
+    const arrowsOn = (p, b, flipped) => p.evaluate(({ b, flipped }) => [...document.querySelectorAll('svg polygon')].map((pg) => {
+      const svg = pg.ownerSVGElement, r = svg.getBoundingClientRect(), k = r.width / svg.width.baseVal.value;
+      const pts = pg.getAttribute('points').split(' ').map((s) => s.split(',').map(Number)).map(([x, y]) => [r.left + x * k, r.top + y * k]);
+      const at = ([x, y]) => { const c = Math.floor((x - b.x0) / b.sq), w = Math.floor((y - b.y0) / b.sq); return flipped ? 'hgfedcba'[c] + (w + 1) : 'abcdefgh'[c] + (8 - w); };
+      const tail = [(pts[0][0] + pts[6][0]) / 2, (pts[0][1] + pts[6][1]) / 2];
+      return { from: at(tail), to: at(pts[3]), tailY: tail[1], tipY: pts[3][1] };
+    }), { b, flipped });
+    // the phone turned sideways (844×390, two columns): the flipped board fits, White's pieces and player at the top,
+    // and the square under a tap is the one played. Tap, tap (Playwright's Firefox, given touch, drops drags)
+    await t.test('phone sideways: a flipped board fits, turned, and plays the squares tapped', async () => {
+      const ph = await open(browser, { width: 844, height: 390 }, phone({ hasTouch: true }));
+      const p = ph.page;
+      await p.addInitScript(() => { try { localStorage.setItem('chess-video.tweaks.v1', JSON.stringify({ flip: true })); } catch (e) {} });
+      await p.goto(base, { waitUntil: 'load' });
+      await loadedOn(p);
+      await settled(p);
+      const b = await boardBox(p);
+      assert.equal(b.n, 32);
+      assert.ok(b.x0 >= 0 && b.y0 >= 0 && b.x0 + 8 * b.sq <= 844 + 0.5 && b.y0 + b.h <= 390 + 0.5, 'the board is inside the window: ' + JSON.stringify(b));
+      const on = await piecesOn(p, b, true);
+      assert.equal(on.e1, 'wK', 'e1 (as seen flipped) holds the white king: ' + JSON.stringify(on));
+      assert.equal(on.d8, 'bQ');
+      const top = await p.evaluate(() => [...document.querySelectorAll('img')].filter((i) => i.src === window.PIECE_IMG.wK || i.src === window.PIECE_IMG.bK).map((i) => [i.src === window.PIECE_IMG.wK, i.getBoundingClientRect().top]));
+      assert.ok(top.find((x) => x[0])[1] < top.find((x) => !x[0])[1], 'the white king above the black one');
+      const bars = { white: (await barNames(p, /^Carlsen/)).map((x) => x.top), black: (await barNames(p, /^Nepomniachtchi/)).map((x) => x.top) };
+      if (bars.white.length && bars.black.length) assert.ok(Math.min(...bars.white) < Math.min(...bars.black), 'White\'s bar above Black\'s: ' + JSON.stringify(bars));
+      assert.deepEqual(await overflowing(p), [], 'nothing cut off');
+      assert.deepEqual(await wider(p), [], 'no sideways scroll');
+      await p.screenshot({ path: path.join(OUT, host + '-flipped-sideways.png') });
+      const f = square(b, 'e2', true), to = square(b, 'e4', true);
+      await p.mouse.click(f.x, f.y);
+      await p.mouse.click(to.x, to.y);
+      await assert.doesNotReject(p.locator('.plabel').filter({ hasText: /You 1\. e4/ }).waitFor({ timeout: 5000 }));
+      // the verdict's search loading cut off by the context's close is an error in WebKit
+      await p.waitForFunction(() => /your move · .*(stockfish’s choice|cp vs|as good as|can’t run here|stopped)/i.test(document.body.innerText), null, { timeout: 60000 });
+      assert.deepEqual(ph.errors, []);
+      await ph.ctx.close();
+    });
+    // a flipped board's engine arrows and line previews go through view() too: on the free board after 1. e4 (as seen
+    // from Black), each of Black's three replies starts on a black piece and points up the screen; in the replay, a
+    // best line's first move hovered lights its own squares as seen flipped, and its arrows start on pieces
+    await t.test('desktop: a flipped board\'s engine arrows and line preview stand on the right squares', async () => {
+      const fa = await open(browser, { width: 1440, height: 900 });
+      let p = fa.page;
+      await p.addInitScript(() => { try { localStorage.setItem('chess-video.tweaks.v1', JSON.stringify({ flip: true, sfLines: 3, sfOwnTime: 1.5 })); } catch (e) {} });
+      await p.goto(base, { waitUntil: 'load' });
+      await loadedOn(p);
+      await p.getByRole('button', { name: 'Menu', exact: true }).click();
+      await p.getByRole('button', { name: 'Starting position' }).click();
+      await assert.doesNotReject(p.getByRole('button', { name: 'Play (space)' }).waitFor({ state: 'detached', timeout: 5000 }));
+      let b = await boardBox(p);
+      const f = square(b, 'e2', true), to = square(b, 'e4', true);
+      await p.mouse.move(f.x, f.y); await p.mouse.down(); await p.mouse.move(to.x, to.y, { steps: 8 }); await p.mouse.up();
+      await p.waitForFunction(() => (document.body.innerText.match(/^[+−]?\d+\.\d\d( d\d+)?\s+1…/gm) || []).length === 3 && document.querySelectorAll('svg polygon').length === 3, null, { timeout: 45000 });
+      b = await boardBox(p);
+      const on = await piecesOn(p, b, true), arrows = await arrowsOn(p, b, true);
+      assert.equal(on.e4, 'wP', 'the pawn went to e4 as seen flipped');
+      for (const a of arrows) {
+        assert.match(on[a.from] || '', /^b/, `an arrow starts on a black piece: ${JSON.stringify(a)} on ${JSON.stringify(on)}`);
+        assert.ok(a.tipY < a.tailY, 'Black\'s move points up a flipped board: ' + JSON.stringify(a));
+      }
+      await p.screenshot({ path: path.join(OUT, host + '-flipped-arrows.png') });
+      assert.deepEqual(fa.errors, []);
+      await fa.ctx.close();
+      // the replay: the sample game, flipped, at a move with a best line
+      const fr = await open(browser, { width: 1440, height: 900 });
+      p = fr.page;
+      await p.addInitScript(() => { try { localStorage.setItem('chess-video.tweaks.v1', JSON.stringify({ flip: true })); } catch (e) {} });
+      await p.goto(base, { waitUntil: 'load' });
+      await loadedOn(p);
+      const chips = p.locator('.mv[role="button"][title^="Show best line"]');
+      for (let i = 0; i < 30 && !(await chips.count()); i++) await p.keyboard.press('ArrowRight');
+      assert.ok(await chips.count() > 0, 'a move with a best line');
+      const san = (await chips.first().innerText()).trim(), dest = (san.match(/[a-h][1-8]/g) || []).pop();
+      b = await boardBox(p);
+      await chips.first().hover();
+      // the line's move lights its two squares, the last one its destination
+      await p.waitForFunction(() => [...document.querySelectorAll('div')].filter((d) => getComputedStyle(d).backgroundColor === 'rgba(155, 199, 0, 0.41)').length >= 2, null, { timeout: 5000 });
+      const lit = await p.evaluate(({ b }) => [...document.querySelectorAll('div')].filter((d) => getComputedStyle(d).backgroundColor === 'rgba(155, 199, 0, 0.41)').map((d) => {
+        const r = d.getBoundingClientRect(), c = Math.floor((r.left + r.width / 2 - b.x0) / b.sq), w = Math.floor((r.top + r.height / 2 - b.y0) / b.sq);
+        return 'hgfedcba'[c] + (w + 1);
+      }), { b });
+      const shown = await piecesOn(p, b, true);
+      if (dest) {
+        assert.ok(lit.includes(dest), `${san} lights ${dest} as seen flipped: ${lit.join(' ')}`);
+        assert.ok(shown[dest], `${san}: a piece on ${dest} in the preview`);
+      }
+      await p.screenshot({ path: path.join(OUT, host + '-flipped-line.png') });
+      await p.mouse.move(5, 5);
+      for (const a of await arrowsOn(p, b, true)) assert.ok((await piecesOn(p, b, true))[a.from], 'a replay arrow starts on a piece: ' + JSON.stringify(a));
+      assert.deepEqual(fr.errors, []);
+      await fr.ctx.close();
+    });
+    // the export draws the page as it stands: a flipped board, from a set-up position (White's army alone, Black a
+    // king), comes out with White's pieces along the top of the video's board
+    await t.test('desktop: a flipped game from a set-up position exports flipped', { timeout: 180000 }, async () => {
+      const fx = await open(browser, { width: 1440, height: 900 });
+      const p = fx.page;
+      await p.addInitScript(() => { try { localStorage.setItem('chess-video.tweaks.v1', JSON.stringify({ flip: true })); } catch (e) {} });
+      await p.goto(base, { waitUntil: 'load' });
+      await loadedOn(p);
+      const pgn = '[SetUp "1"]\n[FEN "4k3/8/8/8/8/8/PPPPPPPP/RNBQKBNR w KQ - 0 1"]\n\n1. e4 Kd7 2. d4 Ke6 *';
+      await p.setInputFiles('#game-files', { name: 'army.pgn', mimeType: 'text/plain', buffer: Buffer.from(pgn) });
+      await p.waitForFunction(() => /Ke6/.test(document.body.innerText), null, { timeout: 10000 });
+      await settled(p);
+      const area = await p.locator('.stage-area').evaluate((el) => { const r = el.getBoundingClientRect(); return { x: r.left, y: r.top, w: el.clientWidth, h: el.clientHeight }; });
+      const b = await boardBox(p);
+      await openShare(p);
+      await p.getByRole('radio', { name: 'WebP' }).click();
+      await p.locator('#tw-webp-width').selectOption({ index: 0 });
+      await p.locator('#tw-clip-from').selectOption({ index: 1 });
+      await p.locator('#tw-clip-to').selectOption({ index: 1 });
+      const [dl] = await Promise.all([p.waitForEvent('download', { timeout: 150000 }), p.getByRole('button', { name: /^Export animated WebP/ }).click()]);
+      const file = path.join(OUT, `${host}-flipped-setup-export.webp`);
+      await dl.saveAs(file);
+      // the first frame, decoded by the browser: on each row of the board's squares, how many hold something (a
+      // square whose middle isn't flat colour, as the auto-crop's occupied() judges)
+      const rows = await p.evaluate(async ({ b64, area, b }) => {
+        const img = new Image();
+        img.src = 'data:image/webp;base64,' + b64;
+        await img.decode();
+        const cv = document.createElement('canvas');
+        cv.width = img.naturalWidth; cv.height = img.naturalHeight;
+        const g = cv.getContext('2d');
+        g.drawImage(img, 0, 0);
+        const k = cv.width / area.w, d = g.getImageData(0, 0, cv.width, cv.height).data, out = [];
+        for (let w = 0; w < 8; w++) {
+          let busy = 0;
+          for (let c = 0; c < 8; c++) {
+            let n = 0, s = 0, q = 0;
+            for (let y = Math.round((b.y0 - area.y + (w + 0.25) * b.sq) * k); y < Math.round((b.y0 - area.y + (w + 0.75) * b.sq) * k); y++) {
+              for (let x = Math.round((b.x0 - area.x + (c + 0.25) * b.sq) * k); x < Math.round((b.x0 - area.x + (c + 0.75) * b.sq) * k); x++) {
+                const i = (y * cv.width + x) * 4, v = 0.3 * d[i] + 0.59 * d[i + 1] + 0.11 * d[i + 2];
+                n++; s += v; q += v * v;
+              }
+            }
+            if (n && Math.sqrt(Math.max(0, q / n - (s / n) ** 2)) > 14) busy++;
+          }
+          out.push(busy);
+        }
+        return out;
+      }, { b64: fs.readFileSync(file).toString('base64'), area, b });
+      assert.ok(rows[0] >= 7 && rows[1] >= 6, `White's two rows along the top: ${rows.join(' ')}`);
+      assert.ok(rows[6] + rows[7] <= 2, `the bottom two rows hold Black's king at most: ${rows.join(' ')}`);
+      assert.deepEqual(fx.errors, []);
+      await fx.ctx.close();
+    });
+    // F turns the board, but not held down (one turn), not with Ctrl or Alt, not typed in a text field, not in a game
+    // (whose board turns by itself) and not while a video exports (the frames would change part-way)
+    await t.test('desktop: F flips once, and not with a modifier, in a text field, in a game or during an export', { timeout: 120000 }, async () => {
+      const fk = await open(browser, { width: 1440, height: 900 });
+      const p = fk.page;
+      const flip = () => p.evaluate(() => !!JSON.parse(localStorage.getItem('chess-video.tweaks.v1') || '{}').flip);
+      await p.goto(base, { waitUntil: 'load' });
+      await loadedOn(p);
+      await p.mouse.click(5, 5);
+      // held: the first press turns it, the repeats don't
+      await p.keyboard.down('f'); await p.keyboard.down('f'); await p.keyboard.down('f'); await p.keyboard.up('f');
+      assert.equal(await flip(), true, 'held F turns the board once');
+      for (const k of ['Control+f', 'Alt+f']) { await p.keyboard.press(k); assert.equal(await flip(), true, `${k} leaves it`); }
+      await p.keyboard.press('Shift+F');
+      assert.equal(await flip(), false, 'Shift+F (a capital F) turns it');
+      // typed into a text field: Edit position's FEN
+      await p.getByRole('button', { name: 'Menu', exact: true }).click();
+      await p.getByRole('button', { name: 'Edit position' }).click();
+      const field = p.getByRole('textbox', { name: 'FEN' });
+      await field.click();
+      await field.press('f');
+      assert.equal(await flip(), false, 'an f typed in the FEN field');
+      await p.keyboard.press('Escape');
+      await field.waitFor({ state: 'detached', timeout: 5000 }).catch(async () => { await p.keyboard.press('Escape'); await field.waitFor({ state: 'detached', timeout: 5000 }); });
+      // during an export: the whole sample game, cancelled once F has been tried
+      await openShare(p);
+      await p.getByRole('radio', { name: 'WebP' }).click();
+      await p.getByRole('button', { name: /^Export animated WebP/ }).click();
+      const exporting = p.getByRole('dialog', { name: 'Exporting' });
+      await exporting.getByRole('button', { name: 'Cancel' }).waitFor({ timeout: 60000 });
+      await p.keyboard.press('f');
+      assert.equal(await flip(), false, 'F during an export');
+      await exporting.getByRole('button', { name: 'Cancel' }).click();
+      await exporting.waitFor({ state: 'detached', timeout: 30000 });
+      // a game: Play vs human, a move made
+      await p.getByRole('button', { name: 'Menu', exact: true }).click();
+      await p.getByRole('button', { name: 'Play vs human' }).click();
+      await p.getByRole('dialog', { name: 'Play vs human' }).getByRole('button', { name: 'Start game' }).click();
+      await assert.doesNotReject(p.getByRole('button', { name: 'Play (space)' }).waitFor({ state: 'detached', timeout: 5000 }));
+      await p.mouse.click(5, 5);
+      await p.keyboard.press('f');
+      assert.equal(await flip(), false, 'F in a game');
+      assert.deepEqual(fk.errors, []);
+      await fk.ctx.close();
+    });
     // a game from a FEN with Black to move: pieces from that position, numbering from move 3, own moves continue the count
     await t.test('desktop: a game from a FEN with Black to move replays and takes own moves', async () => {
       const fp = await open(browser, { width: 1440, height: 900 });
