@@ -206,7 +206,7 @@ function EditBoard({ setup, onChange, onDone, onCancel, fenText, onFenText, fenM
   // a span, not a div: it also heads the fields inside a <label>, which may hold only phrasing content
   const label = (t) => <span style={{ display: 'block', font: `600 ${tx(14)}px ${MONO}`, letterSpacing: '0.1em', textTransform: 'uppercase', color: C.dim, marginBottom: tx(6) }}>{t}</span>;
   return (
-    <div ref={flowRef} style={{ position: 'absolute', inset: 0, background: C.bg, overflow: 'hidden', ...flowStyle() }}>
+    <div className="stage-view" ref={flowRef} style={{ position: 'absolute', inset: 0, background: C.bg, ...flowStyle() }}>
       <BoardSpace>
       <LineBoard a={1} sq={boardSquares()} v={{ upto: -1, moves: [], base: { b: setup.b }, src: 'you' }} hide={drag && drag.moved && drag.from != null ? drag.from : null} arrows={null} />
       <div ref={input.boardEl} data-no-drag-scroll onPointerDown={H.onDown} onPointerMove={H.onMove} onPointerUp={H.onUp} onPointerCancel={H.onCancel} onDragStart={(e) => e.preventDefault()}

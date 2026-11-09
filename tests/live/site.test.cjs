@@ -893,7 +893,7 @@ for (const name of BROWSERS) for (const site of SITES) {
       await p.setInputFiles('#game-files', { name: 'army.pgn', mimeType: 'text/plain', buffer: Buffer.from(pgn) });
       await p.waitForFunction(() => /Ke6/.test(document.body.innerText), null, { timeout: 10000 });
       await settled(p);
-      const area = await p.locator('.stage-area').evaluate((el) => { const r = el.getBoundingClientRect(); return { x: r.left, y: r.top, w: el.clientWidth, h: el.clientHeight }; });
+      const area = await p.locator('.stage-area').evaluate((el) => { const r = el.getBoundingClientRect(), cs = getComputedStyle(el), q = (k) => parseFloat(cs[k]) || 0; return { x: r.left + q('paddingLeft'), y: r.top + q('paddingTop'), w: el.clientWidth - q('paddingLeft') - q('paddingRight'), h: el.clientHeight - q('paddingTop') - q('paddingBottom') }; }); // inside its padding (one column's)
       const b = await boardBox(p);
       await openShare(p);
       await p.getByRole('radio', { name: 'WebP' }).click();
@@ -3923,7 +3923,7 @@ for (const name of BROWSERS) for (const site of SITES) {
     // Export at screen size: the saved WebP is the stage area's size at the screen's density (held to 1920 px on its
     // longer side), whatever the page was scrolled to. Two moves, at the full width, to keep the canvas small
     const exportSize = async (p, tag) => {
-      const area = await p.locator('.stage-area').evaluate((el) => ({ w: el.clientWidth, h: el.clientHeight })); // client: a classic scrollbar's gutter (Firefox) is in neither the page's width nor the video's
+      const area = await p.locator('.stage-area').evaluate((el) => { const cs = getComputedStyle(el), q = (k) => parseFloat(cs[k]) || 0; return { w: el.clientWidth - q('paddingLeft') - q('paddingRight'), h: el.clientHeight - q('paddingTop') - q('paddingBottom') }; }); // inside its padding (one column's); client: a classic scrollbar's gutter (Firefox) is in neither the page's width nor the video's
       const dpr = await p.evaluate(() => window.devicePixelRatio), s = Math.min(dpr, 1920 / Math.max(area.w, area.h));
       const even = (v) => 2 * Math.floor(v / 2);
       await openShare(p);

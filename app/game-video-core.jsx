@@ -1517,7 +1517,7 @@ function GameVideo({ M, tw, d, probe, queen, nav, scheme, sf, orient }) {
   const cx = L.board.x + L.board.size / 2, cy = L.board.y + L.board.size / 2, sc = 1 + 0.1 * f;
   const fade = video ? 1 - cl01((T - (authoredTotal - 0.9)) / 0.8) : 1;
   return (
-    <div data-screen-label={'t=' + Math.floor(T) + 's'} style={{ position: 'absolute', inset: 0, background: C.bg, overflow: 'hidden' }}>
+    <div className="stage-view" data-screen-label={'t=' + Math.floor(T) + 's'} style={{ position: 'absolute', inset: 0, background: C.bg }}>
       <div style={{ position: 'absolute', inset: 0, opacity: fade }}>
         {/* an export keeps the page still and has the compositor zoom the layers in here (data-push, export-draw.js) */}
         <div ref={flowRef} data-push={f > 0 && tw.exporting ? `${sc} ${cx} ${cy}` : undefined} style={{ position: 'absolute', inset: 0, transformOrigin: '0 0', ...flowStyle(), ...(f > 0 && !tw.exporting && { transform: `translate(${cx}px,${cy}px) scale(${sc}) translate(${-cx}px,${-cy}px)` }) }}>
