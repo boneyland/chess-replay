@@ -305,7 +305,12 @@ function GameApp() {
     const D = showCommentary && sayFrom.queen ? C : { ...C, plies: C.plies.map((p) => (p.queenText ? { ...p, queenText: '' } : p)) };
     return hidden ? { ...D, commentaryHidden: true } : D;
   }, [M, Q.cache, queenInVideo, showCommentary, sources, sayFrom.pgn, sayFrom.notes, sayFrom.queen]);
-  const queenSays = queenInVideo && M.plies.some((p, i) => { const r = Q.resultAt(i + 1); return r && r.evalText; });
+  // the replay's key: a new number for each game loaded (another PGN or game in it), not for an analysis, notes or a
+  // setting added to the same game, which keep the playhead on its move
+  const gameSeq = React.useRef({ pgn: undefined, i: undefined, n: 0 });
+  if (gameSeq.current.pgn !== files.pgn || gameSeq.current.i !== files.gameIndex) gameSeq.current = { pgn: files.pgn, i: files.gameIndex, n: gameSeq.current.n + 1 };
+  const gameKey = gameSeq.current.n;
+  const queenSays = queenInVideo &&M.plies.some((p, i) => { const r = Q.resultAt(i + 1); return r && r.evalText; });
   const TM = React.useMemo(() => window.ChessCore.timing(MV, { secondsPerMove: t.secondsPerMove, keyHold: t.keyHold, fastOpening: t.fastOpening }), [MV, t.secondsPerMove, t.keyHold, t.fastOpening]);
   const scenes = JSON.stringify(TM.scenes);
   const fmtLen = window.ChessCore.fmtLen;
@@ -692,7 +697,7 @@ function GameApp() {
             image={editing.image} onTurn={editTurn} onBackToCrop={backToCrop} />
           : board
           ? <FreeBoard board={board} onChange={commitBoard} tw={t} setTweak={setTweak} onLichess={openLichess} sf={sf} nav={nav} orient={t.flip ? 'b' : 'w'} book={book && !board.game ? window.Openings.book() : null} />
-          : <GameVideo M={MV} tw={video.busy ? { ...t, exporting: true } : t} d={TM.d} probe={probe} queen={queenArrow} nav={nav} scheme={scheme} sf={sf} orient={t.flip ? 'b' : 'w'} />}
+          : <GameVideo key={gameKey} M={MV} tw={video.busy ? { ...t, exporting: true } : t} d={TM.d} probe={probe} queen={queenArrow} nav={nav} scheme={scheme} sf={sf} orient={t.flip ? 'b' : 'w'} />}
       </CompositionStage>
       </EngineMenuContext.Provider>
       <input ref={inputRef} id="game-files" type="file" multiple accept=".pgn,.txt,.json,application/json,text/plain" hidden onChange={(e) => { if (e.target.files.length) setImportOpen(false); loadFiles(e.target.files); e.target.value = ''; }} />
