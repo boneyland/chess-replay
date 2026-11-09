@@ -25,11 +25,11 @@ function CopyButton({ label, text, onFail }) {
 function useExportSettings({ t, setTweak, M, MV, TM, frameW, stem, saveFile, pieceSet, boardTheme, boardAdj, soundSet, soundVolume }) {
   const fmtLen = window.ChessCore.fmtLen;
   const exportFps = EXPORT_FPS_OPTIONS.includes(+t.exportFps) ? +t.exportFps : 8;
-  // the formats this browser can export (no MP4 or WebM without a video encoder, no WebM without VP9); the stored
-  // choice is kept for another browser
+  // the formats this browser can export (no MP4 or WebM without a video encoder, no WebM without VP9, no WebP without
+  // WebAssembly SIMD; maybe none); the stored choice is kept for another browser
   const [webmOk, setWebmOk] = React.useState(WEBM_OK);
   React.useEffect(() => { let on = true; WEBM_EXPORT.then((ok) => on && setWebmOk(ok)); return () => { on = false; }; }, []);
-  const formats = VIDEO_EXPORT ? EXPORT_FORMATS.filter((f) => f !== 'WebM' || webmOk) : ['WebP'];
+  const formats = EXPORT_FORMATS.filter((f) => (f === 'WebP' ? WEBP_EXPORT : VIDEO_EXPORT && (f !== 'WebM' || webmOk)));
   const exportFormat = formats.includes(t.exportFormat) ? t.exportFormat : formats[0], webp = exportFormat === 'WebP';
   // WebP widths, largest first: the page's own (0, the default), half of it ('Half') and fixed ones below the frame's
   const halfW = Math.round(frameW / 2), wPx = (x) => (x === 'Half' ? halfW : x || frameW), webpPx = (x) => (x === 'Half' ? `${halfW} px (half)` : x ? x + ' px' : `${frameW} px (full)`);
@@ -107,9 +107,12 @@ function ShareDialog({ fen, board, pgn, x, setTweak, onFail, onReplay, onExport,
       {!board && pgn.saveAnalysis && <TweakSection label="Analysis">
         <TweakButton secondary label="Download analysis" onClick={pgn.saveAnalysis} />
       </TweakSection>}
-      {!board ? <TweakSection label="Export video">
-        {x.formats.length > 1 ? <TweakRadio id="tw-format" label="Export as" value={x.exportFormat} options={x.formats} onChange={(v) => setTweak('exportFormat', v)} />
-          : <div className="twk-note twk-err">{EXPORT_NO_VIDEO}</div>}
+      {!board && !x.formats.length ? <TweakSection label="Export video">
+        <div className="twk-note twk-err">{EXPORT_NONE}</div>
+      </TweakSection> : !board ? <TweakSection label="Export video">
+        {x.formats.length > 1 && <TweakRadio id="tw-format" label="Export as" value={x.exportFormat} options={x.formats} onChange={(v) => setTweak('exportFormat', v)} />}
+        {!VIDEO_EXPORT && <div className="twk-note twk-err">{EXPORT_NO_VIDEO}</div>}
+        {!WEBP_EXPORT && <div className="twk-note">{EXPORT_NO_WEBP}</div>}
         {x.webp && <>
           <TweakSelect id="tw-webp-width" label="WebP width" value={x.webpPx(x.webpWidth)} options={x.webpWidths.map(x.webpPx)} onChange={(v) => setTweak('webpWidth', x.webpWidths.find((w) => x.webpPx(w) === v))} />
           <TweakSlider id="tw-webp-q" label="WebP quality" value={x.webpQuality} min={WEBP_QUALITY.min} max={WEBP_QUALITY.max} step={WEBP_QUALITY.step} format={(v) => (v >= 100 ? 'Lossless' : v)} onChange={(v) => setTweak('webpQuality', v)} />

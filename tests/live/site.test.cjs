@@ -3527,6 +3527,29 @@ for (const name of BROWSERS) for (const site of SITES) {
       assert.deepEqual(ne.errors, []);
       await ne.ctx.close();
     });
+    // without WebAssembly SIMD the WebP's encoder can't run: no WebP to choose, and said why; with no video encoder either
+    // there is nothing to export, and the dialog says so in place of the export's settings
+    await t.test('desktop: without WebAssembly SIMD, Share and export offers no WebP and says why', async () => {
+      for (const noVideo of [false, true]) {
+        const ns = await open(browser, { width: 1440, height: 900 });
+        // (only the page's check is fooled: SFEngine.simdSupport's test is 31 bytes)
+        await ns.ctx.addInitScript((nv) => { const v = WebAssembly.validate; WebAssembly.validate = (b) => (b.length === 31 ? false : v(b)); if (nv) delete window.VideoEncoder; }, noVideo);
+        await ns.page.goto(base, { waitUntil: 'load' });
+        await loadedOn(ns.page);
+        const dialog = await openShare(ns.page);
+        assert.equal(await dialog.getByRole('radio', { name: 'WebP' }).count(), 0, 'no WebP to choose');
+        assert.equal(await dialog.getByRole('button', { name: /^Export animated WebP/ }).count(), 0);
+        if (noVideo) {
+          await assert.doesNotReject(dialog.getByText(/^This browser can’t export a video: MP4 and WebM need a video encoder, and the animated WebP needs WebAssembly SIMD/).waitFor({ timeout: 3000 }));
+          assert.equal(await dialog.getByRole('button', { name: /^Export video/ }).count(), 0);
+        } else {
+          await assert.doesNotReject(dialog.getByText(/^No animated WebP here: its encoder needs WebAssembly SIMD/).waitFor({ timeout: 3000 }));
+          await assert.doesNotReject(dialog.getByRole('button', { name: /^Export video \(MP4/ }).waitFor({ timeout: 3000 }));
+        }
+        assert.deepEqual(ns.errors, []);
+        await ns.ctx.close();
+      }
+    });
 
     await t.test('desktop: an export is the screen-sized page', { timeout: 180000 }, async () => {
       const dk = await open(browser, { width: 1440, height: 900 });
