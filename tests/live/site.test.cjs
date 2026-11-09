@@ -83,9 +83,10 @@ async function open(browser, viewport, opts) {
   // stockfish.js's glue, whose wording varies ("Load failed", "Maximum call stack size exceeded"). Those are left out
   // there: the page did nothing wrong, and an engine that really can't load fails the tests of its verdicts. The wasm
   // fetch cut off can also arrive as a page error (the HEAD check before an engine starts, whose rejection the page handles),
-  // whose message WebKit can hand Playwright cut short at the URL's colon (the whole sentence is then in its stack)
+  // whose message WebKit can hand Playwright cut short at the URL's colon (the whole sentence is then in its stack). The
+  // dead-position prover's worker (chasolver.wasm) is cut off the same way by a reload while it loads (CI, 2026-11-08)
   const webkit = browser.browserType().name() === 'webkit';
-  const wasmCut = (text) => /Fetch API cannot load \S+\/stockfish-[\w-]+\.wasm due to access control checks\./.test(text);
+  const wasmCut = (text) => /Fetch API cannot load \S+\/(stockfish-[\w-]+|chasolver)\.wasm due to access control checks\./.test(text);
   const cutOff = (m) => webkit && ((wasmCut(m.text()) && /^Fetch API/.test(m.text())) || (/^Unhandled Promise Rejection: /.test(m.text()) && /\/stockfish-[\w-]+\.js$/.test(m.location().url)));
   page.on('console', (m) => { if (m.type() === 'error' && !cutOff(m)) errors.push(m.text() + (m.location().url ? ` (${m.location().url}:${m.location().lineNumber})` : '')); });
   page.on('pageerror', (e) => { if (!(webkit && wasmCut(`${e.message} ${e.stack || ''}`))) errors.push(e.message + (e.stack ? ' ' + e.stack.split('\n').slice(0, 3).join(' | ') : '')); });
@@ -2244,17 +2245,21 @@ for (const name of BROWSERS) for (const site of SITES) {
       assert.equal(new Set(sent).size, 1, 'the move\'s position asked');
       await p.screenshot({ path: path.join(OUT, host + '-cloud-go-deeper.png') });
       // Stockfish switched off (its deeper search likely still running): the cloud's answer stays, the + goes, and no
-      // frame in between shows the analysis's or Stockfish's eval instead (sampled every frame for a second)
+      // frame in between shows the analysis's or Stockfish's eval instead (sampled every frame for a second, and after
+      // every change to the panel: CI's WebKit draws only 7–9 frames in that second, 2026-11-08)
       await p.evaluate(() => {
         const a = document.querySelector('.part-analysis'), seen = window.__frames = [], t0 = performance.now();
-        const tick = () => { seen.push(/cloud depth \d+/i.test(a.innerText)); if (performance.now() - t0 < 1000) requestAnimationFrame(tick); };
+        const look = () => seen.push(/cloud depth \d+/i.test(a.innerText));
+        const mo = new MutationObserver(look);
+        mo.observe(a, { subtree: true, childList: true, characterData: true, attributes: true });
+        const tick = () => { look(); if (performance.now() - t0 < 1000) requestAnimationFrame(tick); else mo.disconnect(); };
         requestAnimationFrame(tick);
       });
       await p.getByRole('switch', { name: 'Stockfish' }).click();
       await p.waitForTimeout(1200);
       assert.match(await p.locator('.part-analysis').innerText(), /cloud depth \d+/i, 'the cloud\'s answer with Stockfish off');
       const frames = await p.evaluate(() => window.__frames);
-      assert.ok(frames.length > 10 && frames.every(Boolean), `every frame shows the cloud's answer (${frames.filter((x) => !x).length} of ${frames.length} didn't)`);
+      assert.ok(frames.length >= 5 && frames.every(Boolean), `every frame shows the cloud's answer (${frames.filter((x) => !x).length} of ${frames.length} didn't)`);
       assert.equal(await deeper.count(), 0, 'no Go deeper with Stockfish off');
       assert.deepEqual(gd.errors, []);
       await gd.ctx.close();
