@@ -343,8 +343,9 @@ const fmtEta = (s) => {
 };
 
 // The Analysis panel's body for a game without evals
-// compact: a row under a panel that already shows PGN variations (no heading text)
-function EngineEmptyState({ M, sf, paused, compact }) {
+// compact: a row under a panel that already shows PGN variations (no heading text); ask: Analyse with Stockfish (or Resume)
+// offered, only before the game's first move (the Analysis panel's computer button has it everywhere)
+function EngineEmptyState({ M, sf, paused, compact, ask = true }) {
   const run = sf.run;
   if (run.state === 'running') {
     const k = run.total ? run.done / run.total : 0;
@@ -359,7 +360,7 @@ function EngineEmptyState({ M, sf, paused, compact }) {
   // a panel too narrow for the estimate on the button (a phone's) puts it beside the button
   const narrow = !L.analysis || L.analysis.w < 480, est = `about ${sf.estimateMin} min`;
   const text = compact ? null : <span style={{ ...NO_SELECT, font: `400 ${tx(26)}px ${SERIF}`, color: C.dim, fontStyle: 'italic' }}>No engine analysis for this game.</span>;
-  if (!paused) return text;
+  if (!paused || !ask) return text;
   if (sf.status === 'unavailable') {
     return (
       <div style={{ display: 'flex', flexDirection: 'column', gap: tx(12) }}>
