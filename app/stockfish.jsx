@@ -557,8 +557,9 @@ const fmtSf = (cp) => {
   return (cp > 0 ? '+' : cp < 0 ? '−' : '') + Math.abs(cp / 100).toFixed(2);
 };
 
-// The Analysis panel while the viewer plays their own line: their move, its eval, what it costs, Stockfish's reply
-function OwnMoveAnalysis({ M, vline, own, status, why, onReply, onHover }) {
+// The Analysis panel while the viewer plays their own line: their move, its eval, what it costs, Stockfish's reply; top:
+// what goes between the verdict and the lines (the replay's Tablebase block)
+function OwnMoveAnalysis({ M, vline, own, status, why, onReply, onHover, top }) {
   const step = vline.moves[vline.upto], ply = vline.at + vline.upto, isWhite = (M.ply0 + ply) % 2 === 0;
   const { before, after } = own;
   const done = before && after && !before.partial && !after.partial;
@@ -580,6 +581,7 @@ function OwnMoveAnalysis({ M, vline, own, status, why, onReply, onHover }) {
       </div>
       {/* the verdict spans the panel, under the move and the eval, so it fits on one line in the phone layout */}
       <div style={{ marginTop: anGap(6), font: `600 ${tx(16)}px ${MONO}`, letterSpacing: '0.08em', textTransform: 'uppercase', color: col }}>{who} · {bad ? CLASS_LABEL[rated.classification] + ' · ' : ''}{verdict}</div>
+      {top}
       <div style={{ marginTop: anGap(16), paddingTop: anGap(14), borderTop: `1px solid ${C.line}`, font: `500 ${tx(18)}px ${MONO}`, color: C.dim, display: 'flex', flexDirection: 'column', gap: anGap(8) }}>
         {many ? <EngineLines lines={after.lines} pos={step.pos} ply0={M.ply0} c={ply + 1} onPick={onReply} onHover={onHover} cloud={after.source === 'cloud'} />
           : replies.length > 0

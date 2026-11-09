@@ -936,11 +936,13 @@ function Analysis({ M, T, S, a, vline, onLine, onPreview, onReplyHover, paused, 
   const c = lastPly(T, S);
   // Stockfish runs as asm.js here (stockfish.jsx, which a page without the engine doesn't load)
   const sfAsm = typeof SF_SIMD !== 'undefined' && !SF_SIMD;
-  // the Tablebase block goes under the lines (above them on a move in one column); the panel scrolls to it where it doesn't fit
+  // a rule block (a dead position, the fifty-move rule) goes under the lines; the panel scrolls where they don't fit
   const rule = deadWords(dead) || fifty;
   const deadEl = rule && <div style={{ marginTop: tx(12), paddingTop: tx(12), borderTop: `1px solid ${C.line}` }}><RuleBlock w={rule} /></div>;
   const box = (tb || deadEl) && !L.analysis.flow ? { ...L.analysis, scroll: true } : L.analysis;
-  const tbEl = (tb || deadEl) && <React.Fragment>{deadEl}{tb && <div style={{ marginTop: tx(12), paddingTop: tx(12), borderTop: `1px solid ${C.line}` }}><TablebaseBlock t={tb} onPlay={onTb} /></div>}</React.Fragment>;
+  // the Tablebase block goes above Stockfish's analysis (its lines, or the analysis's progress) in every layout: ruled off
+  // above it, or below it where it comes first in the panel
+  const tbAt = (first) => tb && <div style={first ? { marginBottom: anGap(16), paddingBottom: anGap(14), borderBottom: `1px solid ${C.line}` } : { marginTop: anGap(16), paddingTop: anGap(14), borderTop: `1px solid ${C.line}` }}><TablebaseBlock t={tb} onPlay={onTb} /></div>;
   // Go deeper's search of this move, once it has passed the analysis's (deep: useMoveEval's)
   const deeper = paused && deep && deep.after && !deep.after.stored ? deep.after : null;
   // this move's own search when the analysis recorded it, else the engine settings
@@ -948,8 +950,8 @@ function Analysis({ M, T, S, a, vline, onLine, onPreview, onReplyHover, paused, 
   if (own && vline && vline.src === 'you' && vline.upto >= 0) {
     return (
       <AnalysisPanel box={box} a={a} paused={paused} depth={sf && !sf.off && (sf.status === 'unavailable' || sf.status === 'stopped') ? null : searchDepth(own.after)} deep={own}>
-        <OwnMoveAnalysis M={M} vline={vline} own={own} status={!sf ? 'idle' : sf.busy ? 'busy' : sf.off ? 'off' : sf.status} why={sf ? sf.why : ''} onReply={onReply} onHover={onReplyHover} />
-        {tbEl}
+        <OwnMoveAnalysis M={M} vline={vline} own={own} status={!sf ? 'idle' : sf.busy ? 'busy' : sf.off ? 'off' : sf.status} why={sf ? sf.why : ''} onReply={onReply} onHover={onReplyHover} top={tbAt(false)} />
+        {deadEl}
         <span style={{ display: 'block', marginTop: tx(8), font: `500 ${tx(15)}px ${MONO}`, color: C.dim }}>
           <span style={{ color: lineAccent('you') }}>Your moves: {vline.moves.slice(0, vline.upto + 1).map((m, j) => (j === 0 || (M.ply0 + vline.at + j) % 2 === 0 ? lineLabel(M, vline.at, j, m.san) : m.san)).join(' ')}</span>
         </span>
@@ -957,13 +959,14 @@ function Analysis({ M, T, S, a, vline, onLine, onPreview, onReplyHover, paused, 
     );
   }
   if (!M.hasEval && !M.plies.some((p) => p.best)) {
-    return <AnalysisPanel box={box} a={a} paused={paused} depth={depth}>{sf ? <EngineEmptyState M={M} sf={sf} paused={paused} /> : <span style={{ font: `400 ${tx(26)}px ${SERIF}`, color: C.dim, fontStyle: 'italic' }}>No engine analysis loaded.</span>}{tbEl}</AnalysisPanel>;
+    return <AnalysisPanel box={box} a={a} paused={paused} depth={depth}>{tbAt(true)}{sf ? <EngineEmptyState M={M} sf={sf} paused={paused} /> : <span style={{ font: `400 ${tx(26)}px ${SERIF}`, color: C.dim, fontStyle: 'italic' }}>No engine analysis loaded.</span>}{deadEl}</AnalysisPanel>;
   }
   if (c < 0) return (
     <AnalysisPanel box={box} a={a} paused={paused} depth={depth}>
       {paused && <span style={{ ...NO_SELECT, font: `500 ${tx(16)}px ${MONO}`, color: C.dim }}>Press play to watch the game, or drag a piece to try your own move.</span>}
+      {tbAt(!paused)}
       {sf && !M.hasAnalysis && (sf.run.state === 'running' || paused) && <div style={{ marginTop: tx(16) }}><EngineEmptyState M={M} sf={sf} paused={paused} compact /></div>}
-      {tbEl}
+      {deadEl}
     </AnalysisPanel>
   );
   const P = M.plies[c], cls = P.cls;
@@ -991,7 +994,6 @@ function Analysis({ M, T, S, a, vline, onLine, onPreview, onReplyHover, paused, 
   const agreeText = `${engName} agrees with the move played.` + (qPick ? (qPick.best === P.uci ? ' So does Queen.' : ` Queen preferred ${qPick.bestSan || qPick.best}.`) : '');
   const qLine = Qp.after && Qp.after.line ? Qp.after.line.split(/\s+/).filter((x) => x && !/^\d+\.+$/.test(x) && !/^\d+\.\.\.$/.test(x)).map((x) => x.replace(/^\d+\.+/, '')).filter(Boolean).slice(0, 6) : [];
   const qLegal = qLine.length ? playLineCached(M, c + 1, qLine) : [];
-  const tbTop = L.cols === 1;
   return (
     <AnalysisPanel box={box} a={a} paused={paused} depth={depth} deep={M.hasEval ? deep : null}>
       <div style={{ opacity: k, transform: `translateY(${(1 - k) * 8}px)` }}>
@@ -1005,9 +1007,9 @@ function Analysis({ M, T, S, a, vline, onLine, onPreview, onReplyHover, paused, 
           {[P.checkmate ? 'Checkmate' : CLASS_LABEL[cls], P.loss > 0 && `−${P.loss} cp`, cls === 'best' && P.best && P.best.line[0] && `as good as ${P.best.line[0]}`].filter(Boolean).map((t) => <span key={t} style={{ whiteSpace: 'nowrap' }}>{t}</span>)}
         </div>
       </div>
-      {/* one column (a phone): the Tablebase block above the lines, where it shows without scrolling the panel; its
-          results keep three rows' height, so the lines under it don't move from one position to the next */}
-      {tb && tbTop && <div style={{ marginTop: anGap(16), paddingTop: anGap(14), borderTop: `1px solid ${C.line}` }}><TablebaseBlock t={tb} onPlay={onTb} /></div>}
+      {/* the Tablebase block above the lines, where it shows without scrolling the panel; its results keep two rows'
+          height, so the lines under it don't move from one position to the next */}
+      {tbAt(false)}
       <div style={{ marginTop: anGap(16), paddingTop: anGap(14), borderTop: `1px solid ${C.line}`, font: `500 ${tx(18)}px ${MONO}`, color: C.dim, display: 'flex', flexDirection: 'column', gap: anGap(8), opacity: k }}>
         {betterLegal.length > 0 && (
           <LineChips name="Better was" tip="better line" nameColor={C.ink} accent={C.best} moves={P.best.line.slice(0, 8)} ply0={M.ply0} c={c} legal={betterLegal.length}
@@ -1026,7 +1028,6 @@ function Analysis({ M, T, S, a, vline, onLine, onPreview, onReplyHover, paused, 
         )}
         {P.advice && <span style={{ color: C.inaccuracy }}>{P.advice}</span>}
         {rule && <div style={{ paddingTop: tx(8), borderTop: `1px solid ${C.line}` }}><RuleBlock w={rule} /></div>}
-        {tb && !tbTop && <div style={{ paddingTop: tx(8), borderTop: `1px solid ${C.line}` }}><TablebaseBlock t={tb} onPlay={onTb} /></div>}
         {vline && (
           <span style={{ font: `500 ${tx(15)}px ${MONO}`, color: C.dim }}>
             <span style={{ color: lineAccent(vline.src) }}>

@@ -45,10 +45,10 @@ function TablebaseBlock({ t, onPlay }) {
       <span style={{ flex: 'none', color: C.dim }}>Tablebase</span><span style={{ minWidth: 0, color }}>{txt}</span>
     </div>
   );
-  // the results always take three rows' height (more scroll, fewer leave room), the same while looking up, so nothing
+  // the results always take two rows' height (more scroll, fewer leave room), the same while looking up, so nothing
   // under the block moves from one position to the next
   const ROW = tx(28), GAP = tx(6);
-  const results = (rows) => <div className="tb-rows" style={{ display: 'flex', flexDirection: 'column', gap: GAP, height: 3 * ROW + 2 * GAP, overflowY: 'auto', overscrollBehavior: 'contain' }}>{rows}</div>;
+  const results = (rows) => <div className="tb-rows" style={{ display: 'flex', flexDirection: 'column', gap: GAP, height: 2 * ROW + GAP, overflowY: 'auto', overscrollBehavior: 'contain' }}>{rows}</div>;
   if (t.state !== 'ready') return <div className="tb-block" style={{ display: 'flex', flexDirection: 'column', gap: GAP }}>{head(t.state === 'loading' ? 'Looking up…' : 'Not available', C.dim)}{results(null)}</div>;
   const tb = t.tb, white = t.turn === 'w';
   // distances where a side is winning (a cursed win too: its DTZ says how far past the fifty moves the win lies)
