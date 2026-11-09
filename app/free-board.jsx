@@ -117,8 +117,9 @@ const FLAGGED = ['inaccuracy', 'mistake', 'blunder'];
 // Stockfish's reply, played through PlayCore.move no sooner than REPLY_PAUSE_MS after the move. The player's move is rated
 // from the two searches, and a flagged one joins the critique in the same change. A result lands only on the board it was
 // searched for (the same game, the same moves, still going on): a takeback, a resign, a new game or leaving the board
-// cancels the searches and drops what they find. Returns { down }: 'unavailable' or 'stopped' when Stockfish can't answer
-// (a takeback tries again; a stopped engine restarts on the next engine.get())
+// cancels the searches and drops what they find. Returns { down, retry }: down 'unavailable' or 'stopped' when Stockfish
+// can't answer; retry() (Try again) or a takeback asks it again (a stopped engine restarts on the next engine.get()), so
+// a player whose Stockfish dies before its first move, with nothing to take back, needn't resign
 function useEngineOpponent(board, onChange, sf) {
   const B = window.BoardCore, P = window.PlayCore, G = board.game;
   const active = !!G && G.mode === 'stockfish' && P.inProgress(board);
@@ -127,7 +128,7 @@ function useEngineOpponent(board, onChange, sf) {
   latest.current = { board, onChange };
   // the "before" search of the position the player last moved from: { key, promise } (its result, or null)
   const before = React.useRef(null);
-  const [down, setDown] = React.useState(null);
+  const [down, setDown] = React.useState(null), [tries, setTries] = React.useState(0);
   React.useEffect(() => {
     setDown(null);
     if (!active) { before.current = null; return; }
@@ -167,8 +168,8 @@ function useEngineOpponent(board, onChange, sf) {
       set(P.move(next, step, Date.now()));
     })();
     return () => { live = false; clearTimeout(timer); if (handle) handle.cancel(); };
-  }, [key]);
-  return { down: active ? down : null };
+  }, [key, tries]);
+  return { down: active ? down : null, retry: () => setTries((n) => n + 1) };
 }
 
 // The Commentary box in a game: how the game works, in place of the explorer (a hint, so hidden). Against Stockfish it
@@ -231,8 +232,9 @@ function GameInfo({ board }) {
 // The Analysis box in a game: whose move it is, with Take back, Offer a draw and Resign (the last two asked twice: a draw is
 // offered by the side to move and accepted by the other; against Stockfish there is no draw offer, and the player resigns),
 // and Claim a draw when the side to move can (vs human: a threefold repetition or the fifty-move rule),
-// or the result with Play again beside it and Analyse on the free board below. down: why Stockfish can't answer, if so
-function GameStatus({ board, onChange, down, why }) {
+// or the result with Play again beside it and Analyse on the free board below. down: why Stockfish can't answer, if so,
+// and retry asks it again (Try again)
+function GameStatus({ board, onChange, down, why, retry }) {
   const P = window.PlayCore, G = board.game, last = board.steps.length ? board.steps[board.steps.length - 1] : null;
   const turn = (last ? last.pos : board.start.pos).turn, side = sideName(turn), sfGame = G.mode === 'stockfish';
   // the question waiting on an answer: 'resign' or 'draw'; another position or result drops it
@@ -268,7 +270,7 @@ function GameStatus({ board, onChange, down, why }) {
   const backNote = behind && hint(`Looking at ${board.upto < 0 ? 'the start' : window.BoardCore.label(board, board.upto)} · End or a press on the board goes back to the game`);
   if (sfGame) {
     const mine = turn === G.you;
-    const trouble = down ? sfDownText(down, why, 'Take back or Resign') : null;
+    const trouble = down ? sfDownText(down, why, P.canTakeback(board) ? 'Try again, Take back or Resign' : 'Try again or Resign') : null;
     return (
       <React.Fragment>
         <div style={{ display: 'flex', flexDirection: 'column', gap: tx(6) }}>
@@ -280,6 +282,7 @@ function GameStatus({ board, onChange, down, why }) {
           <FrameButton color={C.blunder} onClick={() => onChange(P.resign(board, now(), G.you))}>Resign</FrameButton>
           <FrameButton color={C.dim} onClick={() => setAsk(null)}>Keep playing</FrameButton>
         </React.Fragment>) : row(<React.Fragment>
+          {trouble && retry && <FrameButton primary color={C.last} onClick={retry}>Try again</FrameButton>}
           {P.canTakeback(board) && <FrameButton color={C.dim} onClick={() => onChange(P.takeback(board, now()))}>Take back</FrameButton>}
           <FrameButton color={C.dim} onClick={() => setAsk('resign')}>Resign</FrameButton>
         </React.Fragment>)}
@@ -436,7 +439,7 @@ function FreeBoard({ board, onChange, tw, setTweak, onLichess, sf, nav, orient, 
       {L.header && !upright && <Header M={HM} a={1} />}
       <MoveList M={MV} T={upto + 0.999} S={S} a={1} paused onPick={go} deadAt={deadAt} end={end} startAt={G && G.from} />
       {G ? <GameInfo board={board} /> : tb ? <TablebaseExplorer t={tb} posKey={boardKey} onPlay={onBook} /> : xl ? <LichessExplorer x={xl} tw={tw} setTweak={setTweak} onGame={onLichess} posKey={boardKey} onPlay={onBook} onHover={setHov} white={pos.turn === 'w'} fallback={<OpeningExplorer board={board} book={book} onPlay={onBook} onHover={setHov} />} /> : <OpeningExplorer board={board} book={book} onPlay={onBook} onHover={setHov} />}
-      {G ? <Panel box={L.analysis} part="game" a={1} style={NO_SELECT} title="Game"><GameStatus board={board} onChange={onChange} down={opponent.down} why={sf.why} /></Panel>
+      {G ? <Panel box={L.analysis} part="game" a={1} style={NO_SELECT} title="Game"><GameStatus board={board} onChange={onChange} down={opponent.down} why={sf.why} retry={opponent.retry} /></Panel>
         : <AnalysisPanel box={L.analysis} a={1} paused depth={down && !sf.off ? null : searchDepth(ev.after)} deep={ev}>
         {upto < 0
           ? <React.Fragment>
