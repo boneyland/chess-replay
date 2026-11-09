@@ -108,6 +108,23 @@ test('runAnalysis stops when aborted and returns null', async () => {
   assert.equal(eng.calls, 2);
 });
 
+test('runAnalysis cancels the running search when its signal aborts', async () => {
+  const ctl = new AbortController();
+  let cancelled = 0, calls = 0;
+  const eng = { search() {
+    calls++;
+    if (calls < 3) return { promise: Promise.resolve({ cp: 0, depth: 22, pv: [], best: null }), cancel() {} };
+    // the third search hangs until it is cancelled, as SFEngine's does
+    let done; const promise = new Promise((r) => { done = r; });
+    setTimeout(() => ctl.abort(), 0);
+    return { promise, cancel() { cancelled++; done(null); } };
+  } };
+  const out = await A.runAnalysis({ engine: eng, ...SCHOLAR, headers: {}, signal: ctl.signal, onProgress: () => {} });
+  assert.equal(out, null);
+  assert.equal(cancelled, 1);
+  assert.equal(calls, 3);
+});
+
 test('runAnalysis searches each position for 3 s, no depth limit, as game priority', async () => {
   const reqs = [];
   await A.runAnalysis({ engine: fakeEngine((r) => reqs.push(r)), ...SCHOLAR, headers: {}, signal: { aborted: false }, onProgress: () => {} });

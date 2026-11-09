@@ -9,7 +9,8 @@ function useTweaks(defaults, carry) {
   const [values, setValues] = React.useState(() => {
     try {
       const stored = JSON.parse(localStorage.getItem(TWEAK_STORE) || 'null') || {}, add = carry ? carry(stored) : null;
-      if (add && Object.keys(add).length) localStorage.setItem(TWEAK_STORE, JSON.stringify({ ...stored, ...add }));
+      // a write that fails (full storage) still keeps what was read: the viewer's next change writes it all back
+      if (add && Object.keys(add).length) { try { localStorage.setItem(TWEAK_STORE, JSON.stringify({ ...stored, ...add })); } catch (e) {} }
       return { ...defaults, ...stored, ...add };
     } catch (e) { return defaults; }
   });
