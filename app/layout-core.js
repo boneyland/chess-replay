@@ -188,7 +188,7 @@
     return L;
   }
 
-  function oneColumn({ w, h, text, view, video }) {
+  function oneColumn({ w, h, text, view, video, phone }) {
     const hasEval = view === 'replay' || view === 'free';
     const ev = hasEval ? EVAL_TOTAL : 0;
     const bar = barH(text), bars = barsTotal(text);
@@ -204,7 +204,8 @@
       // Commentary last, at the bottom
       parts = [['moves', movesMax(text, MOVE_LINES_ONE), Math.min(movesMax(text, MOVE_LINES_ONE), Math.max(VIDEO_PREF[2] * text, movesMin)), movesMin],
         ['analysis', ONE_COL.analysis * text, VIDEO_PREF[1] * text, PANEL_FLOOR * text], ['comment', ONE_COL.comment * text, VIDEO_PREF[0] * text, PANEL_FLOOR * text]];
-      if (!video && view !== 'game') parts.unshift(['header', HEADER_H * text]); // no Game info in a game
+      // no Game info in a game, nor on a phone held upright (a tablet's one column keeps it)
+      if (!video && view !== 'game' && !phone) parts.unshift(['header', HEADER_H * text]);
     }
     const cell = Math.min(56, Math.floor((pw - 5 * 4) / 6));
     const trayH = 2 * cell + 4;
@@ -283,7 +284,7 @@
     if (c === 1 && tierOf(vw, vh) === 'phone') {
       TOP = PHONE_ONE.top; SIDE = PHONE_ONE.side; PAD = [PAD[0], PHONE_ONE.padX]; BAR_K = PHONE_ONE.barK; BAR_GAP = PHONE_ONE.barGap;
     }
-    return Object.assign((c === 1 ? oneColumn : twoColumns)({ w, h, text: t, view, video, dock: c === 2 && dock, vw }), { text: t, tier: tierOf(vw, vh), pad: PAD });
+    return Object.assign((c === 1 ? oneColumn : twoColumns)({ w, h, text: t, view, video, dock: c === 2 && dock, vw, phone: tierOf(vw, vh) === 'phone' }), { text: t, tier: tierOf(vw, vh), pad: PAD });
   }
 
   // The export's pixel scale for a w × h page: the screen's density, held so the longer side stays within 1920 px
