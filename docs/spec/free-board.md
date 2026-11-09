@@ -43,7 +43,7 @@ The viewer sees a position or puzzle somewhere (a book diagram, a screen, someon
 
 ## My games
 
-- Every game (`board.game.id`) is kept from its first move under `chess-video.games.v1` (`GamesCore`), the 50 newest, written on each move, takeback or result. A stored list that can't be read is copied to `chess-video.games.v1.unreadable` (once, kept by Clear saved data) before the next write replaces it.
+- Every game (`board.game.id`) is kept from its first move under `chess-video.games.v1` (`GamesCore`), the 50 newest, written on each move, takeback or result. A game with every move taken back stays while its clocks run (`PlayCore.begun`: a timed game that has begun); an untimed one leaves the list. Leaving a game with no moves on the board doesn't ask first. A stored list that can't be read is copied to `chess-video.games.v1.unreadable` (once, kept by Clear saved data) before the next write replaces it.
 - The My games list resumes a game in progress or opens a finished one as a loaded game from `PlayCore.pgn` (replay, own moves, Analyse, Queen, Save PGN, video export). Each can be deleted. The crash screen's Clear saved data leaves the list alone.
 - PGN headers: players, date, result, `[FEN]`/`[SetUp]` for custom starts, `[TimeControl]` and `%clk` when clocked.
 

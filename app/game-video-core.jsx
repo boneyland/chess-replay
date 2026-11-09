@@ -205,6 +205,8 @@ function useSchedule(M, CUES, d) {
 }
 const lastPly = (T, S) => { let k = -1; for (let i = 0; i < S.N; i++) { if (T >= S.tp[i]) k = i; else break; } return k; };
 const cpOf = (M, i) => (i < 0 ? M.evalStart : plyCp(M.plies[i]));
+// a game without an analysis: no evals and no best lines (a PGN's own evals count as one)
+const bareGame = (M) => !M.hasEval && !M.plies.some((p) => p.best);
 // a move on screen for under a second (a short Seconds per move, or a long game squeezed into the video) shows its
 // analysis at once: the eval count and the panel's fade would end too late to read
 const QUICK_MOVE = 1;
@@ -919,7 +921,7 @@ function Commentary({ M, T, S, a, book, line }) {
       {total ? (
         <div style={{ display: 'flex', flexDirection: 'column', gap: tx(14) }}>
           {/* the Analysis panel names the move, unless the game has no analysis */}
-          {c >= 0 && !M.hasEval && !M.plies.some((p) => p.best) && <span style={{ font: `600 ${tx(18)}px ${MONO}`, color: M.plies[c].mark ? clsColor(M.plies[c].cls) : C.last }}>{label(M, c)}</span>}
+          {c >= 0 && bareGame(M) && <span style={{ font: `600 ${tx(18)}px ${MONO}`, color: M.plies[c].mark ? clsColor(M.plies[c].cls) : C.last }}>{label(M, c)}</span>}
           {txt && <span style={{ font: `400 ${size}px/1.14 ${SERIF}`, color: C.ink, textWrap: 'pretty' }}>{txt.slice(0, nh)}<span style={{ opacity: 0 }}>{txt.slice(nh)}</span></span>}
           {qtxt && (
             <div style={{ display: 'flex', flexDirection: 'column', gap: tx(6), opacity: nq > 0 || !txt ? 1 : 0 }}>
@@ -983,7 +985,7 @@ function Analysis({ M, T, S, a, vline, onLine, onPreview, onReplyHover, paused, 
       </AnalysisPanel>
     );
   }
-  if (!M.hasEval && !M.plies.some((p) => p.best)) {
+  if (bareGame(M)) {
     return <AnalysisPanel box={box} a={a} paused={paused} depth={depth}>{tbAt(true)}{sf ? <EngineEmptyState M={M} sf={sf} paused={paused} /> : <span style={{ font: `400 ${tx(26)}px ${SERIF}`, color: C.dim, fontStyle: 'italic' }}>No engine analysis loaded.</span>}{deadEl}</AnalysisPanel>;
   }
   if (c < 0) return (
@@ -1387,10 +1389,11 @@ function useGoDeeper(M, c, on, sf, tw) {
 }
 
 // Stockfish on a move of a loaded game without an analysis, while paused on it (on), as the free board rates a move: the
-// positions before and after it, at the live searches' settings, with the best move's SAN; null when not on
+// positions before and after it, at the live searches' settings, with the best move's SAN; null when not on (on needs sf)
+const NO_OWN = { depth: null, time_limit: 1, lines: 1 }; // the settings when there's no engine (on needs sf: nothing searched)
 function useGameMoveEval(M, c, on, sf, tw, gamePos) {
   const after = on ? M.plies.slice(0, c + 1).map((q) => q.uci) : null, before = on ? after.slice(0, -1) : null;
-  const ev = useMoveEval(sf ? sf.engine : null, before, after, sf ? sf.own : window.AnalysisCore.engineSettings().own, M.start.fen, null, cloudSetting(tw), !sf || sf.off);
+  const ev = useMoveEval(sf ? sf.engine : null, before, after, sf ? sf.own : NO_OWN, M.start.fen, null, cloudSetting(tw), !sf || sf.off);
   if (!on) return null;
   const bm = ev.before && ev.before.best ? window.ChessCore.applyUci(gamePos(c - 1), ev.before.best) : null;
   return { ...ev, bestSan: bm ? bm.san : null };
@@ -1467,8 +1470,7 @@ function GameVideo({ M, tw, d, probe, queen, nav, scheme, sf, orient }) {
   const own = useOwnLineEval(M, line, sf, tw);
   const gameEval = useGoDeeper(M, cNow, !!(sf && M.evalSource === 'analysis' && !playing && cNow >= 0 && !M.plies[cNow].tb && !(vline && vline.src === 'you')), sf, tw);
   // a game without an analysis: the move paused on searched live (the Stockfish switch on), while no game analysis runs
-  const bare = !M.hasEval && !M.plies.some((p) => p.best);
-  const moveEval = useGameMoveEval(M, cNow, !!(sf && bare && !sf.off && !playing && cNow >= 0 && !(vline && vline.src === 'you')), sf, tw, line.gamePos);
+  const moveEval = useGameMoveEval(M, cNow, !!(sf && bareGame(M) && !sf.off && !playing && cNow >= 0 && !(vline && vline.src === 'you')), sf, tw, line.gamePos);
   // the live eval of the position shown, for the eval bar and the arrows: the bare game's search, else Go deeper's
   const liveAfter = moveEval ? moveEval.after : gameEval.after && !gameEval.after.stored ? gameEval.after : null;
   const onReply = (steps) => { setPv(null); setVline((v) => v && { ...v, moves: [...v.moves.slice(0, v.upto + 1), ...steps], upto: v.upto + steps.length }); };

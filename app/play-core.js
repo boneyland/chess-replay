@@ -173,6 +173,8 @@
   // the steps before the game (none for a game from a start), and the game's own moves
   const fromOf = (b) => (b && b.game && b.game.from) || 0;
   const played = (b) => (b ? b.steps.length - fromOf(b) : 0);
+  // a game that has begun: a move on the board, or every move taken back on a clock that has run since (clock.begun)
+  const begun = (b) => !!(b && b.game && (played(b) || (b.game.clock && b.game.clock.begun)));
   // who played step j: the side to move before it, from the positions (a start may have Black to move)
   const moverOf = (b, j) => (j === 0 ? b.start.pos : b.steps[j - 1].pos).turn;
   const CLASSES = ['inaccuracy', 'mistake', 'blunder'];
@@ -419,7 +421,7 @@
   // clocks are stopped; the board as it was otherwise
   function runClock(b, now) {
     const c = b && b.game && b.game.clock;
-    if (!inProgress(b) || !c || c.since != null || !(played(b) || c.begun)) return b;
+    if (!inProgress(b) || !c || c.since != null || !begun(b)) return b;
     return withGame(b, { clock: { ...c, since: now } });
   }
 
@@ -471,7 +473,7 @@
   }
 
   window.PlayCore = {
-    canMate, lockedDead, positionKey, outcome, TIME_CONTROLS, parseTc, start, inProgress, played, move, canTakeback, takeback, thinkMs, MIN_RATED_DEPTH, SHALLOW_DEPTH, BIG_LOSS_CP, rateMove, addCritique, critiqueText,
+    canMate, lockedDead, positionKey, outcome, TIME_CONTROLS, parseTc, start, inProgress, played, begun, move, canTakeback, takeback, thinkMs, MIN_RATED_DEPTH, SHALLOW_DEPTH, BIG_LOSS_CP, rateMove, addCritique, critiqueText,
     resign, agreeDraw, claimable, claimDraw, fiftyRule, flag, recheck, setProver, pause, runClock, timeLeft, resultText, ending, resume, pgn,
   };
 })();

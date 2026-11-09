@@ -420,7 +420,13 @@ function useMoveEval(engine, before, after, own, fen, stored, cloud, off, auto) 
   const [fail, setFail] = React.useState(null); // { key: baseKey, msg }
   // off: the deepest level pressed whose searches both finished (the stored result at 0)
   const linesOf = (which) => (which === 'after' || before.join(' ') === after.join(' ') ? own.lines || 1 : 1);
-  const finished = (lv) => ['after', 'before'].every((w) => SF_EVAL_CACHE.has(keyOf(toSearch(A.deeperSearch(own, lv), linesOf(w)), w === 'after' ? after : before)));
+  // a finished search at level lv: its own, or for a position searched as one line (before), a search of several lines of
+  // the same position (the move before's after, stepping on through a game), whose line 1 is the one line's answer
+  const cachedAt = (lv, which) => {
+    const m = which === 'after' ? after : before, s = A.deeperSearch(own, lv), n = linesOf(which);
+    return SF_EVAL_CACHE.get(keyOf(toSearch(s, n), m)) || (n === 1 && (own.lines || 1) > 1 && SF_EVAL_CACHE.get(keyOf(toSearch(s), m))) || null;
+  };
+  const finished = (lv) => ['after', 'before'].every((w) => cachedAt(lv, w));
   // auto's level counts as a press, so it stays (with the cloud's answers) once the switch goes off, as a press's does
   if (auto && stored && after && !SF_DEEPER.has(baseKey)) SF_DEEPER.set(baseKey, 1);
   const pressed = SF_DEEPER.get(baseKey) || 0;
@@ -454,7 +460,7 @@ function useMoveEval(engine, before, after, own, fen, stored, cloud, off, auto) 
     }
     const cloudLimit = A.cloudEnough(search.depth, own.name);
     const keyAt = (lv, which) => keyOf(toSearch(A.deeperSearch(own, lv), lines(which)), moves[which]);
-    const at = (lv, which) => (lv === 0 && stored ? stored : SF_EVAL_CACHE.get(keyAt(lv, which)) || null);
+    const at = (lv, which) => (lv === 0 && stored ? stored : cachedAt(lv, which));
     const handles = [], cached = (which) => at(level, which);
     // the result a press of Go deeper started from, shown until the deeper search passes its depth
     const prev = (which) => (level > 0 ? at(level - 1, which) : null);
