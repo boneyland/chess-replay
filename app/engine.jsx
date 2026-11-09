@@ -95,7 +95,10 @@ function Stage({ menu, top, onLayout, duration, background, playback, nav, still
     const off = {}; // what each column count leaves of the viewport for the area, as last seen (LayoutCore.pickColumns)
     const measure = () => {
       // sh: the whole stage's height, which the slim bar doesn't change (the area's does), so it can decide the bar
-      const w = el.clientWidth, h = el.clientHeight, sh = el.parentElement.clientHeight, ox = el.offsetLeft, oy = el.offsetTop;
+      // the area's own padding (one column's, shell.html) is outside the page
+      const cs = getComputedStyle(el), px = (k) => parseFloat(cs[k]) || 0;
+      const w = el.clientWidth - px('paddingLeft') - px('paddingRight'), h = el.clientHeight - px('paddingTop') - px('paddingBottom');
+      const sh = el.parentElement.clientHeight, ox = el.offsetLeft, oy = el.offsetTop;
       // the viewport, which caps the board's size (LayoutCore)
       const vw = document.documentElement.clientWidth, vh = document.documentElement.clientHeight;
       const cols = LayoutCore.pickColumns({ w, h, vw, vh, text, video, was: colsRef.current, off });

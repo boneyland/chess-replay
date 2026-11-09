@@ -56,6 +56,9 @@ button:focus-visible, select:focus-visible, input:focus-visible, [role="slider"]
 /* the page is laid out at this area's size; it scrolls up and down only for a paused one-column page (Stage sets overflow-y) */
 .stage-area { flex: 1; min-height: 0; width: 100%; overflow-x: hidden; overflow-x: clip; scrollbar-color: var(--line-strong) transparent; }
 .stage-frame { overflow: hidden; overflow: clip; }
+/* a view's root (GameVideo, FreeBoard, EditBoard): clips as the frame does, and lets the panels' halos out as far */
+.stage-view { overflow: hidden; overflow: clip; }
+.stage-one .stage-view { overflow-clip-margin: 48px; }
 .stage-error { position: absolute; inset: 0; display: grid; place-items: center; color: var(--danger); font: 500 0.9375rem var(--mono); }
 
 .pbar {
@@ -110,8 +113,13 @@ body:has(.stage-one) .twk-panel { bottom: calc(51px + var(--safe-b)); max-height
 /* one column: a slimmer transport bar and less padding around it, so the page gets the room; smaller buttons (the same
    icons) and gaps, so the seek bar keeps a usable width; below 360 px the first and last move buttons go, rather than
    the seek bar */
-.stage-one { padding-block: 2px 5px; gap: 6px; padding-left: max(4px, var(--safe-l)); padding-right: max(4px, var(--safe-r)); }
-.stage-one .pbar { padding: 3px 6px; gap: 4px; padding-block: 2px; }
+.stage-one { padding-block: 0 5px; gap: 6px; padding-inline: 0; }
+.stage-one .pbar { padding: 3px 6px; gap: 4px; padding-block: 2px; margin-inline: max(4px, var(--safe-l)) max(4px, var(--safe-r)); width: calc(100% - max(4px, var(--safe-l)) - max(4px, var(--safe-r))); }
+/* one column's padding round the page is the area's own, not the stage's, so the area (which clips, as it scrolls) runs to
+   the screen's edges and the panels' halos (the dark theme's glow) fade out there rather than stop at a line 4 px in; the
+   frame and the view's root (.stage-view) let them out as far. Stage measures the area inside its padding */
+.stage-one .stage-area { box-sizing: border-box; padding: 2px max(4px, var(--safe-r)) 0 max(4px, var(--safe-l)); }
+.stage-one .stage-frame { overflow-clip-margin: 48px; }
 .stage-one .pbtn { width: 30px; height: 30px; }
 .stage-one .ptrack { min-width: 96px; }
 @media (max-width: 359px) { .stage-one .pbtn-end { display: none; } }

@@ -15,10 +15,15 @@
     tablet: { margin: 8, gap: 8, evalW: 20, evalGap: 8, pad: [12, 16], scale: 0.95 },
     desktop: { margin: 12, gap: 10, evalW: 24, evalGap: 10, pad: [16, 22], scale: 1 },
   };
+  // a phone in one column (held upright) has no margin over the top player bar (the stage's own 2 px padding is all),
+  // shorter player bars hugging the board (barK: their height at text 1, before TX; barGap: the space to the board), and the
+  // panels under the board run wider than it (a 2 px margin, 6 px from the screen's edge with the stage's padding) with
+  // narrower side padding
+  const PHONE_ONE = { top: 0, side: 2, padX: 10, barK: 32, barGap: 1 };
   const DESKTOP_VW = 1181;
   const tierOf = (vw, vh) => (vw < 600 || vh < 500 ? 'phone' : vw >= DESKTOP_VW ? 'desktop' : vh >= 0.8 * vw && vh <= 1.2 * vw ? 'foldable' : 'tablet');
-  let MARGIN = 12, GAP = 10, EVAL_W = 24, EVAL_GAP = 10, EVAL_TOTAL = 34, PAD = [16, 22];
-  const BAR_GAP = 4;
+  let MARGIN = 12, TOP = 12, SIDE = 12, GAP = 10, EVAL_W = 24, EVAL_GAP = 10, EVAL_TOTAL = 34, PAD = [16, 22];
+  let BAR_GAP = 4, BAR_K = 40;
   // the full-width eval graph's largest height: thinner in a viewport under PLOT_WIDE px wide (desktops included); by the
   // viewport's width (vw), as the viewer measures it, not the stage's
   const PLOT_WIDE = 1181;
@@ -27,6 +32,7 @@
   const useTier = (vw, vh) => {
     const t = TIERS[tierOf(vw, vh)];
     MARGIN = t.margin; GAP = t.gap; EVAL_W = t.evalW; EVAL_GAP = t.evalGap; EVAL_TOTAL = EVAL_W + EVAL_GAP; PAD = t.pad;
+    BAR_K = 40; BAR_GAP = 4; // compute() shortens them for a phone in one column
     return t;
   };
   const BOARD_MAX = 900, BOARD_MIN = 200, BOARD_OK = 360, BOARD_BACK = 380;
@@ -61,7 +67,7 @@
   const TEXT_SIZES = { Small: 0.9, Default: 1, Large: 1.15, Larger: 1.3 };
   const textScale = (name) => (Object.prototype.hasOwnProperty.call(TEXT_SIZES, name) ? TEXT_SIZES[name] : 1);
 
-  const barH = (text) => 40 * text * 0.8;
+  const barH = (text) => BAR_K * text * 0.8;
   const barsTotal = (text) => 2 * barH(text) + 2 * BAR_GAP;
   // the sidebar's width in two columns: 380 px and a gap while the board keeps 360 px; never under the minimum
   const sideW = (w, text) => Math.max(SIDEBAR_MIN * text, Math.min(SIDEBAR_W * text + GAP, w - 2 * MARGIN - GAP - EVAL_TOTAL - BOARD_OK));
@@ -186,7 +192,7 @@
     const hasEval = view === 'replay' || view === 'free';
     const ev = hasEval ? EVAL_TOTAL : 0;
     const bar = barH(text), bars = barsTotal(text);
-    const pw = Math.min(w - 2 * MARGIN, BOARD_MAX + ev); // panels' width; the board and eval bar sit centred in it
+    const pw = Math.min(w - 2 * SIDE, BOARD_MAX + ev); // panels' width; the board and eval bar sit centred in it
     const px = (w - pw) / 2;
     const natural = Math.min(boardMax, w - 2 * MARGIN - ev);
     // what goes under the board, top to bottom, with its paused height and, in a video, its preferred one
@@ -210,8 +216,8 @@
     else {
       const prefs = sized.map((p) => p[2]);
       const sumPref = prefs.reduce((a, b) => a + b, 0);
-      const room = (s) => h - 2 * MARGIN - bars - s - GAP - fixed - gaps; // for the panels, given a board of size s
-      size = Math.max(BOARD_MIN, Math.min(natural, h - 2 * MARGIN - bars - GAP - fixed - gaps - sumPref));
+      const room = (s) => h - TOP - MARGIN - bars - s - GAP - fixed - gaps; // for the panels, given a board of size s
+      size = Math.max(BOARD_MIN, Math.min(natural, h - TOP - MARGIN - bars - GAP - fixed - gaps - sumPref));
       const avail = room(size), sum = (a) => a.reduce((x, y) => x + y, 0);
       // a window too small for those floors at the 200 px board gives up the Moves minimum, then the text scaling, before the board shrinks (R5)
       const tiers = [sized.map((p) => p[3]), sized.map(() => PANEL_FLOOR * text), sized.map(() => PANEL_FLOOR)];
@@ -242,12 +248,12 @@
     const gx = (w - (size + ev)) / 2;
     const L = {
       cols: 1, w, h,
-      board: { x: gx + ev, y: MARGIN + bar + BAR_GAP, size },
+      board: { x: gx + ev, y: TOP + bar + BAR_GAP, size },
       eval: hasEval ? { x: gx, w: EVAL_W } : null,
       bars: { h: bar, gap: BAR_GAP },
       header: null, moves: null, comment: null, analysis: null, plot: null, tray: null, panel: null,
     };
-    let y = MARGIN + bars + size + GAP;
+    let y = TOP + bars + size + GAP;
     // A paused page flows: the panels stack under the board in a column, each as tall as its contents (Moves up to
     // MOVE_LINES_ONE lines, then it scrolls), and the page scrolls. The boxes keep their order and width; the heights here are
     // only the paused defaults, which the views don't use. L.flow says where the column starts
@@ -273,6 +279,10 @@
     boardMax = Math.max(BOARD_MIN, Math.min(BOARD_MAX, 0.5 * Math.max(vw, vh)));
     const tier = useTier(vw, vh), t = text * tier.scale;
     TIGHT = tierOf(vw, vh) !== 'desktop' && (c === 1 || tierOf(vw, vh) === 'phone');
+    TOP = MARGIN; SIDE = MARGIN; // the one-column page's margins over the top bar and beside the panels
+    if (c === 1 && tierOf(vw, vh) === 'phone') {
+      TOP = PHONE_ONE.top; SIDE = PHONE_ONE.side; PAD = [PAD[0], PHONE_ONE.padX]; BAR_K = PHONE_ONE.barK; BAR_GAP = PHONE_ONE.barGap;
+    }
     return Object.assign((c === 1 ? oneColumn : twoColumns)({ w, h, text: t, view, video, dock: c === 2 && dock, vw }), { text: t, tier: tierOf(vw, vh), pad: PAD });
   }
 

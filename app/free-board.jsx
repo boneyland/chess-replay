@@ -462,7 +462,7 @@ function FreeBoard({ board, onChange, tw, setTweak, onLichess, sf, nav, orient, 
   // an upright phone (one column in the phone tier; a tablet held upright keeps them) drops the free board's info box
   const upright = L.cols === 1 && L.tier === 'phone';
   return (
-    <div ref={flowRef} style={{ position: 'absolute', inset: 0, background: C.bg, overflow: 'hidden', ...flowStyle() }}>
+    <div className="stage-view" ref={flowRef} style={{ position: 'absolute', inset: 0, background: C.bg, ...flowStyle() }}>
       {!G && (deadv || tbv ? <EvalBarView cp={(deadv || tbv).cp} txt={(deadv || tbv).txt} a={1} /> : <EvalBarView cp={cp == null ? 0 : cp} txt={cp == null ? (down ? '' : '…') : fmtSf(cp)} a={1} />)}
       <FreeBar pos={pos} side="b" a={1} clock={clockOf('b')} name={G ? playerName(G, 'b') : null} />
       <BoardSpace onStep={!steps.length ? null : (d) => goIf(upto + d)}>

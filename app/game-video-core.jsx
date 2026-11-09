@@ -679,8 +679,8 @@ function LineChips({ name, nameColor, accent, moves, ply0, c, legal, sel, onPick
       {moves.map((m, j) => {
         const ply = ply0 + c + j, white = ply % 2 === 0, ok = j < legal, on = sel === j;
         return (
-          <span key={j} style={{ display: 'flex', alignItems: 'center', gap: tx(5), marginRight: white && j + 1 < moves.length ? tx(2) : tx(6) }}>
-            {(white || j === 0) && <span style={{ color: C.dim, marginLeft: j ? tx(6) : 0, font: `500 ${tx(16)}px ${MONO}` }}>{window.ChessCore.moveNo(ply)}</span>}
+          <span key={j} style={{ display: 'flex', alignItems: 'center', gap: tx(5), marginRight: white && j + 1 < moves.length ? tx(2) : tx(6) + (j + 1 < moves.length ? tx(6) : 0) }}>
+            {(white || j === 0) && <span style={{ color: C.dim, font: `500 ${tx(16)}px ${MONO}` }}>{window.ChessCore.moveNo(ply)}</span>}
             <span className={ok ? 'mv' : undefined} role={ok ? 'button' : undefined} title={ok ? `Show ${what} on the board up to ${m}` : 'Not a legal move in this line'}
               onClick={ok ? (e) => { e.stopPropagation(); onPick(j); } : undefined}
               onPointerEnter={ok && onHover ? (e) => { if (e.pointerType === 'mouse') onHover(j); } : undefined} tabIndex={ok ? 0 : undefined}
@@ -829,6 +829,9 @@ function MoveList({ M, T, S, a, paused, onPick, deadAt, end, startAt }) {
   const ROW = tx(38), CHIP = tx(28), GAP = tx(6);
   // a white move and the black one after it sit PAIR_GAP apart (each its own flex item, so a long list still wraps between them)
   const PAIR_GAP = tx(2);
+  // the extra space before a move number (or the result): on the item before it, not the number's left, so a number that
+  // wraps to the start of a line isn't indented
+  const NUM_GAP = tx(6);
   // a flowing list grows up to maxRows lines, then scrolls; a placed one takes all the box's height under its title (the
   // tight panel's padding and title gap where it has them, as LayoutCore counts them)
   const listH = L.moves.flow ? null : Math.max(ROW, L.moves.h - 2 * tx(L.pad[0] * (tightAn() ? 0.6 : 1)) - tx(15) * 1.4 - (tightAn() ? anGap(12) : tx(12)) - 2);
@@ -879,9 +882,9 @@ function MoveList({ M, T, S, a, paused, onPick, deadAt, end, startAt }) {
     const shown = paused ? 1 : cl01((T - S.tp[i]) / 0.15);
     const edge = P.cls !== 'none' && P.cls !== 'best' ? `2px solid ${clsColor(P.cls)}` : chipEdge(white);
     moves.push(
-      <span key={i} style={{ display: 'flex', alignItems: 'center', gap: tx(5), opacity: shown, marginRight: white && i + 1 < S.N && i + 1 !== startAt ? PAIR_GAP : GAP }}>
+      <span key={i} style={{ display: 'flex', alignItems: 'center', gap: tx(5), opacity: shown, marginRight: white && i + 1 < S.N && i + 1 !== startAt ? PAIR_GAP : GAP + (i + 1 < S.N || end ? NUM_GAP : 0) }}>
         {startAt > 0 && i === startAt && <StartPill />}
-        {(white || i === 0 || i === startAt) && <span style={{ color: i <= c ? C.ink : C.dim, marginLeft: i ? tx(6) : 0, font: `500 ${tx(16)}px ${MONO}` }}>{window.ChessCore.moveNo(M.ply0 + i)}</span>}
+        {(white || i === 0 || i === startAt) && <span style={{ color: i <= c ? C.ink : C.dim, font: `500 ${tx(16)}px ${MONO}` }}>{window.ChessCore.moveNo(M.ply0 + i)}</span>}
         <span className="mv" role="button" data-ply={i} tabIndex={i === focusPly ? 0 : -1} title={`Go to ${label(M, i)}`} onClick={(e) => { e.stopPropagation(); onPick(i); }}
           onKeyDown={(e) => moveKey(e, i)}
           style={moveChip(white, { opacity: ahead ? 0.5 : 1, height: CHIP, boxSizing: 'border-box', display: 'flex', alignItems: 'center', padding: `0 ${tx(8)}px`, cursor: 'pointer', font: `${cur ? 700 : 600} ${tx(16)}px ${MONO}`, border: edge, boxShadow: cur ? `0 0 0 3px ${C.last}` : 'none' })}>{P.san}{P.mark || ''}</span>
@@ -893,7 +896,7 @@ function MoveList({ M, T, S, a, paused, onPick, deadAt, end, startAt }) {
   if (startAt > 0 && startAt === S.N) moves.push(<StartPill key="start" />);
   if (end && S.N) {
     moves.push(
-      <span key="end" className="move-result" style={{ ...NO_SELECT, display: 'flex', alignItems: 'baseline', gap: tx(6), marginLeft: tx(6), opacity: paused ? 1 : cl01((T - S.tp[S.N - 1]) / 0.15) }}>
+      <span key="end" className="move-result" style={{ ...NO_SELECT, display: 'flex', alignItems: 'baseline', gap: tx(6), opacity: paused ? 1 : cl01((T - S.tp[S.N - 1]) / 0.15) }}>
         <span style={{ color: C.ink, font: `700 ${tx(16)}px ${MONO}` }}>{end.score}</span>
         <span style={{ color: C.dim, font: `500 ${tx(14)}px ${MONO}` }}>{end.why}</span>
       </span>
@@ -1514,7 +1517,7 @@ function GameVideo({ M, tw, d, probe, queen, nav, scheme, sf, orient }) {
   const cx = L.board.x + L.board.size / 2, cy = L.board.y + L.board.size / 2, sc = 1 + 0.1 * f;
   const fade = video ? 1 - cl01((T - (authoredTotal - 0.9)) / 0.8) : 1;
   return (
-    <div data-screen-label={'t=' + Math.floor(T) + 's'} style={{ position: 'absolute', inset: 0, background: C.bg, overflow: 'hidden' }}>
+    <div className="stage-view" data-screen-label={'t=' + Math.floor(T) + 's'} style={{ position: 'absolute', inset: 0, background: C.bg }}>
       <div style={{ position: 'absolute', inset: 0, opacity: fade }}>
         {/* an export keeps the page still and has the compositor zoom the layers in here (data-push, export-draw.js) */}
         <div ref={flowRef} data-push={f > 0 && tw.exporting ? `${sc} ${cx} ${cy}` : undefined} style={{ position: 'absolute', inset: 0, transformOrigin: '0 0', ...flowStyle(), ...(f > 0 && !tw.exporting && { transform: `translate(${cx}px,${cy}px) scale(${sc}) translate(${-cx}px,${-cy}px)` }) }}>
