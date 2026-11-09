@@ -2615,6 +2615,40 @@ for (const name of BROWSERS) for (const site of SITES) {
       assert.deepEqual(gl.errors, []);
       await gl.ctx.close();
     });
+    // a game whose only evals are the PGN's own (Lichess's [%eval]s, no engine lines): the Stockfish switch on searches the
+    // move paused on as it does an analysis's; off, the PGN's eval stands. The PGN's evals are all +9.99, far from the truth
+    await t.test('desktop: the Stockfish switch searches a move of a game with only the PGN\'s evals', async () => {
+      const pe = await open(browser, { width: 1440, height: 900 });
+      const p = pe.page, dialog = p.getByRole('dialog', { name: 'Import game' });
+      await p.goto(base, { waitUntil: 'load' });
+      await loadedOn(p);
+      const sfSwitch = p.getByRole('switch', { name: 'Stockfish' });
+      await sfSwitch.click();
+      await p.getByRole('button', { name: 'Import game' }).click();
+      await dialog.waitFor({ timeout: 5000 });
+      await dialog.getByRole('textbox', { name: 'PGN, FEN or Lichess link' }).click();
+      await p.keyboard.type('[White "Evals White"]\n[Black "Evals Black"]\n[Result "*"]\n\n1. e4 { [%eval 9.99] } 1... e5 { [%eval 9.99] } 2. Nf3 { [%eval 9.99] } 2... Nc6 { [%eval 9.99] } *');
+      await p.keyboard.press('ControlOrMeta+Enter');
+      await dialog.waitFor({ state: 'detached', timeout: 5000 });
+      await p.waitForFunction(() => /Evals White/.test(document.body.innerText), null, { timeout: 5000 });
+      // Analyse with Stockfish only before the first move
+      const analyse = p.locator('.part-analysis').getByRole('button', { name: /^Analyse with Stockfish/ });
+      await analyse.waitFor({ timeout: 5000 });
+      await p.locator('[data-ply="2"]').click();
+      await analyse.waitFor({ state: 'detached', timeout: 3000 });
+      const bar = () => p.locator('.part-eval-bar').innerText(), panel = p.locator('.part-analysis');
+      await p.waitForTimeout(800);
+      assert.equal(await bar(), '+9.99', 'off: the PGN\'s eval');
+      assert.doesNotMatch(await panel.innerText(), /depth \d+/, 'off: nothing searched');
+      await sfSwitch.click();
+      await p.waitForFunction(() => /depth \d+/.test(document.querySelector('.part-analysis').innerText) && document.querySelector('.part-eval-bar').innerText !== '+9.99', null, { timeout: 20000 });
+      assert.match(await panel.innerText(), /Best line/, 'the search\'s best line');
+      await p.getByRole('button', { name: /^Go deeper/ }).waitFor({ timeout: 30000 });
+      assert.equal(await analyse.count(), 0, 'no Analyse with Stockfish on a move');
+      await p.screenshot({ path: path.join(OUT, host + '-pgn-evals-live.png') });
+      assert.deepEqual(pe.errors, []);
+      await pe.ctx.close();
+    });
     // the sample's annotated PGN: one better line after 28. Qxb5 (the analysis's, as Evaluations from is Analysis; the
     // PGN's own after switching to PGN), its own comment beside the notes'; and its notes as a notes file
     await t.test('desktop: the annotated PGN follows Evaluations from and keeps the PGN\'s comments; Download notes', async () => {

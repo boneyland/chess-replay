@@ -986,7 +986,7 @@ function Analysis({ M, T, S, a, vline, onLine, onPreview, onReplyHover, paused, 
     );
   }
   if (bareGame(M)) {
-    return <AnalysisPanel box={box} a={a} paused={paused} depth={depth}>{tbAt(true)}{sf ? <EngineEmptyState M={M} sf={sf} paused={paused} /> : <span style={{ font: `400 ${tx(26)}px ${SERIF}`, color: C.dim, fontStyle: 'italic' }}>No engine analysis loaded.</span>}{deadEl}</AnalysisPanel>;
+    return <AnalysisPanel box={box} a={a} paused={paused} depth={depth}>{tbAt(true)}{sf ? <EngineEmptyState M={M} sf={sf} paused={paused} ask={c < 0} /> : <span style={{ font: `400 ${tx(26)}px ${SERIF}`, color: C.dim, fontStyle: 'italic' }}>No engine analysis loaded.</span>}{deadEl}</AnalysisPanel>;
   }
   if (c < 0) return (
     <AnalysisPanel box={box} a={a} paused={paused} depth={depth}>
@@ -1064,7 +1064,8 @@ function Analysis({ M, T, S, a, vline, onLine, onPreview, onReplyHover, paused, 
             </span>
           </span>
         )}
-        {sf && !M.hasAnalysis && (sf.run.state === 'running' || paused) && <EngineEmptyState M={M} sf={sf} paused={paused} compact />}
+        {/* a running analysis's progress; Analyse with Stockfish itself only at the start */}
+        {sf && !M.hasAnalysis && sf.run.state === 'running' && <EngineEmptyState M={M} sf={sf} paused={paused} compact />}
         {!vline && paused && M.hasEval && sfAsm && <FitOrHide style={{ ...NO_SELECT, font: `500 ${tx(15)}px ${MONO}`, color: C.blunder }}>{SF_ASM_SHORT}</FitOrHide>}
       </div>
     </AnalysisPanel>
@@ -1368,9 +1369,10 @@ function withDeeper(M) {
 
 // Go deeper on a move of the loaded analysis, while paused on it (on): from its own search (else the game settings),
 // what describes the position after the move (the eval, the Best line, the eval bar, and in the annotated PGN the
-// eval and, on the next move, the line: DEEPER_SHOWN); the ratings, graph and accuracy stay the analysis's. Not on a PGN's own evals, which have no
-// best lines for it to go with (those come from analysing the game), nor on a position the tablebase answered (its
-// result is final): on says when
+// eval and, on the next move, the line: DEEPER_SHOWN); the ratings, graph and accuracy stay the analysis's. On a PGN's own
+// evals (Lichess's [%eval]s) too, as the Stockfish switch searches every move: the PGN's eval stands until the search
+// passes it, and the annotated PGN, marks and graph stay the PGN's (nothing goes into DEEPER_SHOWN). Not on a position
+// the tablebase answered (its result is final): on says when
 function useGoDeeper(M, c, on, sf, tw) {
   const p = on ? M.plies[c] : null, settings = sf ? sf.game : window.AnalysisCore.ENGINE;
   // name: the engine running keys Go deeper's results, so lite and full ones never mix
@@ -1378,8 +1380,9 @@ function useGoDeeper(M, c, on, sf, tw) {
   const base = { name: settings.name, depth: p && p.search ? p.search.depth : settings.depth, time_limit: settings.time_limit, lines: sf && sf.own ? sf.own.lines : 1 };
   const moves = on ? M.plies.slice(0, c + 1).map((q) => q.uci) : null;
   // the Stockfish switch on searches every move deeper by itself (auto), as a press of Go deeper would
-  const ev = useMoveEval(sf ? sf.engine : null, moves, moves, base, M.start.fen, on ? { cp: cpOf(M, c), depth: base.depth, pv: [], stored: true, src: M.engine } : null, cloudSetting(tw), !sf || sf.off, !!sf && !sf.off);
-  const r = on && ev.after && !ev.after.stored && !ev.after.partial && ev.after.cp != null ? ev.after : null;
+  const src = M.evalSource === 'pgn' ? 'pgn' : M.engine;
+  const ev = useMoveEval(sf ? sf.engine : null, moves, moves, base, M.start.fen, on ? { cp: cpOf(M, c), depth: base.depth, pv: [], stored: true, src } : null, cloudSetting(tw), !sf || sf.off, !!sf && !sf.off);
+  const r = on && M.evalSource === 'analysis' && ev.after && !ev.after.stored && !ev.after.partial && ev.after.cp != null ? ev.after : null;
   React.useEffect(() => {
     if (!r) return;
     const k = deeperKey(M, c), had = DEEPER_SHOWN.get(k);
@@ -1468,7 +1471,7 @@ function GameVideo({ M, tw, d, probe, queen, nav, scheme, sf, orient }) {
   const onTb = (uci) => { const step = window.ChessCore.stepFromUci(touchPos, uci); if (step) { tl.setPlaying(false); input.clear(); playOwn(step); } };
   React.useEffect(() => { if (!vline) input.clear(); }, [vline]);
   const own = useOwnLineEval(M, line, sf, tw);
-  const gameEval = useGoDeeper(M, cNow, !!(sf && M.evalSource === 'analysis' && !playing && cNow >= 0 && !M.plies[cNow].tb && !(vline && vline.src === 'you')), sf, tw);
+  const gameEval = useGoDeeper(M, cNow, !!(sf && M.evalSource !== 'none' && !playing && cNow >= 0 && !M.plies[cNow].tb && !(vline && vline.src === 'you')), sf, tw);
   // a game without an analysis: the move paused on searched live (the Stockfish switch on), while no game analysis runs
   const moveEval = useGameMoveEval(M, cNow, !!(sf && bareGame(M) && !sf.off && !playing && cNow >= 0 && !(vline && vline.src === 'you')), sf, tw, line.gamePos);
   // the live eval of the position shown, for the eval bar and the arrows: the bare game's search, else Go deeper's
