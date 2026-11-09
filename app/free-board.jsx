@@ -96,7 +96,7 @@ function StartAnalysis({ board, ev, status, why, onLine, onHover }) {
   );
 }
 
-// ---------- a game at the board (Play vs human, Play vs Stockfish) ----------
+// ---------- a game at the board (Play vs human, Play vs computer) ----------
 // the side to move in a game: after its last move (a game always shows its last move while it goes on)
 const gameTurn = (board) => (board.steps.length ? board.steps[board.steps.length - 1].pos : board.start.pos).turn;
 const sideName = (side) => (side === 'w' ? 'White' : 'Black');
@@ -172,7 +172,14 @@ function useEngineOpponent(board, onChange, sf) {
     })();
     return () => { live = false; clearTimeout(timer); if (handle) handle.cancel(); };
   }, [key, tries]);
-  return { down: active ? down : null, retry: () => setTries((n) => n + 1) };
+  // hint(): Stockfish's best move in the position the player is to move in, from that "before" search (it ends within
+  // BEFORE_SEARCH's 5 s), or null when there is none (not the player's turn, Stockfish down)
+  const hint = async () => {
+    const c = before.current;
+    if (!active || !c || c.key !== key) return null;
+    return window.AnalysisCore.bestOf(await c.promise);
+  };
+  return { down: active ? down : null, retry: () => setTries((n) => n + 1), hint };
 }
 
 // The Commentary box in a game: how the game works, in place of the explorer (a hint, so hidden). Against Stockfish it
@@ -193,7 +200,7 @@ function GameInfo({ board }) {
       </React.Fragment>
     );
   } else {
-    const crit = [...(G.critique || [])].sort((x, y) => x.j - y.j), side = sideName(G.you);
+    const crit = [...(G.critique || [])].sort((x, y) => x.j - y.j), side = sideName(G.you), hintsUsed = (G.hints || []).length;
     const named = (c) => `${CLASS_LABEL[c.cls]}: ${window.BoardCore.label(board, c.j)}`;
     const why = (c) => (c.text ? c.text[0].toUpperCase() + c.text.slice(1) + '.' : '');
     const bestSan = (c) => { const r = window.ChessCore.applyUci(c.j ? board.steps[c.j - 1].pos : board.start.pos, c.best); return r ? r.san : c.best; };
@@ -212,7 +219,7 @@ function GameInfo({ board }) {
               ))}
             </div>
           ) : note('Stockfish found no inaccuracy, mistake or blunder in your moves.')}
-          {note(`You played ${side}, ${from.toLowerCase()}. Analyse on the free board shows Stockfish’s eval of every move.`)}
+          {note(`You played ${side}, ${from.toLowerCase()}${hintsUsed ? `, with ${hintsUsed} hint${hintsUsed === 1 ? '' : 's'}` : ''}. Analyse on the free board shows Stockfish’s eval of every move.`)}
         </React.Fragment>
       );
     } else {
@@ -220,13 +227,13 @@ function GameInfo({ board }) {
       body = (
         <React.Fragment>
           {c ? <div className="game-critique">{heading(named(c), clsColor(c.cls))}{line(why(c))}</div> : heading(`You play ${side}`)}
-          {note('No hints: Stockfish only says when one of your moves is an inaccuracy, a mistake or a blunder.')}
+          {note(`Stockfish says when one of your moves is an inaccuracy, a mistake or a blunder. Hint shows its best move, ${window.PlayCore.HINTS} times a game.`)}
         </React.Fragment>
       );
     }
   }
   return (
-    <Panel box={{ ...L.comment, scroll: !L.comment.flow }} a={1} part="game-details" title={sfGame ? 'Play vs Stockfish' : 'Play vs human'} right={G.tc || 'No clock'}>
+    <Panel box={{ ...L.comment, scroll: !L.comment.flow }} a={1} part="game-details" title={sfGame ? 'Play vs computer' : 'Play vs human'} right={G.tc || 'No clock'}>
       <div>{body}</div>
     </Panel>
   );
@@ -236,8 +243,8 @@ function GameInfo({ board }) {
 // offered by the side to move and accepted by the other; against Stockfish there is no draw offer, and the player resigns),
 // and Claim a draw when the side to move can (vs human: a threefold repetition or the fifty-move rule),
 // or the result with Play again beside it and Analyse on the free board below. down: why Stockfish can't answer, if so,
-// and retry asks it again (Try again)
-function GameStatus({ board, onChange, down, why, retry }) {
+// and retry asks it again (Try again). tip: against Stockfish, the hint's state { san, left, wait, failed, ask } (FreeBoard's hintInfo)
+function GameStatus({ board, onChange, down, why, retry, tip }) {
   const P = window.PlayCore, G = board.game, last = board.steps.length ? board.steps[board.steps.length - 1] : null;
   const turn = (last ? last.pos : board.start.pos).turn, side = sideName(turn), sfGame = G.mode === 'stockfish';
   // the question waiting on an answer: 'resign' or 'draw'; another position or result drops it
@@ -286,9 +293,15 @@ function GameStatus({ board, onChange, down, why, retry }) {
           <FrameButton color={C.dim} onClick={() => setAsk(null)}>Keep playing</FrameButton>
         </React.Fragment>) : row(<React.Fragment>
           {trouble && retry && <FrameButton primary color={C.last} onClick={retry}>Try again</FrameButton>}
+          {mine && !behind && !trouble && tip && !tip.san && (tip.left > 0
+            ? <FrameButton color={C.best} disabled={tip.wait} onClick={tip.ask}>Hint · {tip.left} left</FrameButton>
+            : <span style={{ font: `600 ${tx(15)}px ${MONO}`, letterSpacing: '0.1em', textTransform: 'uppercase', color: C.dim }}>No hints left</span>)}
           {P.canTakeback(board) && <FrameButton color={C.dim} onClick={() => onChange(P.takeback(board, now()))}>Take back</FrameButton>}
           <FrameButton color={C.dim} onClick={() => setAsk('resign')}>Resign</FrameButton>
         </React.Fragment>)}
+        {mine && !behind && tip && (tip.san || tip.wait || tip.failed) && <span className="game-hint" role="status" style={{ display: 'block', marginTop: tx(14), font: `600 ${tx(18)}px ${SANS}`, color: tip.failed ? C.blunder : C.best }}>
+          {tip.san ? `Hint: ${tip.san} · ${tip.left} left` : tip.wait ? 'Stockfish is looking for a move…' : 'Stockfish found no move: ask again'}
+        </span>}
         {backNote}
       </React.Fragment>
     );
@@ -339,6 +352,23 @@ function FreeBoard({ board, onChange, tw, setTweak, onLichess, sf, nav, orient, 
   const boardKey = board.fen + '|' + B.ucis(board).join(' ');
   // the viewer's circles and arrows, until another position
   const draw = useBoardDraw(boardKey);
+  // a hint against Stockfish: the one had for the position, drawn as an arrow and named in the Game box while the game
+  // waits at it; hintAt: the position a hint is being looked for in ({ key, failed })
+  const myTurn = sfGame && live && !behind && gameTurn(board) === G.you, had = myTurn ? P.hintFor(board) : null;
+  const [hintAt, setHintAt] = React.useState(null);
+  const hintNow = hintAt && hintAt.key === boardKey ? hintAt : null;
+  const askHint = async () => {
+    const k = boardKey;
+    setHintAt({ key: k });
+    const best = await opponent.hint();
+    const { board: b, onChange: set } = latest.current;
+    if (b.fen + '|' + B.ucis(b).join(' ') !== k) return;
+    const nb = best ? P.addHint(b, b.steps.length, best) : b;
+    setHintAt(nb !== b ? null : { key: k, failed: true });
+    if (nb !== b) set(nb);
+  };
+  const hintMove = had ? window.ChessCore.applyUci(pos, had.best) : null;
+  const hintInfo = sfGame && live ? { san: hintMove ? hintMove.san : null, left: P.hintsLeft(board), wait: !!hintNow && !hintNow.failed, failed: !!hintNow && !!hintNow.failed, ask: askHint } : null;
   // the explorer row under the pointer: its move is drawn as an arrow on the board
   const [hov, setHov] = React.useState(null);
   // the Analysis line under the mouse, as the steps it would play: shown on the board until the mouse leaves
@@ -436,7 +466,7 @@ function FreeBoard({ board, onChange, tw, setTweak, onLichess, sf, nav, orient, 
       {!G && (deadv || tbv ? <EvalBarView cp={(deadv || tbv).cp} txt={(deadv || tbv).txt} a={1} /> : <EvalBarView cp={cp == null ? 0 : cp} txt={cp == null ? (down ? '' : '…') : fmtSf(cp)} a={1} />)}
       <FreeBar pos={pos} side="b" a={1} clock={clockOf('b')} name={G ? playerName(G, 'b') : null} />
       <BoardSpace onStep={!steps.length ? null : (d) => goIf(upto + d)}>
-        <LineBoard a={1} sq={boardSquares()} v={pv && pv.length ? { upto: upto + pv.length, moves: [...steps.slice(0, upto + 1), ...pv], base: board.start.pos, src: 'you' } : { upto, moves: steps, base: board.start.pos, src: 'you' }} hide={input.drag && input.drag.moved ? input.drag.from : null} arrows={hovArrows(!G && tw.bestArrows !== false ? lineArrows(ev.after) : null, hov)} sel={input.sel} />
+        <LineBoard a={1} sq={boardSquares()} v={pv && pv.length ? { upto: upto + pv.length, moves: [...steps.slice(0, upto + 1), ...pv], base: board.start.pos, src: 'you' } : { upto, moves: steps, base: board.start.pos, src: 'you' }} hide={input.drag && input.drag.moved ? input.drag.from : null} arrows={hintMove ? [{ uci: had.best, k: 1 }] : hovArrows(!G && tw.bestArrows !== false ? lineArrows(ev.after) : null, hov)} sel={input.sel} />
         <BoardDraw draw={draw} hidden={!!(pv && pv.length)}>
           <BoardTouch pos={pos} targets={input.targets} drag={input.drag} promo={input.promo} {...(still ? stillInput : input.handlers)} />
         </BoardDraw>
@@ -445,7 +475,7 @@ function FreeBoard({ board, onChange, tw, setTweak, onLichess, sf, nav, orient, 
       {L.header && !upright && <Header M={HM} a={1} />}
       <MoveList M={MV} T={upto + 0.999} S={S} a={1} paused onPick={go} deadAt={deadAt} end={end} startAt={G && G.from} />
       {G ? <GameInfo board={board} /> : tb ? <TablebaseExplorer t={tb} posKey={boardKey} onPlay={onBook} /> : xl ? <LichessExplorer x={xl} tw={tw} setTweak={setTweak} onGame={onLichess} posKey={boardKey} onPlay={onBook} onHover={setHov} white={pos.turn === 'w'} fallback={<OpeningExplorer board={board} book={book} onPlay={onBook} onHover={setHov} />} /> : <OpeningExplorer board={board} book={book} onPlay={onBook} onHover={setHov} />}
-      {G ? <Panel box={L.analysis} part="game" a={1} style={NO_SELECT} title="Game"><GameStatus board={board} onChange={onChange} down={opponent.down} why={sf.why} retry={opponent.retry} /></Panel>
+      {G ? <Panel box={L.analysis} part="game" a={1} style={NO_SELECT} title="Game"><GameStatus board={board} onChange={onChange} down={opponent.down} why={sf.why} retry={opponent.retry} tip={hintInfo} /></Panel>
         : <AnalysisPanel box={L.analysis} a={1} paused depth={down && !sf.off ? null : searchDepth(ev.after)} deep={ev}>
         {upto < 0
           ? <React.Fragment>
@@ -594,7 +624,7 @@ function DialogChoice({ label, value, options, onChange }) {
   );
 }
 
-// Play vs human or vs Stockfish (mode): where the game starts (the starting position, or the open board's set-up position
+// Play vs human or vs computer (mode): where the game starts (the starting position, or the open board's set-up position
 // when it has one), the clock, and against Stockfish the side the player takes (side: 'w', 'b' or 'random', resolved when
 // the game starts). onStart({ fen, tc, you })
 // Start from: the starting position, or a set-up one: the board's, or with none set up, one set up in the editor first
@@ -616,13 +646,13 @@ function PlayDialog({ mode = 'human', setUpFen, here, clock, side, initial, onSt
   const froms = (at ? [{ label: 'This position', value: 'here' }] : []).concat([{ label: 'Starting position', value: 'start' }, { label: 'Set-up position', value: 'setup' }], onFromImage ? [{ label: 'From image', value: 'image' }] : []);
   const n = at ? at.moves.length : 0;
   return (
-    <DialogBox label={sfGame ? 'Play vs Stockfish' : 'Play vs human'} part="play" onClose={onClose}>
+    <DialogBox label={sfGame ? 'Play vs computer' : 'Play vs human'} part="play" onClose={onClose}>
       <DialogChoice label="Start from" value={from} options={froms} onChange={setFrom} />
       {sfGame && <DialogChoice label="You play" value={you} options={[{ label: 'White', value: 'w' }, { label: 'Black', value: 'b' }, { label: 'Random', value: 'random' }]} onChange={setYou} />}
       <DialogChoice label="Time control" value={tc} options={[{ label: 'Off', value: null }].concat(window.PlayCore.TIME_CONTROLS.map((x) => ({ label: x, value: x })))} onChange={setTc} />
       {from === 'here' && at && <div className="fen-note play-here-note">{n ? `The game goes on from the position on the board, keeping the ${n} move${n === 1 ? '' : 's'} before it; Take back stops there.` : 'The game starts from the position on the board.'}</div>}
       <div className="fen-note">{sfGame
-        ? 'Stockfish 19 plays at full strength and replies after a short pause; the board stays on your side. No hints during the game, but Stockfish says when one of your moves is an inaccuracy, a mistake or a blunder. Take back is a button by Resign.'
+        ? `The computer, Stockfish 19 (a chess engine), plays at full strength and replies after a short pause; the board stays on your side. It says when one of your moves is an inaccuracy, a mistake or a blunder, and Hint shows its best move, ${window.PlayCore.HINTS} times a game. Take back is a button by Resign.`
         : 'Two players at this screen. The board turns after each move, so the side to move plays from the bottom; Take back is a button by Resign. Stockfish stays off until the game ends.'}</div>
       <div className="fen-btns">
         <button type="button" className="twk-btn secondary" onClick={onClose}>Cancel</button>
@@ -667,7 +697,7 @@ function MyGamesDialog({ games, current, onReplay, onResume, onDelete, onClose }
           {rows.map(({ e, b }) => {
             const g = b.game, own = P.played(b), r = g.result && P.resultText(g.result), turn = gameTurn(b) === 'w' ? 'White' : 'Black';
             const head = r ? `${r.score} · ${r.why}` : `In progress · ${turn} to move`;
-            const meta = [g.mode === 'stockfish' && `vs Stockfish · you played ${sideName(g.you)}`, window.ChessCore.fmtDate(g.date), g.tc || 'no clock', `${own} move${own === 1 ? '' : 's'}`,
+            const meta = [g.mode === 'stockfish' && `vs computer · you played ${sideName(g.you)}`, window.ChessCore.fmtDate(g.date), g.tc || 'no clock', `${own} move${own === 1 ? '' : 's'}`,
               g.from ? `from after ${window.BoardCore.label(b, g.from - 1)}` : b.fen === window.ChessCore.START_FEN ? 'from the starting position' : 'from a set-up position'].filter(Boolean).join(' · ');
             return (
               <li key={e.id} className="games-row">
@@ -688,7 +718,7 @@ function MyGamesDialog({ games, current, onReplay, onResume, onDelete, onClose }
             );
           })}
         </ul>
-      ) : <div className="fen-note">No games yet. A game of Play vs human or Play vs Stockfish is kept here from its first move.</div>}
+      ) : <div className="fen-note">No games yet. A game of Play vs human or Play vs computer is kept here from its first move.</div>}
       <div className="fen-note">A finished game replays like a loaded one: analyse it with Stockfish, ask Queen, save it as a PGN or export a video. The 50 most recent games are kept, in this browser only.</div>
       <div className="fen-btns">
         <button ref={closeBtn} type="button" className="twk-btn secondary" data-autofocus onClick={onClose}>Close</button>

@@ -26,7 +26,7 @@ class by hand on anything else.
 | `part-commentary` | Commentary | The notes and the book name (replay) | `Commentary`, `L.comment` |
 | `part-opening-explorer` | Opening explorer | Book moves, or Lichess's explorer when it's on (free board, in Commentary's place) | `OpeningExplorer`, `LichessExplorer` |
 | `part-tablebase` | Endgame tablebase | Tablebase answers (in Commentary's place) | `app/tablebase.jsx` |
-| `part-game-details` | Game details | The panel titled Play vs human / Play vs Stockfish during a game: where it started, the clock, the critique | `GameInfo` (`app/free-board.jsx`) |
+| `part-game-details` | Game details | The panel titled Play vs human / Play vs computer during a game: where it started, the clock, the critique | `GameInfo` (`app/free-board.jsx`) |
 | `part-analysis` | Analysis | Stockfish's lines, depth and engine options button | `AnalysisPanel`, `L.analysis` |
 | `part-engine-menu` | Engine menu | Analysis's engine options, opened from its ☰ button, inside Analysis | `.an-engine` |
 | `part-game` | Game | The panel titled Game during a game: whose move or the result, and Take back, Offer a draw, Resign (in Analysis's place) | `GameStatus` |
@@ -52,7 +52,7 @@ Each is `part-<name>-dialog`, on the dialog box itself.
 | --- | --- |
 | `part-import-game-dialog` | Import game |
 | `part-position-from-image-dialog` | Position from image |
-| `part-play-dialog` | Play vs human / Play vs Stockfish |
+| `part-play-dialog` | Play vs human / Play vs computer |
 | `part-leave-game-dialog` | Leave this game? |
 | `part-my-games-dialog` | My games |
 | `part-shortcuts-dialog` | Keyboard shortcuts |

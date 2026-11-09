@@ -157,7 +157,7 @@
       dock: dock ? box(sx, h - MARGIN - DOCK_H, sw, DOCK_H) : null,
     };
     if (view === 'edit') { L.panel = box(sx, top, sw, bottom - top); return L; }
-    // no Game info in a game (vs human or vs Stockfish): the panels under it move up
+    // no Game info in a game (vs human or vs computer): the panels under it move up
     L.header = dock || view === 'game' ? null : box(sx, top, sw, HEADER_H * text);
     let rest = L.header ? bottom - top - L.header.h - GAP : bottom - top; // under the header
     let plotSide = false;
