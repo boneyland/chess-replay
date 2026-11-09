@@ -87,3 +87,38 @@ test('shouldTurn: the red-framed diagram with labels in its frame band, read fro
   assert.equal(VG.shouldTurn(im, box, b), false);
   assert.equal(VG.shouldTurn(im, box, b.slice().reverse()), true);
 });
+
+// a cell as ink gives it, drawn in rows of '#' (ink) and '.'
+const cell = (...rows) => {
+  const w = rows[0].length, h = rows.length, bits = new Uint8Array(w * h);
+  let n = 0, x0 = w, y0 = h, x1 = 0, y1 = 0;
+  rows.forEach((r, y) => [...r].forEach((ch, x) => { if (ch === '#') { bits[y * w + x] = 1; n++; x0 = Math.min(x0, x); x1 = Math.max(x1, x + 1); y0 = Math.min(y0, y); y1 = Math.max(y1, y + 1); } }));
+  return { n, x0, y0, x1, y1, w, h, bits };
+};
+const EIGHT = cell('..####..', '.##..##.', '.##..##.', '..####..', '.##..##.', '##....##', '##....##', '.##..##.', '..####..');
+const ONE = cell('...##...', '..###...', '.####...', '...##...', '...##...', '...##...', '...##...', '...##...', '.######.');
+const A = cell('.#####..', '##...##.', '.....##.', '.....##.', '.######.', '##...##.', '##...##.', '##..###.', '.###.##.');
+const H = cell('##......', '##......', '##.###..', '###..##.', '##...##.', '##...##.', '##...##.', '##...##.', '........');
+const MID = cell('..###...', '.#...#..', '.....#..', '....#...', '...#....', '..#.....', '.#####..', '........', '........');
+
+test('holes: an 8 two, a 1 none, an a one; a gap a corner wide still closes', () => {
+  assert.equal(VG.holes(EIGHT), 2);
+  assert.equal(VG.holes(ONE), 0);
+  assert.equal(VG.holes(A), 1);
+  assert.equal(VG.holes(H), 0);
+  assert.equal(VG.holes(cell('.#.', '#.#', '.#.')), 1);
+  assert.equal(VG.holes(cell('##.', '#.#', '.##')), 1);
+});
+// the 2026-11-03 gap: a board turned a quarter puts its file letters down the side, a to h; ink alone (an "a" over a
+// lighter "h" by 1.35, in some font) passed them for digits and turned a good read without a word
+test('ends: "8" over "1" read by shape, so letters down the side are no answer however their ink compares', () => {
+  const mids = [MID, MID, MID, MID, MID, MID];
+  assert.ok(VG.ends([EIGHT, ...mids, ONE]) > 0);
+  assert.ok(VG.ends([ONE, ...mids, EIGHT]) < 0);
+  assert.equal(VG.ends([A, ...mids, H]), 0); // "h" is no "1": too wide
+  assert.equal(VG.ends([H, ...mids, A]), 0); // "a" has a hole
+  const light = cell('...#....', '..##....', '...#....', '...#....', '...#....', '...#....', '...#....', '...#....', '..###...');
+  assert.ok(A.n / light.n >= 1.35);
+  assert.equal(VG.ends([A, ...mids, light]), 0, 'a narrow "1" under an "a": no two holes up top');
+  assert.equal(VG.ends([EIGHT, EIGHT, ...mids.slice(1), ONE]), 0, 'the "8" end must carry the most ink');
+});

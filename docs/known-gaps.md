@@ -41,7 +41,7 @@ Deferred by the per-plan reviews; each was true when recorded and may since have
 **Position from image** (2026-11-03)
 - `tests/fixtures/vision-diagram.png` (a book-style diagram drawn here) reads its c4 bishop as a pawn in both browsers, framed or cropped, though the 2026-11-03 tests found real diagrams exact once cropped; and its read rarely marks a square to check (only cropped, in Chromium at 1440×900). The live test asserts no read of it, and doesn't cover the outlines: an edit dropping one was checked by hand in Chromium, a typed FEN dropping one (the same rule, `sureOf` in `GameApp`) not in a browser.
 - Reading speed on a phone is unmeasured.
-- Board auto-crop: the rank labels are told apart by ink alone. A labelled diagram turned a quarter (its file letters down the side) came out at 1.21 against the 1.35 needed to count as "8" over "1", so an unusual font could still pass letters for digits and turn a good read without a word; reading the digits themselves (matching them against "1" and "8" drawn in the page's fonts, or the whole 1–8 sequence) would be safer. The tilted-board test picture's noise layer doesn't show in its screenshot (the tilt alone keeps it from being an upright grid); the picture with no board has noise.
+- Board auto-crop: the tilted-board test picture's noise layer doesn't show in its screenshot (the tilt alone keeps it from being an upright grid); the picture with no board has noise.
 
 **Full Stockfish download** (2026-10-24)
 - The benchmarks behind the limits were not redone for Full, and the starting pace factors (asm.js 8, Full 1.3: `AnalysisCore.paceStart`) come from one laptop in Chromium, three positions to depth 16 (2026-11-09).
