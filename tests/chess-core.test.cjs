@@ -102,6 +102,39 @@ test('cutechess engine comments in a game starting with Black to move are turned
   assert.deepEqual(M.plies.map((p) => p.cp), [-100, 200]);
 });
 
+test('a cutechess eval needs its time or the comment\'s end: a fraction in words isn\'t one', () => {
+  const M = CC.buildGame({ pgn: '1. e4 {3/4 of players choose this} e5 {+0.40/12} *' });
+  assert.equal(M.plies[0].cp, undefined);
+  assert.equal(M.plies[0].comment, '3/4 of players choose this');
+  assert.equal(M.plies[1].cp, -40);
+});
+
+test('TimeControl gives the first period\'s seconds, a move count before it or not', () => {
+  const clock = (tc) => CC.buildGame({ pgn: `[TimeControl "${tc}"]\n\n1. e4 e5 *` }).clockStart;
+  assert.equal(clock('40/7200:3600'), 7200);
+  assert.equal(clock('300+2'), 300);
+});
+
+test('splitGames: a tag line inside a comment stays in its game, and header-less games split after their result', () => {
+  assert.deepEqual(CC.splitGames('[White "A"]\n\n1. e4 {a note\n[Event "x"]\nends} e5 *').length, 1);
+  assert.deepEqual(CC.splitGames('1. e4 e5 1-0\n\n1. d4 d5 0-1').map((g) => g.trim()), ['1. e4 e5 1-0', '1. d4 d5 0-1']);
+  assert.equal(CC.splitGames('1. e4 (1. d4 1-0)\ne5 *').length, 1, 'a result in a variation ends nothing');
+  assert.equal(CC.splitGames('1. e4 {ends 1-0}\ne5 *').length, 1, 'nor one in a comment');
+  assert.equal(CC.splitGames('1. e4 e5 1-0\n{a last word}\n').length, 1, 'a comment after the result stays with its game');
+  assert.equal(CC.splitGames('[White "A"]\n\n1. e4 *\n\n[White "B"]\n\n1. d4 *').length, 2);
+});
+
+test('SAN castling needs the king on its square', () => {
+  assert.throws(() => CC.buildGame({ pgn: '[SetUp "1"]\n[FEN "k7/8/8/8/8/8/3K4/4R3 w - - 0 1"]\n\n1. O-O *' }), /not a legal move/);
+});
+
+test('posFromFen keeps an en passant square a pawn just crossed, and drops one none did', () => {
+  assert.equal(CC.posFromFen('4k3/8/8/3pPp2/8/8/8/4K3 w - f6 0 2').ep, CC.sqIndex('f6'));
+  assert.equal(CC.posFromFen('4k3/8/8/3pP3/8/8/8/4K3 w - f6 0 2').ep, -1);
+  assert.equal(CC.posFromFen('4k3/8/8/3pPp2/8/8/8/4K3 w').ep, -1);
+  assert.ok(CC.applyUci(CC.posFromFen('4k3/8/8/3pPp2/8/8/8/4K3 w - f6 0 2'), 'e5f6'));
+});
+
 // a PGN's move is checked as fully as a move on the board: an illegal one would otherwise corrupt every position after it
 test('illegal castling and promotions in a PGN are refused', () => {
   const bad = (pgn) => assert.throws(() => CC.buildGame({ pgn }), /not a legal move/);

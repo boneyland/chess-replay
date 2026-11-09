@@ -88,3 +88,11 @@ test('a Stockfish game is kept and playable, its side and critique with it', () 
   assert.deepEqual(B.ucis(back), ['e2e4', 'e7e5', 'g1f3']);
   assert.match(P.pgn(back), /\[White "Stockfish 19"\]\n\[Black "You"\]/);
 });
+
+test('an unreadable stored list reads as empty but says so, so a write can set it aside first', () => {
+  for (const raw of [null, '', '[]', JSON.stringify([{ id: 'x' }])]) assert.equal(G.readable(raw), true, String(raw));
+  for (const raw of ['{', '{"a":1}', '"text"']) {
+    assert.equal(G.readable(raw), false, raw);
+    assert.deepEqual(G.read(raw), []);
+  }
+});

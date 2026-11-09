@@ -128,6 +128,14 @@
   // false when it can, null when not known (yet); read synchronously, so a game only ends on an answer already in
   let prover = null;
   const setProver = (fn) => { prover = fn || null; };
+  // color proven unable to mate in the board's last position, or in any position before it on the line: a side that
+  // can't mate stays unable after any legal move, so a proof outlives a later position's pending or undecided search
+  function provenUnable(board, color) {
+    if (!prover) return false;
+    if (prover(board.start.pos, color) === true) return true;
+    for (const s of board.steps) if (prover(s.pos, color) === true) return true;
+    return false;
+  }
 
   // The end of the game in the position after the board's last move, or null while it goes on. With claim (vs human) a
   // threefold repetition and the fifty-move rule only let the side to move claim a draw (claimable); the game ends by
@@ -141,7 +149,7 @@
     const draw = (reason) => ({ result: '1/2-1/2', reason });
     if (!canMate(pos, 'w') && !canMate(pos, 'b')) return draw('material');
     if (lockedDead(pos)) return draw('dead');
-    if (prover && prover(pos, 'w') === true && prover(pos, 'b') === true) return draw('dead');
+    if (provenUnable(board, 'w') && provenUnable(board, 'b')) return draw('dead');
     const { half, seen } = drawCounts(board);
     if (claim) return half >= 150 ? draw('seventyfive') : seen >= 5 ? draw('fivefold') : null;
     if (half >= 100) return draw('fifty');
@@ -192,13 +200,13 @@
   };
 
   // The side to move out of time: a loss, or a draw when the other side can't mate (no mating material, or the prover
-  // says so). The board as it was otherwise
+  // says so of this position or an earlier one). The board as it was otherwise
   function flag(b, now) {
     if (!inProgress(b) || !b.game.clock || b.game.clock.since == null) return b;
     const side = lastPos(b).turn;
     if (timeLeft(b, side, now) > 0) return b;
     const c = charged(b, now), opp = other(side);
-    const pos = lastPos(b), dead = !canMate(pos, opp) || (prover && prover(pos, opp) === true);
+    const pos = lastPos(b), dead = !canMate(pos, opp) || provenUnable(b, opp);
     const result = dead ? '1/2-1/2' : opp === 'w' ? '1-0' : '0-1';
     return withGame(b, { clock: { ...c, left: { ...c.left, [side]: 0 } }, result: { result, reason: 'time', side } });
   }
