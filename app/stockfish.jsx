@@ -397,10 +397,10 @@ const CLOUD_DEBOUNCE_MS = 300; // after the last position change (stepping throu
 // is then undone, so the + comes back to try again
 // progress: 0–1 through the searches still to run while pending (each one's depth or time limit, whichever it nears first)
 // stored: a loaded analysis's result for after (with before the same moves), standing in for the first search, which
-// then never runs: only a press of Go deeper searches. Results from it carry stored: true; its src names the evals it
+// then never runs: only a press of Go deeper (or auto) searches. Results from it carry stored: true; its src names the evals it
 // comes from, so presses on one analysis's move don't carry over to another's (or the PGN's) once it is removed
-// cloud: Settings › Online › Lichess cloud evaluation ({ on, prefer }); with stored, only once Go deeper is pressed
-// (the analysis's own eval stands until then, and its ratings are never touched): each position asks the cloud (after CLOUD_DEBOUNCE_MS, at once when cached) while the local search runs; whichever comes first
+// cloud: Settings › Online › Lichess cloud evaluation ({ on, prefer }); with stored, only once Go deeper is pressed or auto
+// runs its first level (the analysis's own eval stands until then, and its ratings are never touched): each position asks the cloud (after CLOUD_DEBOUNCE_MS, at once when cached) while the local search runs; whichever comes first
 // shows, and a finished local search replaces the cloud's only when deeper. prefer: a position the cloud has as deep
 // as the local depth limit (AnalysisCore.cloudEnough: with No limit, 35, or 22 for asm.js) isn't searched locally. A miss falls back silently
 const cloudSetting = (tw) => ({ on: !!(tw && tw.cloudEval), prefer: !!(tw && tw.cloudPrefer) });
@@ -421,12 +421,14 @@ function useMoveEval(engine, before, after, own, fen, stored, cloud, off, auto) 
   // off: the deepest level pressed whose searches both finished (the stored result at 0)
   const linesOf = (which) => (which === 'after' || before.join(' ') === after.join(' ') ? own.lines || 1 : 1);
   const finished = (lv) => ['after', 'before'].every((w) => SF_EVAL_CACHE.has(keyOf(toSearch(A.deeperSearch(own, lv), linesOf(w)), w === 'after' ? after : before)));
-  const pressed = SF_DEEPER.has(baseKey) ? SF_DEEPER.get(baseKey) : auto && stored ? 1 : 0;
+  // auto's level counts as a press, so it stays (with the cloud's answers) once the switch goes off, as a press's does
+  if (auto && stored && after && !SF_DEEPER.has(baseKey)) SF_DEEPER.set(baseKey, 1);
+  const pressed = SF_DEEPER.get(baseKey) || 0;
   let level = pressed;
   if (off && after) while (level > 0 && !finished(level)) level--;
   const search = toSearch(A.deeperSearch(own, level));
   const sfKey = (moves) => keyOf(search, moves);
-  // a stored result asks the cloud once Go deeper is pressed, whatever the local searches got to (off keeps it asked)
+  // a stored result asks the cloud once Go deeper is pressed (or auto ran), whatever the local searches got to (off keeps it asked)
   const cloudOn = !!(cloud && cloud.on && CLOUD && after && (!stored || pressed > 0)), prefer = cloudOn && !!cloud.prefer;
   const key = after ? sfKey(after) + (cloudOn ? (prefer ? '|cloud+' : '|cloud') : '') + (off ? '|off' : '') : '';
   const empty = { key: '', before: null, after: null, cloud: {}, pending: false, progress: 0 };

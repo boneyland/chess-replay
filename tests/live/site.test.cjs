@@ -2515,8 +2515,9 @@ for (const name of BROWSERS) for (const site of SITES) {
       assert.deepEqual(ex.errors.filter((e) => !/status of 401/.test(e)), []);
       await ex.ctx.close();
     });
-    // Go deeper on a loaded analysis's move asks the cloud (the setting on): stepping onto the move sends nothing, the
-    // analysis's eval stands until the press, and the cloud's deeper answer then shows, labelled
+    // Go deeper on a loaded analysis's move asks the cloud (the setting on): with Stockfish off, stepping onto the move
+    // sends nothing and the analysis's eval stands; with it on, Go deeper's first level runs by itself (auto) and the
+    // cloud's deeper answer shows, labelled
     await t.test('desktop: Go deeper on an analysed move takes the cloud\'s answer', async () => {
       const gd = await open(browser, { width: 1440, height: 900 });
       const p = gd.page, sent = [];
@@ -2527,12 +2528,13 @@ for (const name of BROWSERS) for (const site of SITES) {
       await p.getByRole('tab', { name: 'Online' }).click();
       await p.getByRole('switch', { name: /Lichess cloud evaluation/ }).click();
       await p.keyboard.press('Escape');
+      const sfSwitch = p.getByRole('switch', { name: 'Stockfish' });
+      await sfSwitch.click();
       await p.locator('[data-ply="0"]').click();
       const deeper = p.getByRole('button', { name: /^Go deeper/ });
-      await deeper.waitFor({ timeout: 20000 });
       await p.waitForTimeout(800);
-      assert.deepEqual(sent, [], 'the analysis\'s eval stands until Go deeper');
-      await deeper.click();
+      assert.deepEqual(sent, [], 'with Stockfish off, the analysis\'s eval stands');
+      await sfSwitch.click();
       await p.waitForFunction(() => /cloud depth \d+/i.test(document.body.innerText), null, { timeout: 20000 });
       assert.equal(new Set(sent).size, 1, 'the move\'s position asked');
       await p.screenshot({ path: path.join(OUT, host + '-cloud-go-deeper.png') });
@@ -2547,7 +2549,7 @@ for (const name of BROWSERS) for (const site of SITES) {
         const tick = () => { look(); if (performance.now() - t0 < 1000) requestAnimationFrame(tick); else mo.disconnect(); };
         requestAnimationFrame(tick);
       });
-      await p.getByRole('switch', { name: 'Stockfish' }).click();
+      await sfSwitch.click();
       await p.waitForTimeout(1200);
       assert.match(await p.locator('.part-analysis').innerText(), /cloud depth \d+/i, 'the cloud\'s answer with Stockfish off');
       const frames = await p.evaluate(() => window.__frames);
@@ -2574,15 +2576,18 @@ for (const name of BROWSERS) for (const site of SITES) {
       await p.addInitScript(() => { try { localStorage.setItem('chess-video.tweaks.v1', JSON.stringify({ cloudEval: true })); } catch (e) {} });
       await p.goto(base, { waitUntil: 'load' });
       await loadedOn(p);
+      // Stockfish off while stepping onto a move: the analysis's line and eval, nothing deeper asked
+      const sfSwitch = p.getByRole('switch', { name: 'Stockfish' });
+      await sfSwitch.click();
       await p.locator('[data-ply="0"]').click();
       const firstChip = () => p.locator('.part-analysis').locator('div', { has: p.locator('span', { hasText: /^Best line$/ }) }).last().locator('.mv').first().innerText();
       const bar = () => p.locator('.part-eval-bar').innerText();
-      const deeper = p.getByRole('button', { name: /^Go deeper/ });
-      await deeper.waitFor({ timeout: 20000 });
+      await p.waitForTimeout(800);
       const before = await firstChip();
       assert.doesNotMatch(before, /^[ah][36]$/, 'the analysis\'s own line first');
       assert.notEqual(await bar(), '+3.21');
-      await deeper.click();
+      // on: Go deeper's first level runs by itself and the cloud answers it
+      await sfSwitch.click();
       await p.waitForFunction(() => /cloud depth 60/i.test(document.body.innerText), null, { timeout: 20000 });
       assert.match(await firstChip(), /^[ah][36]$/, 'the cloud\'s line');
       assert.equal(await bar(), '+3.21');
@@ -2601,9 +2606,11 @@ for (const name of BROWSERS) for (const site of SITES) {
       // its line goes on the next move in place of the analysis's: after 2. g3 the cloud's 2... a6 is 2... Nf6's line
       const nf6 = (txt) => txt.split('\n\n')[1].replace(/\n/g, ' ').match(/2\.\.\. Nf6 \{[^}]*\}( \([^)]*\))?/)[0];
       assert.match(nf6(pgn), /\(2\.\.\. g6 /, 'the analysis\'s line before: ' + nf6(pgn));
+      await sfSwitch.click();
       await p.locator('[data-ply="2"]').click();
-      await p.getByRole('button', { name: /^Go deeper/ }).click();
-      await p.waitForFunction(() => /cloud depth 60/i.test(document.body.innerText), null, { timeout: 20000 });
+      await p.waitForFunction(() => !/cloud depth 60/i.test(document.querySelector('.part-analysis').innerText), null, { timeout: 5000 });
+      await sfSwitch.click();
+      await p.waitForFunction(() => /cloud depth 60/i.test(document.querySelector('.part-analysis').innerText), null, { timeout: 20000 });
       assert.match(nf6(await annotated()), /\} \(2\.\.\. a6\)$/, 'Go deeper\'s line');
       assert.deepEqual(gl.errors, []);
       await gl.ctx.close();
