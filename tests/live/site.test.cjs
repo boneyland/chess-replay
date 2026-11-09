@@ -358,6 +358,45 @@ for (const name of BROWSERS) for (const site of SITES) {
       await best.nth(Math.floor((await best.count()) / 2)).click();
       await p.mouse.move(5, 5);
       await assert.doesNotReject(panel.filter({ hasText: /best line · .*(stockfish’s choice|cp vs|as good as)/i }).waitFor({ timeout: 60000 }), 'the best line\'s move rated');
+      // Stockfish's reply played on from it is Stockfish's, not the best line's
+      const reply = p.locator('.mv[role="button"][title^="Show Stockfish’s reply"]');
+      await reply.first().click();
+      await p.mouse.move(5, 5);
+      await assert.doesNotReject(panel.filter({ hasText: /stockfish’s reply · .*then Stockfish’s line to/i }).waitFor({ timeout: 60000 }), 'the reply named as Stockfish\'s');
+      // with Stockfish off, a picked move leaves the move's analysis and its lines in the panel
+      await p.keyboard.press('Escape');
+      await p.getByRole('switch', { name: 'Stockfish' }).click();
+      await best.first().click();
+      await p.mouse.move(5, 5);
+      await assert.doesNotReject(panel.filter({ hasText: /On the board: best line to/ }).waitFor({ timeout: 5000 }), 'the line shown');
+      assert.ok(await best.count() > 0, 'the Best line still listed');
+      assert.doesNotMatch(await panel.innerText(), /stockfish is off/i);
+      assert.deepEqual(g.errors, []);
+      await g.ctx.close();
+    });
+
+    // the progress line along the Analysis panel's top while a game analysis runs stays where the run is as the moves
+    // are stepped through (a move's search, which can't run then, sent it back to 0 at each move)
+    await t.test('desktop: a game analysis\'s progress line holds its place while stepping through the moves', async () => {
+      const g = await open(browser, { width: 1440, height: 900 });
+      const p = g.page;
+      await p.addInitScript(() => { try { if (!sessionStorage.getItem('seeded')) { sessionStorage.setItem('seeded', '1'); localStorage.setItem('chess-video.tweaks.v1', JSON.stringify({ sfTime: 1, sfGameThreads: 1 })); } } catch (e) {} });
+      // the progress line: the panel's only 3 px high bar with a width in per cent
+      await p.addInitScript(() => { window.__findBar = () => [...document.querySelectorAll('div')].find((d) => d.style.height === '3px' && /%$/.test(d.style.width)); });
+      await p.goto(base, { waitUntil: 'load' });
+      await loadedOn(p);
+      for (let i = 0; i < 5; i++) await p.keyboard.press('ArrowRight');
+      await p.getByRole('button', { name: 'Analyse the game' }).click();
+      await p.getByRole('dialog', { name: 'Analyse the game' }).getByRole('button', { name: /^Analyse again/ }).click();
+      await p.getByRole('button', { name: /^Analyse the game: analysing/ }).waitFor({ timeout: 15000 });
+      await p.waitForFunction(() => { const b = window.__findBar(); return b && parseFloat(b.style.width) > 0; }, null, { timeout: 60000 });
+      // the bar's width every frame
+      await p.evaluate(() => { window.__bar = []; const tick = () => { const b = window.__findBar(); window.__bar.push(b ? b.getBoundingClientRect().width : -1); if (window.__bar.length < 2000) requestAnimationFrame(tick); }; tick(); });
+      for (let i = 0; i < 6; i++) { await p.keyboard.press('ArrowRight'); await p.waitForTimeout(250); }
+      const w = await p.evaluate(() => window.__bar);
+      const drops = w.slice(1).map((x, i) => w[i] - x).filter((d) => d > 0.5);
+      assert.ok(w.every((x) => x >= 0), 'the line shows throughout');
+      assert.deepEqual(drops, [], 'the line never goes back');
       assert.deepEqual(g.errors, []);
       await g.ctx.close();
     });
