@@ -250,10 +250,10 @@ function useGameAnalysis(M, files, getFiles, commit, engine, settings, tbOn) {
   const tbAt = React.useMemo(() => (tb ? sfTbPositions(M) : []), [ucisKey, M.start.fen, tb]);
   // seconds for positions from..N: Stockfish's at perSec, the tablebase's at tbSec
   const secondsFrom = (from, perSec, tbSec = SF_TB_SECONDS) => { let t = 0; for (let k = from; k <= M.plies.length; k++) t += tbAt[k] ? tbSec : perSec; return t; };
-  React.useEffect(() => () => { if (run.current) { run.current.signal.aborted = true; run.current = null; } setSt(idle); }, [files.pgn, files.gameIndex || 0, !!files.sample, files.analysis]);
+  React.useEffect(() => () => { if (run.current) { run.current.ctl.abort(); run.current = null; } setSt(idle); }, [files.pgn, files.gameIndex || 0, !!files.sample, files.analysis]);
   const start = async () => {
     if (run.current) return;
-    const me = { signal: { aborted: false } };
+    const me = { ctl: new AbortController() };
     run.current = me;
     const ucis = M.plies.map((p) => p.uci), sans = M.plies.map((p) => p.san), N = ucis.length;
     const T = tb, prior = perPos;
@@ -274,7 +274,7 @@ function useGameAnalysis(M, files, getFiles, commit, engine, settings, tbOn) {
       if (eng && ((!eng.threaded && S.threads !== 1) || hashNow() !== S.hash_mb)) { S = { ...S, threads: eng.threaded ? S.threads : 1, hash_mb: hashNow() }; earlier = readSfPartial(ucis, S, M.start.fen, T); d0 = Math.max(0, earlier.length - 1); }
       timed.last = Date.now();
       const json = await window.AnalysisCore.runAnalysis({
-        engine: eng, ucis, sans, headers: M.headers, signal: me.signal, earlier, settings: S, startFen: M.start.fen, tablebase: T ? TB : null, tablebaseOn: () => tbRef.current,
+        engine: eng, ucis, sans, headers: M.headers, signal: me.ctl.signal, earlier, settings: S, startFen: M.start.fen, tablebase: T ? TB : null, tablebaseOn: () => tbRef.current,
         onSearched: (R, { searches = 0, tbMs = 0, tbAsks = 0 } = {}) => {
           S.hash_mb = hashNow();
           writeSfPartial(ucis, S, R, M.start.fen, T);
@@ -317,7 +317,7 @@ function useGameAnalysis(M, files, getFiles, commit, engine, settings, tbOn) {
     }, 1000);
     return () => clearInterval(id);
   }, [st.state]);
-  const stop = () => { if (run.current) { run.current.signal.aborted = true; run.current = null; } setSt(idle); };
+  const stop = () => { if (run.current) { run.current.ctl.abort(); run.current = null; } setSt(idle); };
   return { ...st, start, stop, resumeAt, plies: M.plies.length, estimateMin: Math.max(1, Math.ceil(secondsFrom(resumeAt ? resumeAt + 1 : 0, perPos) / 60)) };
 }
 

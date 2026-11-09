@@ -104,6 +104,7 @@ const sideName = (side) => (side === 'w' ? 'White' : 'Black');
 const playerName = (G, side) => (G && G.mode === 'stockfish' ? (side === G.you ? 'You' : 'Stockfish 19') : sideName(side));
 
 // Stockfish's reply lands no sooner than this after the player's move, so it reads as a reply rather than a jump
+// (within its think time, which the pause shares as it runs on Stockfish's clock: a low clock skips it)
 const REPLY_PAUSE_MS = 600;
 // the search of the position the player is to move in, the "before" of their move: long enough to rate it, then it stops
 // rather than run the CPU (a phone's battery) for as long as they think; their move stops it sooner. Whether the two
@@ -141,17 +142,19 @@ function useEngineOpponent(board, onChange, sf) {
       return () => { live = false; if (handle) handle.cancel(); };
     }
     const movedAt = Date.now(), prevKey = id + '|' + moves.slice(0, -1).join(' ');
+    // kept (not cleared) for a run again on the same moves, Try again's, which would otherwise leave the move unrated
     const prior = before.current && before.current.key === prevKey ? before.current.promise : null;
-    before.current = null;
     const same = (b) => P.inProgress(b) && b.game.id === id && b.steps.length === n && B.ucis(b, n).join(' ') === list;
     (async () => {
       const eng = await engine();
       if (!live || !eng) return;
-      handle = eng.search({ moves, fen, depth: null, movetimeMs: P.thinkMs(latest.current.board, Date.now()), priority: 'play' });
+      const startAt = Date.now(), think = P.thinkMs(latest.current.board, startAt);
+      handle = eng.search({ moves, fen, depth: null, movetimeMs: think, priority: 'play' });
       const r = await handle.promise, bf = prior ? await prior : null;
       if (!live) return;
       if (!r || !r.best) { setDown('stopped'); return; }
-      const wait = movedAt + REPLY_PAUSE_MS - Date.now();
+      // the pause runs on Stockfish's clock, so it ends by the think time's end: with a clock low (+0) none at all
+      const wait = Math.min(movedAt + REPLY_PAUSE_MS, startAt + think) - Date.now();
       if (wait > 0) await new Promise((res) => { timer = setTimeout(res, wait); });
       const { board: b, onChange: set } = latest.current;
       if (!live || !same(b)) return;
@@ -342,6 +345,9 @@ function FreeBoard({ board, onChange, tw, setTweak, onLichess, sf, nav, orient, 
   const [pv, setPv] = React.useState(null);
   // another position (a step, a takeback) drops a half-made move: a selected piece, the promotion picker
   React.useEffect(() => { input.clear(); setHov(null); setPv(null); }, [boardKey]);
+  // a board that stops taking moves (a flag fall, a late dead-position answer, Stockfish's turn) drops one half made:
+  // its handlers no longer answer, so a drag ghost, a hidden piece or the promotion picker would stay
+  React.useEffect(() => { if (still) input.clear(); }, [!!still]);
   // Stockfish rates the move on the board: the positions before and after it (before the first move, both the start); never in a game
   const ev = useMoveEval(sf.engine, G ? null : B.ucis(board, upto), G ? null : B.ucis(board), sf.own, board.fen, null, cloudSetting(tw), sf.off);
   const posBefore = upto > 0 ? steps[upto - 1].pos : board.start.pos;
@@ -378,7 +384,7 @@ function FreeBoard({ board, onChange, tw, setTweak, onLichess, sf, nav, orient, 
     return () => clearInterval(id);
   }, [running, G && G.clock && G.clock.since]);
   const now = Date.now();
-  const clockOf = (side) => (G && G.clock ? { s: P.timeLeft(board, side, now) / 1000, active: running && pos.turn === side } : null);
+  const clockOf = (side) => (G && G.clock ? { s: P.timeLeft(board, side, now) / 1000, active: running && gameTurn(board) === side } : null);
   // a move lands with its sound, as a line's moves do in the replay
   const stepKey = upto >= 0 ? upto + ':' + steps[upto].uci : '';
   const prevStep = React.useRef(stepKey);

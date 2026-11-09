@@ -238,6 +238,7 @@
 
   // Analyse every position of a game (ucis/sans from the start, or from startFen; the JSON then records it as start_fen), as analyze_game does: the search after a
   // move is also the search before the next one. Returns the --analyze JSON, or null when signal.aborted.
+  // signal: an AbortSignal (or any { aborted }); an abort through its 'abort' event also cancels the running search
   // earlier: searches of the first positions from a run that stopped, to resume from; onSearched gets every
   // search so far after each new one, so a run that stops can be resumed
   // settings: the engine settings to search with and to record (engineSettings().game)
@@ -258,7 +259,13 @@
     const backedOff = () => !!(tablebase.backedOff && tablebase.backedOff('tablebase'));
     let searches = 0, tbMs = 0, tbAsks = 0;
     const search = async (k) => {
-      const r = await engine.search({ moves: ucis.slice(0, k), fen: startFen, depth: settings.depth, movetimeMs: settings.time_limit * 1000, threads: settings.threads, lines: settings.lines || 1, priority: 'game' }).promise;
+      const h = engine.search({ moves: ucis.slice(0, k), fen: startFen, depth: settings.depth, movetimeMs: settings.time_limit * 1000, threads: settings.threads, lines: settings.lines || 1, priority: 'game' });
+      // an abort (Stop, a files change) cancels the running search: SFEngine never interrupts one, so every later
+      // search (the live one, Stockfish's reply in a game) would wait out its time limit behind it
+      const off = () => h.cancel();
+      if (signal.addEventListener) signal.addEventListener('abort', off);
+      let r;
+      try { r = await h.promise; } finally { if (signal.removeEventListener) signal.removeEventListener('abort', off); }
       searches++;
       if (!signal.aborted && (!r || r.cp == null)) throw new Error('Stockfish stopped before the analysis finished');
       return r;
