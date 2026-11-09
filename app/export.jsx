@@ -17,6 +17,11 @@ const EXPORT_FORMATS = ['MP4', 'WebM', 'WebP'];
 // MP4 and WebM need WebCodecs' VideoEncoder, which Firefox for Android lacks (2026-11): there only the WebP is offered
 const VIDEO_EXPORT = typeof VideoEncoder === 'function';
 const EXPORT_NO_VIDEO = 'MP4 and WebM need a video encoder this browser doesn’t have (Firefox for Android has none yet), so the export is an animated WebP.';
+// The WebP's encoder (webp_enc_simd) needs WebAssembly SIMD, as Stockfish's wasm does (SFEngine.simdSupport: Firefox on
+// 32-bit Android lacks it), so the WebP isn't offered without it
+const WEBP_EXPORT = !window.SFEngine || window.SFEngine.simdSupport();
+const EXPORT_NO_WEBP = 'No animated WebP here: its encoder needs WebAssembly SIMD, which this browser lacks.';
+const EXPORT_NONE = 'This browser can’t export a video: MP4 and WebM need a video encoder, and the animated WebP needs WebAssembly SIMD. Try a recent Chrome, Edge, Safari or desktop Firefox.';
 // A WebM is VP9 with Opus sound. It is offered where the encoder takes VP9 at 1080p (not every browser's does); the
 // frame's own size is checked again when the export starts. WEBM_OK: the answer once known (null before)
 let WEBM_OK = VIDEO_EXPORT ? null : false;

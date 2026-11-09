@@ -470,6 +470,7 @@ function AnalysisPanel({ box, a, depth, deep, paused, style, children }) {
       {shown ? <div className="an-engine part-engine-menu" onClick={stopHere} onPointerDown={stopHere}><div className="twk-flow">{E.body}</div></div>
         : <AnalysisStatContext.Provider value={{ depth, deep, paused }}>
           {E && E.runErr && <div role="alert" style={{ marginBottom: tx(10), font: `500 ${tx(15)}px ${MONO}`, color: C.blunder }}>{E.runErr}</div>}
+          {E && E.runNote && <div role="status" style={{ marginBottom: tx(10), font: `500 ${tx(15)}px ${MONO}`, color: C.dim }}>{E.runNote}</div>}
           <div className="an-lines" data-playing={paused ? undefined : '1'} style={{ display: 'contents' }}>{children}</div>
         </AnalysisStatContext.Provider>}
     </Panel>
@@ -717,14 +718,27 @@ const barPlace = (side) => ({
   position: 'absolute', left: barLeft(), width: barWidth(), height: L.bars.h, display: 'flex', alignItems: 'center',
   top: side === ORIENT ? L.board.y + L.board.size + L.bars.gap : L.board.y - L.bars.gap - L.bars.h,
 });
-// A game's player bar: the captures counted from the pieces taken by time T, the clock from the clocks in the PGN
+// The pieces a side has taken and its material edge, counted from the pieces on the board (left(colour, type)) against a
+// full set, so a position set up with an edge shows it: { taken, pts } for SideBar
+const FULL_SET = { q: 1, r: 2, b: 2, n: 2, p: 8 };
+function materialOf(side, left) {
+  const lost = (col, t) => Math.max(0, FULL_SET[t] - left(col, t));
+  const worth = (col) => Object.keys(FULL_SET).reduce((s, t) => s + left(col, t) * VALUE[t], 0);
+  const opp = side === 'w' ? 'b' : 'w', taken = {};
+  Object.keys(FULL_SET).forEach((t) => { taken[t] = lost(opp, t) - lost(side, t); });
+  return { taken, pts: worth(side) - worth(opp) };
+}
+// A game's player bar: the captures and material edge from the pieces on the board at time T (taken off as they are
+// captured, a pawn counted as its new piece once it has promoted, as the board draws them), the clock from the PGN's clocks
 function PlayerBar({ M, T, S, side, a, pieces }) {
   const P = side === 'w' ? M.white : M.black;
-  const cap = { w: {}, b: {} };
-  pieces.forEach((p) => { if (p.captured >= 0 && T >= S.tp[p.captured] + S.md[p.captured] * 0.6) cap[p.color][p.type] = (cap[p.color][p.type] || 0) + 1; });
-  const opp = side === 'w' ? 'b' : 'w', taken = {};
-  let pts = 0;
-  ['q', 'r', 'b', 'n', 'p'].forEach((t) => { taken[t] = (cap[opp][t] || 0) - (cap[side][t] || 0); pts += taken[t] * VALUE[t]; });
+  const count = { w: {}, b: {} };
+  pieces.forEach((p) => {
+    if (p.captured >= 0 && T >= S.tp[p.captured] + S.md[p.captured] * 0.6) return;
+    const type = p.promo && T >= S.tp[p.promo.ply] + S.md[p.promo.ply] ? p.promo.type : p.type;
+    count[p.color][type] = (count[p.color][type] || 0) + 1;
+  });
+  const { taken, pts } = materialOf(side, (col, t) => count[col][t] || 0);
   return <SideBar side={side} a={a} name={P.name} rating={[P.title, P.elo].filter(Boolean).join(' ')} taken={taken} pts={pts} clock={M.hasClock ? clockOf(M, side, T, S) : null} />;
 }
 
@@ -922,11 +936,13 @@ function Analysis({ M, T, S, a, vline, onLine, onPreview, onReplyHover, paused, 
   const c = lastPly(T, S);
   // Stockfish runs as asm.js here (stockfish.jsx, which a page without the engine doesn't load)
   const sfAsm = typeof SF_SIMD !== 'undefined' && !SF_SIMD;
-  // the Tablebase block goes under the lines; the panel scrolls to it where it doesn't fit
+  // a rule block (a dead position, the fifty-move rule) goes under the lines; the panel scrolls where they don't fit
   const rule = deadWords(dead) || fifty;
   const deadEl = rule && <div style={{ marginTop: tx(12), paddingTop: tx(12), borderTop: `1px solid ${C.line}` }}><RuleBlock w={rule} /></div>;
   const box = (tb || deadEl) && !L.analysis.flow ? { ...L.analysis, scroll: true } : L.analysis;
-  const tbEl = (tb || deadEl) && <React.Fragment>{deadEl}{tb && <div style={{ marginTop: tx(12), paddingTop: tx(12), borderTop: `1px solid ${C.line}` }}><TablebaseBlock t={tb} onPlay={onTb} /></div>}</React.Fragment>;
+  // the Tablebase block goes above Stockfish's analysis (its lines, or the analysis's progress) in every layout: ruled off
+  // above it, or below it where it comes first in the panel
+  const tbAt = (first) => tb && <div style={first ? { marginBottom: anGap(16), paddingBottom: anGap(14), borderBottom: `1px solid ${C.line}` } : { marginTop: anGap(16), paddingTop: anGap(14), borderTop: `1px solid ${C.line}` }}><TablebaseBlock t={tb} onPlay={onTb} /></div>;
   // Go deeper's search of this move, once it has passed the analysis's (deep: useMoveEval's)
   const deeper = paused && deep && deep.after && !deep.after.stored ? deep.after : null;
   // this move's own search when the analysis recorded it, else the engine settings
@@ -934,8 +950,8 @@ function Analysis({ M, T, S, a, vline, onLine, onPreview, onReplyHover, paused, 
   if (own && vline && vline.src === 'you' && vline.upto >= 0) {
     return (
       <AnalysisPanel box={box} a={a} paused={paused} depth={sf && !sf.off && (sf.status === 'unavailable' || sf.status === 'stopped') ? null : searchDepth(own.after)} deep={own}>
-        <OwnMoveAnalysis M={M} vline={vline} own={own} status={!sf ? 'idle' : sf.busy ? 'busy' : sf.off ? 'off' : sf.status} why={sf ? sf.why : ''} onReply={onReply} onHover={onReplyHover} />
-        {tbEl}
+        <OwnMoveAnalysis M={M} vline={vline} own={own} status={!sf ? 'idle' : sf.busy ? 'busy' : sf.off ? 'off' : sf.status} why={sf ? sf.why : ''} onReply={onReply} onHover={onReplyHover} top={tbAt(false)} />
+        {deadEl}
         <span style={{ display: 'block', marginTop: tx(8), font: `500 ${tx(15)}px ${MONO}`, color: C.dim }}>
           <span style={{ color: lineAccent('you') }}>Your moves: {vline.moves.slice(0, vline.upto + 1).map((m, j) => (j === 0 || (M.ply0 + vline.at + j) % 2 === 0 ? lineLabel(M, vline.at, j, m.san) : m.san)).join(' ')}</span>
         </span>
@@ -943,13 +959,14 @@ function Analysis({ M, T, S, a, vline, onLine, onPreview, onReplyHover, paused, 
     );
   }
   if (!M.hasEval && !M.plies.some((p) => p.best)) {
-    return <AnalysisPanel box={box} a={a} paused={paused} depth={depth}>{sf ? <EngineEmptyState M={M} sf={sf} paused={paused} /> : <span style={{ font: `400 ${tx(26)}px ${SERIF}`, color: C.dim, fontStyle: 'italic' }}>No engine analysis loaded.</span>}{tbEl}</AnalysisPanel>;
+    return <AnalysisPanel box={box} a={a} paused={paused} depth={depth}>{tbAt(true)}{sf ? <EngineEmptyState M={M} sf={sf} paused={paused} /> : <span style={{ font: `400 ${tx(26)}px ${SERIF}`, color: C.dim, fontStyle: 'italic' }}>No engine analysis loaded.</span>}{deadEl}</AnalysisPanel>;
   }
   if (c < 0) return (
     <AnalysisPanel box={box} a={a} paused={paused} depth={depth}>
       {paused && <span style={{ ...NO_SELECT, font: `500 ${tx(16)}px ${MONO}`, color: C.dim }}>Press play to watch the game, or drag a piece to try your own move.</span>}
+      {tbAt(!paused)}
       {sf && !M.hasAnalysis && (sf.run.state === 'running' || paused) && <div style={{ marginTop: tx(16) }}><EngineEmptyState M={M} sf={sf} paused={paused} compact /></div>}
-      {tbEl}
+      {deadEl}
     </AnalysisPanel>
   );
   const P = M.plies[c], cls = P.cls;
@@ -990,6 +1007,9 @@ function Analysis({ M, T, S, a, vline, onLine, onPreview, onReplyHover, paused, 
           {[P.checkmate ? 'Checkmate' : CLASS_LABEL[cls], P.loss > 0 && `−${P.loss} cp`, cls === 'best' && P.best && P.best.line[0] && `as good as ${P.best.line[0]}`].filter(Boolean).map((t) => <span key={t} style={{ whiteSpace: 'nowrap' }}>{t}</span>)}
         </div>
       </div>
+      {/* the Tablebase block above the lines, where it shows without scrolling the panel; its results keep two rows'
+          height, so the lines under it don't move from one position to the next */}
+      {tbAt(false)}
       <div style={{ marginTop: anGap(16), paddingTop: anGap(14), borderTop: `1px solid ${C.line}`, font: `500 ${tx(18)}px ${MONO}`, color: C.dim, display: 'flex', flexDirection: 'column', gap: anGap(8), opacity: k }}>
         {betterLegal.length > 0 && (
           <LineChips name="Better was" tip="better line" nameColor={C.ink} accent={C.best} moves={P.best.line.slice(0, 8)} ply0={M.ply0} c={c} legal={betterLegal.length}
@@ -1008,7 +1028,6 @@ function Analysis({ M, T, S, a, vline, onLine, onPreview, onReplyHover, paused, 
         )}
         {P.advice && <span style={{ color: C.inaccuracy }}>{P.advice}</span>}
         {rule && <div style={{ paddingTop: tx(8), borderTop: `1px solid ${C.line}` }}><RuleBlock w={rule} /></div>}
-        {tb && <div style={{ paddingTop: tx(8), borderTop: `1px solid ${C.line}` }}><TablebaseBlock t={tb} onPlay={onTb} /></div>}
         {vline && (
           <span style={{ font: `500 ${tx(15)}px ${MONO}`, color: C.dim }}>
             <span style={{ color: lineAccent(vline.src) }}>

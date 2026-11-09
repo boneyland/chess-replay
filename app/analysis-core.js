@@ -191,8 +191,14 @@
   // that laptop's (paceFactor)
   // (at a set depth, 3 lines took about 4.5 times as long as 1 in chess-animator's analyzer: lines ^ 1.37)
   const secondsPerPosition = (g, factor = 1) => (g.depth == null ? g.time_limit : Math.min(g.time_limit, factor * 1.3 * Math.pow(g.lines || 1, 1.37) * Math.pow(1.45, g.depth - 22)));
-  // A finished run's seconds per position → its device's factor for secondsPerPosition, within reason
-  const paceFactor = (g, sec) => Math.min(4, Math.max(0.25, sec / secondsPerPosition(g)));
+  // Each engine's factor before this device has timed a run with it, against the lite engine's model: the asm.js build
+  // took 8.3 times as long as lite-single to depth 16 on three positions, Full's single-thread build 1.3 times
+  // (Chromium on a laptop, 2026-11-09)
+  const PACE_START = { [ENGINE_NAMES.asm]: 8, [ENGINE_NAMES.full]: 1.3 };
+  const paceStart = (name) => PACE_START[name] || 1;
+  // A finished run's seconds per position → its device's factor for secondsPerPosition, within reason (around the
+  // engine's starting factor: g.name)
+  const paceFactor = (g, sec) => { const k = paceStart(g.name); return Math.min(4 * k, Math.max(0.25 * k, sec / secondsPerPosition(g))); };
   // A running analysis's seconds per position: the estimate before it started, giving way to the run's own pace as it
   // times more positions (sumSec over n of them); a run's first few searches alone are a poor guide to the rest
   const PACE_PRIOR_WEIGHT = 3;
@@ -243,7 +249,7 @@
   // tablebase calls won without a distance to mate (tbWonOnly) next to a searched one is searched too (kept as its sf),
   // so the move between them is rated on two searches. onSearched(R, { searches, tbMs, tbAsks }): the engine searches made,
   // and the time spent on the tablebase and its requests since the last call, for the run's pace. now, sleep: the clock, for tests
-  async function runAnalysis({ engine, ucis, sans, headers, signal, onProgress, earlier = [], onSearched, settings = ENGINE, startFen = window.ChessCore.START_FEN, tablebase = null, tablebaseOn = () => true, tbGapMs = TB_GAP_MS, now = Date.now, sleep = (ms) => new Promise((r) => setTimeout(r, ms)) }) {
+  async function runAnalysis({ engine, ucis, sans, headers, signal, onProgress, onTablebaseLost, earlier = [], onSearched, settings = ENGINE, startFen = window.ChessCore.START_FEN, tablebase = null, tablebaseOn = () => true, tbGapMs = TB_GAP_MS, now = Date.now, sleep = (ms) => new Promise((r) => setTimeout(r, ms)) }) {
     const LC = window.LichessCore;
     const N = ucis.length, R = earlier.slice(0, N + 1);
     const fens = tablebase && LC ? positionFens(startFen, ucis) : null;
@@ -266,7 +272,9 @@
         const got = await tablebaseResult(tablebase, fens[k], pace, tablebaseOn);
         tbMs += now() - t0; tbAsks++;
         if (signal.aborted) return null;
-        if (got.failed && !backedOff()) tbFailed = true;
+        // a failed request (not a back-off, which ends): the rest is searched, and the page is told (onTablebaseLost), as
+        // only the Analysis panel's header would otherwise tell the searched positions from the tablebase's
+        if (got.failed && !backedOff()) { tbFailed = true; if (onTablebaseLost) onTablebaseLost(); }
         r = got.result;
       }
       if (!r) r = await search(k);
@@ -350,5 +358,5 @@
     return { result: { cp, depth: 0, pv: best ? [best] : [], best, nodes: null, timeMs: null, tb: { category: t.category, dtz: t.dtz, dtm: t.dtm } }, failed: false };
   }
 
-  window.AnalysisCore = { C, TB_GAP_MS, ENGINE, ENGINE_NAMES, SEARCH_LIMITS, DEPTHS, SECONDS, HASH_MB, hashChoices, LINES, threadChoices, defaultThreads, engineSettings, secondsPerPosition, paceFactor, blendPace, deeperSearch, canGoDeeper, cloudEnough, bestOf, winningChances, infoToScore, infoStats, rateMove, rateByOutcome, tbWonOnly, mateLine, positionFens, playerStats, engineLines, alternativesOf, buildAnalysisJson, runAnalysis };
+  window.AnalysisCore = { C, paceStart, TB_GAP_MS, ENGINE, ENGINE_NAMES, SEARCH_LIMITS, DEPTHS, SECONDS, HASH_MB, hashChoices, LINES, threadChoices, defaultThreads, engineSettings, secondsPerPosition, paceFactor, blendPace, deeperSearch, canGoDeeper, cloudEnough, bestOf, winningChances, infoToScore, infoStats, rateMove, rateByOutcome, tbWonOnly, mateLine, positionFens, playerStats, engineLines, alternativesOf, buildAnalysisJson, runAnalysis };
 })();

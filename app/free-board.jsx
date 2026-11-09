@@ -2,17 +2,12 @@
 // A board without a game (Play/Explore → Starting position): the viewer plays both sides and Stockfish rates every move. A view of its own
 // rather than a zero-ply GameVideo, so the replay's timeline never has to handle it; it shares the frame's layout,
 // panels, board drawing and input. The board (BoardCore) lives in GameApp's files, so it is stored like a loaded game.
-const FULL_SET = { q: 1, r: 2, b: 2, n: 2, p: 8 };
 
-// A player bar for "White" or "Black" (or name: "You", "Stockfish 19"): the pieces taken and the material edge, counted from the pieces on the board
-// against a full set (so a position set up with an edge shows it), and in a clocked game the clock ({ s, active })
+// A player bar for "White" or "Black" (or name: "You", "Stockfish 19"): the pieces taken and the material edge, counted from
+// the pieces on the board (materialOf), and in a clocked game the clock ({ s, active })
 function FreeBar({ pos, side, a, clock, name }) {
-  const left = (col, t) => pos.b.filter((p) => p === (col === 'w' ? t.toUpperCase() : t)).length;
-  const lost = (col, t) => Math.max(0, FULL_SET[t] - left(col, t));
-  const worth = (col) => Object.keys(FULL_SET).reduce((s, t) => s + left(col, t) * VALUE[t], 0);
-  const opp = side === 'w' ? 'b' : 'w', taken = {};
-  Object.keys(FULL_SET).forEach((t) => { taken[t] = lost(opp, t) - lost(side, t); });
-  return <SideBar side={side} a={a} name={name || (side === 'w' ? 'White' : 'Black')} taken={taken} pts={worth(side) - worth(opp)} clock={clock} />;
+  const { taken, pts } = materialOf(side, (col, t) => pos.b.filter((p) => p === (col === 'w' ? t.toUpperCase() : t)).length);
+  return <SideBar side={side} a={a} name={name || (side === 'w' ? 'White' : 'Black')} taken={taken} pts={pts} clock={clock} />;
 }
 
 // the book's name for the position on the board (the last named one on the way there, the start included), or null
@@ -41,7 +36,7 @@ function OpeningExplorer({ board, book, onPlay, onHover }) {
   const note = (txt) => <span style={{ display: 'block', marginTop: tx(8), font: `500 ${tx(15)}px ${MONO}`, color: C.dim }}>{txt}</span>;
   const play = (e, uci) => { e.preventDefault(); e.stopPropagation(); onPlay(uci); };
   // each position's list starts at its top, not where the last one was scrolled to (the panel's box stays the same node)
-  const top = React.useRef(null), posKey = board.fen + '|' + ucis.join(' ');
+  const top = React.useRef(null), posKey = board.fen + '|' + ucis.join(' '), rowKey = useRowFocus(top);
   React.useLayoutEffect(() => { const box = top.current && top.current.parentElement; if (box) box.scrollTop = 0; }, [posKey]);
   let body;
   if (!book) body = <span style={{ font: `italic 400 ${tx(30)}px/1.25 ${SERIF}`, color: C.dim }}>Loading the opening book…</span>;
@@ -54,7 +49,7 @@ function OpeningExplorer({ board, book, onPlay, onHover }) {
               // the name stays beside its move, cut short with an ellipsis when it doesn't fit
               <div key={m.uci} className="mv expl-row" role="button" tabIndex={0} title={`Play ${m.san}`} onClick={(e) => play(e, m.uci)}
                 onMouseEnter={() => onHover(m.uci)} onMouseLeave={() => onHover(null)} onFocus={() => onHover(m.uci)} onBlur={() => onHover(null)}
-                onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') play(e, m.uci); }}
+                onKeyDown={rowKey(play, m.uci)}
                 style={{ display: 'flex', alignItems: 'center', gap: tx(14), minWidth: 0, padding: `${tx(3)}px ${tx(6)}px`, borderRadius: 2, cursor: 'pointer' }}>
                 <span style={rowChip(white)}>{m.san}</span>
                 <span style={{ flex: '1 1 auto', minWidth: 0, font: `400 ${tx(17)}px ${SANS}`, color: C.dim, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{m.name || ''}</span>
@@ -122,8 +117,9 @@ const FLAGGED = ['inaccuracy', 'mistake', 'blunder'];
 // Stockfish's reply, played through PlayCore.move no sooner than REPLY_PAUSE_MS after the move. The player's move is rated
 // from the two searches, and a flagged one joins the critique in the same change. A result lands only on the board it was
 // searched for (the same game, the same moves, still going on): a takeback, a resign, a new game or leaving the board
-// cancels the searches and drops what they find. Returns { down }: 'unavailable' or 'stopped' when Stockfish can't answer
-// (a takeback tries again; a stopped engine restarts on the next engine.get())
+// cancels the searches and drops what they find. Returns { down, retry }: down 'unavailable' or 'stopped' when Stockfish
+// can't answer; retry() (Try again) or a takeback asks it again (a stopped engine restarts on the next engine.get()), so
+// a player whose Stockfish dies before its first move, with nothing to take back, needn't resign
 function useEngineOpponent(board, onChange, sf) {
   const B = window.BoardCore, P = window.PlayCore, G = board.game;
   const active = !!G && G.mode === 'stockfish' && P.inProgress(board);
@@ -132,7 +128,7 @@ function useEngineOpponent(board, onChange, sf) {
   latest.current = { board, onChange };
   // the "before" search of the position the player last moved from: { key, promise } (its result, or null)
   const before = React.useRef(null);
-  const [down, setDown] = React.useState(null);
+  const [down, setDown] = React.useState(null), [tries, setTries] = React.useState(0);
   React.useEffect(() => {
     setDown(null);
     if (!active) { before.current = null; return; }
@@ -172,8 +168,8 @@ function useEngineOpponent(board, onChange, sf) {
       set(P.move(next, step, Date.now()));
     })();
     return () => { live = false; clearTimeout(timer); if (handle) handle.cancel(); };
-  }, [key]);
-  return { down: active ? down : null };
+  }, [key, tries]);
+  return { down: active ? down : null, retry: () => setTries((n) => n + 1) };
 }
 
 // The Commentary box in a game: how the game works, in place of the explorer (a hint, so hidden). Against Stockfish it
@@ -236,8 +232,9 @@ function GameInfo({ board }) {
 // The Analysis box in a game: whose move it is, with Take back, Offer a draw and Resign (the last two asked twice: a draw is
 // offered by the side to move and accepted by the other; against Stockfish there is no draw offer, and the player resigns),
 // and Claim a draw when the side to move can (vs human: a threefold repetition or the fifty-move rule),
-// or the result with Play again beside it and Analyse on the free board below. down: why Stockfish can't answer, if so
-function GameStatus({ board, onChange, down, why }) {
+// or the result with Play again beside it and Analyse on the free board below. down: why Stockfish can't answer, if so,
+// and retry asks it again (Try again)
+function GameStatus({ board, onChange, down, why, retry }) {
   const P = window.PlayCore, G = board.game, last = board.steps.length ? board.steps[board.steps.length - 1] : null;
   const turn = (last ? last.pos : board.start.pos).turn, side = sideName(turn), sfGame = G.mode === 'stockfish';
   // the question waiting on an answer: 'resign' or 'draw'; another position or result drops it
@@ -273,7 +270,7 @@ function GameStatus({ board, onChange, down, why }) {
   const backNote = behind && hint(`Looking at ${board.upto < 0 ? 'the start' : window.BoardCore.label(board, board.upto)} · End or a press on the board goes back to the game`);
   if (sfGame) {
     const mine = turn === G.you;
-    const trouble = down ? sfDownText(down, why, 'Take back or Resign') : null;
+    const trouble = down ? sfDownText(down, why, P.canTakeback(board) ? 'Try again, Take back or Resign' : 'Try again or Resign') : null;
     return (
       <React.Fragment>
         <div style={{ display: 'flex', flexDirection: 'column', gap: tx(6) }}>
@@ -285,6 +282,7 @@ function GameStatus({ board, onChange, down, why }) {
           <FrameButton color={C.blunder} onClick={() => onChange(P.resign(board, now(), G.you))}>Resign</FrameButton>
           <FrameButton color={C.dim} onClick={() => setAsk(null)}>Keep playing</FrameButton>
         </React.Fragment>) : row(<React.Fragment>
+          {trouble && retry && <FrameButton primary color={C.last} onClick={retry}>Try again</FrameButton>}
           {P.canTakeback(board) && <FrameButton color={C.dim} onClick={() => onChange(P.takeback(board, now()))}>Take back</FrameButton>}
           <FrameButton color={C.dim} onClick={() => setAsk('resign')}>Resign</FrameButton>
         </React.Fragment>)}
@@ -441,7 +439,7 @@ function FreeBoard({ board, onChange, tw, setTweak, onLichess, sf, nav, orient, 
       {L.header && !upright && <Header M={HM} a={1} />}
       <MoveList M={MV} T={upto + 0.999} S={S} a={1} paused onPick={go} deadAt={deadAt} end={end} startAt={G && G.from} />
       {G ? <GameInfo board={board} /> : tb ? <TablebaseExplorer t={tb} posKey={boardKey} onPlay={onBook} /> : xl ? <LichessExplorer x={xl} tw={tw} setTweak={setTweak} onGame={onLichess} posKey={boardKey} onPlay={onBook} onHover={setHov} white={pos.turn === 'w'} fallback={<OpeningExplorer board={board} book={book} onPlay={onBook} onHover={setHov} />} /> : <OpeningExplorer board={board} book={book} onPlay={onBook} onHover={setHov} />}
-      {G ? <Panel box={L.analysis} part="game" a={1} style={NO_SELECT} title="Game"><GameStatus board={board} onChange={onChange} down={opponent.down} why={sf.why} /></Panel>
+      {G ? <Panel box={L.analysis} part="game" a={1} style={NO_SELECT} title="Game"><GameStatus board={board} onChange={onChange} down={opponent.down} why={sf.why} retry={opponent.retry} /></Panel>
         : <AnalysisPanel box={L.analysis} a={1} paused depth={down && !sf.off ? null : searchDepth(ev.after)} deep={ev}>
         {upto < 0
           ? <React.Fragment>

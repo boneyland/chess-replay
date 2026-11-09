@@ -15,8 +15,12 @@
   const label = (b, j) => CC().moveNo(b.start.ply0 + j) + ' ' + b.steps[j].san;
   const play = (b, step) => ({ ...b, steps: [...b.steps.slice(0, b.upto + 1), step], upto: b.upto + 1 });
   const go = (b, upto) => ({ ...b, upto: clamp(b, upto) });
-  // a game on the board (PlayCore) is kept with it
-  const save = (b) => ({ fen: b.fen, moves: b.steps.map((s) => s.uci), upto: b.upto, ...(b.game ? { game: b.game } : {}) });
+  // a game on the board (PlayCore) is kept with it, and engine lists the steps Stockfish's reply chips played (byEngine),
+  // so they are still labelled as its replies after a reload
+  const save = (b) => {
+    const engine = b.steps.map((s, j) => (s.byEngine ? j : -1)).filter((j) => j >= 0);
+    return { fen: b.fen, moves: b.steps.map((s) => s.uci), upto: b.upto, ...(engine.length ? { engine } : {}), ...(b.game ? { game: b.game } : {}) };
+  };
 
   // today as PGN's YYYY.MM.DD
   const today = () => { const d = new Date(); return `${d.getFullYear()}.${String(d.getMonth() + 1).padStart(2, '0')}.${String(d.getDate()).padStart(2, '0')}`; };
@@ -43,11 +47,12 @@
     try {
       if (!saved || typeof saved !== 'object' || typeof saved.fen !== 'string') return null;
       let b = fromFen(saved.fen);
+      const engine = new Set(Array.isArray(saved.engine) ? saved.engine : []);
       for (const u of Array.isArray(saved.moves) ? saved.moves : []) {
         let step = null;
         try { step = typeof u === 'string' ? CC().stepFromUci(pos(b), u) : null; } catch (e) {}
         if (!step) break;
-        b = play(b, step);
+        b = play(b, engine.has(b.upto + 1) ? { ...step, byEngine: true } : step);
       }
       b = go(b, typeof saved.upto === 'number' ? saved.upto : b.steps.length - 1);
       return saved.game && window.PlayCore ? window.PlayCore.resume(b, saved.game, now) : b;

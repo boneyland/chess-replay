@@ -1423,12 +1423,13 @@ for (const name of BROWSERS) for (const site of SITES) {
       assert.deepEqual(ep.errors, []);
       await ep.ctx.close();
     });
-    // Play vs Stockfish where the engine won't start: the Game panel says so, with why, and the view doesn't crash
+    // Play vs Stockfish where the engine won't start: the Game panel says so, with why, and the view doesn't crash; once the
+    // files are back, Try again has Stockfish make its first move (playing Black, there is nothing to take back)
     await t.test('desktop: Play vs Stockfish says when Stockfish can\'t run', async () => {
       const g = await open(browser, { width: 1440, height: 900 });
       const p = g.page;
       // the engine files missing (a route misses what the service worker fetches in Firefox; see Go deeper's test)
-      await g.ctx.addInitScript(() => { const f = window.fetch; window.fetch = (u, o) => (/stockfish-19/.test(String(u)) ? Promise.resolve(new Response('', { status: 404 })) : f(u, o)); });
+      await g.ctx.addInitScript(() => { const f = window.fetch; window.__sfGone = true; window.fetch = (u, o) => (window.__sfGone && /stockfish-19/.test(String(u)) ? Promise.resolve(new Response('', { status: 404 })) : f(u, o)); });
       await p.goto(base, { waitUntil: 'load' });
       await loadedOn(p);
       await p.getByRole('button', { name: 'Menu', exact: true }).click();
@@ -1441,6 +1442,12 @@ for (const name of BROWSERS) for (const site of SITES) {
       await assert.doesNotReject(p.getByText('Stockfish to move', { exact: true }).waitFor({ timeout: 3000 }));
       await assert.doesNotReject(p.getByRole('button', { name: 'Resign' }).waitFor({ timeout: 3000 }));
       await p.screenshot({ path: path.join(OUT, host + '-play-stockfish-down.png') });
+      assert.equal(await p.getByRole('button', { name: 'Take back' }).count(), 0, 'nothing to take back');
+      await assert.doesNotReject(p.getByText(/· Try again or Resign$|Stockfish can’t run here/).first().waitFor({ timeout: 3000 }));
+      await p.evaluate(() => { window.__sfGone = false; });
+      await p.getByRole('button', { name: 'Try again' }).click();
+      await assert.doesNotReject(p.getByText('Your move', { exact: true }).waitFor({ timeout: 45000 }));
+      assert.match(await p.locator('.part-moves').innerText(), /1\./, 'Stockfish played its first move');
       assert.deepEqual(g.errors, []);
       await g.ctx.close();
     });
@@ -1693,6 +1700,8 @@ for (const name of BROWSERS) for (const site of SITES) {
       assert.ok(Math.abs(again.width - pulled.width) <= 1 && Math.abs(again.height - pulled.height) <= 1, 'the box as pulled');
       await dialog.getByRole('button', { name: 'Cancel' }).click();
       await dialog.waitFor({ state: 'detached', timeout: 5000 });
+      // Cancel there goes back to the button that opened it
+      await p.waitForFunction(() => document.activeElement && document.activeElement.textContent === 'Back to crop', null, { timeout: 3000 });
       await p.getByRole('button', { name: 'Cancel' }).click();
       await assert.doesNotReject(field.waitFor({ state: 'detached', timeout: 5000 }));
       // the greyscale copy failing (a canvas that can't be read back): the picture is still taken, the box around all of it
@@ -2566,11 +2575,65 @@ for (const name of BROWSERS) for (const site of SITES) {
       await p.waitForFunction(() => /Blunder/i.test(document.body.innerText), null, { timeout: 5000 });
       assert.match(await p.evaluate(() => document.body.innerText), /Tablebase/i);
       await p.screenshot({ path: path.join(OUT, host + '-tablebase-analysis.png') });
+      // the mouse wheel over the Tablebase block's rows scrolls the panel on (with nothing of their own to scroll)
+      const panelTop = () => p.evaluate(() => document.querySelector('.part-analysis').scrollTop);
+      await p.evaluate(() => { document.querySelector('.part-analysis').scrollTop = 0; });
+      const rows = await p.locator('.tb-rows').boundingBox();
+      await p.mouse.move(rows.x + rows.width - 20, rows.y + rows.height / 2);
+      await p.mouse.wheel(0, 120);
+      await p.waitForFunction(() => document.querySelector('.part-analysis').scrollTop > 0, null, { timeout: 3000 }).catch(() => {});
+      assert.ok(await panelTop() > 0, 'the panel scrolls under the wheel over the Tablebase rows');
       await p.locator('[data-ply="0"]').click();
       await p.waitForFunction(() => /The tablebase agrees/.test(document.body.innerText) || /Best line/.test(document.body.innerText), null, { timeout: 5000 });
       assert.equal(await p.getByRole('button', { name: /^Go deeper/ }).count(), 0, 'nothing to go deeper on');
       assert.deepEqual(ta.errors, []);
       await ta.ctx.close();
+    });
+    // a book move played by Enter (or Space) hands the focus to the next position's first book move, not the page
+    await t.test('desktop: a book move played by Enter leaves the focus on the next list', async () => {
+      const ek = await open(browser, { width: 1440, height: 900 });
+      const p = ek.page;
+      await p.goto(base, { waitUntil: 'load' });
+      await loadedOn(p);
+      await p.getByRole('button', { name: 'Menu', exact: true }).click();
+      await p.getByRole('button', { name: 'Starting position' }).click();
+      const first = p.locator('.book-moves [role="button"]').first();
+      await first.waitFor({ timeout: 5000 });
+      const san = (await first.locator('span').first().innerText()).trim();
+      await first.focus();
+      await p.keyboard.press('Enter');
+      await assert.doesNotReject(p.locator('.plabel').filter({ hasText: new RegExp('^1\\. ' + san + '$') }).waitFor({ timeout: 5000 }));
+      await p.waitForFunction(() => { const a = document.activeElement; return a && a.classList.contains('expl-row') && a.closest('.book-moves'); }, null, { timeout: 5000 });
+      // and again, from the row it landed on
+      await p.keyboard.press('Enter');
+      await assert.doesNotReject(p.locator('.plabel').filter({ hasText: /^1… / }).waitFor({ timeout: 5000 }));
+      await p.waitForFunction(() => document.activeElement && document.activeElement.classList.contains('expl-row'), null, { timeout: 5000 });
+      assert.deepEqual(ek.errors, []);
+      await ek.ctx.close();
+    });
+    // a Stockfish reply played from its chips on the free board is still labelled as its reply after a reload
+    await t.test('desktop: a Stockfish reply from the chips stays its reply after a reload', async () => {
+      const rr = await open(browser, { width: 1440, height: 900 });
+      const p = rr.page;
+      await p.addInitScript(() => { try { localStorage.setItem('chess-video.tweaks.v1', JSON.stringify({ sfOwnTime: 1 })); } catch (e) {} });
+      await p.goto(base, { waitUntil: 'load' });
+      await loadedOn(p);
+      await p.getByRole('button', { name: 'Menu', exact: true }).click();
+      await p.getByRole('button', { name: 'Starting position' }).click();
+      await assert.doesNotReject(p.getByRole('button', { name: 'Play (space)' }).waitFor({ state: 'detached', timeout: 5000 }));
+      const b = await boardBox(p), f = square(b, 'e2'), tt = square(b, 'e4');
+      await p.mouse.move(f.x, f.y); await p.mouse.down(); await p.mouse.move(tt.x, tt.y, { steps: 8 }); await p.mouse.up();
+      const chip = p.locator('[title^="Show Stockfish’s reply on the board"]').first();
+      await chip.waitFor({ timeout: 60000 });
+      await chip.click();
+      const who = () => p.locator('.part-analysis').innerText();
+      await p.waitForFunction(() => /Stockfish’s reply/i.test(document.querySelector('.part-analysis').innerText), null, { timeout: 10000 });
+      await p.reload({ waitUntil: 'load' });
+      await p.waitForFunction(() => /Stockfish’s reply|Your move/i.test((document.querySelector('.part-analysis') || {}).innerText || ''), null, { timeout: 30000 });
+      assert.match(await who(), /Stockfish’s reply/i);
+      assert.doesNotMatch(await who(), /^Your move/im);
+      assert.deepEqual(rr.errors, []);
+      await rr.ctx.close();
     });
     // the opening explorer: book moves from the position shown, played like a drag (and rated); a take-back branches
     await t.test('desktop: the explorer names the opening and plays a book move', async () => {
@@ -3526,6 +3589,29 @@ for (const name of BROWSERS) for (const site of SITES) {
       await assert.doesNotReject(dialog.locator('#tw-webp-width').waitFor({ timeout: 3000 }));
       assert.deepEqual(ne.errors, []);
       await ne.ctx.close();
+    });
+    // without WebAssembly SIMD the WebP's encoder can't run: no WebP to choose, and said why; with no video encoder either
+    // there is nothing to export, and the dialog says so in place of the export's settings
+    await t.test('desktop: without WebAssembly SIMD, Share and export offers no WebP and says why', async () => {
+      for (const noVideo of [false, true]) {
+        const ns = await open(browser, { width: 1440, height: 900 });
+        // (only the page's check is fooled: SFEngine.simdSupport's test is 31 bytes)
+        await ns.ctx.addInitScript((nv) => { const v = WebAssembly.validate; WebAssembly.validate = (b) => (b.length === 31 ? false : v(b)); if (nv) delete window.VideoEncoder; }, noVideo);
+        await ns.page.goto(base, { waitUntil: 'load' });
+        await loadedOn(ns.page);
+        const dialog = await openShare(ns.page);
+        assert.equal(await dialog.getByRole('radio', { name: 'WebP' }).count(), 0, 'no WebP to choose');
+        assert.equal(await dialog.getByRole('button', { name: /^Export animated WebP/ }).count(), 0);
+        if (noVideo) {
+          await assert.doesNotReject(dialog.getByText(/^This browser can’t export a video: MP4 and WebM need a video encoder, and the animated WebP needs WebAssembly SIMD/).waitFor({ timeout: 3000 }));
+          assert.equal(await dialog.getByRole('button', { name: /^Export video/ }).count(), 0);
+        } else {
+          await assert.doesNotReject(dialog.getByText(/^No animated WebP here: its encoder needs WebAssembly SIMD/).waitFor({ timeout: 3000 }));
+          await assert.doesNotReject(dialog.getByRole('button', { name: /^Export video \(MP4/ }).waitFor({ timeout: 3000 }));
+        }
+        assert.deepEqual(ns.errors, []);
+        await ns.ctx.close();
+      }
     });
 
     await t.test('desktop: an export is the screen-sized page', { timeout: 180000 }, async () => {

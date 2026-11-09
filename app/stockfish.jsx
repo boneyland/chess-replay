@@ -210,12 +210,16 @@ const SF_TB_SECONDS = window.AnalysisCore.TB_GAP_MS / 1000;
 // which of a game's positions (0: the start, k: after k moves) are small enough for the tablebase
 const sfTbPositions = (M) => [M.start.fen, ...M.plies.map((p) => p.fen)].map((f) => window.LichessCore.pieceCount(f) <= window.LichessCore.TB_MAX_PIECES);
 
+// a game analysis whose tablebase requests stopped answering part-way (runAnalysis's onTablebaseLost)
+const SF_TB_LOST = 'Lichess’s tablebase stopped answering: Stockfish searched the endgame positions after that';
+
 // This device's pace against the model's (AnalysisCore.paceFactor), from the last run that timed enough positions, for
 // each engine (name: the settings' engine name; the full engine searches fewer nodes a second)
 const SF_PACE_STORE = 'chess-video.sf-pace.v1', SF_PACE_MIN_POSITIONS = 10;
 // and thread count (one thread keeps the key it always had)
 const sfPaceKey = (name, threads) => (name === window.AnalysisCore.ENGINE_NAMES.full ? SF_PACE_STORE + '.full' : name === window.AnalysisCore.ENGINE_NAMES.asm ? SF_PACE_STORE + '.asm' : SF_PACE_STORE) + (threads > 1 ? '.t' + threads : '');
-function readSfPace(name, threads) { try { const f = +localStorage.getItem(sfPaceKey(name, threads)); return f > 0 ? f : 1; } catch (e) { return 1; } }
+// (the engine's starting factor, AnalysisCore.paceStart, until a run has timed enough positions)
+function readSfPace(name, threads) { const k = window.AnalysisCore.paceStart(name); try { const f = +localStorage.getItem(sfPaceKey(name, threads)); return f > 0 ? f : k; } catch (e) { return k; } }
 function writeSfPace(name, threads, f) { try { localStorage.setItem(sfPaceKey(name, threads), String(f)); } catch (e) {} }
 
 // The full-game analysis. Loading other files (another game, the sample) abandons a run in progress; its searches
@@ -228,7 +232,9 @@ function useGameAnalysis(M, files, getFiles, commit, engine, settings, tbOn) {
   const [pace, setPace] = React.useState(() => readSfPace(settings.name, settings.threads));
   React.useEffect(() => { setPace(readSfPace(settings.name, settings.threads)); }, [settings.name, settings.threads]);
   const perPos = A.secondsPerPosition(settings, pace);
-  const idle = { state: 'idle', done: 0, total: 0, etaSec: null, err: '' };
+  // note: what the viewer should know about the run that isn't a failure (Lichess's tablebase lost part-way), kept after it
+  // ends until the next run starts
+  const idle = { state: 'idle', done: 0, total: 0, etaSec: null, err: '', note: '' };
   const [st, setSt] = React.useState(idle);
   const run = React.useRef(null);
   const ucisKey = M.plies.map((p) => p.uci).join(' ');
@@ -256,7 +262,7 @@ function useGameAnalysis(M, files, getFiles, commit, engine, settings, tbOn) {
     const timed = { n: 0, sec: 0, last: 0, tbN: 0, tbSec: 0 };
     // { sec, at }: the latest estimate and when it was made; a timer counts it down in between
     me.eta = { sec: secondsFrom(earlier.length, prior), at: Date.now() };
-    setSt({ state: 'running', done: d0, total: N, etaSec: Math.round(me.eta.sec), err: '' });
+    setSt({ state: 'running', done: d0, total: N, etaSec: Math.round(me.eta.sec), err: '', note: '' });
     if (engine.holdHash) engine.holdHash(S.hash_mb);
     try {
       const eng = await engine.get();
@@ -282,21 +288,22 @@ function useGameAnalysis(M, files, getFiles, commit, engine, settings, tbOn) {
           me.eta = { sec: secondsFrom(R.length, A.blendPace(prior, timed.sec, timed.n), timed.tbN ? Math.max(SF_TB_SECONDS, timed.tbSec / timed.tbN) : SF_TB_SECONDS), at: now };
         },
         onProgress: (d, n) => { if (run.current === me && d > d0 && me.eta) setSt((s) => ({ ...s, done: d, total: n, etaSec: Math.round(me.eta.sec) })); },
+        onTablebaseLost: () => { if (run.current === me) setSt((s) => ({ ...s, note: SF_TB_LOST })); },
       });
       if (run.current !== me) return;
       run.current = null;
-      if (!json) { setSt(idle); return; }
+      if (!json) { setSt((s) => ({ ...idle, note: s.note })); return; }
       writeSfPartial(ucis, S, null, M.start.fen, T);
       setResumeAt(0);
       // with no depth limit every position takes its time limit, which says nothing about this device's pace
       if (S.depth != null && timed.n >= SF_PACE_MIN_POSITIONS) { const f = A.paceFactor(S, timed.sec / timed.n); writeSfPace(S.name, S.threads, f); setPace(f); }
       const name = (M.white.short + '_' + M.black.short).replace(/[^\w-]+/g, '_') + '_analysis.json';
-      setSt(idle);
+      setSt((s) => ({ ...idle, note: s.note }));
       commit({ ...getFiles(), analysis: json, analysisName: name, evalSource: null }); // shown, even over PGN evals
     } catch (e) {
       if (run.current !== me) return;
       run.current = null;
-      setSt({ ...idle, err: engine.status === 'unavailable' ? '' : `Analysis stopped: ${(e && e.message) || e}. Press the computer button to start analysis again.` });
+      setSt((s) => ({ ...idle, note: s.note, err: engine.status === 'unavailable' ? '' : `Analysis stopped: ${(e && e.message) || e}. Press the computer button to start analysis again.` }));
     }
   };
   // the run's hash table goes back to the live searches' once it ends, however it ends
@@ -316,10 +323,10 @@ function useGameAnalysis(M, files, getFiles, commit, engine, settings, tbOn) {
 
 // A button inside a panel (theme colours, sized with the panel text)
 // compact: a size down, for a phone's tight panels (Edit position held sideways)
-function FrameButton({ primary, color, onClick, children, label, disabled, compact }) {
+function FrameButton({ primary, color, onClick, children, label, disabled, compact, className }) {
   const c = color || C.best;
   return (
-    <button type="button" aria-label={label} disabled={disabled} onClick={(e) => { e.stopPropagation(); onClick(); }} onPointerDown={(e) => e.stopPropagation()}
+    <button type="button" className={className} aria-label={label} disabled={disabled} onClick={(e) => { e.stopPropagation(); onClick(); }} onPointerDown={(e) => e.stopPropagation()}
       style={{ whiteSpace: 'nowrap', font: `600 ${tx(primary ? (compact ? 17 : 20) : (compact ? 14 : 15))}px ${MONO}`, letterSpacing: primary ? '0.02em' : '0.1em', textTransform: primary ? 'none' : 'uppercase', padding: primary ? (compact ? `${tx(7)}px ${tx(18)}px` : `${tx(12)}px ${tx(22)}px`) : (compact ? `${tx(4)}px ${tx(10)}px` : `${tx(5)}px ${tx(12)}px`), borderRadius: 4, cursor: disabled ? 'default' : 'pointer', opacity: disabled ? 0.4 : 1, userSelect: 'none', WebkitUserSelect: 'none', border: `1.5px solid ${c}`, background: primary ? c : 'transparent', color: primary ? C.bg : c }}>
       {children}
     </button>
@@ -550,8 +557,9 @@ const fmtSf = (cp) => {
   return (cp > 0 ? '+' : cp < 0 ? '−' : '') + Math.abs(cp / 100).toFixed(2);
 };
 
-// The Analysis panel while the viewer plays their own line: their move, its eval, what it costs, Stockfish's reply
-function OwnMoveAnalysis({ M, vline, own, status, why, onReply, onHover }) {
+// The Analysis panel while the viewer plays their own line: their move, its eval, what it costs, Stockfish's reply; top:
+// what goes between the verdict and the lines (the replay's Tablebase block)
+function OwnMoveAnalysis({ M, vline, own, status, why, onReply, onHover, top }) {
   const step = vline.moves[vline.upto], ply = vline.at + vline.upto, isWhite = (M.ply0 + ply) % 2 === 0;
   const { before, after } = own;
   const done = before && after && !before.partial && !after.partial;
@@ -573,6 +581,7 @@ function OwnMoveAnalysis({ M, vline, own, status, why, onReply, onHover }) {
       </div>
       {/* the verdict spans the panel, under the move and the eval, so it fits on one line in the phone layout */}
       <div style={{ marginTop: anGap(6), font: `600 ${tx(16)}px ${MONO}`, letterSpacing: '0.08em', textTransform: 'uppercase', color: col }}>{who} · {bad ? CLASS_LABEL[rated.classification] + ' · ' : ''}{verdict}</div>
+      {top}
       <div style={{ marginTop: anGap(16), paddingTop: anGap(14), borderTop: `1px solid ${C.line}`, font: `500 ${tx(18)}px ${MONO}`, color: C.dim, display: 'flex', flexDirection: 'column', gap: anGap(8) }}>
         {many ? <EngineLines lines={after.lines} pos={step.pos} ply0={M.ply0} c={ply + 1} onPick={onReply} onHover={onHover} cloud={after.source === 'cloud'} />
           : replies.length > 0

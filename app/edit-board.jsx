@@ -236,7 +236,7 @@ function EditBoard({ setup, onChange, onDone, onCancel, fenText, onFenText, fenM
               <div style={{ display: 'flex', alignItems: 'center', gap: tx(10), flexWrap: 'wrap' }}>
                 {oneCol && <HoldButton onHold={setShowPic} />}
                 <FrameButton color={C.ink} onClick={() => onTurn && onTurn()}>Turn board 180°</FrameButton>
-                <FrameButton color={C.ink} onClick={() => onBackToCrop && onBackToCrop()}>Back to crop</FrameButton>
+                <FrameButton className="edit-back-to-crop" color={C.ink} onClick={() => onBackToCrop && onBackToCrop()}>Back to crop</FrameButton>
               </div>
               {unsure.length > 0 && <div style={{ font: `500 ${tx(15)}px ${MONO}`, color: C.blunder }}>{unsure.length === 1 ? '1 square to check (outlined)' : `${unsure.length} squares to check (outlined)`}</div>}
             </div>
