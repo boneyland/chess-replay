@@ -2047,19 +2047,36 @@ for (const name of BROWSERS) for (const site of SITES) {
       assert.deepEqual(li.errors, []);
       await li.ctx.close();
     });
-    // the endgame tablebase (Lichess, the real service): at 7 pieces or fewer it takes the opening explorer's place and the
+    // Lichess's tablebase faked from tests/fixtures/tb-live.json (real answers by FEN less its move number, fetched by
+    // tests/fixtures/fetch-tb-live.cjs), so a Lichess outage fails nothing here: the page's own fetch is replaced for that
+    // host (a route leaks into later contexts in Firefox), and window.__tb lists the FENs asked, in order. A FEN with no
+    // answer there is a console error, which fails the test
+    const tbAnswers = JSON.parse(fs.readFileSync(path.join(__dirname, '..', 'fixtures', 'tb-live.json'), 'utf8'));
+    const fakeTablebase = (ctx) => ctx.addInitScript((ans) => {
+      const f = window.fetch;
+      window.__tb = [];
+      window.fetch = function (u) {
+        const url = String(u);
+        if (!url.startsWith('https://tablebase.lichess.ovh/')) return f.apply(this, arguments);
+        const fen = decodeURIComponent(url.split('fen=')[1] || ''), key = fen.trim().split(/\s+/).slice(0, 5).join(' '); // LichessCore.tbKey
+        window.__tb.push(fen);
+        if (!ans[key]) { console.error('no tablebase answer in tb-live.json for ' + fen); return Promise.resolve(new Response('', { status: 404 })); }
+        return Promise.resolve(new Response(JSON.stringify(ans[key]), { status: 200, headers: { 'Content-Type': 'application/json' } }));
+      };
+    }, tbAnswers);
+    // the endgame tablebase (faked, fakeTablebase): at 7 pieces or fewer it takes the opening explorer's place and the
     // eval bar shows its result, a move from it plays on the board; more pieces, or the setting off, and nothing is sent
     await t.test('desktop: the tablebase rates an endgame on the free board, and sends nothing above 7 pieces or when off', async () => {
       const tb = await open(browser, { width: 1440, height: 900 });
-      const p = tb.page, sent = [];
-      tb.ctx.on('request', (r) => { if (r.url().startsWith('https://tablebase.lichess.ovh/')) sent.push(decodeURIComponent(r.url().split('fen=')[1])); });
+      await fakeTablebase(tb.ctx);
+      const p = tb.page, sentNow = () => p.evaluate(() => window.__tb);
       const text = () => p.evaluate(() => document.body.innerText);
       const setUp = (fen) => setUpFen(p, fen);
       await p.goto(base, { waitUntil: 'load' });
       await loadedOn(p);
       // the sample's opening has 32 pieces: nothing asked
       await p.waitForTimeout(1000);
-      assert.deepEqual(sent, []);
+      assert.deepEqual(await sentNow(), []);
       await setUp('8/8/8/4k3/8/8/3KB3/7N w - - 0 1');
       await p.waitForFunction(() => /Endgame tablebase\s+DTZ 55 · DTM 55\s+White wins/i.test(document.body.innerText), null, { timeout: 20000 });
       assert.match(await text(), /TB M28/, 'the eval bar shows the mate');
@@ -2069,7 +2086,7 @@ for (const name of BROWSERS) for (const site of SITES) {
       const [m0, m1] = await Promise.all([0, 1].map((i) => p.locator('.tb-move').nth(i).boundingBox()));
       assert.ok(Math.abs(m0.y - m1.y) < 2 && m1.x > m0.x, 'the moves wrap in rows');
       assert.doesNotMatch(await p.locator('.tb-group').first().innerText(), /DTZ|DTM/);
-      assert.deepEqual(sent, ['8/8/8/4k3/8/8/3KB3/7N w - - 0 1']);
+      assert.deepEqual(await sentNow(), ['8/8/8/4k3/8/8/3KB3/7N w - - 0 1']);
       await p.screenshot({ path: path.join(OUT, host + '-tablebase.png') });
       // a move from the tablebase plays on the board, and Black's answer is a loss
       await p.locator('.tb-move', { hasText: /^Ke3(?![a-z0-9=+#])/ }).click();
@@ -2078,19 +2095,19 @@ for (const name of BROWSERS) for (const site of SITES) {
       // back to the start: from the cache, nothing sent again
       await p.keyboard.press('ArrowLeft');
       await p.waitForFunction(() => /DTZ 55/.test(document.body.innerText), null, { timeout: 5000 });
-      assert.equal(sent.length, 2);
+      assert.equal((await sentNow()).length, 2);
       // the fifty-move count goes with the FEN: with 60 plies gone the same win is a cursed one
       await setUp('8/8/8/4k3/8/8/3KB3/7N w - - 60 80');
       await p.waitForFunction(() => /Endgame tablebase[\s\S]*Cursed win for White\s+drawn by the 50-move rule/i.test(document.body.innerText), null, { timeout: 20000 });
       assert.match(await text(), /TB 0\.00/);
-      assert.equal(sent.length, 3);
-      assert.equal(sent[2], '8/8/8/4k3/8/8/3KB3/7N w - - 60 80');
+      assert.equal((await sentNow()).length, 3);
+      assert.equal((await sentNow())[2], '8/8/8/4k3/8/8/3KB3/7N w - - 60 80');
       // 8 pieces: the opening explorer again, nothing sent
       await setUp('8/8/8/3k4/pppp4/8/8/1N1NK3 w - - 0 1');
       await p.waitForTimeout(1500);
       assert.doesNotMatch(await text(), /Tablebase/);
       assert.match(await text(), /Opening explorer/i);
-      assert.equal(sent.length, 3);
+      assert.equal((await sentNow()).length, 3);
       // the setting off: a 5-piece position sends nothing
       await p.getByRole('button', { name: 'Settings' }).click();
       await p.getByRole('tab', { name: 'Online' }).click();
@@ -2099,7 +2116,7 @@ for (const name of BROWSERS) for (const site of SITES) {
       await setUp('4k3/8/8/8/8/8/3RK3/7r w - - 0 1');
       await p.waitForTimeout(1500);
       assert.doesNotMatch(await text(), /Tablebase|TB /);
-      assert.equal(sent.length, 3);
+      assert.equal((await sentNow()).length, 3);
       assert.deepEqual(tb.errors, []);
       await tb.ctx.close();
     });
@@ -2518,19 +2535,13 @@ for (const name of BROWSERS) for (const site of SITES) {
       assert.deepEqual(ac.errors, []);
       await ac.ctx.close();
     });
-    // the tablebase in a game's analysis (the real service): every position of this KBN v K game has 7 pieces or fewer,
-    // so the run asks Lichess (4 requests 4 s apart, the start's answer already shown) and searches none of them (with
-    // 20 s a position, a search would show), and 2. Bc4+, which
-    // gives the bishop away, throws the win away: a blunder
+    // the tablebase in a game's analysis (faked, fakeTablebase): every position of this KBN v K game has 7 pieces or
+    // fewer, so the run asks Lichess (4 requests 4 s apart, the start's answer already shown) and searches none of them
+    // (with 20 s a position, a search would show), and 2. Bc4+, which gives the bishop away, throws the win away: a blunder
     await t.test('desktop: analysing a KBN v K game takes the tablebase and rates the drawing move a blunder', async () => {
       const ta = await open(browser, { width: 1440, height: 900 });
-      const p = ta.page, sent = [], answered = [];
-      // a request the page gives up on (no answer in 10 s, LichessCore's TIMEOUT_MS) isn't cached and is rightly asked
-      // again (once by the Analysis panel, then by the run: 6 requests, seen on GitHub's runners), so only the answered
-      // ones count
-      const tbHost = (r) => r.url().startsWith('https://tablebase.lichess.ovh/');
-      ta.ctx.on('request', (r) => { if (tbHost(r)) sent.push(r.url()); });
-      ta.ctx.on('requestfinished', (r) => { if (tbHost(r)) answered.push(r.url()); });
+      await fakeTablebase(ta.ctx);
+      const p = ta.page;
       await p.addInitScript(() => { try { localStorage.setItem('chess-video.tweaks.v1', JSON.stringify({ sfTime: 20 })); } catch (e) {} });
       await p.goto(base, { waitUntil: 'load' });
       await loadedOn(p);
@@ -2546,12 +2557,9 @@ for (const name of BROWSERS) for (const site of SITES) {
       // a few seconds, more when one hangs and is replaced); a 20 s search would take it past 36 s
       await p.waitForFunction(() => !/Analysing \d|Starting Stockfish|Analyse with Stockfish/i.test(document.body.innerText), null, { timeout: 30000 });
       assert.ok(Date.now() - t0 < 30000, 'no 20 s search');
-      // the last answer's event can reach this process just after the page has read it
-      for (const t1 = Date.now(); answered.length < 5 && Date.now() - t1 < 2000;) await p.waitForTimeout(50);
-      assert.equal(answered.filter((u) => u.includes('/standard?')).length, 5, 'each position answered once: ' + answered.join(' '));
-      assert.equal(new Set(answered).size, 5, 'each position answered once: ' + answered.join(' '));
-      assert.equal(answered.length, 5, 'nothing else asked');
-      assert.ok(sent.length - answered.length <= 1, 'one request given up on at most: ' + sent.join(' '));
+      const asked = await p.evaluate(() => window.__tb);
+      assert.equal(new Set(asked).size, 5, 'each position asked: ' + asked.join(' | '));
+      assert.equal(asked.length, 5, 'each position asked once: ' + asked.join(' | '));
       // on 2. Bc4+ the title row says "Tablebase" in place of a depth
       await p.locator('[data-ply="2"]').click();
       await assert.doesNotReject(p.locator('.plabel').filter({ hasText: /2\. Bc4\+/ }).waitFor({ timeout: 5000 }));
