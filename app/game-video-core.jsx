@@ -7,14 +7,14 @@ const { winChance, plyCp } = window.ChessCore;
 const PALETTES = {
   dark: {
     bg: '#13100f', panel: '#1b1715', line: 'rgba(255,236,214,0.09)', ctlLine: 'rgba(255,236,214,0.4)', ink: '#efe8de', dim: '#9a8e82',
-    light: '#f0d9b5', dark: '#b58863', last: '#e3b55b',
+    light: '#f0d9b5', dark: '#b58863', last: '#e3b55b', engine: '#5c5c5c',
     best: '#62c483', inaccuracy: '#e6c14d', mistake: '#ec9442', blunder: '#e4553f', none: '#efe8de',
     good: '#5aa9e6', brilliant: '#3cc7bd', interesting: '#c98be0', queen: '#e0609f',
     off: '#2a2320', scrim: '19,16,15', haloBoard: '0 0 3px rgba(255,236,214,0.5), 0 0 16px rgba(255,236,214,0.26), 0 0 44px rgba(255,236,214,0.18), ', halo: '0 0 3px rgba(255,236,214,0.3), 0 0 14px rgba(255,236,214,0.14), 0 0 36px rgba(255,236,214,0.1), ', rim: 'drop-shadow(0 0 1px rgba(239,232,222,0.95)) drop-shadow(0 0 1px rgba(239,232,222,0.6))',
   },
   light: {
     bg: '#f2ece3', panel: '#fbf7f1', line: 'rgba(60,40,20,0.13)', ctlLine: 'rgba(60,40,20,0.5)', ink: '#2a211b', dim: '#6b5f53',
-    light: '#f0d9b5', dark: '#b58863', last: '#8a5e15',
+    light: '#f0d9b5', dark: '#b58863', last: '#8a5e15', engine: '#5c5c5c',
     best: '#237a46', inaccuracy: '#8a6a0a', mistake: '#b05616', blunder: '#c63b29', none: '#2a211b',
     good: '#2a6fae', brilliant: '#1a7a73', interesting: '#8f4fab', queen: '#c03f7c',
     off: '#e4dbcd', scrim: '242,236,227', halo: '', haloBoard: '', rim: 'none',
@@ -378,7 +378,7 @@ function Board({ M, T, S, a, arrows, pieces, queen, vline, hide, lines, sel, idl
       {pieces.map((p) => <Piece key={p.id} p={p} T={T} S={S} />)}
       <svg width={BW} height={BW} style={{ position: 'absolute', left: 0, top: 0, zIndex: 6, pointerEvents: 'none' }}>
         {best}
-        {idle && lines && lines.slice().reverse().map((r) => <Arrow key={r.k} from={r.uci.slice(0, 2)} to={r.uci.slice(2, 4)} color={BOARD.best} a={r.k === 1 ? 1 : 0.5} grow={1} thin={r.k > 1} />)}
+        {idle && lines && lines.slice().reverse().map((r) => <Arrow key={r.k} from={r.uci.slice(0, 2)} to={r.uci.slice(2, 4)} color={BOARD.engine} a={r.k === 1 ? 1 : 0.5} grow={1} thin={r.k > 1} />)}
         {queen && (queen.at === c + 1 || queen.at === c) && queen.best && <Arrow from={queen.best.slice(0, 2)} to={queen.best.slice(2, 4)} color={BOARD.queen} a={1} grow={1} />}
       </svg>
       {badge}
@@ -404,6 +404,15 @@ function deepLineSteps(P, pv) {
 }
 // The lines of the position after ply P on the loaded analysis (several searched lines: Go deeper's once it shows, else the
 // analysis file's engine_lines), each { k, cp, depth, pv: uci }; null with one line or none
+// the engine lines' arrows from the position after ply c (grey: the green one is Better was's): each line's first
+// move where several were kept (Go deeper's, else the analysis's), else the Best line's, as the panel lists them
+function nextArrows(M, c, deeper) {
+  const many = nextLinesOf(M.plies[c], deeper);
+  if (many) return lineArrows({ lines: many });
+  if (deeper && deeper.pv && deeper.pv[0]) return [{ uci: deeper.pv[0], k: 1 }];
+  const P = M.plies[c], s = P && P.next && P.next.length ? playLineCached(M, c + 1, P.next.slice(0, 1)) : [];
+  return s.length && s[0].uci ? [{ uci: s[0].uci, k: 1 }] : null;
+}
 const nextLinesOf = (P, deeper) => (deeper ? (deeper.lines && deeper.lines.length > 1 ? deeper.lines : null) : P && P.nextLines && P.nextLines.length > 1 ? P.nextLines : null);
 const lineLabel = (M, c, j, san) => `${window.ChessCore.moveNo(M.ply0 + c + j)} ${san}`;
 
@@ -532,7 +541,7 @@ function LineBoard({ a, sq, v, hide, arrows, sel }) {
       {sq}{over}{selSquare(sel)}{pieces}
       {arrows && (
         <svg width={BW} height={BW} style={{ position: 'absolute', left: 0, top: 0, zIndex: 6, pointerEvents: 'none' }}>
-          {arrows.slice().reverse().map((r) => <Arrow key={r.k} from={r.uci.slice(0, 2)} to={r.uci.slice(2, 4)} color={r.color || BOARD.best} a={r.a != null ? r.a : r.k === 1 ? 1 : 0.5} grow={1} thin={r.k > 1} />)}
+          {arrows.slice().reverse().map((r) => <Arrow key={r.k} from={r.uci.slice(0, 2)} to={r.uci.slice(2, 4)} color={r.color || BOARD.engine} a={r.a != null ? r.a : r.k === 1 ? 1 : 0.5} grow={1} thin={r.k > 1} />)}
         </svg>
       )}
     </div>
@@ -1465,7 +1474,7 @@ function GameVideo({ M, tw, d, probe, queen, nav, scheme, sf, orient }) {
           <EvalBar M={M} T={T} S={S} a={enter(1)} tb={tbBar(tb)} dead={deadBar(dead)} deep={!playing && gameEval.after && !gameEval.after.stored && gameEval.after.cp != null ? gameEval.after.cp : null} />
           <PlayerBar M={M} T={T} S={S} side="b" a={enter(1)} pieces={pieces} />
           <BoardSpace onStep={tw.exporting ? null : stepBy}>
-            <Board M={M} T={T} S={S} a={enter(0)} arrows={tw.bestArrows} pieces={pieces} queen={queen} vline={pv || vline} hide={input.drag && input.drag.moved ? input.drag.from : null} lines={tw.bestArrows ? (own ? lineArrows(own.after) : !playing && !pv && !vline && cNow >= 0 ? lineArrows({ lines: nextLinesOf(M.plies[cNow], gameEval.after && !gameEval.after.stored ? gameEval.after : null) }) : null) : null} idle={!playing && !pv && !vline} sel={input.sel} />
+            <Board M={M} T={T} S={S} a={enter(0)} arrows={tw.bestArrows} pieces={pieces} queen={queen} vline={pv || vline} hide={input.drag && input.drag.moved ? input.drag.from : null} lines={tw.bestArrows ? (own ? lineArrows(own.after) : !playing && !pv && !vline && cNow >= 0 ? nextArrows(M, cNow, gameEval.after && !gameEval.after.stored ? gameEval.after : null) : null) : null} idle={!playing && !pv && !vline} sel={input.sel} />
             <BoardDraw draw={draw} hidden={playing || !!pv}>
               <BoardTouch pos={touchPos} targets={input.targets} drag={input.drag} promo={input.promo} {...input.handlers} />
             </BoardDraw>

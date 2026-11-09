@@ -548,8 +548,8 @@ function EngineLines({ lines, pos, ply0, c, onPick, onHover, cloud }) {
   );
 }
 
-// Arrows for the lines' first moves (Lines above one): line 1 as the best-move arrow, the others thinner and fainter
-const lineArrows = (r) => (r && r.lines && r.lines.length > 1 ? r.lines.filter((l) => l.pv[0]).map((l) => ({ uci: l.pv[0], k: l.k })) : null);
+// Arrows for the lines' first moves, one line or several: line 1 the best line's, the others thinner and fainter
+const lineArrows = (r) => (r && r.lines && r.lines.length ? r.lines.filter((l) => l.pv && l.pv[0]).map((l) => ({ uci: l.pv[0], k: l.k })) : r && r.pv && r.pv[0] ? [{ uci: r.pv[0], k: 1 }] : null);
 
 const fmtSf = (cp) => {
   if (cp == null) return '…';
