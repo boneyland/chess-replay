@@ -117,17 +117,17 @@
   }
 
   // the ink in a cell: its pixels far (over 60 levels) from the cell's own median, the glyph's background; n of them,
-  // and their extent (x0, y0, x1, y1, in pixels, the cell's own corner at 0, 0). With inner (edges of the cell,
+  // their extent (x0, y0, x1, y1, in pixels, the cell's own corner at 0, 0) and which they are (bits, a row at a time). With inner (edges of the cell,
   // 'l', 't', 'r', 'b'), a blob of ink that touches one of them is left out: a piece reaching into a corner patch
   function ink({ g, w, h }, x0, y0, x1, y1, skip, inner) {
     x0 = Math.max(0, Math.round(x0)); y0 = Math.max(0, Math.round(y0)); x1 = Math.min(w, Math.round(x1)); y1 = Math.min(h, Math.round(y1));
-    const cw = Math.max(0, x1 - x0), ch = Math.max(0, y1 - y0), out = { n: 0, x0: Infinity, y0: Infinity, x1: -Infinity, y1: -Infinity, w: cw, h: ch };
+    const cw = Math.max(0, x1 - x0), ch = Math.max(0, y1 - y0), out = { n: 0, x0: Infinity, y0: Infinity, x1: -Infinity, y1: -Infinity, w: cw, h: ch, bits: new Uint8Array(cw * ch) };
     const v = [];
     for (let y = y0; y < y1; y++) for (let x = x0; x < x1; x++) if (!skip || !skip[x]) v.push(g[y * w + x]);
     if (v.length < 4) return out;
     const m = median(v), on = new Uint8Array(cw * ch);
     for (let y = 0; y < ch; y++) for (let x = 0; x < cw; x++) on[y * cw + x] = (!skip || !skip[x + x0]) && Math.abs(g[(y + y0) * w + x + x0] - m) > 60 ? 1 : 0;
-    const take = (x, y) => { out.n++; out.x0 = Math.min(out.x0, x); out.x1 = Math.max(out.x1, x + 1); out.y0 = Math.min(out.y0, y); out.y1 = Math.max(out.y1, y + 1); };
+    const take = (x, y) => { out.n++; out.bits[y * cw + x] = 1; out.x0 = Math.min(out.x0, x); out.x1 = Math.max(out.x1, x + 1); out.y0 = Math.min(out.y0, y); out.y1 = Math.max(out.y1, y + 1); };
     if (!inner) { for (let i = 0; i < on.length; i++) if (on[i]) take(i % cw, (i / cw) | 0); return out; }
     const seen = new Uint8Array(cw * ch);
     for (let i = 0; i < on.length; i++) {
@@ -148,10 +148,49 @@
     return out;
   }
 
+  // the holes in a cell's ink (as ink gives it): the patches of background, side by side neighbours joined, that ink
+  // closes in all round (an "8" has two, a "1" none). Ink touches diagonally, so a gap only a corner wide still closes
+  function holes(c) {
+    if (!c.n) return 0;
+    const W = c.x1 - c.x0 + 2, H = c.y1 - c.y0 + 2, seen = new Uint8Array(W * H); // a background ring around the extent
+    const inkAt = (x, y) => x > 0 && y > 0 && x < W - 1 && y < H - 1 && c.bits[(y - 1 + c.y0) * c.w + x - 1 + c.x0] === 1;
+    let n = 0;
+    for (let i = 0; i < W * H; i++) {
+      if (seen[i] || inkAt(i % W, (i / W) | 0)) continue;
+      const q = [i];
+      seen[i] = 1;
+      for (let j = 0; j < q.length; j++) {
+        const x = q[j] % W, y = (q[j] / W) | 0;
+        for (const [dx, dy] of [[1, 0], [-1, 0], [0, 1], [0, -1]]) {
+          const nx = x + dx, ny = y + dy, k = ny * W + nx;
+          if (nx >= 0 && ny >= 0 && nx < W && ny < H && !seen[k] && !inkAt(nx, ny)) { seen[k] = 1; q.push(k); }
+        }
+      }
+      if (i) n++; // the first patch found starts at the ring's corner: the outside
+    }
+    return n;
+  }
+
+  // the two ends of a label column read as "8" over "1" (> 0: "8" at the top, 'w') or the other way (< 0), or 0 when
+  // they don't read as those: by shape, not ink alone, so a column of letters (a board turned a quarter, its file
+  // letters down the side) is no answer. The "8" end carries the column's most ink, at least 1.35 times the "1"
+  // end's (not always the least: a tiny "7" can carry less); the "1" is narrow, with no hole; the "8" isn't narrow,
+  // and has two holes once it's 9 px high (smaller, they close up)
+  function ends(col) {
+    const n = col.map((c) => c.n), r = Math.log(n[0] / n[7]);
+    if (Math.abs(r) < Math.log(1.35)) return 0;
+    const [eight, one] = r > 0 ? [col[0], col[7]] : [col[7], col[0]];
+    if (n.filter((v) => v >= eight.n).length > 1) return 0;
+    const wd = (c) => c.x1 - c.x0, ht = (c) => c.y1 - c.y0;
+    if (wd(one) > 0.7 * ht(one) || holes(one)) return 0;
+    if (wd(eight) < 0.4 * ht(eight) || (ht(eight) >= 9 && holes(eight) !== 2)) return 0;
+    return r;
+  }
+
   // Which side the rank labels put at the bottom: 'w' when "1" is there, 'b' when "8" is, null when no label column
   // is clear. A label column is 8 cells, one a rank, each holding one glyph: some ink, none with far more than the
-  // others, and shaped like a label, not a run of text or a piece reaching in. An "8" carries clearly more ink than a
-  // "1", so its two ends tell. Columns looked at: just outside the box on the left and right (a frame's solid band
+  // others, and shaped like a label, not a run of text or a piece reaching in. Its two ends tell, read as an "8" and a
+  // "1" (ends). Columns looked at: just outside the box on the left and right (a frame's solid band
   // left out), and the corners of the edge files' squares (inside coordinates). File labels aren't read.
   function labelSide(im, box) {
     const X0 = box.x0 * im.w, Y0 = box.y0 * im.h, X1 = box.x1 * im.w, Y1 = box.y1 * im.h, s = (X1 - X0) / 8, t = (Y1 - Y0) / 8;
@@ -184,7 +223,7 @@
       const glyph = (c) => c.n >= 3 && c.x1 - c.x0 <= 0.45 * s && c.y1 - c.y0 <= 0.6 * t && c.y0 >= 0.1 * c.h && c.y1 <= 0.9 * c.h
         && Math.abs((c.y0 + c.y1) / 2 - c.h / 2) <= 0.25 * c.h;
       const mid = median(cells.map((c) => (c.x0 + c.x1) / 2));
-      cols.push(cells.every((c) => glyph(c) && Math.abs((c.x0 + c.x1) / 2 - mid) <= 0.15 * s) ? cells.map((c) => c.n) : null);
+      cols.push(cells.every((c) => glyph(c) && Math.abs((c.x0 + c.x1) / 2 - mid) <= 0.15 * s) ? cells : null);
     };
     for (const [xa, xb] of [[X0 - 0.7 * s, X0 - 0.05 * s], [X1 + 0.05 * s, X1 + 0.7 * s]]) {
       const { skip, bands } = frame(xa, xb);
@@ -199,18 +238,17 @@
         const inner = (left ? 'r' : 'l') + (top ? 'b' : 't');
         cols.push([...Array(8)].map((_, k) => {
           const ya = top ? Y0 + k * t + 0.02 * t : Y0 + (k + 1) * t - c * t;
-          return ink(im, xa, ya, xb, ya + (c - 0.02) * t, null, inner).n;
+          return ink(im, xa, ya, xb, ya + (c - 0.02) * t, null, inner);
         }));
       }
     }
     let side = null, best = 0;
     for (const col of cols) {
       if (!col) continue;
-      const m = median(col);
-      if (Math.min(...col) < 3 || Math.max(...col) > 3 * m) continue;
-      // the "8" end carries at least 1.35 times the "1" end's ink
-      const r = Math.log(col[0] / col[7]);
-      if (Math.abs(r) < Math.log(1.35)) continue;
+      const n = col.map((c) => c.n), m = median(n);
+      if (Math.min(...n) < 3 || Math.max(...n) > 3 * m) continue;
+      const r = ends(col);
+      if (!r) continue;
       const here = r > 0 ? 'w' : 'b';
       if (side && side !== here) return null;
       if (Math.abs(r) > best) { side = here; best = Math.abs(r); }
@@ -258,5 +296,5 @@
     return s >= 4 && t >= 4 && !!checkered(integral(im), x0, y0, s, t);
   }
 
-  window.VisionGrid = { SIDE, grey, findBoard, labelSide, occupied, modelSide, shouldTurn, isGrid };
+  window.VisionGrid = { SIDE, grey, findBoard, holes, ends, labelSide, occupied, modelSide, shouldTurn, isGrid };
 })();
