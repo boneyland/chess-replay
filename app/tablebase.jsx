@@ -45,16 +45,20 @@ function TablebaseBlock({ t, onPlay }) {
       <span style={{ flex: 'none', color: C.dim }}>Tablebase</span><span style={{ minWidth: 0, color }}>{txt}</span>
     </div>
   );
-  if (t.state !== 'ready') return <div className="tb-block">{head(t.state === 'loading' ? 'Looking up…' : 'Not available', C.dim)}</div>;
+  // the results always take three rows' height (more scroll, fewer leave room), the same while looking up, so nothing
+  // under the block moves from one position to the next
+  const ROW = tx(28), GAP = tx(6);
+  const results = (rows) => <div className="tb-rows" style={{ display: 'flex', flexDirection: 'column', gap: GAP, height: 3 * ROW + 2 * GAP, overflowY: 'auto', overscrollBehavior: 'contain' }}>{rows}</div>;
+  if (t.state !== 'ready') return <div className="tb-block" style={{ display: 'flex', flexDirection: 'column', gap: GAP }}>{head(t.state === 'loading' ? 'Looking up…' : 'Not available', C.dim)}{results(null)}</div>;
   const tb = t.tb, white = t.turn === 'w';
   // distances where a side is winning (a cursed win too: its DTZ says how far past the fifty moves the win lies)
   const decided = !tb.checkmate && (['win', 'loss'].includes(LC.outcome(tb.category)) || tb.category === 'cursed-win' || tb.category === 'blessed-loss');
   const dist = decided ? [tb.dtz != null && `DTZ ${Math.abs(tb.dtz)}`, tb.dtm ? `DTM ${Math.abs(tb.dtm)}` : null].filter(Boolean) : [];
   return (
-    <div className="tb-block" style={{ display: 'flex', flexDirection: 'column', gap: tx(6) }}>
+    <div className="tb-block" style={{ display: 'flex', flexDirection: 'column', gap: GAP }}>
       {head([LC.verdict(tb, t.turn), ...dist].join(' · '), C.ink)}
-      {LC.groups(tb).map((g) => (
-        <div key={g.outcome} style={{ display: 'flex', alignItems: 'center', gap: tx(10), minWidth: 0 }}>
+      {results(LC.groups(tb).map((g) => (
+        <div key={g.outcome} style={{ display: 'flex', alignItems: 'center', gap: tx(10), minWidth: 0, flex: 'none', height: ROW }}>
           <span style={{ ...NO_SELECT, flex: 'none', width: tx(52), font: `600 ${tx(14)}px ${MONO}`, letterSpacing: '0.08em', textTransform: 'uppercase', color: tbColor(g.outcome) }}>{TB_GROUP[g.outcome]}</span>
           <SideScroll style={{ display: 'flex', gap: tx(6), minWidth: 0, flex: 1 }}>
             {g.moves.map((m) => {
@@ -68,7 +72,7 @@ function TablebaseBlock({ t, onPlay }) {
             })}
           </SideScroll>
         </div>
-      ))}
+      )))}
     </div>
   );
 }

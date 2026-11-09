@@ -936,7 +936,7 @@ function Analysis({ M, T, S, a, vline, onLine, onPreview, onReplyHover, paused, 
   const c = lastPly(T, S);
   // Stockfish runs as asm.js here (stockfish.jsx, which a page without the engine doesn't load)
   const sfAsm = typeof SF_SIMD !== 'undefined' && !SF_SIMD;
-  // the Tablebase block goes under the lines; the panel scrolls to it where it doesn't fit
+  // the Tablebase block goes under the lines (above them on a move in one column); the panel scrolls to it where it doesn't fit
   const rule = deadWords(dead) || fifty;
   const deadEl = rule && <div style={{ marginTop: tx(12), paddingTop: tx(12), borderTop: `1px solid ${C.line}` }}><RuleBlock w={rule} /></div>;
   const box = (tb || deadEl) && !L.analysis.flow ? { ...L.analysis, scroll: true } : L.analysis;
@@ -991,6 +991,7 @@ function Analysis({ M, T, S, a, vline, onLine, onPreview, onReplyHover, paused, 
   const agreeText = `${engName} agrees with the move played.` + (qPick ? (qPick.best === P.uci ? ' So does Queen.' : ` Queen preferred ${qPick.bestSan || qPick.best}.`) : '');
   const qLine = Qp.after && Qp.after.line ? Qp.after.line.split(/\s+/).filter((x) => x && !/^\d+\.+$/.test(x) && !/^\d+\.\.\.$/.test(x)).map((x) => x.replace(/^\d+\.+/, '')).filter(Boolean).slice(0, 6) : [];
   const qLegal = qLine.length ? playLineCached(M, c + 1, qLine) : [];
+  const tbTop = L.cols === 1;
   return (
     <AnalysisPanel box={box} a={a} paused={paused} depth={depth} deep={M.hasEval ? deep : null}>
       <div style={{ opacity: k, transform: `translateY(${(1 - k) * 8}px)` }}>
@@ -1004,6 +1005,9 @@ function Analysis({ M, T, S, a, vline, onLine, onPreview, onReplyHover, paused, 
           {[P.checkmate ? 'Checkmate' : CLASS_LABEL[cls], P.loss > 0 && `−${P.loss} cp`, cls === 'best' && P.best && P.best.line[0] && `as good as ${P.best.line[0]}`].filter(Boolean).map((t) => <span key={t} style={{ whiteSpace: 'nowrap' }}>{t}</span>)}
         </div>
       </div>
+      {/* one column (a phone): the Tablebase block above the lines, where it shows without scrolling the panel; its
+          results keep three rows' height, so the lines under it don't move from one position to the next */}
+      {tb && tbTop && <div style={{ marginTop: anGap(16), paddingTop: anGap(14), borderTop: `1px solid ${C.line}` }}><TablebaseBlock t={tb} onPlay={onTb} /></div>}
       <div style={{ marginTop: anGap(16), paddingTop: anGap(14), borderTop: `1px solid ${C.line}`, font: `500 ${tx(18)}px ${MONO}`, color: C.dim, display: 'flex', flexDirection: 'column', gap: anGap(8), opacity: k }}>
         {betterLegal.length > 0 && (
           <LineChips name="Better was" tip="better line" nameColor={C.ink} accent={C.best} moves={P.best.line.slice(0, 8)} ply0={M.ply0} c={c} legal={betterLegal.length}
@@ -1022,7 +1026,7 @@ function Analysis({ M, T, S, a, vline, onLine, onPreview, onReplyHover, paused, 
         )}
         {P.advice && <span style={{ color: C.inaccuracy }}>{P.advice}</span>}
         {rule && <div style={{ paddingTop: tx(8), borderTop: `1px solid ${C.line}` }}><RuleBlock w={rule} /></div>}
-        {tb && <div style={{ paddingTop: tx(8), borderTop: `1px solid ${C.line}` }}><TablebaseBlock t={tb} onPlay={onTb} /></div>}
+        {tb && !tbTop && <div style={{ paddingTop: tx(8), borderTop: `1px solid ${C.line}` }}><TablebaseBlock t={tb} onPlay={onTb} /></div>}
         {vline && (
           <span style={{ font: `500 ${tx(15)}px ${MONO}`, color: C.dim }}>
             <span style={{ color: lineAccent(vline.src) }}>
