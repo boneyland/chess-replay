@@ -21,7 +21,7 @@ class by hand on anything else.
 
 | Class | Name | What and where | Code name |
 | --- | --- | --- | --- |
-| `part-game-info` | Game info | Event, round, teams, place, date and opening, in up to three lines: under White's player bar in one column, top of the sidebar in two | `Header`, `L.header` |
+| `part-game-info` | Game info | Event, round, teams, place, date and opening, in up to three lines: under White's player bar in one column (not on a phone held upright, which has none), top of the sidebar in two | `Header`, `L.header` |
 | `part-moves` | Moves | The move list | `MoveList`, `L.moves` |
 | `part-commentary` | Commentary | The notes and the book name (replay) | `Commentary`, `L.comment` |
 | `part-opening-explorer` | Opening explorer | Book moves, or Lichess's explorer when it's on (free board, in Commentary's place) | `OpeningExplorer`, `LichessExplorer` |

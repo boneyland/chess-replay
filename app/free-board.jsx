@@ -459,8 +459,6 @@ function FreeBoard({ board, onChange, tw, setTweak, onLichess, sf, nav, orient, 
   const from = board.fen === window.ChessCore.START_FEN ? 'from the starting position' : 'from a set-up position';
   // the free board's Game info (a game's layout has none)
   const HM = { white: { name: 'White' }, black: { name: 'Black' }, event: 'Free board', site: from, eco: named && named.eco, opening: named && named.name };
-  // an upright phone (one column in the phone tier; a tablet held upright keeps them) drops the free board's info box
-  const upright = L.cols === 1 && L.tier === 'phone';
   return (
     <div className="stage-view" ref={flowRef} style={{ position: 'absolute', inset: 0, background: C.bg, ...flowStyle() }}>
       {!G && (deadv || tbv ? <EvalBarView cp={(deadv || tbv).cp} txt={(deadv || tbv).txt} a={1} /> : <EvalBarView cp={cp == null ? 0 : cp} txt={cp == null ? (down ? '' : '…') : fmtSf(cp)} a={1} />)}
@@ -472,7 +470,7 @@ function FreeBoard({ board, onChange, tw, setTweak, onLichess, sf, nav, orient, 
         </BoardDraw>
       </BoardSpace>
       <FreeBar pos={pos} side="w" a={1} clock={clockOf('w')} name={G ? playerName(G, 'w') : null} />
-      {L.header && !upright && <Header M={HM} a={1} />}
+      {L.header && <Header M={HM} a={1} />}
       <MoveList M={MV} T={upto + 0.999} S={S} a={1} paused onPick={go} deadAt={deadAt} end={end} startAt={G && G.from} />
       {G ? <GameInfo board={board} /> : tb ? <TablebaseExplorer t={tb} posKey={boardKey} onPlay={onBook} /> : xl ? <LichessExplorer x={xl} tw={tw} setTweak={setTweak} onGame={onLichess} posKey={boardKey} onPlay={onBook} onHover={setHov} white={pos.turn === 'w'} fallback={<OpeningExplorer board={board} book={book} onPlay={onBook} onHover={setHov} />} /> : <OpeningExplorer board={board} book={book} onPlay={onBook} onHover={setHov} />}
       {G ? <Panel box={L.analysis} part="game" a={1} style={NO_SELECT} title="Game"><GameStatus board={board} onChange={onChange} down={opponent.down} why={sf.why} retry={opponent.retry} tip={hintInfo} /></Panel>

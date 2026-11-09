@@ -108,6 +108,15 @@ test('video fits the screen', () => {
   assert.ok(LC.compute({ w: 390, h: 770 }).flow);
 });
 
+test('no Game info on a phone held upright', () => {
+  for (const view of ['replay', 'free']) {
+    assert.equal(LC.compute({ w: 390, h: 770, view }).header, null, view);
+    assert.equal(LC.compute({ w: 390, h: 770, view }).moves.order, 0, 'Moves comes first under the board');
+    assert.ok(LC.compute({ w: 768, h: 1024, cols: 1, view }).header, 'a tablet\'s one column keeps it: ' + view);
+    assert.ok(LC.compute({ w: 844, h: 390, vw: 844, vh: 390, cols: 2, view }).header, 'a phone held sideways, two columns: ' + view);
+  }
+});
+
 test('game and edit views', () => {
   const g = LC.compute({ w: 1440, h: 818, view: 'game' });
   assert.equal(g.eval, null);
