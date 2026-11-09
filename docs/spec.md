@@ -11,7 +11,7 @@ The one spec for the app: what it does now, what is planned, and the decisions b
   - [Replay](spec/replay.md): replay and browser analysis, opening names, custom starts and flip, piece sets, boards, drawing on the board
   - [Import](spec/import.md): import game, Lichess game import
   - [Position from image](spec/position-from-image.md)
-  - [Free board and games](spec/free-board.md): free board and explorer, Edit position, Play vs human, My games, Play vs Stockfish, dead positions with chasolver
+  - [Free board and games](spec/free-board.md): free board and explorer, Edit position, Play vs human, My games, Play vs computer, dead positions with chasolver
   - [Engine](spec/engine.md): Full Stockfish download, lines (MultiPV), engine lines in analysis files, multi-threaded Stockfish, asm.js Stockfish (no WebAssembly SIMD)
   - [Lichess data](spec/lichess.md): endgame tablebase, Lichess cloud evaluation, Lichess opening explorer
   - [Share and export](spec/export.md): the dialog, video and WebP export
@@ -29,7 +29,7 @@ These hold across every feature; a change that breaks one is a failure even if i
 - **Nothing leaves the browser** unless the viewer turns it on (Ask Queen, and the planned Lichess features, each behind a toggle or button). No accounts of our own (online play, when built, is between two browsers with no account or game server of ours).
 - **The playing video stays clean.** Buttons, progress lines and engine controls are for the paused page; a playing video looks like the page, without the paused page's controls (buttons, progress lines, engine controls); the title and end cards, the panels' fade-in, the blunder glow, the camera push and the typewriter commentary show only then, while stepping and paused viewing are a plain, still page.
 - **Nothing heavy starts by itself.** The engine (1.8 MB) loads on first use; the full engine (99 MB) downloads only when the viewer asks; whole-game analysis runs only when asked.
-- **No hints in a game.** During Play vs human or Play vs Stockfish no eval bar, arrows, verdicts, book moves or engine lines show.
+- **No hints in a game, but the ones asked for.** During Play vs human or Play vs computer no eval bar, arrows, verdicts, book moves or engine lines show; against the computer the player may ask for 3 hints a game (Stockfish's best move).
 - **Replay doesn't regress.** A loaded game's title card, timeline, export and own-move exploration are untouched by free-board and game features (which is why the free board is a separate view).
 - **Bad input explains itself.** An illegal FEN or broken PGN gets a plain message, never a crash.
 - **Numbers mean what the Python pipeline's mean.** The browser's analysis JSON uses chess-animator's sign convention, mate encoding, rating and accuracy formulas.

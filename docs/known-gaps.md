@@ -23,7 +23,7 @@ Deferred by the per-plan reviews; each was true when recorded and may since have
 - Leaving a game in progress still asks, though the game is kept.
 - The same game open in two tabs is one entry; each tab's moves replace the other's.
 
-**Play vs Stockfish** (2026-10-21)
+**Play vs computer** (2026-10-21)
 - A move played before the "before" search reaches depth 15 (just after the engine loads; depth 8 for a blunder of a piece or more), and the move before a reload, go unrated. On a slow engine (the asm.js one, a slow phone) the reply search often stops short of depth 15 in its 3 s, so smaller inaccuracies, mistakes and blunders go unflagged, silently.
 - On the phone the Commentary box cuts the how-it-works text short (it scrolls).
 - No draw offers against Stockfish; the player can resign while Stockfish thinks.

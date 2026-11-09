@@ -10,7 +10,7 @@ Music that plays under the page, chosen from a few bundled tracks or the viewer'
 
 Decided:
 
-- **Plays on the replay page, playing or paused, and on the free board and in games** (Play vs human, Play vs Stockfish).
+- **Plays on the replay page, playing or paused, and on the free board and in games** (Play vs human, Play vs computer).
 - **Not in exported videos**: MP4 and WebM exports keep the move sounds only.
 - **Sources**: a small set of bundled free tracks, and an audio file from the viewer's device.
 
@@ -36,7 +36,7 @@ The responsive layout's squarish windows (near 1:1, such as an unfolded foldable
 
 ## Player names (*needs design*)
 
-In Play vs human set White's and Black's names; in Play vs Stockfish the player's (Stockfish is "Stockfish 19"). Open: asked in the Play dialog or set later; whether the last names are remembered; where they show (player bars, My games rows, the PGN's `White`/`Black`, where `PlayCore.pgn` writes "White"/"Black" today).
+In Play vs human set White's and Black's names; in Play vs computer the player's (Stockfish is "Stockfish 19"). Open: asked in the Play dialog or set later; whether the last names are remembered; where they show (player bars, My games rows, the PGN's `White`/`Black`, where `PlayCore.pgn` writes "White"/"Black" today).
 
 ## Chess960
 

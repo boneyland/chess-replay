@@ -1,12 +1,13 @@
-// A game on the free board (Play vs human or vs Stockfish): its clocks, takebacks, resignation, agreed draws, end and the
+// A game on the free board (Play vs human or vs computer): its clocks, takebacks, resignation, agreed draws, end and the
 // critique of the player's moves. A game is a BoardCore board with a game record, board.game = { mode, id, tc, date, clock,
-// result } for mode 'human', { mode: 'stockfish', you, id, tc, date, clock, result, critique } against Stockfish: id names it
+// result } for mode 'human', { mode: 'stockfish', you, id, tc, date, clock, result, critique, hints } against Stockfish: id names it
 // in My games (GamesCore), tc a time control ('10+0') or null, clock { left: { w, b } ms at `since`, since: when the side to
 // move's clock started (null: stopped), clk: the mover's time left after each move, begun: true once a move was played,
 // so the clocks run on when every move is taken back }, result null while the game goes on,
 // else { result, reason, side } (side: who resigned or whose flag fell; none for a draw by agreement); you the player's side
 // ('w' or 'b'), critique the player's flagged moves [{ j, cls, best }] (j the step, cls inaccuracy, mistake or blunder,
-// best Stockfish's move instead, in UCI). A game played on from a position (Play from This position) keeps the moves
+// best Stockfish's move instead, in UCI), hints the hints the player asked for [{ j, fen, best }] (j the step the hinted
+// move would be, fen its position's positionKey, best Stockfish's move there; at most HINTS a game, kept through takebacks so a hint is never had back). A game played on from a position (Play from This position) keeps the moves
 // that led there: from, when set, is how many of the board's steps came before the game, which takebacks never reach,
 // the clocks and critique leave alone, and repetitions count. clk and critique's j still index the game's moves (clk
 // from the first move of the game, j the board's step). Like boards, games are never mutated; `now` is a time in ms.
@@ -187,7 +188,7 @@
     const n = keep ? board.upto + 1 : 0, t = parseTc(tc), b = { ...board, steps: board.steps.slice(0, n), upto: n - 1 };
     const clock = t ? { left: { w: t.base, b: t.base }, since: null, clk: [] } : null;
     const head = mode === 'stockfish' ? { mode, you: you === 'b' ? 'b' : 'w' } : { mode: 'human' };
-    return { ...b, game: { ...head, id: newId(), tc: t ? tc : null, date: date || today(), clock, result: outcome(b, mode !== 'stockfish'), ...(n ? { from: n } : {}), ...(head.you ? { critique: [] } : {}) } };
+    return { ...b, game: { ...head, id: newId(), tc: t ? tc : null, date: date || today(), clock, result: outcome(b, mode !== 'stockfish'), ...(n ? { from: n } : {}), ...(head.you ? { critique: [], hints: [] } : {}) } };
   }
 
   // the side to move's time left at `now`; null without clocks
@@ -307,6 +308,28 @@
     if (!isSf(b) || !e || !Number.isInteger(e.j) || e.j < fromOf(b) || e.j >= b.steps.length || moverOf(b, e.j) !== b.game.you) return b;
     if (!CLASSES.includes(e.cls) || b.game.critique.some((c) => c.j === e.j)) return b;
     return withGame(b, { critique: [...b.game.critique, entry(e)] });
+  }
+
+  // Hints: a Stockfish game gives the player HINTS of them, each Stockfish's best move in a position where they are to
+  // move. hintFor: the hint already had for the position on the board (a game at its last move, the player to move), so
+  // asking again costs nothing; hintsLeft: how many are left; addHint: the board with one more, for step j (the move the
+  // hint is for, the board's steps.length) and best (UCI), or the board as it was when none are left, the game is over, it
+  // isn't the player's turn or the position has one already
+  const HINTS = 3;
+  const hintsOf = (b) => (isSf(b) && Array.isArray(b.game.hints) ? b.game.hints : []);
+  function hintsLeft(b) { return isSf(b) ? Math.max(0, HINTS - hintsOf(b).length) : 0; }
+  function hintFor(b) {
+    if (!isSf(b)) return null;
+    const j = b.steps.length, at = j ? b.steps[j - 1].pos : b.start.pos, key = positionKey(at);
+    // a hint had here before a takeback counts again only in the same position
+    for (let k = hintsOf(b).length - 1; k >= 0; k--) { const h = b.game.hints[k]; if (h.j === j && h.fen === key) return CC().applyUci(at, h.best) ? h : null; }
+    return null;
+  }
+  function addHint(b, j, best) {
+    if (!inProgress(b) || !hintsLeft(b) || j !== b.steps.length || moverOf(b, j) !== b.game.you || typeof best !== 'string' || !UCI_RE.test(best)) return b;
+    const h = hintFor(b);
+    if (h && h.best === best) return b;
+    return withGame(b, { hints: [...hintsOf(b), { j, fen: positionKey(j ? b.steps[j - 1].pos : b.start.pos), best }] });
   }
 
   // A short line on why the player's move was bad, without the better move: pos the position after it, pv Stockfish's reply
@@ -455,7 +478,9 @@
     const you = g.you === 'b' ? 'b' : 'w', seen = new Set();
     const critique = (Array.isArray(g.critique) ? g.critique : []).filter((c) => c && Number.isInteger(c.j) && c.j >= from && c.j < n && moverOf(board, c.j) === you
       && CLASSES.includes(c.cls) && typeof c.best === 'string' && UCI_RE.test(c.best) && !seen.has(c.j) && seen.add(c.j)).map(entry);
-    return { ...b, game: { mode: 'stockfish', you, id, tc, date, clock, result, ...at, critique } };
+    const hints = (Array.isArray(g.hints) ? g.hints : []).filter((h) => h && Number.isInteger(h.j) && h.j >= from && typeof h.best === 'string' && UCI_RE.test(h.best)
+      && typeof h.fen === 'string' && h.fen.length <= 100).slice(0, HINTS).map((h) => ({ j: h.j, fen: h.fen, best: h.best }));
+    return { ...b, game: { mode: 'stockfish', you, id, tc, date, clock, result, ...at, critique, hints } };
   }
 
   // The game as a PGN (for saving, step 4 of the free-board design): the result, the start when it isn't the standard
@@ -463,7 +488,7 @@
   function pgn(b) {
     const g = b.game, t = parseTc(g.tc), res = g.result ? g.result.result : '*';
     const sf = g.mode === 'stockfish', name = (side) => (!sf ? NAME[side] : side === g.you ? 'You' : 'Stockfish 19');
-    const tags = [['Event', sf ? 'Play vs Stockfish' : 'Play vs human'], ['Site', 'chess-replay'], ['Date', g.date], ['White', name('w')], ['Black', name('b')], ['Result', res]];
+    const tags = [['Event', sf ? 'Play vs computer' : 'Play vs human'], ['Site', 'chess-replay'], ['Date', g.date], ['White', name('w')], ['Black', name('b')], ['Result', res]];
     const more = [];
     if (t) more.push(['TimeControl', `${t.base / 1000}+${t.inc / 1000}`]);
     if (g.result) more.push(['Termination', g.result.reason === 'time' ? 'time forfeit' : 'normal']);
@@ -473,7 +498,7 @@
   }
 
   window.PlayCore = {
-    canMate, lockedDead, positionKey, outcome, TIME_CONTROLS, parseTc, start, inProgress, played, begun, move, canTakeback, takeback, thinkMs, MIN_RATED_DEPTH, SHALLOW_DEPTH, BIG_LOSS_CP, rateMove, addCritique, critiqueText,
+    canMate, lockedDead, positionKey, outcome, TIME_CONTROLS, parseTc, start, inProgress, played, begun, move, canTakeback, takeback, thinkMs, MIN_RATED_DEPTH, SHALLOW_DEPTH, BIG_LOSS_CP, rateMove, addCritique, critiqueText, HINTS, hintsLeft, hintFor, addHint,
     resign, agreeDraw, claimable, claimDraw, fiftyRule, flag, recheck, setProver, pause, runClock, timeLeft, resultText, ending, resume, pgn,
   };
 })();

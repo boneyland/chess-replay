@@ -1,10 +1,10 @@
 # Free board and games
 
-[Spec](../spec.md) › what is built. The free board and what is played on it: the explorer, Edit position, Play vs human, Play vs Stockfish, My games, and dead positions.
+[Spec](../spec.md) › what is built. The free board and what is played on it: the explorer, Edit position, Play vs human, Play vs computer, My games, and dead positions.
 
 ## Free board and explorer
 
-A plain board with Stockfish, separate from the replay (`app/free-board.jsx`, state in `BoardCore`), reached from the dock's **Play/Explore** menu (and the phone menu), in two labelled groups: Explore (Starting position, Edit position) and Play (Play vs human, Play vs Stockfish, My games).
+A plain board with Stockfish, separate from the replay (`app/free-board.jsx`, state in `BoardCore`), reached from the dock's **Play/Explore** menu (and the phone menu), in two labelled groups: Explore (Starting position, Edit position) and Play (Play vs human, Play vs computer, My games).
 
 - **Explore**: every move by either side gets Stockfish's verdict, as own moves do; the eval bar follows; Stockfish's eval and best line show before the first move too. Moves are numbered correctly from a FEN. Undo/redo with ← →.
 - **Edit position** (below; it replaced Paste FEN on 2026-10-25).
@@ -28,7 +28,7 @@ The viewer sees a position or puzzle somewhere (a book diagram, a screen, someon
 - **Checks** (each a line in the status line, `EditCore.problems`): "White has no king." / "Black has 2 kings."; "The pawn on a8 can't stand on the first or last rank."; "Black is in check, but it's White's turn."; "White is in check from 3 pieces, which no move can give." / "… from two pieces in a line, …" (chessops' impossible-check rule, without its en passant cases). An empty board shows a hint instead ("Drag pieces from the tray, or tap one and then tap squares."). Done is disabled while any line shows; a setup with none is one `ChessCore.parseFen` accepts.
 - **Done** opens the free board at the position (`commitBoard(BoardCore.fromFen(…))`). **Cancel** or Esc goes back to what showed before; a game left for the editor resumes, its clock running from then (the time spent editing isn't charged). A reload while editing drops the unfinished edit.
 - Copy FEN copies the editor's FEN.
-- **From the Play dialogs**: Play vs human and Play vs Stockfish always offer Start from (Starting position, Set-up position). With no position set up on the board, Set-up position turns Start game into **Set up position…**, which opens the editor keeping the dialog's choices (time control, side); there Done reads **Start game** and starts the game from the position, and Cancel brings the dialog back as it was.
+- **From the Play dialogs**: Play vs human and Play vs computer always offer Start from (Starting position, Set-up position). With no position set up on the board, Set-up position turns Start game into **Set up position…**, which opens the editor keeping the dialog's choices (time control, side); there Done reads **Start game** and starts the game from the position, and Cancel brings the dialog back as it was.
 
 ## Play vs human
 
@@ -47,11 +47,12 @@ The viewer sees a position or puzzle somewhere (a book diagram, a screen, someon
 - The My games list resumes a game in progress or opens a finished one as a loaded game from `PlayCore.pgn` (replay, own moves, Analyse, Queen, Save PGN, video export). Each can be deleted. The crash screen's Clear saved data leaves the list alone.
 - PGN headers: players, date, result, `[FEN]`/`[SetUp]` for custom starts, `[TimeControl]` and `%clk` when clocked.
 
-## Play vs Stockfish
+## Play vs computer
 
 - **Stockfish can't answer** (won't start, or stopped): the Game box says so with why, and **Try again** (beside Take back and Resign, "Try again, Take back or Resign") asks it again, so a player whose Stockfish dies before its first move, with nothing to take back, needn't resign (`useEngineOpponent`'s `retry`).
 - The player picks White, Black or random; the board is drawn from the player's side and never turns. Stockfish plays at full strength (no strength setting: "prepare to get crushed") at the engine's `play` priority, after a short pause; its think time is capped so its clock doesn't flag.
 - Same ends, Take back (back to the player's previous turn, Stockfish's reply included) and time controls as vs human, minus draw offers and claims: threefold repetition and the fifty-move rule end the game by themselves.
+- **Hints**: on the player's turn the Game box has **Hint · 3 left**; a press shows Stockfish's best move as an arrow on the board and "Hint: Nf3 · 2 left" in the Game box, from the search Stockfish already runs on the player's turn (up to 5 s, "Stockfish is looking for a move…" until then). Three a game (`PlayCore.HINTS`), kept in the game record (`hints: [{ j, fen, best }]`) so a takeback or a reload never gives one back; back in the same position (after a takeback) its hint shows again for free. After the game the Commentary box says how many were used. Then "No hints left".
 - Stockfish quietly rates the player's moves (`critique`: `{ j, cls, best, text }`); an inaccuracy, mistake or blunder is flagged in the Commentary box with a short line, and the better move and evals show only after the game. A move is rated when the search before it and Stockfish's reply search both reach depth 15; short of that (a slow engine), only a blunder losing 300 cp or more (about a piece, or a mate) is flagged, once both reach depth 8 (`PlayCore.rateMove`).
 
 ## Dead positions with chasolver
@@ -73,7 +74,7 @@ A search on every move of a real game is cheap, but rare constructed positions t
 
 **Decided by the user:**
 
-- **In a game** (Play vs human, Play vs Stockfish): when chasolver proves that neither side can mate by any legal sequence, even with both cooperating, the game ends at once as a draw by dead position.
+- **In a game** (Play vs human, Play vs computer): when chasolver proves that neither side can mate by any legal sequence, even with both cooperating, the game ends at once as a draw by dead position.
 - **Flag falls follow FIDE 6.9:** the flag fall is a draw when chasolver proves the opponent can't mate, and a loss otherwise.
 - **Loaded games and the free board point out dead positions too**, in all four of these ways (mockups 2026-11-02):
   1. **Analysis panel block**, under the engine lines like the Tablebase block: **Dead position · ½–½**, then "Neither side can mate by any series of legal moves (FIDE 5.2.2)".

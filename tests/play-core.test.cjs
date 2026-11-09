@@ -159,7 +159,7 @@ const sfGame = (you, tc, moves, fen) => moves.reduce((b, [u, at]) => P.move(b, C
 
 test('a Stockfish game carries the player\'s side and an empty critique; vs human stays as it was', () => {
   const g = P.start(B.fromFen(), null, '2026.10.21', { mode: 'stockfish', you: 'b' });
-  assert.deepEqual(g.game, { mode: 'stockfish', you: 'b', id: g.game.id, tc: null, date: '2026.10.21', clock: null, result: null, critique: [] });
+  assert.deepEqual(g.game, { mode: 'stockfish', you: 'b', id: g.game.id, tc: null, date: '2026.10.21', clock: null, result: null, critique: [], hints: [] });
   assert.equal(P.start(B.fromFen(), null, null, { mode: 'stockfish' }).game.you, 'w', 'White by default');
   const h = P.start(B.fromFen(), null, '2026.10.21', { mode: 'human', you: 'b' });
   assert.deepEqual(Object.keys(h.game).sort(), ['clock', 'date', 'id', 'mode', 'result', 'tc']);
@@ -236,6 +236,36 @@ test('resume a Stockfish game: the side, and a critique that fits the moves', ()
   assert.deepEqual(B.restore({ ...saved, game: { ...saved.game, critique: 'junk' } }).game.critique, []);
   assert.equal(B.restore({ ...saved, game: { ...saved.game, mode: 'other' } }).game, undefined);
 });
+test('hints: three a game, on the player\'s turn, free again in the same position, never given back, kept through a reload', () => {
+  const g = sfGame('w', null, [['e2e4', 0], ['e7e5', 0]]), key = (b) => P.positionKey(B.pos(b));
+  assert.equal(P.HINTS, 3); assert.equal(P.hintsLeft(g), 3); assert.equal(P.hintFor(g), null);
+  const h = P.addHint(g, 2, 'g1f3'), h1 = { j: 2, fen: key(g), best: 'g1f3' };
+  assert.deepEqual(h.game.hints, [h1]); assert.equal(P.hintsLeft(h), 2);
+  assert.deepEqual(P.hintFor(h), h1);
+  assert.equal(P.addHint(h, 2, 'g1f3'), h, 'the same hint again costs nothing');
+  assert.equal(P.addHint(g, 1, 'g8f6'), g, 'not Stockfish\'s move');
+  assert.equal(P.addHint(g, 3, 'g1f3'), g, 'only the position on the board');
+  assert.equal(P.addHint(g, 2, 'nope'), g);
+  assert.equal(P.addHint(P.resign(g, 0), 2, 'g1f3').game.hints.length, 0, 'not after the end');
+  const human = game(null, [['e2e4', 0]]);
+  assert.equal(P.addHint(human, 1, 'e7e5'), human); assert.equal(P.hintsLeft(human), 0);
+  // a takeback keeps the hints spent; the position's own hint shows again, but not at the same step in another position
+  const mv = (b, us) => us.reduce((y, u) => P.move(y, CC.stepFromUci(B.pos(y), u), 0), b);
+  const moved = mv(h, ['g1f3', 'b8c6']), t = P.takeback(moved, 0);
+  assert.equal(P.hintsLeft(t), 2); assert.deepEqual(P.hintFor(t), h1);
+  assert.equal(P.hintFor(moved), null);
+  const other = mv(P.takeback(t, 0), ['d2d4', 'd7d5']);
+  assert.equal(P.hintFor(other), null, 'step 2 again, another position: g1f3 is legal there too');
+  let x = mv(P.addHint(moved, 4, 'f1c4'), ['f1c4', 'g8f6']);
+  x = P.addHint(x, 6, 'd2d3');
+  assert.equal(P.hintsLeft(x), 0); assert.equal(P.addHint(x, 6, 'e1g1'), x, 'none left');
+  const back = B.restore(JSON.parse(JSON.stringify(B.save(x))));
+  assert.deepEqual(back.game.hints, x.game.hints);
+  const saved = B.save(g), f = key(g);
+  assert.deepEqual(B.restore({ ...saved, game: { ...saved.game, hints: [{ j: 2, fen: f, best: 'g1f3' }, { j: 2, fen: f, best: 'x' }, { j: 2, best: 'g1f3' }, null, { j: 1.5, fen: f, best: 'a2a3' }, { j: 2, fen: f, best: 'd2d4' }, { j: 2, fen: f, best: 'c2c4' }, { j: 2, fen: f, best: 'b2b3' }] } }).game.hints,
+    [{ j: 2, fen: f, best: 'g1f3' }, { j: 2, fen: f, best: 'd2d4' }, { j: 2, fen: f, best: 'c2c4' }], 'the well-formed ones, at most three');
+  assert.deepEqual(B.restore({ ...saved, game: { ...saved.game, hints: 'junk' } }).game.hints, []);
+});
 test('critique text: critiqueText\'s line is kept with its move and through a reload, a bad one dropped', () => {
   const g = sfGame('w', null, [['e2e4', 0], ['e7e5', 0], ['d1h5', 0], ['b8c6', 0]]);
   const c = P.addCritique(g, { j: 2, cls: 'mistake', best: 'g1f3', text: 'that drops the queen' });
@@ -280,7 +310,7 @@ test('critiqueText: a piece dropped in the reply line, a mate allowed, else a li
 });
 test('a Stockfish game\'s PGN names the players', () => {
   const w = P.pgn(sfGame('w', null, [['e2e4', 0]]));
-  assert.match(w, /\[Event "Play vs Stockfish"\][\s\S]*\[White "You"\]\n\[Black "Stockfish 19"\]/);
+  assert.match(w, /\[Event "Play vs computer"\][\s\S]*\[White "You"\]\n\[Black "Stockfish 19"\]/);
   const b = P.pgn(sfGame('b', null, [['e2e4', 0]]));
   assert.match(b, /\[White "Stockfish 19"\]\n\[Black "You"\]/);
   assert.equal(CC.buildGame({ pgn: b }).plies.length, 1);

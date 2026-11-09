@@ -1754,9 +1754,9 @@ for (const name of BROWSERS) for (const site of SITES) {
       assert.deepEqual(ep.errors, []);
       await ep.ctx.close();
     });
-    // Play vs Stockfish where the engine won't start: the Game panel says so, with why, and the view doesn't crash; once the
+    // Play vs computer where the engine won't start: the Game panel says so, with why, and the view doesn't crash; once the
     // files are back, Try again has Stockfish make its first move (playing Black, there is nothing to take back)
-    await t.test('desktop: Play vs Stockfish says when Stockfish can\'t run', async () => {
+    await t.test('desktop: Play vs computer says when Stockfish can\'t run', async () => {
       const g = await open(browser, { width: 1440, height: 900 });
       const p = g.page;
       // the engine files missing (a route misses what the service worker fetches in Firefox; see Go deeper's test)
@@ -1764,8 +1764,8 @@ for (const name of BROWSERS) for (const site of SITES) {
       await p.goto(base, { waitUntil: 'load' });
       await loadedOn(p);
       await p.getByRole('button', { name: 'Menu', exact: true }).click();
-      await p.getByRole('button', { name: 'Play vs Stockfish' }).click();
-      const dialog = p.getByRole('dialog', { name: 'Play vs Stockfish' });
+      await p.getByRole('button', { name: 'Play vs computer' }).click();
+      const dialog = p.getByRole('dialog', { name: 'Play vs computer' });
       await dialog.getByRole('radio', { name: 'Black' }).click();
       await dialog.getByRole('radio', { name: 'Off' }).click();
       await dialog.getByRole('button', { name: 'Start game' }).click();
@@ -1788,8 +1788,8 @@ for (const name of BROWSERS) for (const site of SITES) {
       await p.goto(base, { waitUntil: 'load' });
       await loadedOn(p);
       await p.getByRole('button', { name: 'Menu', exact: true }).click();
-      await p.getByRole('button', { name: 'Play vs Stockfish' }).click();
-      const dialog = p.getByRole('dialog', { name: 'Play vs Stockfish' });
+      await p.getByRole('button', { name: 'Play vs computer' }).click();
+      const dialog = p.getByRole('dialog', { name: 'Play vs computer' });
       await dialog.getByRole('radio', { name: 'White' }).click();
       await dialog.getByRole('radio', { name: 'Off' }).click();
       await dialog.getByRole('button', { name: 'Start game' }).click();
@@ -3215,8 +3215,8 @@ for (const name of BROWSERS) for (const site of SITES) {
       await g.ctx.close();
     });
     // Play from this position: a loaded game stepped six plies in, Play vs human from there keeps those moves; Take back
-    // stops at them, and Play vs Stockfish from that game's board starts there again
-    await t.test('desktop: Play vs human and vs Stockfish from the position on the board', async () => {
+    // stops at them, and Play vs computer from that game's board starts there again
+    await t.test('desktop: Play vs human and vs computer from the position on the board', async () => {
       const g = await open(browser, { width: 1440, height: 900 });
       const p = g.page, stored = () => p.evaluate(() => JSON.parse(localStorage.getItem('chess-video.files.v1')).board);
       await p.goto(base, { waitUntil: 'load' });
@@ -3275,8 +3275,8 @@ for (const name of BROWSERS) for (const site of SITES) {
       await assert.doesNotReject(p.getByRole('button', { name: 'Take back' }).waitFor({ state: 'detached', timeout: 5000 }));
       assert.equal((await stored()).moves.length, 6);
       await p.getByRole('button', { name: 'Menu', exact: true }).click();
-      await p.getByRole('button', { name: 'Play vs Stockfish' }).click();
-      dialog = p.getByRole('dialog', { name: 'Play vs Stockfish' });
+      await p.getByRole('button', { name: 'Play vs computer' }).click();
+      dialog = p.getByRole('dialog', { name: 'Play vs computer' });
       await dialog.waitFor({ timeout: 3000 });
       assert.equal(await dialog.getByRole('radio', { name: 'This position' }).getAttribute('aria-checked'), 'true');
       await dialog.getByRole('button', { name: 'Start game' }).click();
@@ -3453,8 +3453,8 @@ for (const name of BROWSERS) for (const site of SITES) {
       assert.deepEqual(ph.errors, []);
       await ph.ctx.close();
     });
-    // Play vs Stockfish: it answers each move, the board stays on the player's side, Take back goes to the player's turn
-    await t.test('desktop: Play vs Stockfish replies, keeps the board on the player\'s side, takes back to the player\'s turn', async () => {
+    // Play vs computer: it answers each move, the board stays on the player's side, Take back goes to the player's turn
+    await t.test('desktop: Play vs computer replies, keeps the board on the player\'s side, takes back to the player\'s turn', async () => {
       const g = await open(browser, { width: 1440, height: 900 });
       const p = g.page, label = p.locator('.plabel');
       const panel = (title) => p.evaluate((tt) => { const d = [...document.querySelectorAll('div')].find((e) => e.firstElementChild && e.firstElementChild.firstElementChild && e.firstElementChild.firstElementChild.textContent === tt && getComputedStyle(e.firstElementChild).textTransform === 'uppercase'); return d ? d.innerText : ''; }, title);
@@ -3474,8 +3474,8 @@ for (const name of BROWSERS) for (const site of SITES) {
       const bars = async () => (await barNames(p, /^(You|Stockfish 19)$/)).map((x) => x.text);
       const start = async (you) => {
         await p.getByRole('button', { name: 'Menu', exact: true }).click();
-        await p.getByRole('button', { name: 'Play vs Stockfish' }).click();
-        const dialog = p.getByRole('dialog', { name: 'Play vs Stockfish' });
+        await p.getByRole('button', { name: 'Play vs computer' }).click();
+        const dialog = p.getByRole('dialog', { name: 'Play vs computer' });
         await assert.doesNotReject(dialog.waitFor({ timeout: 3000 }));
         await dialog.getByRole('radio', { name: you }).click();
         await dialog.getByRole('radio', { name: 'Off' }).click();
@@ -3492,7 +3492,7 @@ for (const name of BROWSERS) for (const site of SITES) {
       const b = await boardBox(p);
       assert.equal(b.n, 32);
       assert.match(await panel('Game'), /Your move/);
-      assert.match(await panel('Play vs Stockfish'), /You play White/);
+      assert.match(await panel('Play vs computer'), /You play White/);
       assert.deepEqual(await bars(), ['Stockfish 19', 'You']);
       assert.equal(await p.getByRole('button', { name: 'Take back' }).count(), 0, 'nothing to take back yet');
       assert.equal(await p.getByRole('button', { name: 'Offer a draw' }).count(), 0, 'no draw offers against Stockfish');
@@ -3507,6 +3507,11 @@ for (const name of BROWSERS) for (const site of SITES) {
       await assert.doesNotReject(label.filter({ hasText: /^Start$/ }).waitFor({ timeout: 5000 }));
       assert.doesNotMatch(await panel('Moves'), /e4/);
       assert.equal(await p.getByRole('button', { name: 'Take back' }).count(), 0);
+      // a hint: Stockfish's best move from its search of the position (up to 5 s), named in the Game box; three a game
+      await p.getByRole('button', { name: 'Hint · 3 left' }).click();
+      await assert.doesNotReject(p.locator('.game-hint').filter({ hasText: /^Hint: \S+ · 2 left$/ }).waitFor({ timeout: 15000 }));
+      assert.equal(await p.getByRole('button', { name: /^Hint/ }).count(), 0, 'no second hint for the same position');
+      await p.screenshot({ path: path.join(OUT, host + '-sf-hint.png') });
       // Resign asks first
       await p.getByRole('button', { name: 'Resign', exact: true }).click();
       assert.match(await panel('Game'), /Resign this game\?/);
@@ -3516,7 +3521,7 @@ for (const name of BROWSERS) for (const site of SITES) {
       await (await start('Black')).getByRole('button', { name: 'Start game' }).click();
       await assert.doesNotReject(label.filter({ hasText: /^1\. / }).waitFor({ timeout: 20000 }), 'Stockfish opens');
       assert.deepEqual(await bars(), ['Stockfish 19', 'You']);
-      assert.match(await panel('Play vs Stockfish'), /You play Black/);
+      assert.match(await panel('Play vs computer'), /You play Black/);
       assert.equal(await p.getByRole('button', { name: 'Take back' }).count(), 0, 'Stockfish\'s first move alone can\'t be taken back');
       await drag(b, 'e7', 'e5', true);
       await assert.doesNotReject(label.filter({ hasText: /^1… e5$/ }).waitFor({ timeout: 5000 }));
@@ -3529,13 +3534,13 @@ for (const name of BROWSERS) for (const site of SITES) {
       // My games names the mode and the side
       await p.getByRole('button', { name: 'Menu', exact: true }).click();
       await p.getByRole('button', { name: 'My games' }).click();
-      assert.match(await p.locator('.games-row').first().innerText(), /vs Stockfish · you played Black/);
+      assert.match(await p.locator('.games-row').first().innerText(), /vs computer · you played Black/);
       await p.keyboard.press('Escape');
       assert.deepEqual(g.errors, []);
       await g.ctx.close();
     });
     // a queen left hanging is called a blunder in the Commentary box, without the better move until the game ends
-    await t.test('desktop: Play vs Stockfish flags a blunder', async () => {
+    await t.test('desktop: Play vs computer flags a blunder', async () => {
       const g = await open(browser, { width: 1440, height: 900 });
       const p = g.page, label = p.locator('.plabel');
       // the engine's depths and bestmoves, when each came (ms since the page began): what the move is rated from
@@ -3554,8 +3559,8 @@ for (const name of BROWSERS) for (const site of SITES) {
       await loadedOn(p);
       await setUpFen(p, '6k1/5ppp/8/3p4/8/8/4QPPP/6K1 w - - 0 1');
       await p.getByRole('button', { name: 'Menu', exact: true }).click();
-      await p.getByRole('button', { name: 'Play vs Stockfish' }).click();
-      const dialog = p.getByRole('dialog', { name: 'Play vs Stockfish' });
+      await p.getByRole('button', { name: 'Play vs computer' }).click();
+      const dialog = p.getByRole('dialog', { name: 'Play vs computer' });
       await dialog.getByRole('radio', { name: 'Set-up position' }).click();
       await dialog.getByRole('radio', { name: 'White' }).click();
       // from just before the game starts: its search of the position can end at once (the mate), before any later mark
@@ -3563,7 +3568,7 @@ for (const name of BROWSERS) for (const site of SITES) {
       const t0 = await p.evaluate(() => performance.now());
       await dialog.getByRole('button', { name: 'Start game' }).click();
       await assert.doesNotReject(dialog.waitFor({ state: 'detached', timeout: 3000 }));
-      assert.match(await panel('Play vs Stockfish'), /You play White[\s\S]*No hints: Stockfish only says/);
+      assert.match(await panel('Play vs computer'), /You play White[\s\S]*Hint shows its best move, 3 times a game/);
       // measured in the game, whose board is larger than the replay's on the wide frame: by its touch layer, as a few
       // pieces don't span the board
       const b = await p.evaluate(() => { const r = [...document.querySelectorAll('div')].find((d) => d.style.touchAction === 'none').getBoundingClientRect(); return { x0: r.left, y0: r.top, sq: r.width / 8 }; });
@@ -3591,7 +3596,7 @@ for (const name of BROWSERS) for (const site of SITES) {
       await p.mouse.move(tt.x, tt.y, { steps: 8 });
       await p.mouse.up();
       await assert.doesNotReject(label.filter({ hasText: /^1… dxc4$/ }).waitFor({ timeout: 20000 }), 'Stockfish takes the queen');
-      const info = await panel('Play vs Stockfish');
+      const info = await panel('Play vs computer');
       // if the move went unrated: each search since the game began, as the depth it reached and its bestmove
       const searched = await p.evaluate((t0) => {
         let d = 0; const r = [];
@@ -3606,7 +3611,7 @@ for (const name of BROWSERS) for (const site of SITES) {
       await p.getByRole('button', { name: 'Resign', exact: true }).click();
       await p.getByRole('button', { name: 'Resign', exact: true }).click();
       await assert.doesNotReject(p.getByText('White resigned').first().waitFor({ timeout: 3000 }));
-      assert.match(await panel('Play vs Stockfish'), /1 flagged move[\s\S]*Blunder: 1\. Qc4[\s\S]*That drops the queen\. Better was Q/);
+      assert.match(await panel('Play vs computer'), /1 flagged move[\s\S]*Blunder: 1\. Qc4[\s\S]*That drops the queen\. Better was Q/);
       await p.screenshot({ path: path.join(OUT, host + '-sf-critique-end.png') });
       assert.deepEqual(g.errors, []);
       await g.ctx.close();
@@ -3616,8 +3621,8 @@ for (const name of BROWSERS) for (const site of SITES) {
       await pp.goto(base, { waitUntil: 'load' });
       await loadedOn(pp);
       await pp.getByRole('button', { name: 'Menu' }).click();
-      await pp.getByRole('button', { name: 'Play vs Stockfish' }).click();
-      await assert.doesNotReject(pp.getByRole('dialog', { name: 'Play vs Stockfish' }).waitFor({ timeout: 3000 }));
+      await pp.getByRole('button', { name: 'Play vs computer' }).click();
+      await assert.doesNotReject(pp.getByRole('dialog', { name: 'Play vs computer' }).waitFor({ timeout: 3000 }));
       assert.deepEqual(await wider(pp), [], 'no sideways scroll');
       await pp.screenshot({ path: path.join(OUT, host + '-sf-dialog-phone.png') });
       await pp.getByRole('button', { name: 'Cancel' }).click();
