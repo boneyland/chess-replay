@@ -2580,6 +2580,55 @@ for (const name of BROWSERS) for (const site of SITES) {
       assert.deepEqual(ex.errors.filter((e) => !/status of 401/.test(e)), []);
       await ex.ctx.close();
     });
+    // The second half of both sign-ins (app/pkce.js): the page as the provider sends the viewer back to it, with the
+    // verifier waiting in sessionStorage as the first half leaves it. The providers' token and account endpoints are the
+    // page's own fetch replaced (no route: see the explorer test above), so nothing leaves for Hugging Face or Lichess
+    await t.test('desktop: back from the Hugging Face or Lichess sign-in, the code is exchanged and the viewer is signed in', async () => {
+      for (const s of [
+        { name: 'Hugging Face', pkce: 'chess-video.hf-pkce', state: 's1', token: 'https://huggingface.co/oauth/token', who: 'https://huggingface.co/oauth/userinfo', user: { preferred_username: 'tester' }, auth: 'chess-video.hf-auth.v1' },
+        { name: 'Lichess', pkce: 'chess-video.lichess-pkce', state: 'lichess.s1', token: 'https://lichess.org/api/token', who: 'https://lichess.org/api/account', user: { username: 'tester' }, auth: 'chess-video.lichess-auth.v1' },
+      ]) {
+        const si = await open(browser, { width: 1440, height: 900 });
+        const p = si.page;
+        await si.ctx.addInitScript((o) => {
+          if (location.search && !sessionStorage.getItem('test.seeded')) { sessionStorage.setItem('test.seeded', '1'); sessionStorage.setItem(o.pkce, JSON.stringify({ verifier: 'verifier-1', state: o.state })); }
+          const f = window.fetch;
+          window.__signin = [];
+          window.fetch = function (u, init) {
+            if (String(u) === o.token) { window.__signin.push(String(init.body)); return Promise.resolve(new Response(JSON.stringify({ access_token: 'tok-1', expires_in: 3600 }), { status: 200 })); }
+            if (String(u) === o.who) return Promise.resolve(new Response(JSON.stringify(o.user), { status: 200 }));
+            return f.apply(this, arguments);
+          };
+        }, s);
+        await p.goto(base + '?code=code-1&state=' + s.state, { waitUntil: 'load' });
+        await loadedOn(p);
+        await p.waitForFunction((k) => !!localStorage.getItem(k), s.auth, { timeout: 10000 });
+        const kept = await p.evaluate((k) => JSON.parse(localStorage.getItem(k)), s.auth);
+        assert.equal(kept.token, 'tok-1', s.name);
+        assert.equal(kept.name, 'tester', s.name);
+        const left = kept.expires - Date.now();
+        assert.ok(left > 58 * 60000 && left <= 59 * 60000, `${s.name}: the token is dropped a minute early, in ${Math.round(left / 1000)} s`);
+        const sent = await p.evaluate(() => window.__signin);
+        assert.equal(sent.length, 1, s.name + ': one exchange');
+        const body = Object.fromEntries(new URLSearchParams(sent[0]));
+        assert.equal(body.grant_type, 'authorization_code');
+        assert.equal(body.code, 'code-1');
+        assert.equal(body.code_verifier, 'verifier-1');
+        assert.equal(body.redirect_uri, new URL('.', base).href, s.name + ': the folder the page is served from');
+        assert.equal(await p.evaluate(() => location.search), '', s.name + ': the code leaves the address bar');
+        assert.equal(await p.evaluate((k) => sessionStorage.getItem(k), s.pkce), null, s.name + ': the verifier is used once');
+        if (s.name === 'Hugging Face') await p.getByText('Signed in to Hugging Face as tester.').waitFor({ timeout: 5000 });
+        else {
+          await p.getByRole('button', { name: 'Settings' }).click();
+          await p.getByRole('tab', { name: 'Online' }).click();
+          await p.getByRole('switch', { name: /Lichess opening explorer/ }).click();
+          await p.getByRole('button', { name: 'Sign out of Lichess (tester)' }).waitFor({ timeout: 5000 });
+          assert.ok(await p.getByText('Signed in to Lichess as tester.').isVisible());
+        }
+        assert.deepEqual(si.errors, []);
+        await si.ctx.close();
+      }
+    });
     // Go deeper on a loaded analysis's move asks the cloud (the setting on): with Stockfish off, stepping onto the move
     // sends nothing and the analysis's eval stands; with it on, Go deeper's first level runs by itself (auto) and the
     // cloud's deeper answer shows, labelled

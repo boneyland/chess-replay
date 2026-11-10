@@ -6,7 +6,7 @@ const EXPL = window.LichessCore ? window.LichessCore.create() : null;
 const EXPL_DEBOUNCE_MS = 300; // after the last position change
 const LI_AUTH_STORE = 'chess-video.lichess-auth.v1', LI_PKCE_STORE = 'chess-video.lichess-pkce';
 const LI_CLIENT_ID = 'chess-replay';
-const LI_REDIRECT = location.origin + location.pathname.replace(/[^/]*$/, '');
+const LI_REDIRECT = window.Pkce.redirect();
 // the Lichess rating groups and speeds the Settings choices stand for (empty: all)
 // "Lichess default" is the website's own: every speed but ultrabullet, every rating group but the lowest (400)
 const EXPL_RATINGS = { 'Lichess default': [1000, 1200, 1400, 1600, 1800, 2000, 2200, 2500], All: [], '1600+': [1600, 1800, 2000, 2200, 2500], '2000+': [2000, 2200, 2500], '2200+': [2200, 2500] };
@@ -18,30 +18,16 @@ function readLiAuth() { try { const a = JSON.parse(localStorage.getItem(LI_AUTH_
 let liAuth = readLiAuth(), liNote = '';
 const liSubs = new Set();
 const liSet = (auth, note = liNote) => { liAuth = auth; liNote = note; liSubs.forEach((f) => f({ auth: liAuth, note: liNote })); };
-const liB64 = (buf) => btoa(String.fromCharCode(...new Uint8Array(buf))).replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, '');
-
 function liStore(a) { try { if (a) localStorage.setItem(LI_AUTH_STORE, JSON.stringify(a)); else localStorage.removeItem(LI_AUTH_STORE); } catch (e) {} }
-async function liSignIn() {
-  const verifier = liB64(crypto.getRandomValues(new Uint8Array(32)));
-  const challenge = liB64(await crypto.subtle.digest('SHA-256', new TextEncoder().encode(verifier)));
-  const state = 'lichess.' + liB64(crypto.getRandomValues(new Uint8Array(16)));
-  try { sessionStorage.setItem(LI_PKCE_STORE, JSON.stringify({ verifier, state })); } catch (e) {}
-  location.href = 'https://lichess.org/oauth?' + new URLSearchParams({ response_type: 'code', client_id: LI_CLIENT_ID, redirect_uri: LI_REDIRECT, code_challenge_method: 'S256', code_challenge: challenge, state });
-}
+const LI_OAUTH = { store: LI_PKCE_STORE, clientId: LI_CLIENT_ID, redirect: LI_REDIRECT };
+async function liSignIn() { location.href = await window.Pkce.authorizeUrl({ ...LI_OAUTH, url: 'https://lichess.org/oauth', prefix: 'lichess.' }); }
 async function liFinish(q) {
-  let saved = null;
-  try { saved = JSON.parse(sessionStorage.getItem(LI_PKCE_STORE) || 'null'); sessionStorage.removeItem(LI_PKCE_STORE); } catch (e) {}
-  history.replaceState(null, '', location.pathname);
-  if (!saved || saved.state !== q.get('state')) { liSet(liAuth, 'Sign-in didn’t complete (it was started in another tab or expired). Try again.'); return; }
-  try {
-    const r = await fetch('https://lichess.org/api/token', { method: 'POST', headers: { 'Content-Type': 'application/x-www-form-urlencoded' }, body: new URLSearchParams({ grant_type: 'authorization_code', code: q.get('code'), redirect_uri: LI_REDIRECT, client_id: LI_CLIENT_ID, code_verifier: saved.verifier }) });
-    const t = await r.json();
-    if (!t.access_token) throw new Error(t.error_description || t.error || 'no token');
-    const u = await fetch('https://lichess.org/api/account', { headers: { Authorization: 'Bearer ' + t.access_token } }).then((x) => (x.ok ? x.json() : {})).catch(() => ({}));
-    const a = { token: t.access_token, expires: t.expires_in ? Date.now() + t.expires_in * 1000 - 60000 : 0, name: u.username || '' };
-    liStore(a);
-    liSet(a, `Signed in to Lichess${a.name ? ' as ' + a.name : ''}.`);
-  } catch (e) { liSet(liAuth, 'Sign-in failed: ' + ((e && e.message) || e)); }
+  const P = window.Pkce, got = await P.finish({ ...LI_OAUTH, q, url: 'https://lichess.org/api/token' });
+  if (!got.token) { liSet(liAuth, got.note); return; }
+  const u = await P.account('https://lichess.org/api/account', got.token);
+  const a = { token: got.token, expires: got.expiresIn ? P.expires(got.expiresIn) : 0, name: u.username || '' };
+  liStore(a);
+  liSet(a, `Signed in to Lichess${a.name ? ' as ' + a.name : ''}.`);
 }
 // a personal token pasted in Settings (lichess.org/account/oauth/token, no scopes needed), kept as it is
 function liPaste(token) {
@@ -121,8 +107,7 @@ function useRowFocus(top) {
 // panel, for an answer that can't come (offline, a back-off)
 function LichessExplorer({ x, tw, setTweak, onGame, posKey, onPlay, onHover, white, fallback }) {
   const LA = useLichessAuth();
-  const top = React.useRef(null), loading = x.state === 'loading', rowKey = useRowFocus(top);
-  React.useLayoutEffect(() => { const box = top.current && top.current.parentElement; if (box) box.scrollTop = 0; }, [posKey]);
+  const top = useScrollTop(posKey), loading = x.state === 'loading', rowKey = useRowFocus(top);
   // the progress line under the title, as the Analysis panel's: the answer's time isn't known, so it creeps towards the end
   const [pr, setPr] = React.useState(0);
   React.useEffect(() => {
@@ -132,8 +117,7 @@ function LichessExplorer({ x, tw, setTweak, onGame, posKey, onPlay, onHover, whi
     return () => clearInterval(id);
   }, [loading, posKey]);
   if (x.state === 'none' && fallback) return fallback;
-  const heading = (txt, dim) => <span className="book-head" style={{ display: 'block', font: `400 ${tx(30)}px/1.14 ${SERIF}`, color: dim ? C.dim : C.ink, textWrap: 'pretty' }}>{txt}</span>;
-  const note = (txt) => <span style={{ display: 'block', marginTop: tx(8), font: `500 ${tx(15)}px ${MONO}`, color: C.dim }}>{txt}</span>;
+  const heading = (txt, dim) => commentHead('book-head', txt, dim), note = commentNote;
   const play = (e, uci) => { e.preventDefault(); e.stopPropagation(); onPlay(uci); };
   const masters = explorerFilters(tw).db === 'masters';
   // Open games: Here (Import game fetches the game) or On Lichess (a new tab); a middle or Ctrl click is always Lichess

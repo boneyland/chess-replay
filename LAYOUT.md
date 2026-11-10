@@ -19,6 +19,7 @@ What each part of the repo is, with the pinned SHA-256 of every vendored file. B
   - `vision-core.js`, `vision.js`, `vision-worker.js`, `vision-grid.js`, `vision.jsx`: Position from image (the board reader's files, the reader and its Worker, the board auto-crop, the dialog)
   - `kept-files.js`, `kept-download.jsx`: files downloaded only on the viewer's click and kept (Full Stockfish, the board reader), and their download UI
   - `queen-core.js`, `queen.jsx`: Ask Queen and its Hugging Face sign-in
+  - `pkce.js`: the OAuth2 + PKCE steps the Hugging Face and Lichess sign-ins share
   - `export.jsx`, `webp-core.js`: MP4, WebM and animated WebP export; `export-draw.js` paints each export frame layer by layer, handing html2canvas only what it can't draw
   - `sfx-core.js`, `sfx.jsx`: the move sounds
   - `piece-sets.js`: the piece sets (Settings › View › Pieces): their credits, which are kept out of exports, and loading the chosen one

@@ -32,12 +32,9 @@ function OpeningExplorer({ board, book, onPlay, onHover }) {
   let inBook = false;
   try { inBook = !!book && book.inBook(ucis, board.fen); } catch (e) {}
   const fromStart = board.fen === window.ChessCore.START_FEN;
-  const heading = (txt, dim) => <span className="book-head" style={{ display: 'block', font: `400 ${tx(40)}px/1.14 ${SERIF}`, color: dim ? C.dim : C.ink, textWrap: 'pretty' }}>{txt}</span>;
-  const note = (txt) => <span style={{ display: 'block', marginTop: tx(8), font: `500 ${tx(15)}px ${MONO}`, color: C.dim }}>{txt}</span>;
+  const heading = (txt, dim) => commentHead('book-head', txt, dim), note = commentNote;
   const play = (e, uci) => { e.preventDefault(); e.stopPropagation(); onPlay(uci); };
-  // each position's list starts at its top, not where the last one was scrolled to (the panel's box stays the same node)
-  const top = React.useRef(null), posKey = board.fen + '|' + ucis.join(' '), rowKey = useRowFocus(top);
-  React.useLayoutEffect(() => { const box = top.current && top.current.parentElement; if (box) box.scrollTop = 0; }, [posKey]);
+  const posKey = board.fen + '|' + ucis.join(' '), top = useScrollTop(posKey), rowKey = useRowFocus(top);
   let body;
   if (!book) body = <span style={{ font: `italic 400 ${tx(30)}px/1.25 ${SERIF}`, color: C.dim }}>Loading the opening book…</span>;
   else if (inBook) {
