@@ -536,6 +536,40 @@ for (const name of BROWSERS) for (const site of SITES) {
       assert.equal(await page.evaluate(() => document.activeElement.textContent), 'Menu');
     });
 
+    // an answer from Queen takes 20-33 s: one that lands after another game was loaded draws no arrow on that game
+    // (the Space is faked: a slow answer, e2e4 at the start)
+    await t.test('desktop: Queen\'s late answer draws no arrow on a game loaded meanwhile', async () => {
+      const q = await open(browser, { width: 1440, height: 900 });
+      const p = q.page;
+      await q.ctx.addInitScript(() => {
+        const f = window.fetch;
+        window.__queen = { asked: 0, done: 0 };
+        window.fetch = function (u, o) {
+          if (!String(u).startsWith('https://boneyland-queen-pawn-8.hf.space/')) return f.apply(this, arguments);
+          if (o && o.method === 'POST') { window.__queen.asked++; return Promise.resolve(new Response(JSON.stringify({ event_id: 'x' }), { status: 200, headers: { 'Content-Type': 'application/json' } })); }
+          const body = 'event: complete\ndata: ' + JSON.stringify([{ best_move_uci: 'e2e4', best_move_san: 'e4', analysis: 'Fine.', evaluation: 'The position is equal.', seconds: 1 }]) + '\n\n';
+          return new Promise((res) => setTimeout(() => { window.__queen.done++; res(new Response(body, { status: 200 })); }, 1500));
+        };
+      });
+      await p.goto(base, { waitUntil: 'load' });
+      await loadedOn(p);
+      const arrow = p.locator('polygon[fill="#e0609f"], polygon[fill="#c03f7c"]'), panel = p.locator('.q-panel');
+      const ask = async () => { await p.getByRole('button', { name: 'Menu', exact: true }).click(); await p.getByRole('button', { name: 'Ask Queen' }).click(); await panel.getByRole('button', { name: 'Analyse the position on the board' }).click(); };
+      await ask();
+      await p.waitForFunction(() => window.__queen.asked === 1, null, { timeout: 5000 });
+      await p.setInputFiles('#game-files', { name: 'other.pgn', mimeType: 'text/plain', buffer: Buffer.from('[White "Gamma Tester"]\n[Black "Delta Tester"]\n\n1. d4 d5 2. c4 e6 *') });
+      await p.waitForFunction(() => /Gamma Tester/.test(document.body.innerText), null, { timeout: 10000 });
+      await assert.doesNotReject(panel.waitFor({ state: 'detached', timeout: 3000 }), 'a game from a file closes Queen\'s panel');
+      await p.waitForFunction(() => window.__queen.done === 1, null, { timeout: 5000 });
+      await p.waitForTimeout(400);
+      assert.equal(await arrow.count(), 0, 'no arrow from the old game\'s answer');
+      // asked on this game, the arrow shows (the same starting position, so the answer is the kept one)
+      await ask();
+      await assert.doesNotReject(arrow.waitFor({ timeout: 5000 }), 'the arrow for this game');
+      assert.equal(await p.evaluate(() => window.__queen.asked), 1, 'the kept answer, not asked again');
+      await q.ctx.close();
+    });
+
     await t.test('desktop: Esc closes the Queen panel', async () => {
       await page.getByRole('button', { name: 'Menu', exact: true }).click();
       await page.getByRole('button', { name: 'Ask Queen' }).click();
@@ -559,6 +593,19 @@ for (const name of BROWSERS) for (const site of SITES) {
       await page.keyboard.press('ArrowRight');
       await page.waitForFunction(() => document.activeElement && document.activeElement.dataset.ply === '1', null, { timeout: 3000 });
       await assert.doesNotReject(page.locator('.plabel').filter({ hasText: /^1…/ }).waitFor({ timeout: 3000 }));
+      // ← from the first move, and Home, reach the starting position, the focus staying on the first move
+      await page.keyboard.press('ArrowLeft');
+      await assert.doesNotReject(page.locator('.plabel').filter({ hasText: /^1\. / }).waitFor({ timeout: 3000 }));
+      // the focus follows a frame after the move: the next ← must find it on the first move
+      await page.waitForFunction(() => document.activeElement && document.activeElement.dataset.ply === '0', null, { timeout: 3000 });
+      await page.keyboard.press('ArrowLeft');
+      await assert.doesNotReject(page.locator('.plabel').filter({ hasText: 'Start' }).waitFor({ timeout: 3000 }), '← from the first move');
+      assert.equal(await page.evaluate(() => document.activeElement.dataset.ply), '0');
+      await page.keyboard.press('End');
+      await page.waitForFunction(() => document.activeElement && +document.activeElement.dataset.ply > 1, null, { timeout: 3000 });
+      await page.keyboard.press('Home');
+      await assert.doesNotReject(page.locator('.plabel').filter({ hasText: 'Start' }).waitFor({ timeout: 3000 }), 'Home in the Moves panel');
+      await page.waitForFunction(() => document.activeElement && document.activeElement.dataset.ply === '0', null, { timeout: 3000 });
     });
 
     // , and . step one export frame (8 fps by default, 0.125 s), from between two frames to the one on that side
@@ -967,6 +1014,16 @@ for (const name of BROWSERS) for (const site of SITES) {
       await exporting.getByRole('button', { name: 'Cancel' }).waitFor({ timeout: 60000 });
       await p.keyboard.press('f');
       assert.equal(await flip(), false, 'F during an export');
+      // nor do the replay's keys seek it: the playhead only moves on, frame by frame
+      await p.evaluate(() => {
+        const head = document.querySelector('[role="slider"][aria-label="Playhead"]');
+        window.__back = 0; let last = +head.getAttribute('aria-valuenow');
+        new MutationObserver(() => { const v = +head.getAttribute('aria-valuenow'); if (v < last) window.__back++; last = v; }).observe(head, { attributes: true, attributeFilter: ['aria-valuenow'] });
+      });
+      await p.waitForFunction(() => +document.querySelector('[role="slider"][aria-label="Playhead"]').getAttribute('aria-valuenow') >= 2, null, { timeout: 60000 });
+      for (const k of ['Home', '0', 'ArrowLeft', 'Shift+ArrowLeft', ',', 'Home']) { await p.keyboard.press(k); await p.waitForTimeout(120); }
+      assert.equal(await p.evaluate(() => window.__back), 0, 'no key took the export back');
+      assert.equal(await exporting.count(), 1, 'still exporting');
       await exporting.getByRole('button', { name: 'Cancel' }).click();
       await exporting.waitFor({ state: 'detached', timeout: 30000 });
       // a game: Play vs human, a move made

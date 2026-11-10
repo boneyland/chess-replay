@@ -81,6 +81,8 @@ function Stage({ menu, top, onLayout, duration, background, playback, nav, still
   const [contentH, setContentH] = React.useState(0);
   const colsRef = React.useRef(null); // the last column count, for the switch's hysteresis
   React.useEffect(() => { if (still) setPlaying(false); }, [still]);
+  // a schedule that got shorter (a setting, commentary turned off) while the playhead was near the end: back onto it
+  React.useEffect(() => { setTime((t) => (t > duration ? duration : t)); }, [duration]);
   const areaRef = React.useRef(null);
   const video = playing || !!forceVideo;
   const lastTsRef = React.useRef(null);
@@ -164,7 +166,7 @@ function Stage({ menu, top, onLayout, duration, background, playback, nav, still
       setPlaying(false);
       setTime((t) => clamp((d > 0 ? Math.floor(t * fps + 1e-6) + 1 : Math.ceil(t * fps - 1e-6) - 1) / fps, 0, duration));
     }
-  }, { on: !still });
+  }, { on: !still && !forceVideo }); // not during an export, which seeks the stage itself: a key would put the wrong moment in the file
 
   // Page controls outside the stage (Queen panel, video export) pause and seek through this event;
   // `sync` renders the new frame before dispatchEvent returns, so the export can draw it straight away

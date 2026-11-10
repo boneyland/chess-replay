@@ -326,6 +326,14 @@ function GameApp() {
   // a menu item closes what is open over the board first: both menus, Settings and Queen's panel
   const closeOverlays = () => { setNewMenu(false); setMenu(false); setPanel(false); setQueenOpen(false); };
   React.useEffect(() => { setQueenArrow(null); }, [M]);
+  // Queen's panel is tied to the game it was opened for (queenLive, read when its late answers land), and a game
+  // being replaced stops the call or test still running for the old one
+  const gameNow = React.useRef(gameKey);
+  gameNow.current = gameKey;
+  const queenLive = React.useCallback(() => gameNow.current === gameKey, [gameKey]);
+  const queenStop = React.useRef(null);
+  queenStop.current = Q.stop;
+  React.useEffect(() => () => { queenStop.current(); }, [gameKey]);
 
   const newBoard = () => { closeOverlays(); guard(() => { commitBoard(window.BoardCore.fromFen()); }); };
   // the editor opens on the position on the board (empty when there is none); a game in progress is paused for it (and
@@ -514,7 +522,7 @@ function GameApp() {
       delete batch.queen; delete batch.queenName;
       if (answers) { Q.merge(answers); setErr(''); setQueenOpen(true); setPanel(false); }
       if (!batch.pgn && !batch.analysis && !batch.notes) return;
-    }
+    } else if (batch.pgn) setQueenOpen(false); // another game: Queen's panel closes, as the other ways to load one close it
     if (!batch.pgn && !batch.analysis && !batch.notes) { setErr('That file isn’t a PGN, an analysis JSON or a notes file.'); return; }
     // a free board has no game for notes or an analysis to go with
     if (board && !batch.pgn) { setErr('Load a PGN first: notes and analysis files go with a game.'); return; }
@@ -746,7 +754,7 @@ function GameApp() {
         onRemoveAnalysis={() => { setAnalyseOpen(false); commit({ ...files, analysis: null, analysisName: null, evalSource: null }); }} onClose={() => setAnalyseOpen(false)} />}
       {gamesOpen && <MyGamesDialog games={gamesOpen} current={board && window.PlayCore.inProgress(board) ? board.game.id : null} onReplay={replayGame} onResume={resumeGame} onDelete={deleteGame} onClose={closeGames} />}
       {leave && <LeaveDialog onStay={() => setLeave(null)} onLeave={() => { const run = leave.run; setLeave(null); keepLeft(board); run(); }} />}
-      {queenOpen && !board && <QueenPanel M={M} Q={Q} hf={hf} probe={probe} onClose={closeQueen} onOverlay={setQueenArrow} onSave={saveQueen} left={queenLeft} />}
+      {queenOpen && !board && <QueenPanel key={gameKey} M={M} Q={Q} hf={hf} probe={probe} live={queenLive} onClose={closeQueen} onOverlay={setQueenArrow} onSave={saveQueen} left={queenLeft} />}
       <TweaksPanel open={panel} onClose={closePanel} tab={panelTab} onTab={setPanelTab} tabs={[
         { id: 'game', label: 'Game', body: <GameSettings M={M} files={files} board={board} status={status} err={shownErr} commit={commit}
           commentary={!board && <CommentarySettings t={t} setTweak={setTweak} files={files} sources={sources} queenSays={queenSays} />}
