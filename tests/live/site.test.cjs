@@ -596,6 +596,8 @@ for (const name of BROWSERS) for (const site of SITES) {
       // ← from the first move, and Home, reach the starting position, the focus staying on the first move
       await page.keyboard.press('ArrowLeft');
       await assert.doesNotReject(page.locator('.plabel').filter({ hasText: /^1\. / }).waitFor({ timeout: 3000 }));
+      // the focus follows a frame after the move: the next ← must find it on the first move
+      await page.waitForFunction(() => document.activeElement && document.activeElement.dataset.ply === '0', null, { timeout: 3000 });
       await page.keyboard.press('ArrowLeft');
       await assert.doesNotReject(page.locator('.plabel').filter({ hasText: 'Start' }).waitFor({ timeout: 3000 }), '← from the first move');
       assert.equal(await page.evaluate(() => document.activeElement.dataset.ply), '0');
