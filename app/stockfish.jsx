@@ -197,7 +197,11 @@ const SF_PARTIAL_STORE = 'chess-video.sf-partial.v1';
 // A game from a start FEN adds it to the key, and so does the endgame tablebase (tb: on); a standard game's key with
 // the tablebase off is as it always was.
 const sfStartFen = (fen) => (fen && fen !== window.ChessCore.START_FEN ? fen : null);
+// (its stored form is older than sfRunKey and kept, so a deploy drops nobody's partial run)
 const sfPartialKey = (ucis, settings, fen, tb) => JSON.stringify((sfStartFen(fen) ? [fen, settings, ucis] : [settings, ucis]).concat(tb ? ['tablebase'] : []));
+// A run's identity apart from its game: the engine settings and whether the tablebase answers (tb). The page's own
+// (the settings as they are now) against a run's says whether that run's progress is what "Resume from move N" shows
+const sfRunKey = (settings, tb) => JSON.stringify(settings) + (tb ? ' tablebase' : '');
 function readSfPartial(ucis, settings, fen, tb) {
   try { const s = JSON.parse(localStorage.getItem(SF_PARTIAL_STORE) || 'null'); return s && s.key === sfPartialKey(ucis, settings, fen, tb) && Array.isArray(s.searched) ? s.searched : []; } catch (e) { return []; }
 }
@@ -228,7 +232,7 @@ function writeSfPace(name, threads, f) { try { localStorage.setItem(sfPaceKey(na
 // settings: the engine settings for a game (AnalysisCore.engineSettings().game); a run keeps those it started with
 // tbOn: Settings › Online data › Endgame tablebase: positions of 7 pieces or fewer ask it first (runAnalysis)
 function useGameAnalysis(M, files, getFiles, commit, engine, settings, tbOn) {
-  const A = window.AnalysisCore, tb = !!(tbOn && TB), setKey = JSON.stringify(settings) + (tb ? ' tablebase' : '');
+  const A = window.AnalysisCore, tb = !!(tbOn && TB), setKey = sfRunKey(settings, tb);
   const [pace, setPace] = React.useState(() => readSfPace(settings.name, settings.threads));
   React.useEffect(() => { setPace(readSfPace(settings.name, settings.threads)); }, [settings.name, settings.threads]);
   const perPos = A.secondsPerPosition(settings, pace);
@@ -278,7 +282,7 @@ function useGameAnalysis(M, files, getFiles, commit, engine, settings, tbOn) {
         onSearched: (R, { searches = 0, tbMs = 0, tbAsks = 0 } = {}) => {
           S.hash_mb = hashNow();
           writeSfPartial(ucis, S, R, M.start.fen, T);
-          if (JSON.stringify(S) + (T ? ' tablebase' : '') === setKeyRef.current) setResumeAt(Math.max(0, R.length - 1));
+          if (sfRunKey(S, T) === setKeyRef.current) setResumeAt(Math.max(0, R.length - 1));
           const now = Date.now();
           // the searches' time only: the tablebase's (its requests and the waits between them) says nothing of this device's pace
           if (searches) { timed.sec += Math.max(0, now - timed.last - tbMs) / 1000; timed.n += searches; }
