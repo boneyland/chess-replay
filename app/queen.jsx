@@ -12,7 +12,7 @@ const fmtPawns = (v) => (v == null ? 'â€”' : (v > 0.004 ? '+' : v < -0.004 ? 'âˆ
 function queenError(e) {
   const code = e && e.code;
   if (code === 'tool_error') return 'The Queen Space reported an error: ' + String((e && e.message) || '').slice(0, 300);
-  if (code === 'server_unavailable' || code === 'upstream_error')
+  if (code === 'server_unavailable')
     return `No answer from the Queen Space${e.secs != null ? ` after ${e.secs} s` : ''}${e.retryable ? ', even after a retry' : ''}. It may be busy, waking up or out of ZeroGPU quota. Try again in a minute.`;
   if (code === 'cancelled') return 'Stopped.';
   if (code === 'direct_auth') return e.message;
@@ -150,9 +150,9 @@ function useQueen(M, hf) {
           const secs = Math.round((Date.now() - started) / 1000);
           note({ at, ok: false, code: (e && e.code) || '?', secs, msg: e && e.message ? String(e.message).slice(0, 200) : '' });
           if (e && typeof e === 'object') e.secs = secs;
-          // A temporary failure gets one more try after the wait the runtime suggests
+          // A temporary failure gets one more try after a few seconds
           if (attempt === 1 && e && e.retryable && !ctrl.signal.aborted) {
-            const ms = Math.min(60000, e.retryAfterMs || 4000 + Math.random() * 4000);
+            const ms = 4000 + Math.random() * 4000;
             setBusy({ at, started: Date.now(), attempt, retryAt: Date.now() + ms });
             await wait(ms, ctrl.signal);
             continue;
@@ -310,7 +310,7 @@ function QueenPanel({ M, Q, hf, probe, onClose, onOverlay, onSave, left }) {
         if (Q.stopRef.current) break;
         try { const r = await score(at); if (at === i) onOverlay({ at: i, best: r.best }); failsInRow = 0; }
         catch (e) {
-          const transient = e && (e.code === 'server_unavailable' || e.code === 'upstream_error');
+          const transient = e && e.code === 'server_unavailable';
           if (!transient || ++failsInRow >= 2) { fail(e); stop = true; break; }
         }
       }
