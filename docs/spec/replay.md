@@ -83,7 +83,7 @@ Hash table sizes by device (`AnalysisCore.hashChoices`): 256 and 512 MB are offe
 ## Custom starts and flip
 
 - `ChessCore.buildGame` accepts a `[FEN]` start: Black may move first, castling rights come from the FEN. Move numbers and sides come from `M.ply0` (`ChessCore.moveNo`), never `i % 2`.
-- The engine sends `position fen <fen> moves …`; caches (`SF_EVAL_CACHE`, partial runs) key on the start FEN too.
+- The engine sends `position fen <fen> moves …`; caches (`MoveEval`'s finished searches, partial runs) key on the start FEN too.
 - **Player bars**' taken pieces and "+N" count the pieces on the board at the time shown against a full set (`materialOf`, shared with the free board's bars; a promoted pawn counts as its new piece once it has promoted), so a game from a set-up position with a material edge shows it from the start.
 - **Flip** turns the board, coordinates, player bars and eval bar, for loaded games and the free board; remembered like other settings. Squares become pixels only through `view()`.
 

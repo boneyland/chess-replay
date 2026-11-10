@@ -9,6 +9,7 @@ What each part of the repo is, with the pinned SHA-256 of every vendored file. B
   - `layout-core.js`: the page's layout (`LayoutCore`: one or two columns, the boxes for the board and panels, the export scale)
   - `chess-core.js`: PGN, analysis and notes turned into the game model the replay draws
   - `analysis-core.js`, `sf-engine.js`, `stockfish.jsx`: Stockfish in the browser (a Web Worker over UCI) and the move ratings, ported from chess-animator's Python
+  - `move-eval.js`: the evals of a move for the Analysis panel (`MoveEval`: the searches of the positions before and after it, the cloud's answers, Go deeper, the session's finished searches), with the engine and the cloud passed in; `useMoveEval` in `stockfish.jsx` subscribes to it
   - `sf-full.js`: the full engine the viewer can download (the Analysis panel's engine drop-down), checked and kept in the browser
   - `openings-core.js`: opening names and book continuations (the opening explorer)
   - `lichess-core.js`: Lichess's public data (URLs, parsers, a polite client); `explorer.jsx` the Lichess opening explorer (Settings › Online); `tablebase.jsx` the endgame tablebase; `import-core.js` what Import game's paste box holds (a Lichess link, a FEN, a PGN)
