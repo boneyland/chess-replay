@@ -23,6 +23,11 @@ already drifted apart; dead code (grep the whole repo, tests/ and app/shell.html
 unused); overgrown functions or components (say which jobs and roughly how many lines); state held in two places;
 inconsistent patterns (the same thing done two ways); lists or constants kept in step by hand; stale compatibility
 code and stale comments.
+<for structure:> rules a node test cannot reach because they sit in a React hook, effect or component, around Cores
+that are pure and tested: name each rule, grep tests/*.test.cjs for the hook or component (a hit only in tests/live/
+means browser-only), and list what the code depends on (the engine, a Lichess client, localStorage, the clock, timers)
+and whether each could be passed in. Also hooks with many positional arguments or many returned values. Report at
+most two per area, the ones in the files that change most (your area's counts: <hot-spot counts>).
 <for correctness / security / tests / docs: the matching line from the skill's step 1>
 If you find a real bug outside these kinds, report it anyway, labelled with its real kind.
 
@@ -55,5 +60,9 @@ with a "Files read in full:" line and a "Not read in full:" line.
   OAuth helpers; error codes nothing produces any more.
 - **Export, vision, sound (4)**: does export drawing duplicate the live board's (it didn't: it walks the DOM); do Full
   Stockfish and vision use KeptFiles the same way; constants that tests check but the code doesn't read.
+- **Structure (2, 3a, 3b; 2026-11-11)**: hooks holding rules around the Cores. `useMoveEval` was the strongest (done:
+  `MoveEval`, PR 220). Seen then and left open: `useStoredFiles` in `game-app.jsx` (what is stored when, the
+  full-storage fallbacks, when a game is kept in My games), `useEngineOpponent` in `free-board.jsx` (the two searches'
+  order, the reply pause, the stale-board check), and the Transport bar's `nav.current` hand-off, written by three views.
 - **Build, deploy, offline (5)**: every list kept in step by hand (VENDOR, SW_LOCAL, CSP hosts, KEEP_HOSTS, cache
   names, LAYOUT.md pins, `VisionCore.FILES`, `buildFilter`), compared concretely; sha256sum the pinned files.
