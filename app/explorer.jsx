@@ -107,8 +107,7 @@ function useRowFocus(top) {
 // panel, for an answer that can't come (offline, a back-off)
 function LichessExplorer({ x, tw, setTweak, onGame, posKey, onPlay, onHover, white, fallback }) {
   const LA = useLichessAuth();
-  const top = React.useRef(null), loading = x.state === 'loading', rowKey = useRowFocus(top);
-  React.useLayoutEffect(() => { const box = top.current && top.current.parentElement; if (box) box.scrollTop = 0; }, [posKey]);
+  const top = useScrollTop(posKey), loading = x.state === 'loading', rowKey = useRowFocus(top);
   // the progress line under the title, as the Analysis panel's: the answer's time isn't known, so it creeps towards the end
   const [pr, setPr] = React.useState(0);
   React.useEffect(() => {
@@ -118,8 +117,7 @@ function LichessExplorer({ x, tw, setTweak, onGame, posKey, onPlay, onHover, whi
     return () => clearInterval(id);
   }, [loading, posKey]);
   if (x.state === 'none' && fallback) return fallback;
-  const heading = (txt, dim) => <span className="book-head" style={{ display: 'block', font: `400 ${tx(30)}px/1.14 ${SERIF}`, color: dim ? C.dim : C.ink, textWrap: 'pretty' }}>{txt}</span>;
-  const note = (txt) => <span style={{ display: 'block', marginTop: tx(8), font: `500 ${tx(15)}px ${MONO}`, color: C.dim }}>{txt}</span>;
+  const heading = (txt, dim) => commentHead('book-head', txt, dim), note = commentNote;
   const play = (e, uci) => { e.preventDefault(); e.stopPropagation(); onPlay(uci); };
   const masters = explorerFilters(tw).db === 'masters';
   // Open games: Here (Import game fetches the game) or On Lichess (a new tab); a middle or Ctrl click is always Lichess
