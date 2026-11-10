@@ -15,6 +15,7 @@ const units = [
   ['chess-core.js', read(path.join(app, 'chess-core.js'))],
   ['analysis-core.js', read(path.join(app, 'analysis-core.js'))],
   ['lichess-core.js', read(path.join(app, 'lichess-core.js'))],
+  ['pkce.js', read(path.join(app, 'pkce.js'))],
   ['openings-data.js', 'window.OPENINGS_TSV = ' + JSON.stringify(require('./openings-data.cjs').openingsTsv()).replace(/</g, '\\u003c') + ';'],
   ['openings-core.js', read(path.join(app, 'openings-core.js'))],
   ['board-core.js', read(path.join(app, 'board-core.js'))],

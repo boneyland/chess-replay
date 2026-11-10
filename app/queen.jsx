@@ -37,7 +37,9 @@ const DIRECT_API = 'https://boneyland-queen-pawn-8.hf.space/gradio_api';
 // Public OAuth app (no secret) registered at huggingface.co/settings/applications. Sign-in returns to the folder the
 // page is served from (https://chess-replay.onrender.com/); each host's URL must be a redirect URL there. A static HF Space
 // with `hf_oauth: true` in its README gets its own app, whose ID HF injects as window.huggingface.variables
-const HF_OAUTH = { clientId: (window.huggingface && window.huggingface.variables || {}).OAUTH_CLIENT_ID || '5d94cba5-1c7f-49ec-9ea3-5419e82a3af5', scope: 'openid profile', redirect: location.origin + location.pathname.replace(/[^/]*$/, '') };
+const HF_OAUTH = { clientId: (window.huggingface && window.huggingface.variables || {}).OAUTH_CLIENT_ID || '5d94cba5-1c7f-49ec-9ea3-5419e82a3af5', scope: 'openid profile', redirect: window.Pkce.redirect() };
+// how long a token is taken to last when Hugging Face doesn't say (8 hours)
+const HF_TOKEN_SECONDS = 28800;
 const AUTH_STORE = 'chess-video.hf-auth.v1', PKCE_STORE = 'chess-video.hf-pkce';
 // a pull request's preview on Render (chess-replay-pr-64.onrender.com) is a host the OAuth app doesn't list, so Hugging
 // Face would refuse its redirect: sign-in is offered on the live site only
@@ -62,7 +64,6 @@ async function directCall(moves, token, signal, fen = '') {
   throw { code: 'tool_error', message: String(msg || 'The Space returned no answer.') };
 }
 
-const b64url = (buf) => btoa(String.fromCharCode(...new Uint8Array(buf))).replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, '');
 function readAuth() { try { const a = JSON.parse(localStorage.getItem(AUTH_STORE) || 'null'); return a && a.token && a.expires > Date.now() ? a : null; } catch (e) { return null; } }
 
 // "Sign in with Hugging Face" (OAuth code flow with PKCE, no secret)
@@ -70,29 +71,16 @@ function useHfAuth() {
   const [auth, setAuth] = React.useState(readAuth);
   const [note, setNote] = React.useState('');
   const enabled = !!HF_OAUTH.clientId && !HF_PREVIEW;
-  const start = async () => {
-    if (!enabled) return;
-    const verifier = b64url(crypto.getRandomValues(new Uint8Array(32)));
-    const challenge = b64url(await crypto.subtle.digest('SHA-256', new TextEncoder().encode(verifier)));
-    const state = b64url(crypto.getRandomValues(new Uint8Array(16)));
-    try { sessionStorage.setItem(PKCE_STORE, JSON.stringify({ verifier, state })); } catch (e) {}
-    location.href = 'https://huggingface.co/oauth/authorize?' + new URLSearchParams({ client_id: HF_OAUTH.clientId, redirect_uri: HF_OAUTH.redirect, response_type: 'code', scope: HF_OAUTH.scope, state, code_challenge: challenge, code_challenge_method: 'S256' });
-  };
+  const O = { store: PKCE_STORE, clientId: HF_OAUTH.clientId, redirect: HF_OAUTH.redirect };
+  const start = async () => { if (enabled) location.href = await window.Pkce.authorizeUrl({ ...O, url: 'https://huggingface.co/oauth/authorize', scope: HF_OAUTH.scope }); };
   const finish = async (q) => {
-    let saved = null;
-    try { saved = JSON.parse(sessionStorage.getItem(PKCE_STORE) || 'null'); sessionStorage.removeItem(PKCE_STORE); } catch (e) {}
-    history.replaceState(null, '', location.pathname);
-    if (!saved || saved.state !== q.get('state')) { setNote('Sign-in didn’t complete (it was started in another tab or expired). Try again.'); return; }
-    try {
-      const r = await fetch('https://huggingface.co/oauth/token', { method: 'POST', headers: { 'Content-Type': 'application/x-www-form-urlencoded' }, body: new URLSearchParams({ grant_type: 'authorization_code', code: q.get('code'), redirect_uri: HF_OAUTH.redirect, client_id: HF_OAUTH.clientId, code_verifier: saved.verifier }) });
-      const t = await r.json();
-      if (!t.access_token) throw new Error(t.error_description || t.error || 'no token');
-      const u = await fetch('https://huggingface.co/oauth/userinfo', { headers: { Authorization: 'Bearer ' + t.access_token } }).then((x) => (x.ok ? x.json() : {})).catch(() => ({}));
-      const a = { token: t.access_token, expires: Date.now() + (t.expires_in || 28800) * 1000 - 60000, name: u.preferred_username || u.name || '' };
-      try { localStorage.setItem(AUTH_STORE, JSON.stringify(a)); } catch (e) {}
-      setAuth(a);
-      setNote(`Signed in to Hugging Face${a.name ? ' as ' + a.name : ''}.`);
-    } catch (e) { setNote('Sign-in failed: ' + ((e && e.message) || e)); }
+    const P = window.Pkce, got = await P.finish({ ...O, q, url: 'https://huggingface.co/oauth/token' });
+    if (!got.token) { setNote(got.note); return; }
+    const u = await P.account('https://huggingface.co/oauth/userinfo', got.token);
+    const a = { token: got.token, expires: P.expires(got.expiresIn || HF_TOKEN_SECONDS), name: u.preferred_username || u.name || '' };
+    try { localStorage.setItem(AUTH_STORE, JSON.stringify(a)); } catch (e) {}
+    setAuth(a);
+    setNote(`Signed in to Hugging Face${a.name ? ' as ' + a.name : ''}.`);
   };
   const signOut = () => { try { localStorage.removeItem(AUTH_STORE); } catch (e) {} setAuth(null); };
   React.useEffect(() => {
