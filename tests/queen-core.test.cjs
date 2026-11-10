@@ -9,6 +9,11 @@ test('pyParse reads a Python dict repr: quotes, escapes, None/True/False, number
   assert.deepEqual(v, { best_move_uci: 'e2e4', analysis: 'It\'s "fine"\nreally', x: null, ok: true, no: false, n: -150, l: [1, 'a', { k: 2 }], u: 'éA\u{1f600}' });
 });
 
+test('pyParse reads nan and inf as null, and only Python\'s own spellings of its literals', () => {
+  assert.deepEqual(Q.pyParse("{'seconds': nan, 'a': inf, 'b': -inf, 'best_move_uci': 'e2e4', 'n': 1E3}"), { seconds: null, a: null, b: null, best_move_uci: 'e2e4', n: 1000 });
+  assert.throws(() => Q.pyParse("{'a': TRUE}"));
+});
+
 test('pyParse reads Python tuples as arrays, a one-element tuple included', () => {
   assert.deepEqual(Q.pyParse("{'line': ('e2e4', 'e7e5'), 'one': (1,), 'none': (), 'nest': [(1, 2), {'t': ('a',)}]}"),
     { line: ['e2e4', 'e7e5'], one: [1], none: [], nest: [[1, 2], { t: ['a'] }] });

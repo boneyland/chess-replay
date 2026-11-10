@@ -34,10 +34,11 @@
         }
         i++; return s;
       }
-      const m = /^(None|True|False|null|true|false|-?\d+(?:\.\d+)?(?:e[-+]?\d+)?)/i.exec(src.slice(i));
+      // nan and inf (a float Python couldn't give a number for) read as null: one such field doesn't lose the answer
+      const m = /^(None|True|False|null|true|false|nan|-?inf|-?\d+(?:\.\d+)?(?:[eE][-+]?\d+)?)/.exec(src.slice(i));
       if (!m) throw new Error('unexpected ' + ch);
       i += m[0].length;
-      const LIT = { None: null, null: null, True: true, true: true, False: false, false: false };
+      const LIT = { None: null, null: null, True: true, true: true, False: false, false: false, nan: null, inf: null, '-inf': null };
       return Object.prototype.hasOwnProperty.call(LIT, m[0]) ? LIT[m[0]] : Number(m[0]);
     };
     return val();
