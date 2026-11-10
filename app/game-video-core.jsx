@@ -867,12 +867,13 @@ function MoveList({ M, T, S, a, paused, onPick, deadAt, end, startAt }) {
   const moveKey = (e, i) => {
     if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); onPick(i); return; }
     if (e.shiftKey || e.altKey || e.metaKey || e.ctrlKey) return;
-    const j = { ArrowLeft: () => i - 1, ArrowRight: () => i + 1, ArrowUp: () => lineStep(i, -1), ArrowDown: () => lineStep(i, 1), Home: () => 0, End: () => S.N - 1 }[e.key];
+    const j = { ArrowLeft: () => i - 1, ArrowRight: () => i + 1, ArrowUp: () => lineStep(i, -1), ArrowDown: () => lineStep(i, 1), Home: () => -1, End: () => S.N - 1 }[e.key];
     if (!j) return;
     e.preventDefault(); e.stopPropagation();
-    const to = clamp(j(), 0, S.N - 1);
+    // Home, and ← from the first move, go to the starting position (−1), which has no chip: focus stays on the first move
+    const to = clamp(j(), e.key === 'Home' || e.key === 'ArrowLeft' ? -1 : 0, S.N - 1);
     onPick(to);
-    requestAnimationFrame(() => { const el = listRef.current && listRef.current.querySelector(`[data-ply="${to}"]`); if (el) el.focus({ preventScroll: true }); });
+    requestAnimationFrame(() => { const el = listRef.current && listRef.current.querySelector(`[data-ply="${Math.max(0, to)}"]`); if (el) el.focus({ preventScroll: true }); });
   };
   const moves = [];
   for (let i = 0; i < S.N; i++) {
@@ -1415,7 +1416,8 @@ function useGameMoveEval(M, c, on, sf, tw, gamePos) {
 // The transport bar (nav: its label, buttons and Copy FEN) and the keys for the replay: ← → step through a shown line's
 // moves, else the game's (as the wheel over the board does: the step returned), End goes to the last move, Esc cancels
 // a promotion, then leaves a shown line. goTo(i): paused on ply i, settled; fen(): the position's FEN
-function useReplayNav({ nav, M, S, c, line, input, goTo, fen }) {
+// keys: false during an export, which no key may seek
+function useReplayNav({ nav, M, S, c, line, input, goTo, fen, keys = true }) {
   const { vline, stepLine, setVline, leaveIfEmpty } = line;
   const step = (d) => { if (vline) stepLine(d); else goTo(c + d); };
   if (nav) {
@@ -1442,7 +1444,7 @@ function useReplayNav({ nav, M, S, c, line, input, goTo, fen }) {
     if (e.code !== 'ArrowLeft' && e.code !== 'ArrowRight' && e.code !== 'End') return;
     e.preventDefault();
     if (e.code === 'End') goTo(Infinity); else step(e.code === 'ArrowRight' ? 1 : -1);
-  });
+  }, { on: keys });
   return step;
 }
 
@@ -1501,7 +1503,7 @@ function GameVideo({ M, tw, d, probe, queen, nav, scheme, sf, orient }) {
   // (before the first paint, so the title card never flashes); GameApp keys this view on the game, so another game
   // loaded opens the same way, not at the old game's move with its line still shown
   React.useLayoutEffect(() => { if (tl.setPlaying) tl.setPlaying(false); if (tl.setStart) tl.setStart(settled(-1)); }, []);
-  const stepBy = useReplayNav({ nav, M, S, c: cNow, line, input, goTo, fen: shownFen });
+  const stepBy = useReplayNav({ nav, M, S, c: cNow, line, input, goTo, fen: shownFen, keys: !tw.exporting });
   const pieces = React.useMemo(() => simulate(M), [M]);
   // the video touches (panels fading in, the camera push, the blunder glow, the final fade, the title and end cards)
   // only while playing or exporting: stepping, exploring and analysing show a still page
