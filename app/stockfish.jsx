@@ -82,7 +82,10 @@ function useEngine(hashMB, threads, kind = 'lite', onBroken, onHashFail) {
     if (ref.current) ref.current.then((eng) => eng.setHash(hashNow()), () => {});
   }, []);
   React.useEffect(() => { if (ref.current) ref.current.then((eng) => eng.setThreads(threads), () => {}); }, [threads]);
-  const [status, setStatus] = React.useState('idle');
+  // statusNow: the status as just set, for code that runs before the next render (a run's catch, right after the
+  // engine's start failed)
+  const [status, showStatus] = React.useState('idle'), statusNow = React.useRef('idle');
+  const setStatus = React.useCallback((v) => { statusNow.current = v; showStatus(v); }, []);
   const [why, setWhy] = React.useState(''); // why the engine stopped or can't run (sfDownText shows it)
   // the engine of the other kind, quit (its running search answers null)
   const drop = React.useCallback(() => {
@@ -115,10 +118,11 @@ function useEngine(hashMB, threads, kind = 'lite', onBroken, onHashFail) {
           make = sfMakeWorker(file);
         }
         threaded.current = withThreads;
-        // a threaded engine that dies before it is ready is start()'s to handle (ready() rejects, and it falls back)
+        // an engine that dies before it is ready is start()'s to handle: ready() rejects, and a threaded one falls back,
+        // a single-thread one ends 'unavailable' (with Try again), not 'stopped'
         let up = false;
         const onFail = (err) => {
-          if (!up && withThreads) return;
+          if (!up) return;
           if (withThreads) sfThreadsFailed('The threaded engine stopped');
           if (ref.current === mine) { ref.current = null; setStatus('stopped'); setWhy(sfReason(err)); }
         };
@@ -150,7 +154,7 @@ function useEngine(hashMB, threads, kind = 'lite', onBroken, onHashFail) {
     const id = setTimeout(() => get().catch(() => {}), SF_ASM_EARLY_MS);
     return () => clearTimeout(id);
   }, [kind]);
-  return { get, status, why, holdHash };
+  return { get, status, statusNow, why, holdHash };
 }
 
 // The full engine's download (the Analysis panel's engine drop-down and menu).
@@ -307,7 +311,7 @@ function useGameAnalysis(M, files, getFiles, commit, engine, settings, tbOn) {
     } catch (e) {
       if (run.current !== me) return;
       run.current = null;
-      setSt((s) => ({ ...idle, note: s.note, err: engine.status === 'unavailable' ? '' : `Analysis stopped: ${(e && e.message) || e}. Press the computer button to start analysis again.` }));
+      setSt((s) => ({ ...idle, note: s.note, err: engine.statusNow.current === 'unavailable' ? '' : `Analysis stopped: ${(e && e.message) || e}. Press the computer button to start analysis again.` }));
     }
   };
   // the run's hash table goes back to the live searches' once it ends, however it ends
