@@ -4,6 +4,8 @@ const QUEEN_SPACE = 'https://huggingface.co/spaces/boneyland/queen-pawn-8';
 // The Space reserves 15 s + 0.03 s per token of ZeroGPU for each call: 1536 tokens reserves 61 s instead of 76 s.
 // Typical answers are ~900-1300 tokens; a longer one is cut and the Space falls back to Queen's line or candidates.
 const QUEEN_TOKENS = 1536;
+// the longest wait for an answer's stream
+const QUEEN_WAIT_MS = 180000;
 
 const { queenPayload, queenEval, queenProse, readSse, capQueenCache, queenAnswer, queenFile } = window.QueenCore;
 
@@ -54,14 +56,27 @@ async function directCall(moves, token, signal, fen = '') {
   } catch (e) { throw unreachable(); }
   if (r.status === 401 || r.status === 403) throw { code: 'direct_auth', message: 'The Space refused the sign-in. Sign out and try again.' };
   if (!r.ok) throw { code: 'server_unavailable', retryable: r.status >= 500 || r.status === 429, message: `The Space answered ${r.status}.` };
-  const { event_id } = await r.json();
+  // the answer's stream stays open until Queen is done (20-33 s, under ZeroGPU's reserved 61 s plus the queue):
+  // one that says nothing for QUEEN_WAIT_MS is given up, as a failure the caller may try again
+  const timed = new AbortController(), give = setTimeout(() => timed.abort(), QUEEN_WAIT_MS);
+  const stop = () => timed.abort();
+  if (signal) { if (signal.aborted) timed.abort(); else signal.addEventListener('abort', stop, { once: true }); }
   let text;
-  try { text = await (await fetch(`${DIRECT_API}/call/analyse_position/${event_id}`, { headers: auth, signal })).text(); } catch (e) { throw unreachable(); }
+  try {
+    const { event_id } = await r.json();
+    if (!event_id) throw new Error('no event id');
+    const s = await fetch(`${DIRECT_API}/call/analyse_position/${event_id}`, { headers: auth, signal: timed.signal });
+    if (!s.ok) throw new Error('status ' + s.status);
+    text = await s.text();
+  } catch (e) { throw unreachable(); }
+  finally { clearTimeout(give); if (signal) signal.removeEventListener('abort', stop); }
   const { result, error } = readSse(text);
   if (result) return { payload: Array.isArray(result) ? result[0] : result };
   // Gradio errors arrive as {error, title}, e.g. "You have exceeded your ZeroGPU runs limit. Authenticate with…"
   const msg = error && typeof error === 'object' ? error.error || error.title || JSON.stringify(error) : error;
-  throw { code: 'tool_error', message: String(msg || 'The Space returned no answer.') };
+  if (msg) throw { code: 'tool_error', message: String(msg) };
+  // a stream that ended with neither an answer nor an error was cut short
+  throw { code: 'server_unavailable', retryable: true, message: 'The Space’s answer was cut short.' };
 }
 
 function readAuth() { try { const a = JSON.parse(localStorage.getItem(AUTH_STORE) || 'null'); return a && a.token && a.expires > Date.now() ? a : null; } catch (e) { return null; } }
@@ -247,7 +262,10 @@ function withQueen(M, resultAt) {
 }
 const fmtQ = (v) => fmtPawns(v);
 
-function QueenPanel({ M, Q, hf, probe, onClose, onOverlay, onSave, left }) {
+// live(): whether the game on the page is still the one this panel was opened for. An answer takes 20-33 s, and a
+// test many minutes: what was asked for a game since replaced draws no arrow, seeks nothing and reports no error
+function QueenPanel({ M, Q, hf, probe, live, onClose, onOverlay: overlay, onSave, left }) {
+  const onOverlay = (a) => { if (live()) overlay(a); };
   const [sel, setSel] = React.useState(null); // at: the position before the selected move
   const [running, setRunning] = React.useState(false);
   const [diag, setDiag] = React.useState('');
@@ -291,17 +309,17 @@ function QueenPanel({ M, Q, hf, probe, onClose, onOverlay, onSave, left }) {
     seek(undefined); // pause where it is
     const at = Math.max(0, pr.c);
     Q.setErr(''); setDiag(''); setSel(at); Q.stopRef.current = false;
-    try { if (pr.c < 0) onOverlay({ at, best: (await score(at)).best }); else await scorePair(at); } catch (e) { fail(e); }
+    try { if (pr.c < 0) onOverlay({ at, best: (await score(at)).best }); else await scorePair(at); } catch (e) { if (live()) fail(e); }
   };
   const scoreAfter = async (at) => {
     Q.setErr(''); setDiag(''); Q.stopRef.current = false;
-    try { await score(at + 1); } catch (e) { fail(e); }
+    try { await score(at + 1); } catch (e) { if (live()) fail(e); }
   };
   const runTest = async () => {
     Q.setErr(''); setDiag(''); Q.stopRef.current = false; setRunning(true);
     let failsInRow = 0;
     for (const i of marked) {
-      if (Q.stopRef.current) break;
+      if (Q.stopRef.current || !live()) break;
       const todo = [i, canAfter(i) ? i + 1 : null].filter((at) => at != null && !Q.has(at));
       if (!todo.length) continue;
       setSel(i); seekAfter(i);
@@ -310,6 +328,7 @@ function QueenPanel({ M, Q, hf, probe, onClose, onOverlay, onSave, left }) {
         if (Q.stopRef.current) break;
         try { const r = await score(at); if (at === i) onOverlay({ at: i, best: r.best }); failsInRow = 0; }
         catch (e) {
+          if (!live()) { stop = true; break; }
           const transient = e && e.code === 'server_unavailable';
           if (!transient || ++failsInRow >= 2) { fail(e); stop = true; break; }
         }
