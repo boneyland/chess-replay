@@ -131,9 +131,9 @@
   // end on a bestmove token that isn't the start of its last complete line
   const bestOf = (r) => (r && r.pv && r.pv[0]) || (r && r.best) || null;
 
-  // A tablebase win or loss with no distance to mate (6 and 7 pieces): its ±9990 says won, not mate in 1, so it is never
-  // weighed against a search's eval
-  const tbWonOnly = (r) => !!(r && r.tb && !r.tb.dtm && r.cp !== 0 && Math.abs(r.cp) < C.MATE_SCORE_CP);
+  // A tablebase win or loss, with a distance to mate or not (6 and 7 pieces: its ±9990 says won, not mate in 1): never weighed against a search's eval, which reads many
+  // such positions as a small edge (KBN v K about +1.9), so the move beside it would be rated as losing the mate
+  const tbDecided = (r) => !!(r && r.tb && r.cp !== 0);
   // the eval a move's rating takes for a position: a search of it where one was made beside the tablebase's answer
   const rateCp = (r) => (r.sf ? r.sf.cp : r.cp);
 
@@ -247,8 +247,8 @@
   // one is searched. Its requests go tbGapMs apart (TB_GAP_MS). While the client backs off after a 429 the positions
   // are searched, then it is asked again; after a request that fails otherwise (offline, an error, the timeout) the run
   // asks no more. tablebaseOn(): whether the setting is still on (turned off, the run asks no more). A position the
-  // tablebase calls won without a distance to mate (tbWonOnly) next to a searched one is searched too (kept as its sf),
-  // so the move between them is rated on two searches. onSearched(R, { searches, tbMs, tbAsks }): the engine searches made,
+  // tablebase calls won or lost (tbDecided, a mate or a win with no distance) next to a searched one is searched too
+  // (kept as its sf), so the move between them is rated on two searches. onSearched(R, { searches, tbMs, tbAsks }): the engine searches made,
   // and the time spent on the tablebase and its requests since the last call, for the run's pace. now, sleep: the clock, for tests
   async function runAnalysis({ engine, ucis, sans, headers, signal, onProgress, onTablebaseLost, earlier = [], onSearched, settings = ENGINE, startFen = window.ChessCore.START_FEN, tablebase = null, tablebaseOn = () => true, tbGapMs = TB_GAP_MS, now = Date.now, sleep = (ms) => new Promise((r) => setTimeout(r, ms)) }) {
     const LC = window.LichessCore;
@@ -286,9 +286,9 @@
       }
       if (!r) r = await search(k);
       if (signal.aborted) return null;
-      // a move between a searched position and a tablebase win with no distance to mate: that one searched too
+      // a move between a searched position and a tablebase win or loss: that one searched too
       if (k > 0 && !r.tb !== !R[k - 1].tb) {
-        const j = tbWonOnly(r) ? k : tbWonOnly(R[k - 1]) && !R[k - 1].sf ? k - 1 : -1;
+        const j = tbDecided(r) ? k : tbDecided(R[k - 1]) && !R[k - 1].sf ? k - 1 : -1;
         if (j >= 0) {
           const s = await search(j);
           if (signal.aborted) return null;
@@ -365,5 +365,5 @@
     return { result: { cp, depth: 0, pv: best ? [best] : [], best, nodes: null, timeMs: null, tb: { category: t.category, dtz: t.dtz, dtm: t.dtm } }, failed: false };
   }
 
-  window.AnalysisCore = { C, paceStart, TB_GAP_MS, ENGINE, ENGINE_NAMES, SEARCH_LIMITS, DEPTHS, SECONDS, HASH_MB, hashChoices, LINES, threadChoices, defaultThreads, engineSettings, secondsPerPosition, paceFactor, blendPace, deeperSearch, canGoDeeper, cloudEnough, bestOf, winningChances, infoToScore, infoStats, rateMove, rateByOutcome, tbWonOnly, mateLine, positionFens, playerStats, engineLines, alternativesOf, buildAnalysisJson, runAnalysis };
+  window.AnalysisCore = { C, paceStart, TB_GAP_MS, ENGINE, ENGINE_NAMES, SEARCH_LIMITS, DEPTHS, SECONDS, HASH_MB, hashChoices, LINES, threadChoices, defaultThreads, engineSettings, secondsPerPosition, paceFactor, blendPace, deeperSearch, canGoDeeper, cloudEnough, bestOf, winningChances, infoToScore, infoStats, rateMove, rateByOutcome, tbDecided, mateLine, positionFens, playerStats, engineLines, alternativesOf, buildAnalysisJson, runAnalysis };
 })();

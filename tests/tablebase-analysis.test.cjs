@@ -99,7 +99,7 @@ test('an uncertain answer is searched; a failed request is searched and the run 
   const tb = fakeTb([WINNING[0], WINNING[1], answer('maybe-win', 90, null, 'e2d3'), null, WINNING[4]]);
   let lost = 0;
   const out = await run(eng, tb, { onTablebaseLost: () => lost++ });
-  assert.deepEqual(eng.calls, [2, 3, 4]);
+  assert.deepEqual(eng.calls, [2, 1, 3, 4], '2 as uncertain, then the tablebase mate at 1 beside it');
   assert.deepEqual(tb.asked, [0, 1, 2, 3], 'nothing asked after the failure');
   assert.equal(lost, 1, 'the page told once');
   assert.equal(out.moves[2].tb_before, undefined);
@@ -133,6 +133,22 @@ test('a win with no distance to mate next to a searched position is searched too
   assert.equal(m3.classification, 'best', 'between tablebase positions: the outcome');
 });
 
+test('a tablebase mate next to a searched position is searched too: a move that keeps the win is no lost mate', async () => {
+  // White mates in 27 at position 2 (DTM 53); the request for 3 fails, and Stockfish reads KBN v K as about +1.9
+  const tb = fakeTb([WINNING[0], WINNING[1], answer('win', 53, 53, 'e3d4'), null, WINNING[4]]);
+  const cps = { 2: 200, 3: 190, 4: 190 }, eng = fakeEngine();
+  eng.search = function (req) { this.calls.push(req.moves.length); return { promise: Promise.resolve({ cp: cps[req.moves.length], depth: 20, pv: [], best: null }), cancel() {} }; };
+  const out = await run(eng, tb);
+  assert.deepEqual(eng.calls, [3, 2, 4], '3 after the failure, then the mate at 2 beside it');
+  const m3 = out.moves[2];
+  assert.equal(m3.eval_before, 10000 - 10 * 27, 'the eval shown stays the tablebase\'s');
+  assert.equal(m3.eval_after, 190);
+  assert.notEqual(m3.classification, 'blunder');
+  assert.equal(m3.mate_advice, '');
+  assert.equal(m3.eval_loss, 10, 'rated on the two searches');
+  assert.equal(out.moves[1].classification, 'best', 'between tablebase positions: the outcome');
+});
+
 test('the setting turned off during a run: nothing more is asked, the rest is searched', async () => {
   const eng = fakeEngine(), tb = fakeTb(WINNING);
   let on = true;
@@ -140,7 +156,7 @@ test('the setting turned off during a run: nothing more is asked, the rest is se
   tb.tablebase = async (fen) => { const r = await ask(fen); on = false; return r; };
   await run(eng, tb, { tablebaseOn: () => on });
   assert.deepEqual(tb.asked, [0]);
-  assert.deepEqual(eng.calls, [1, 2, 3, 4]);
+  assert.deepEqual(eng.calls, [1, 0, 2, 3, 4], 'the rest, and the tablebase mate at 0 beside the first of them');
   // off while the run waits for its turn to ask: not asked either
   const tb2 = fakeTb(WINNING);
   let on2 = true;
@@ -155,8 +171,8 @@ test('onSearched: the time spent on the tablebase is reported apart from the sea
   tb.tablebase = async (fen) => { t += 300; return ask(fen); };
   const info = [];
   await run(fakeEngine(), tb, { tbGapMs: 4000, now: () => t, sleep: async (ms) => { t += ms; }, onSearched: (R, x) => info.push(x) });
-  // position 1: a 4 s wait and a 300 ms request, then searched
-  assert.deepEqual(info.map((x) => x.searches), [0, 1, 0, 0, 0]);
+  // position 1: a 4 s wait and a 300 ms request, then searched, and the tablebase mates on either side of it too
+  assert.deepEqual(info.map((x) => x.searches), [0, 2, 1, 0, 0]);
   // each later request 4 s after the one before: 3.7 s of waiting, then the request
   assert.deepEqual(info.map((x) => x.tbMs), [300, 4000, 4000, 4000, 4000]);
 });
@@ -172,7 +188,7 @@ test('a 429 back-off: the positions during it are searched, then the tablebase i
   eng.search = (req) => { if (req.moves.length === 3) off = false; return search(req); };
   let lost = 0;
   const out = await run(eng, tb, { onTablebaseLost: () => lost++ });
-  assert.deepEqual(eng.calls, [2, 3]);
+  assert.deepEqual(eng.calls, [2, 1, 3], 'the tablebase mate at 1 is searched beside 2; the draw at 4 is not');
   assert.deepEqual(tb.asked, [0, 1, 2, 4]);
   assert.equal(lost, 0, 'a back-off ends: not lost');
   assert.ok(out.moves[3].tb_after, 'asked again after the back-off');
