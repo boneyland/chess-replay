@@ -376,7 +376,7 @@ function FreeBoard({ board, onChange, tw, setTweak, onLichess, sf, nav, orient, 
   // its handlers no longer answer, so a drag ghost, a hidden piece or the promotion picker would stay
   React.useEffect(() => { if (still) input.clear(); }, [!!still]);
   // Stockfish rates the move on the board: the positions before and after it (before the first move, both the start); never in a game
-  const ev = useMoveEval(sf.engine, G ? null : B.ucis(board, upto), G ? null : B.ucis(board), sf.own, board.fen, null, cloudSetting(tw), sf.off);
+  const ev = useMoveEval({ engine: sf.engine, before: G ? null : B.ucis(board, upto), after: G ? null : B.ucis(board), settings: sf.own, fen: board.fen, stored: null, cloud: cloudSetting(tw), off: sf.off });
   const posBefore = upto > 0 ? steps[upto - 1].pos : board.start.pos;
   const bm = upto >= 0 && ev.before && ev.before.best ? window.ChessCore.applyUci(posBefore, ev.before.best) : null;
   const own = { ...ev, bestSan: bm ? bm.san : null };

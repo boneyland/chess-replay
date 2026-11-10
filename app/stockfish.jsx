@@ -393,143 +393,38 @@ function EngineEmptyState({ M, sf, paused, compact, ask = true }) {
 }
 
 // ---------- the viewer's own moves ----------
-const SF_EVAL_CACHE = new Map(); // finished searches by settings and move list, for the session
-const SF_DEEPER = new Map(); // presses of Go deeper by position (its key at the base settings), for the session
 const CLOUD = window.LichessCore ? window.LichessCore.create() : null; // Lichess's cloud evaluation, cached for the session
-const CLOUD_DEBOUNCE_MS = 300; // after the last position change (stepping through moves asks nothing for the ones passed)
-
-// Evaluates the positions before and after the viewer's move (move lists from the start, or from fen); the score streams in.
-// own: the search settings (AnalysisCore.engineSettings().own; its lines are searched for after only); fen: the game's start FEN, omitted for the standard start.
-// deeper(): searches both positions again, deeper (null when the search can't go further or hasn't finished); it counts
-// for that position only, and a deeper search shows the last result until it passes that result's depth.
-// failed: why a Go deeper search didn't run (the engine wouldn't start, or stopped), shown in place of its depth; the press
-// is then undone, so the + comes back to try again
-// progress: 0–1 through the searches still to run while pending (each one's depth or time limit, whichever it nears first)
-// stored: a loaded analysis's result for after (with before the same moves), standing in for the first search, which
-// then never runs: only a press of Go deeper (or auto) searches. Results from it carry stored: true; its src names the evals it
-// comes from, so presses on one analysis's move don't carry over to another's (or the PGN's) once it is removed
-// cloud: Settings › Online › Lichess cloud evaluation ({ on, prefer }); with stored, only once Go deeper is pressed or auto
-// runs its first level (the analysis's own eval stands until then, and its ratings are never touched): each position asks the cloud (after CLOUD_DEBOUNCE_MS, at once when cached) while the local search runs; whichever comes first
-// shows, and a finished local search replaces the cloud's only when deeper. prefer: a position the cloud has as deep
-// as the local depth limit (AnalysisCore.cloudEnough: with No limit, 35, or 22 for asm.js) isn't searched locally. A miss falls back silently
+// The session's finished searches and presses of Go deeper, and the rules for what shows: app/move-eval.js, which
+// says what a request's fields mean and what a watch reports. The cloud is asked 300 ms after the last position change
+// (stepping through moves asks nothing for the ones passed)
+const MOVE_EVAL = window.MoveEval.create({ cloud: CLOUD });
 const cloudSetting = (tw) => ({ on: !!(tw && tw.cloudEval), prefer: !!(tw && tw.cloudPrefer) });
-// off: no live Stockfish searches (the Analysis panel's switch off, or a game analysis running): nothing is searched
-// locally and Go deeper isn't offered, but the cloud (its setting on) is still asked and shown, and finished searches
-// still show; a stored result shows with the deepest Go deeper level whose local searches finished (and the cloud's
-// answers there), as the annotated PGN writes it
-// auto: with stored, Go deeper's first level runs without a press (the Stockfish switch searching every move of a loaded
-// analysis, as Lichess's local engine does): the stored result shows until the search passes its depth
-function useMoveEval(engine, before, after, own, fen, stored, cloud, off, auto) {
-  const A = window.AnalysisCore;
-  // a search of several lines (Analysis › ☰ › Lines) is cached apart from one of one line
-  const keyOf = (s, moves) => (own.name ? own.name + '|' : '') + (sfStartFen(fen) ? fen + '|' : '') + `${s.depth}/${s.movetimeMs}${s.lines > 1 ? '/' + s.lines : ''}:` + moves.join(' ');
-  const toSearch = (o, lines = own.lines || 1) => ({ depth: o.depth, movetimeMs: o.time_limit * 1000, lines });
-  const baseKey = after ? keyOf(toSearch(own), after) + (stored ? '|' + stored.src : '') : '';
-  const [, bump] = React.useState(0);
-  const [fail, setFail] = React.useState(null); // { key: baseKey, msg }
-  // off: the deepest level pressed whose searches both finished (the stored result at 0)
-  const linesOf = (which) => (which === 'after' || before.join(' ') === after.join(' ') ? own.lines || 1 : 1);
-  // a finished search at level lv: its own, or for a position searched as one line (before), a search of several lines of
-  // the same position (the move before's after, stepping on through a game), whose line 1 is the one line's answer
-  const cachedAt = (lv, which) => {
-    const m = which === 'after' ? after : before, s = A.deeperSearch(own, lv), n = linesOf(which);
-    return SF_EVAL_CACHE.get(keyOf(toSearch(s, n), m)) || (n === 1 && (own.lines || 1) > 1 && SF_EVAL_CACHE.get(keyOf(toSearch(s), m))) || null;
-  };
-  const finished = (lv) => ['after', 'before'].every((w) => cachedAt(lv, w));
-  // auto's level counts as a press, so it stays (with the cloud's answers) once the switch goes off, as a press's does
-  if (auto && stored && after && !SF_DEEPER.has(baseKey)) SF_DEEPER.set(baseKey, 1);
-  const pressed = SF_DEEPER.get(baseKey) || 0;
-  let level = pressed;
-  if (off && after) while (level > 0 && !finished(level)) level--;
-  const search = toSearch(A.deeperSearch(own, level));
-  const sfKey = (moves) => keyOf(search, moves);
-  // a stored result asks the cloud once Go deeper is pressed (or auto ran), whatever the local searches got to (off keeps it asked)
-  const cloudOn = !!(cloud && cloud.on && CLOUD && after && (!stored || pressed > 0)), prefer = cloudOn && !!cloud.prefer;
-  const key = after ? sfKey(after) + (cloudOn ? (prefer ? '|cloud+' : '|cloud') : '') + (off ? '|off' : '') : '';
-  const empty = { key: '', before: null, after: null, cloud: {}, pending: false, progress: 0 };
-  const [st, setSt] = React.useState(empty);
+
+// Evaluates the positions before and after the viewer's move; the score streams in. req: a MoveEval request
+// ({ engine, before, after, settings, fen, stored, cloud, off, auto }). Returns its watch's state (before, after,
+// pending, progress, deeper, deeperTo) and failed: why a Go deeper search didn't run, shown in place of its depth. The
+// message is kept here, not by the watch, so it is still there after a step to another move and back, until a press
+function useMoveEval(req) {
+  const key = MOVE_EVAL.keyOf(req), base = MOVE_EVAL.positionKey(req);
+  const [st, setSt] = React.useState({ key: '', ev: null });
+  const [fail, setFail] = React.useState(null); // { key: base, msg }
   // a layout effect: a new key's state (the cached results and cloud answers it starts with) replaces the old one
   // before the page paints, so no frame shows the bare analysis in between (switching Stockfish off flashed it)
   React.useLayoutEffect(() => {
-    if (!after) { setSt(empty); return; }
-    let live = true;
-    // only after's lines are shown, so before (what the move is rated against) searches one line, as deep as it can;
-    // the start position is both, and searches after's lines
-    const lines = linesOf;
-    const moves = { after, before };
-    // the cloud's answers, as promises (null: a miss); a cached one shows at once
-    const ctl = new AbortController(), timers = [], asked = {};
-    const fenOf = (m) => { const f = window.AnalysisCore.positionFens(fen || window.ChessCore.START_FEN, m); return f.length === m.length + 1 ? f[m.length] : null; };
-    const cloudHit = {};
-    if (cloudOn) for (const which of ['after', 'before']) {
-      const f = fenOf(moves[which]), n = lines(which), hit = f ? CLOUD.cloudCached(f, n) : null;
-      if (hit !== undefined) { cloudHit[which] = hit; asked[which] = Promise.resolve(hit); continue; }
-      asked[which] = new Promise((res) => { timers.push(setTimeout(() => CLOUD.cloudEval(f, n, { signal: ctl.signal }).then(res), CLOUD_DEBOUNCE_MS)); })
-        .then((r) => { if (live && r) setSt((s) => ({ ...s, cloud: { ...s.cloud, [which]: r } })); return r; });
-    }
-    const cloudLimit = A.cloudEnough(search.depth, own.name);
-    const keyAt = (lv, which) => keyOf(toSearch(A.deeperSearch(own, lv), lines(which)), moves[which]);
-    const at = (lv, which) => (lv === 0 && stored ? stored : cachedAt(lv, which));
-    const handles = [], cached = (which) => at(level, which);
-    // the result a press of Go deeper started from, shown until the deeper search passes its depth
-    const prev = (which) => (level > 0 ? at(level - 1, which) : null);
-    const shown = (which) => cached(which) || (prev(which) && { ...prev(which), partial: true, held: true });
-    setSt({ key, before: shown('before'), after: shown('after'), cloud: { before: cloudHit.before || null, after: cloudHit.after || null }, pending: !off && (!cached('after') || !cached('before')), progress: 0 });
-    // no local search: the cloud's answers (asked above) are all that can come
-    if (off) return () => { live = false; timers.forEach(clearTimeout); ctl.abort(); };
-    // the searches to run (the start position's two are one)
-    const todo = [...new Set(['after', 'before'].filter((w) => !cached(w)).map((w) => keyAt(level, w)))].length;
-    let ran = 0;
-    const failed = (msg) => { if (level > 0) { SF_DEEPER.set(baseKey, level - 1); setFail({ key: baseKey, msg }); bump((n) => n + 1); } };
-    (async () => {
-      let eng;
-      try { eng = await engine.get(); } catch (e) { if (live) { setSt((s) => ({ ...s, pending: false })); failed('Stockfish didn’t start' + (e && e.message ? ': ' + e.message : '')); } return; }
-      for (const which of ['after', 'before']) {
-        if (!live) return;
-        // the start position is both before and after: its second search is the first one's, cached
-        if (cached(which)) { const c = cached(which); setSt((s) => ({ ...s, [which]: c })); continue; }
-        if (prefer) {
-          const c = await asked[which];
-          if (!live) return;
-          if (c && c.depth >= cloudLimit) { ran++; continue; }
-        }
-        const floor = prev(which) ? prev(which).depth : 0;
-        // a depth takes about 1.5 times the one before it, so depth d of D is about 1.5^(d − D) of the way
-        const part = (sc) => Math.max(sc.timeMs ? sc.timeMs / search.movetimeMs : 0, search.depth ? Math.pow(1.5, sc.depth - search.depth) : 0);
-        const i = ran++;
-        const h = eng.search({ moves: moves[which], fen, ...search, lines: lines(which), priority: 'own', onInfo: (sc) => {
-          if (!live) return;
-          const progress = (i + Math.min(1, part(sc))) / todo;
-          setSt((s) => ({ ...s, progress: Math.max(s.progress, progress), ...(sc.depth > floor && { [which]: { ...sc, best: sc.pv[0] || null, partial: true } }) }));
-        } });
-        handles.push(h);
-        const r = await h.promise;
-        if (!live) return;
-        if (!r) { const e = eng.failed && eng.failed(); setSt((s) => ({ ...s, pending: false })); failed('Stockfish stopped before it finished' + (e && e.message ? ': ' + e.message : '')); return; }
-        if (r && r.cp != null) { const fin = { ...r, best: A.bestOf(r) }; SF_EVAL_CACHE.set(keyAt(level, which), fin); setSt((s) => ({ ...s, [which]: fin })); }
-      }
-      if (live) setSt((s) => ({ ...s, pending: false }));
-    })();
-    return () => { live = false; handles.forEach((h) => h.cancel()); timers.forEach(clearTimeout); ctl.abort(); };
+    if (!key) { setSt({ key: '', ev: null }); return; }
+    const read = () => {
+      const ev = w.get();
+      if (ev.failed) setFail((f) => (f && f.key === base && f.msg === ev.failed ? f : { key: base, msg: ev.failed }));
+      setSt({ key, ev });
+    };
+    const w = MOVE_EVAL.watch(req, read);
+    read();
+    return w.stop;
   }, [key]);
   // a new key's first render, before its layout effect: pending only where it will search (off, as while a game analysis
   // runs, never does, so the Analysis panel's progress line keeps showing the run's rather than starting over at each move)
-  const raw = st.key === key ? st : { ...empty, pending: !!after && !off };
-  // the cloud's answer stands until a finished local search goes deeper; it replaces the result a Go deeper started
-  // from (the stored analysis's among them) only when deeper
-  const pick = (loc, cl) => (cl && (!loc || cl.depth >= loc.depth || (loc.partial && !loc.held)) ? cl : loc);
-  // a finished search that reached less deep than the stored result it set out to pass (its time ran out first, as on
-  // fewer threads than the analysis had) leaves the stored result showing: a shallower eval isn't a better one
-  const notPast = (r) => (stored && r && !r.partial && !r.stored && r.source !== 'cloud' && stored.depth && r.depth < stored.depth ? stored : r);
-  const out = { ...raw, before: pick(notPast(raw.before), raw.cloud.before), after: pick(notPast(raw.after), raw.cloud.after) };
-  const fromCloud = (r) => !!(r && r.source === 'cloud');
-  const done = out.after && !out.after.partial && out.before && !out.before.partial && !out.pending;
-  const next = A.deeperSearch(own, level + 1);
-  // nothing to go deeper on where both positions show a cloud answer at least as deep as the next search would reach
-  // (AnalysisCore.cloudEnough)
-  const cloudDeep = (r) => fromCloud(r) && r.depth >= A.cloudEnough(next.depth, own.name);
-  const deeper = !off && done && !(cloudDeep(out.after) && cloudDeep(out.before)) && A.canGoDeeper(own, level) ? () => { SF_DEEPER.set(baseKey, level + 1); setFail(null); bump((n) => n + 1); } : null;
-  return { ...out, deeper, deeperTo: deeper ? next : null, failed: fail && fail.key === baseKey ? fail.msg : null };
+  const ev = st.key === key && st.ev ? st.ev : { ...window.MoveEval.EMPTY, pending: !!req.after && !req.off, deeper: null, deeperTo: null };
+  return { ...ev, deeper: ev.deeper && (() => { setFail(null); ev.deeper(); }), failed: fail && fail.key === base ? fail.msg : null };
 }
 
 // Go deeper: the small + after the search's stats in the Analysis heading, once an eval has finished; sized in em to
