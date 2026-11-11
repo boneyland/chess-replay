@@ -98,7 +98,7 @@ const ce = console.error; console.error = (...a) => { __errs.push(a.map(String).
   const fresh = async () => { await browser.url(URL_); await loaded(); await wait(1000); };
 
   await browser.url(URL_);
-  await js(() => localStorage.clear());
+  await js(() => { localStorage.clear(); localStorage.setItem('chess-video.tweaks.v1', '{"sfOn":true}'); }); // the Stockfish switch on
   // the window sized so the page is VIEW: the window's frame and toolbar come on top of the page's size
   {
     await browser.setWindowRect(0, 0, VIEW.w, VIEW.h);
@@ -242,7 +242,7 @@ const ce = console.error; console.error = (...a) => { __errs.push(a.map(String).
       await shot('dark');
       assert.deepEqual(await errors(), []);
     } finally {
-      await js(() => localStorage.clear());
+      await js(() => { localStorage.clear(); localStorage.setItem('chess-video.tweaks.v1', '{"sfOn":true}'); }); // the Stockfish switch on
     }
   });
 
@@ -341,7 +341,7 @@ const ce = console.error; console.error = (...a) => { __errs.push(a.map(String).
       assert.ok(again.w < again.b, 'still flipped after a reload');
       assert.deepEqual(await errors(), []);
     } finally {
-      await js(() => localStorage.clear());
+      await js(() => { localStorage.clear(); localStorage.setItem('chess-video.tweaks.v1', '{"sfOn":true}'); }); // the Stockfish switch on
     }
   });
 

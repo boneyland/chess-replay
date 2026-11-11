@@ -47,4 +47,17 @@ function namePending(page) {
   return page;
 }
 
-module.exports = { loadedOn, boardBox, settled, square, namePending };
+// An init script: the Stockfish switch on, as most tests need it (its default is off since 2026-11-11). It seeds the
+// settings store when empty, and adds sfOn: true to a test's own write of the store that leaves sfOn out, so a test
+// seeding other settings needn't repeat it; a test that sets sfOn itself keeps its value
+const engineOn = () => {
+  try {
+    const KEY = 'chess-video.tweaks.v1', set = Storage.prototype.setItem;
+    Storage.prototype.setItem = function (k, v) {
+      if (this === window.localStorage && k === KEY) { try { const o = JSON.parse(v); if (o && typeof o === 'object' && !('sfOn' in o)) v = JSON.stringify({ ...o, sfOn: true }); } catch (e) {} }
+      return set.call(this, k, v);
+    };
+    if (!localStorage.getItem(KEY)) localStorage.setItem(KEY, '{}');
+  } catch (e) {}
+};
+module.exports = { loadedOn, boardBox, settled, square, namePending, engineOn };
