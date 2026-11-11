@@ -1946,7 +1946,10 @@ for (const name of BROWSERS) for (const site of SITES) {
       const read = async () => {
         await cropBox.waitFor({ timeout: 5000 });
         await dialog.getByRole('button', { name: 'Read board' }).click();
-        await dialog.waitFor({ state: 'detached', timeout: 60000 });
+        // what the dialog says when it doesn't close (it hung in Firefox on GitHub, 2026-11-11)
+        await dialog.waitFor({ state: 'detached', timeout: 60000 }).catch(async (e) => {
+          throw new Error(`${e.message}\nThe dialog says: ${(await dialog.innerText().catch(() => '(gone)')).replace(/\s+/g, ' ')}`);
+        });
         await field.waitFor({ timeout: 5000 });
       };
       const unsureLine = p.getByText(/squares? to check \(outlined\)/);
@@ -4355,18 +4358,26 @@ for (const name of BROWSERS) for (const site of SITES) {
         while (!/^0(px)? 0(px)?/.test(flow.style.transformOrigin)) flow = flow.parentElement; // the box the push transforms in playback
         const R = el.getBoundingClientRect(), r = bd.getBoundingClientRect();
         const px0 = r.left - R.left + r.width / 2, py0 = r.top - R.top + r.height / 2;
-        const flat = document.createElement('canvas'); flat.width = W; flat.height = H; await stage.draw(flat.getContext('2d'));
-        flow.dataset.push = `1.1 ${px0} ${py0}`;
-        const pushed = document.createElement('canvas'); pushed.width = W; pushed.height = H; await stage.draw(pushed.getContext('2d'));
-        delete flow.dataset.push;
+        // the frame drawn unpushed before and after the pushed one must match: on a slow machine (GitHub's runners, 29 dB
+        // twice in 2026-11) the page changed in between (a search's arrows or eval landing), so it is drawn again then
+        const draw = async () => { const c = document.createElement('canvas'); c.width = W; c.height = H; await stage.draw(c.getContext('2d')); return c; };
+        const zoomed = { left: px0 - 0.5 * 1.1 * r.width + 4, top: py0 - 0.5 * 1.1 * r.height + 4, right: px0 + 0.5 * 1.1 * r.width - 4, bottom: py0 + 0.5 * 1.1 * r.height - 4 };
+        let flat, pushed, tries = 0, steady;
+        do {
+          flat = await draw();
+          flow.dataset.push = `1.1 ${px0} ${py0}`;
+          pushed = await draw();
+          delete flow.dataset.push;
+          steady = psnr(pixels(flat), pixels(await draw()), [zoomed]) === Infinity;
+        } while (!steady && ++tries < 5);
         const want = document.createElement('canvas'); want.width = W; want.height = H;
         const wx = want.getContext('2d'); wx.translate(px0, py0); wx.scale(1.1, 1.1); wx.translate(-px0, -py0); wx.drawImage(flat, 0, 0);
-        const zoomed = { left: px0 - 0.5 * 1.1 * r.width + 4, top: py0 - 0.5 * 1.1 * r.height + 4, right: px0 + 0.5 * 1.1 * r.width - 4, bottom: py0 + 0.5 * 1.1 * r.height - 4 };
-        out.push({ push: psnr(pixels(want), pixels(pushed), [zoomed]), still: psnr(pixels(flat), pixels(pushed), [zoomed]) });
+        out.push({ push: psnr(pixels(want), pixels(pushed), [zoomed]), still: psnr(pixels(flat), pixels(pushed), [zoomed]), steady, tries });
         stage.done();
         return out;
       });
       const push = got.pop();
+      assert.ok(push.steady, 'the frame stays still long enough to draw it three times (5 tries)');
       assert.ok(push.push > 30 && push.push > push.still + 6, `the pushed frame is the frame zoomed (${push.push.toFixed(2)} dB; unzoomed ${push.still.toFixed(2)} dB)`);
       // both pictures of each frame, to see what differs where it fails
       for (const f of got) for (const [k, v] of [['html2canvas', f.old], ['drawn', f.neu]]) fs.writeFileSync(path.join(OUT, `${host}-export-frame-${f.t}-${k}.png`), Buffer.from(v.split(',')[1], 'base64'));
