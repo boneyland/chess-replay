@@ -455,7 +455,7 @@ function AnalysisPanel({ box, a, depth, deep, paused, style, children }) {
         onClick={(e) => { e.stopPropagation(); E.setOn(!E.on); }} onPointerDown={stopHere}><i /></button>}
       {/* smaller on the phone, where the row is tight */}
       {pick
-        ? <select aria-label="Engine" value={pick.value} onChange={(e) => { const go = pick.onChange(e.target.value); if (go) setOpen(true); }} onClick={stopHere} onPointerDown={stopHere}
+        ? <select className="frame-select" aria-label="Engine" value={pick.value} onChange={(e) => { const go = pick.onChange(e.target.value); if (go) setOpen(true); }} onClick={stopHere} onPointerDown={stopHere}
             style={{ ...headCtl(), flex: '0 1 auto', minWidth: '3em', padding: '0 0.4em', font: 'inherit', fontSize: L.cols === 2 ? '1.15em' : '1em', height: 'auto', minHeight: '1.6em', textTransform: 'none', background: C.panel }}>
             {pick.options.map((o) => <option key={o.value} value={o.value}>{o.label}</option>)}
           </select>
@@ -463,14 +463,14 @@ function AnalysisPanel({ box, a, depth, deep, paused, style, children }) {
       {/* the game analysis: its dialog, with its own settings; while a run goes on, a turning rainbow ring in place
           of the computer, so a run going on isn't forgotten */}
       {live && E.analyse && (
-        <button type="button" aria-label={E.run ? `Analyse the game: analysing, ${E.run.done} of ${E.run.total} positions` : 'Analyse the game'} title={E.run ? `Analysing the game: ${E.run.done} of ${E.run.total} positions` : 'Analyse the game'} onClick={(e) => { e.stopPropagation(); E.analyse(); }} onPointerDown={stopHere}
+        <button type="button" className="frame-btn" aria-label={E.run ? `Analyse the game: analysing, ${E.run.done} of ${E.run.total} positions` : 'Analyse the game'} title={E.run ? `Analysing the game: ${E.run.done} of ${E.run.total} positions` : 'Analyse the game'} onClick={(e) => { e.stopPropagation(); E.analyse(); }} onPointerDown={stopHere}
           style={{ ...headCtl(), width: '1.8em', padding: 0, display: 'grid', placeItems: 'center', color: C.dim, borderColor: E.run ? 'transparent' : C.ctlLine }}>
           {E.run ? <span className="an-spin" aria-hidden="true" />
             : <svg viewBox="0 0 16 16" width="70%" height="70%" aria-hidden="true" fill="none" stroke="currentColor" strokeWidth="1.6" strokeLinejoin="round" strokeLinecap="round"><rect x="1.5" y="2.5" width="13" height="8.5" rx="1" /><path d="M5.5 14h5M8 11v3" /></svg>}
         </button>
       )}
       {live && (
-        <button type="button" aria-label="Engine options" aria-expanded={shown} title="Engine settings" onClick={(e) => { e.stopPropagation(); setOpen((o) => !o); }} onPointerDown={stopHere}
+        <button type="button" className="frame-btn" aria-label="Engine options" aria-expanded={shown} title="Engine settings" onClick={(e) => { e.stopPropagation(); setOpen((o) => !o); }} onPointerDown={stopHere}
           style={{ ...headCtl(), width: '1.8em', padding: 0, display: 'grid', placeItems: 'center', color: shown ? C.best : C.dim, borderColor: shown ? C.best : C.ctlLine }}>
           <svg viewBox="0 0 16 16" width="60%" height="60%" aria-hidden="true"><path d="M2 3.5h12M2 8h12M2 12.5h12" stroke="currentColor" strokeWidth="2" strokeLinecap="round" /></svg>
         </button>

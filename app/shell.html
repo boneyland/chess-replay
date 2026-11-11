@@ -431,6 +431,25 @@ body:has(.stage.stage-short) .twk-panel { bottom: calc(44px + var(--safe-b)); ma
 .mv:focus-visible { outline: 2px solid var(--accent); outline-offset: 1px; }
 .dock-queen { border-color: color-mix(in srgb, var(--queen) 55%, transparent); color: var(--queen); }
 .dock-queen:hover:not(:disabled) { background: color-mix(in srgb, var(--queen) 18%, var(--btn)); border-color: var(--queen); }
+/* every other control's hover (buttons, drop-downs, segmented rows, switches, sliders, links), only where there's a mouse
+   so a tap doesn't leave one lit. Filled buttons brighten; outlined and bare ones take a tint of their own colour. The
+   inline-styled ones (frame-btn, frame-select, tray-piece, expl-game: the board's panels) need !important over their style */
+@media (hover: hover) {
+  .twk-btn:not(:disabled):hover, .frame-btn-primary:not(:disabled):hover, .twk-toggle[data-on="1"]:hover { filter: brightness(1.12); }
+  .twk-btn.secondary:not(:disabled):hover { filter: none; background: var(--btn-hover); border-color: var(--line-strong); }
+  .twk-seg button:not([aria-checked="true"]):hover, .twk-tabs button:not([aria-selected="true"]):hover, .expl-open-btn:not(.on):hover { background: color-mix(in srgb, var(--ink) 9%, transparent); color: var(--ink); }
+  .twk-toggle:not([data-on="1"]):hover { background: color-mix(in srgb, var(--ink) 32%, transparent); }
+  .twk-slider:hover { filter: brightness(1.15); }
+  select.twk-field:not(:disabled):hover { background: var(--btn-hover); border-color: var(--line-strong); }
+  .twk-note a:hover, .fen-note a:hover { color: color-mix(in srgb, var(--accent) 60%, var(--ink)); text-decoration-thickness: 2px; }
+  .expl-game:hover { color: var(--ink) !important; text-decoration: underline; }
+  .q-stop:hover { background: var(--btn-hover); border-color: var(--line-strong); }
+  .q-mini:hover { background: color-mix(in srgb, var(--queen) 18%, transparent); border-color: var(--queen); }
+  .q-why summary:hover { color: var(--accent); }
+  .frame-btn:not(.frame-btn-primary):not(:disabled):hover { background-color: color-mix(in srgb, currentColor 16%, transparent) !important; }
+  .frame-select:not(:disabled):hover { border-color: currentColor !important; }
+  .tray-piece:not([aria-pressed="true"]):hover { background-color: color-mix(in srgb, var(--ink) 10%, transparent) !important; }
+}
 
 .q-panel { left: max(16px, env(safe-area-inset-left, 0px)); right: auto; width: min(400px, calc(100% - 32px)); }
 .q-panel .twk-hd b { color: var(--queen); }

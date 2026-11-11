@@ -163,7 +163,7 @@ function LichessExplorer({ x, tw, setTweak, onGame, posKey, onPlay, onHover, whi
           ))}
         </div>}
         {e.games.length > 0 && <div style={{ marginTop: tx(onGame ? 6 : 12) }}>{e.games.map((g) => (
-          <a key={g.id} href={`https://lichess.org/${g.id}`} target="_blank" rel="noopener noreferrer" title={here ? 'Open the game here' : 'Open the game on Lichess'}
+          <a key={g.id} className="expl-game" href={`https://lichess.org/${g.id}`} target="_blank" rel="noopener noreferrer" title={here ? 'Open the game here' : 'Open the game on Lichess'}
             onClick={(ev) => { ev.stopPropagation(); if (here && !ev.ctrlKey && !ev.metaKey && !ev.shiftKey) { ev.preventDefault(); onGame(`https://lichess.org/${g.id}`); } }}
             style={{ display: 'block', font: `400 ${tx(15)}px ${SANS}`, color: C.dim, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
             {g.white} {g.winner === 'white' ? '1–0' : g.winner === 'black' ? '0–1' : '½–½'} {g.black}{g.year ? ` · ${g.year}` : ''}
