@@ -313,10 +313,12 @@ function Piece({ p, T, S }) {
 }
 
 // thin: a lesser engine line's arrow
-function Arrow({ from, to, color, a, grow, thin }) {
+// thin: an engine line other than the best; w (0 to 1) then takes it from the thinnest (0) up to the best line's thickness (1)
+function Arrow({ from, to, color, a, grow, thin, w = 0 }) {
   const [x1, y1] = sqC(from), [x2, y2] = sqC(to);
   const dx = x2 - x1, dy = y2 - y1, d = Math.hypot(dx, dy), ux = dx / d, uy = dy / d, nx = -uy, ny = ux;
-  const L = (d - 16) * grow, head = thin ? 26 : 34, sw = thin ? 4.5 : 8, hw = thin ? 15 : 22;
+  const t = thin ? Math.min(1, Math.max(0, w)) : 1, mix = (lo, hi) => lo + (hi - lo) * t;
+  const L = (d - 16) * grow, head = mix(26, 34), sw = mix(4.5, 8), hw = mix(15, 22);
   const bx = x1 + ux * (L - head), by = y1 + uy * (L - head), tx = x1 + ux * L, ty = y1 + uy * L;
   const pts = [[x1 + nx * sw, y1 + ny * sw], [bx + nx * sw, by + ny * sw], [bx + nx * hw, by + ny * hw], [tx, ty], [bx - nx * hw, by - ny * hw], [bx - nx * sw, by - ny * sw], [x1 - nx * sw, y1 - ny * sw]].map((p) => p.join(',')).join(' ');
   return <polygon points={pts} fill={color} opacity={0.85 * a} />;
@@ -380,7 +382,7 @@ function Board({ M, T, S, a, arrows, pieces, queen, vline, hide, lines, sel, idl
       {pieces.map((p) => <Piece key={p.id} p={p} T={T} S={S} />)}
       <svg width={BW} height={BW} style={{ position: 'absolute', left: 0, top: 0, zIndex: 6, pointerEvents: 'none' }}>
         {best}
-        {idle && lines && lines.slice().reverse().map((r) => <Arrow key={r.k} from={r.uci.slice(0, 2)} to={r.uci.slice(2, 4)} color={BOARD.engine} a={r.k === 1 ? 1 : 0.5} grow={1} thin={r.k > 1} />)}
+        {idle && lines && lines.slice().reverse().map((r) => <Arrow key={r.k} from={r.uci.slice(0, 2)} to={r.uci.slice(2, 4)} color={BOARD.engine} a={r.k === 1 ? 1 : 0.5} grow={1} thin={r.k > 1} w={r.w} />)}
         {queen && (queen.at === c + 1 || queen.at === c) && queen.best && <Arrow from={queen.best.slice(0, 2)} to={queen.best.slice(2, 4)} color={BOARD.queen} a={1} grow={1} />}
       </svg>
       {badge}
@@ -555,7 +557,7 @@ function LineBoard({ a, sq, v, hide, arrows, sel }) {
       {sq}{over}{selSquare(sel)}{pieces}
       {arrows && (
         <svg width={BW} height={BW} style={{ position: 'absolute', left: 0, top: 0, zIndex: 6, pointerEvents: 'none' }}>
-          {arrows.slice().reverse().map((r) => <Arrow key={r.k} from={r.uci.slice(0, 2)} to={r.uci.slice(2, 4)} color={r.color || BOARD.engine} a={r.a != null ? r.a : r.k === 1 ? 1 : 0.5} grow={1} thin={r.k > 1} />)}
+          {arrows.slice().reverse().map((r) => <Arrow key={r.k} from={r.uci.slice(0, 2)} to={r.uci.slice(2, 4)} color={r.color || BOARD.engine} a={r.a != null ? r.a : r.k === 1 ? 1 : 0.5} grow={1} thin={r.k > 1} w={r.w} />)}
         </svg>
       )}
     </div>
