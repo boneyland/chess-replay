@@ -108,6 +108,9 @@ test('track: each ply sounds when it lands, the end of the game after the last, 
   assert.deepEqual(X.track(M, S, 2, 3.5), [{ at: 0.5, kinds: ['capture'] }]); // a ply landing at the end is left out
   assert.deepEqual(X.track(M, S, 3, 3.9).map((e) => e.kinds), [['move', 'check']]); // no room for the end sound
   assert.deepEqual(X.track({ ...M, result: '*' }, S, 0, 10).length, 3);
+  const late = X.track(M, S, 3.6, 10);
+  assert.deepEqual(late.map((e) => e.kinds), [['victory']]);
+  assert.ok(Math.abs(late[0].at - 0.5) < 1e-9); // a clip starting after the last move lands still ends with it
 });
 
 // A fake Web Audio context that, like Firefox's, is created suspended in the first gesture and runs once resume() settles

@@ -32,10 +32,10 @@
     const out = [];
     for (let i = 0; i < S.N; i++) {
       const at = S.tp[i] + S.md[i];
-      if (at < start || at >= end) continue;
-      out.push({ at: at - start, kinds: kinds(M.plies[i].san) });
+      if (at >= start && at < end) out.push({ at: at - start, kinds: kinds(M.plies[i].san) });
+      // the end's sound comes END_DELAY after the last move lands, so a clip starting in between still has it
       const e = i === S.N - 1 && endKind(M.result);
-      if (e && at + END_DELAY < end) out.push({ at: at + END_DELAY - start, kinds: [e] });
+      if (e && at + END_DELAY >= start && at + END_DELAY < end) out.push({ at: at + END_DELAY - start, kinds: [e] });
     }
     return out;
   }
