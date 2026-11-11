@@ -849,8 +849,10 @@ function MoveList({ M, T, S, a, paused, onPick, deadAt, end, startAt }) {
       const lines = Math.max(1, Math.floor((el.clientHeight + 1) / ROW)), under = Math.min(1, lines - 1);
       return m ? Math.max(0, Math.round(m.offsetTop / ROW) + 1 + under - lines) * ROW : 0;
     };
-    const scroll = Math.round(lerp(at(c - 1), at(c), k));
-    if (applied.current !== scroll) { el.scrollTop = scroll; applied.current = scroll; }
+    // keyed on the move as well: a new move whose line needs the same scroll as the last one's must still bring it back
+    // into view after the viewer scrolled away (or the box clamped scrollTop while its height changed)
+    const scroll = Math.round(lerp(at(c - 1), at(c), k)), key = c + ':' + scroll;
+    if (applied.current !== key) { el.scrollTop = scroll; applied.current = key; }
   });
   // one Tab stop for the whole list (the current move); the arrows move between moves (up and down a line), and focus follows
   const focusPly = Math.max(0, c);
