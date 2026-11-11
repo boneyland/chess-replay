@@ -39,6 +39,7 @@ const CURSOR = `(() => {
 async function clip(browser, name, ctxOpts, script) {
   const ctx = await browser.newContext(ctxOpts);
   await ctx.addInitScript(CURSOR);
+  await ctx.addInitScript(require('../tests/live/board.cjs').engineOn); // the Stockfish switch on, as the demo shows it
   const page = await ctx.newPage();
   const cdp = await ctx.newCDPSession(page);
   const dir = path.join(WORK, name); fs.mkdirSync(dir);

@@ -618,7 +618,7 @@ function GameApp() {
   // while a loaded analysis still shows and the game analysis still runs from its dialog (ask opens it). A running game
   // analysis turns the live searches off too (busy: the panel says why), so the engine never switches between the
   // run's threads and theirs (Stockfish resizes its thread pool and clears its hash table on each change)
-  const sfOn = t.sfOn !== false, running = analysis.state === 'running', askAnalysis = () => { closeOverlays(); setAnalyseOpen(true); };
+  const sfOn = t.sfOn === true, running = analysis.state === 'running', askAnalysis = () => { closeOverlays(); setAnalyseOpen(true); };
   const sf = { engine, own: ES.own, game: ES.game, book, status: engine.status, why: engine.why, off: !sfOn || running, busy: running, run: analysis, start: analysis.start, stop: analysis.stop, ask: askAnalysis, estimateMin: analysis.estimateMin };
 
   // the Analysis panel's engine menu (EngineMenuContext): the Lite/Full choice in its title row, and EngineSettings in the

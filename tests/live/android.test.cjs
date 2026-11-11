@@ -63,7 +63,7 @@ test('android · chrome · local build', async (t) => {
     .catch(() => t.diagnostic('Chrome fetched no manifest on load'));
   await page.goto(local.url, { waitUntil: 'load' });
   await manifest;
-  await page.evaluate(() => localStorage.clear());
+  await page.evaluate(() => { localStorage.clear(); localStorage.setItem('chess-video.tweaks.v1', '{"sfOn":true}'); }); // the Stockfish switch on
 
   await t.test('the page loads in the phone layout, fits the width, with no console errors', async () => {
     await page.reload({ waitUntil: 'load' });

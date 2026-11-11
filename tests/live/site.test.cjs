@@ -22,7 +22,7 @@ const { execFileSync, execSync } = require('child_process');
 const fs = require('fs'), path = require('path'), crypto = require('crypto');
 const pw = (() => { try { return require('playwright'); } catch (e) { return require(path.join(execSync('npm root -g').toString().trim(), 'playwright')); } })();
 const { serve } = require('./serve.cjs');
-const { loadedOn, boardBox, settled, square, namePending } = require('./board.cjs');
+const { loadedOn, boardBox, settled, square, namePending, engineOn } = require('./board.cjs');
 
 const ROOT = path.join(__dirname, '..', '..');
 const OUT = path.join(ROOT, 'tests', 'out', 'live');
@@ -67,13 +67,17 @@ async function shareFen(p) {
   await dialog.waitFor({ state: 'detached', timeout: 5000 });
   return fen;
 }
+// opts: the context's options, and newViewer: true for a page with no settings stored (the Stockfish switch left at its default)
 async function open(browser, viewport, opts) {
-  const ctx = await browser.newContext({ viewport, ...(PROXY_CA && browser.browserType().name() === 'firefox' ? { ignoreHTTPSErrors: true } : {}), ...opts });
+  const { newViewer, ...ctxOpts } = opts || {};
+  const ctx = await browser.newContext({ viewport, ...(PROXY_CA && browser.browserType().name() === 'firefox' ? { ignoreHTTPSErrors: true } : {}), ...ctxOpts });
   const cdn = process.env.LIVE_CDN_DIR;
   if (cdn) await ctx.route('https://cdnjs.cloudflare.com/ajax/libs/**', (r) => {
     const m = r.request().url().match(/\/(react|react-dom)\/18\.3\.1\/umd\/([\w.-]+)$/);
     return m ? r.fulfill({ path: path.join(cdn, m[1], 'package', 'umd', m[2]), contentType: 'text/javascript' }) : r.continue();
   });
+  // the Stockfish switch on (off by default), unless a test sets sfOn itself
+  if (!newViewer) await ctx.addInitScript(engineOn);
   // whatever the page's Content-Security-Policy blocks is an error, whether or not the browser logs it
   await ctx.addInitScript(() => document.addEventListener('securitypolicyviolation', (e) => console.error(`CSP blocked ${e.blockedURI || 'inline'} (${e.effectiveDirective})`)));
   const page = namePending(await ctx.newPage());
@@ -2858,6 +2862,20 @@ for (const name of BROWSERS) for (const site of SITES) {
       await sn.ctx.close();
     });
     // Go deeper where the engine won't start (as on a tablet whose + only vanished): the press says so and the + comes back
+    // a new viewer's Stockfish switch is off (2026-11-11): a loaded analysis shows its own evals and nothing searches
+    await t.test('desktop: the Stockfish switch is off for a new viewer', async () => {
+      const g = await open(browser, { width: 1440, height: 900 }, { newViewer: true });
+      const p = g.page;
+      await p.addInitScript(spyEngine, {});
+      await p.goto(base, { waitUntil: 'load' });
+      await loadedOn(p);
+      assert.equal(await p.getByRole('switch', { name: 'Stockfish' }).getAttribute('aria-checked'), 'false');
+      await p.locator('[data-ply="10"]').click();
+      await p.waitForTimeout(1500);
+      assert.deepEqual(await p.evaluate(() => window.__sf.posted.filter((m) => m.startsWith('go'))), [], 'nothing searched');
+      assert.deepEqual(g.errors, []);
+      await g.ctx.close();
+    });
     // the Analysis title's switch turns live searches off (a move on the board says so, and nothing searches); the
     // game analysis's dialog keeps its own hash table, apart from the engine menu's, over a reload, and so does the switch
     await t.test('desktop: the Stockfish switch and the game analysis dialog\'s own settings', async () => {
@@ -4688,7 +4706,7 @@ for (const name of BROWSERS) for (const site of SITES) {
     // and the board follows each slider at once and keeps them over a reload
     await t.test('desktop: Tint and Saturation colour a grey board', async () => {
       const dk = await open(browser, { width: 1440, height: 900 });
-      await dk.page.addInitScript(() => { try { if (!localStorage.getItem('chess-video.tweaks.v1')) localStorage.setItem('chess-video.tweaks.v1', JSON.stringify({ boardTheme: 'grey' })); } catch (e) {} });
+      await dk.page.addInitScript(() => { try { if (!sessionStorage.getItem('seeded')) { sessionStorage.setItem('seeded', '1'); localStorage.setItem('chess-video.tweaks.v1', JSON.stringify({ boardTheme: 'grey' })); } } catch (e) {} });
       await dk.page.goto(base, { waitUntil: 'load' });
       await loadedOn(dk.page);
       const pic = dk.page.locator('.stage-frame img[src="boards/grey.jpg"]');

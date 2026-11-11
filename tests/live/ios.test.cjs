@@ -111,7 +111,7 @@ const ce = console.error; console.error = (...a) => { __errs.push(a.map(String).
   const loaded = () => until(() => !!document.querySelector('.dock-primary') && document.querySelectorAll('img').length >= 32, 60000, 'the page did not load');
 
   await browser.url(URL_);
-  await js(() => localStorage.clear());
+  await js(() => { localStorage.clear(); localStorage.setItem('chess-video.tweaks.v1', '{"sfOn":true}'); }); // the Stockfish switch on
 
   await t.test('the page loads in the phone layout, fits the width, with no console errors', { timeout: 120000 }, async () => {
     await browser.url(URL_);
