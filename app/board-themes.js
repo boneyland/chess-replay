@@ -1,6 +1,6 @@
 // Boards: Lichess's 2D ones (lila's public/images/board, AGPL-3.0-or-later, the lila authors and pirouetti), in
 // Lichess's order, with its coordinate colours (ui/lib/css/theme/board/_boards.scss), and its Brightness, Contrast and
-// Hue sliders. The flat boards are two colours, drawn as squares at once; the others are lila's pictures, unchanged,
+// Hue sliders, plus Tint and Saturation (ours: Hue can't colour a grey board, a tint first can). The flat boards are two colours, drawn as squares at once; the others are lila's pictures, unchanged,
 // that build.cjs serves next to the page as boards/<file> (vendor/boards), fetched only when chosen, and redrawn here
 // through the sliders into one picture (render) that sits under the squares, so an export paints it like any <img>.
 (function () {
@@ -39,37 +39,59 @@
   // the picker's tile: lila's 64×32 thumbnail of two squares (newspaper has none: its own picture, see the picker)
   const thumb = (id) => { const t = byId(id); return t.file === 'newspaper.svg' ? null : `boards/${t.file ? t.file.replace(/\.(\w+)$/, '.thumbnail.$1') : t.id + '.thumbnail.png'}`; };
 
-  // the sliders, as Lichess has them: brightness and contrast in %, hue 0–100 (× 3.6°)
-  const SLIDERS = { brightness: { min: 20, max: 140, step: 1, def: 100 }, contrast: { min: 40, max: 200, step: 2, def: 100 }, hue: { min: 0, max: 100, step: 1, def: 0 } };
+  // the sliders. Lichess's: brightness and contrast in %, hue 0–100 (× 3.6°). Ours: tint (CSS's sepia(), in %: a
+  // one-tone board at 100, which Hue then turns) and saturation (CSS's saturate(), in %)
+  const SLIDERS = {
+    brightness: { min: 20, max: 140, step: 1, def: 100 }, contrast: { min: 40, max: 200, step: 2, def: 100 },
+    tint: { min: 0, max: 100, step: 1, def: 0 }, saturation: { min: 0, max: 300, step: 5, def: 100 }, hue: { min: 0, max: 100, step: 1, def: 0 },
+  };
+  const NAMES = Object.keys(SLIDERS);
   const num = (v, s) => (Number.isFinite(v) ? Math.min(s.max, Math.max(s.min, v)) : s.def);
-  const adjust = (a = {}) => ({ brightness: num(a.brightness, SLIDERS.brightness), contrast: num(a.contrast, SLIDERS.contrast), hue: num(a.hue, SLIDERS.hue) });
-  const isDefault = (a) => { a = adjust(a); return a.brightness === 100 && a.contrast === 100 && a.hue === 0; };
+  const adjust = (a = {}) => Object.fromEntries(NAMES.map((n) => [n, num(a[n], SLIDERS[n])]));
+  const isDefault = (a) => { a = adjust(a); return NAMES.every((n) => a[n] === SLIDERS[n].def); };
   // the same change as a CSS filter, for what has to follow a slider at once: the picker's tiles, and a picture board
-  // until it's drawn through the sliders (render)
-  const css = (a) => { a = adjust(a); return isDefault(a) ? 'none' : `brightness(${a.brightness}%) contrast(${a.contrast}%) hue-rotate(${Math.round(a.hue * 3.6 * 100) / 100}deg)`; };
+  // until it's drawn through the sliders (render). sepia() and saturate() only once their sliders are moved
+  const css = (a) => {
+    a = adjust(a);
+    if (isDefault(a)) return 'none';
+    return [`brightness(${a.brightness}%)`, `contrast(${a.contrast}%)`, a.tint ? `sepia(${a.tint}%)` : '', a.saturation !== 100 ? `saturate(${a.saturation}%)` : '', `hue-rotate(${Math.round(a.hue * 3.6 * 100) / 100}deg)`].filter(Boolean).join(' ');
+  };
 
-  // The sliders' colour change, in Lichess's order (CSS's brightness(), contrast(), then hue-rotate(), each clamped to
-  // 0–1 as a CSS filter step is), in sRGB. filter(a) is a function of r, g, b (0–255) to [r, g, b], for the squares
-  // A 256-entry table does brightness and contrast (per channel), then hue-rotate()'s matrix (Filter Effects 1,
-  // feColorMatrix type="hueRotate") mixes the channels
+  // The sliders' colour change, in Lichess's order with ours before its hue (CSS's brightness(), contrast(), sepia(),
+  // saturate(), then hue-rotate(), each clamped to 0–1 as a CSS filter step is), in sRGB. filter(a) is a function of
+  // r, g, b (0–255) to [r, g, b], for the squares. A 256-entry table does brightness and contrast (per channel), then
+  // a matrix for each of the others that is off its default mixes the channels (Filter Effects 1: sepia and saturate
+  // as its filter functions give them, hue as feColorMatrix type="hueRotate")
   const cl = (v) => (v < 0 ? 0 : v > 255 ? 255 : v);
   function steps(a) {
     a = adjust(a);
     const b = a.brightness / 100, k = a.contrast / 100, th = (a.hue * 3.6 * Math.PI) / 180, c = Math.cos(th), s = Math.sin(th);
     const lut = new Float64Array(256);
     for (let v = 0; v < 256; v++) lut[v] = cl((cl(v * b) - 127.5) * k + 127.5);
-    const m = [
+    const ms = [], q = 1 - a.tint / 100, u = a.saturation / 100;
+    if (a.tint) ms.push([
+      0.393 + 0.607 * q, 0.769 - 0.769 * q, 0.189 - 0.189 * q,
+      0.349 - 0.349 * q, 0.686 + 0.314 * q, 0.168 - 0.168 * q,
+      0.272 - 0.272 * q, 0.534 - 0.534 * q, 0.131 + 0.869 * q,
+    ]);
+    if (a.saturation !== 100) ms.push([
+      0.213 + 0.787 * u, 0.715 - 0.715 * u, 0.072 - 0.072 * u,
+      0.213 - 0.213 * u, 0.715 + 0.285 * u, 0.072 - 0.072 * u,
+      0.213 - 0.213 * u, 0.715 - 0.715 * u, 0.072 + 0.928 * u,
+    ]);
+    if (a.hue) ms.push([
       0.213 + c * 0.787 - s * 0.213, 0.715 - c * 0.715 - s * 0.715, 0.072 - c * 0.072 + s * 0.928,
       0.213 - c * 0.213 + s * 0.143, 0.715 + c * 0.285 + s * 0.140, 0.072 - c * 0.072 - s * 0.283,
       0.213 - c * 0.213 - s * 0.787, 0.715 - c * 0.715 + s * 0.715, 0.072 + c * 0.928 + s * 0.072,
-    ];
-    return { lut, m };
+    ]);
+    return { lut, ms };
   }
   function filter(a) {
-    const { lut, m } = steps(a);
+    const { lut, ms } = steps(a);
     return (r, g, b) => {
       r = lut[r]; g = lut[g]; b = lut[b];
-      return [m[0] * r + m[1] * g + m[2] * b, m[3] * r + m[4] * g + m[5] * b, m[6] * r + m[7] * g + m[8] * b].map((v) => Math.round(cl(v)));
+      for (const m of ms) [r, g, b] = [cl(m[0] * r + m[1] * g + m[2] * b), cl(m[3] * r + m[4] * g + m[5] * b), cl(m[6] * r + m[7] * g + m[8] * b)];
+      return [r, g, b].map(Math.round);
     };
   }
   const hex = (h) => [1, 3, 5].map((i) => parseInt(h.slice(i, i + 2), 16));
@@ -79,13 +101,16 @@
     const t = byId(id), f = filter(a), go = (h) => (h ? toHex(f(...hex(h))) : null);
     return { light: go(t.light), dark: go(t.dark), onLight: go(t.onLight), onDark: go(t.onDark) };
   }
-  // the sliders on an RGBA picture's pixels, in place
-  // the sliders on an RGBA picture's pixels (a Uint8ClampedArray, which rounds and clamps what it's given), in place
+  // the sliders on an RGBA picture's pixels (a Uint8ClampedArray, which rounds what it's given), in place
   function filterPixels(px, a) {
-    const { lut, m } = steps(a);
+    const { lut, ms } = steps(a);
     for (let i = 0; i < px.length; i += 4) {
-      const r = lut[px[i]], g = lut[px[i + 1]], b = lut[px[i + 2]];
-      px[i] = m[0] * r + m[1] * g + m[2] * b; px[i + 1] = m[3] * r + m[4] * g + m[5] * b; px[i + 2] = m[6] * r + m[7] * g + m[8] * b;
+      let r = lut[px[i]], g = lut[px[i + 1]], b = lut[px[i + 2]];
+      for (let j = 0; j < ms.length; j++) {
+        const m = ms[j], x = m[0] * r + m[1] * g + m[2] * b, y = m[3] * r + m[4] * g + m[5] * b, z = m[6] * r + m[7] * g + m[8] * b;
+        r = cl(x); g = cl(y); b = cl(z);
+      }
+      px[i] = r; px[i + 1] = g; px[i + 2] = b;
     }
     return px;
   }
@@ -93,7 +118,7 @@
   // A picture board through the sliders, as a blob: URL of a SIZE px square PNG (the last few kept, so moving a slider
   // back, or a later view, finds it at once; older ones are let go). At the defaults it is lila's file as it is.
   const SIZE = 1024, KEEP = 4, made = new Map(), pictures = {}, decoded = {};
-  const key = (id, a) => { a = adjust(a); return `${valid(id)}/${a.brightness}/${a.contrast}/${a.hue}`; };
+  const key = (id, a) => { a = adjust(a); return [valid(id), ...NAMES.map((n) => a[n])].join('/'); };
   const rendered = (id, a) => (byId(id).file ? (isDefault(a) ? url(id) : made.get(key(id, a)) || null) : null);
   function picture(id) {
     if (pictures[id]) return pictures[id];
@@ -125,5 +150,5 @@
     return u;
   }
 
-  window.BoardThemes = { THEMES, DEFAULT, SLIDERS, valid, byId, url, thumb, adjust, isDefault, css, filter, colours, filterPixels, rendered, loaded, preload, render };
+  window.BoardThemes = { THEMES, DEFAULT, SLIDERS, valid, byId, url, thumb, adjust, isDefault, css, key, filter, colours, filterPixels, rendered, loaded, preload, render };
 })();

@@ -142,10 +142,16 @@ function ViewSettings({ t, setTweak, board, TM, pieceSet, pieces, boardTheme, bo
           <BoardPicker value={boardTheme.id} adj={boardAdj} onChange={(id) => setTweak('boardTheme', id)} />
           <div className="twk-note">{boardTheme.name}{boardTheme.id === window.BoardThemes.DEFAULT ? '' : <>, from <a href="https://github.com/lichess-org/lila" target="_blank" rel="noopener">Lichess’s source</a>, by the lila authors and <a href="https://lichess.org/@/pirouetti" target="_blank" rel="noopener">pirouetti</a> under <a href="https://www.gnu.org/licenses/agpl-3.0.html" target="_blank" rel="noopener">AGPL-3.0-or-later</a></>}. The sliders change the board’s colours, in exports too.{boardLook.failed ? ' Couldn’t load it (offline?): the board keeps the one it had.' : ''}</div>
         </div>
-        <TweakSlider id="tw-board-brightness" label="Brightness" value={boardAdj.brightness} min={window.BoardThemes.SLIDERS.brightness.min} max={window.BoardThemes.SLIDERS.brightness.max} step={window.BoardThemes.SLIDERS.brightness.step} unit="%" onChange={(v) => setTweak('boardBrightness', v)} />
-        <TweakSlider id="tw-board-contrast" label="Contrast" value={boardAdj.contrast} min={window.BoardThemes.SLIDERS.contrast.min} max={window.BoardThemes.SLIDERS.contrast.max} step={window.BoardThemes.SLIDERS.contrast.step} unit="%" onChange={(v) => setTweak('boardContrast', v)} />
-        <TweakSlider id="tw-board-hue" label="Hue" value={boardAdj.hue} min={window.BoardThemes.SLIDERS.hue.min} max={window.BoardThemes.SLIDERS.hue.max} step={window.BoardThemes.SLIDERS.hue.step} format={(v) => `+ ${Math.round(v * 3.6)}°`} onChange={(v) => setTweak('boardHue', v)} />
-        {!window.BoardThemes.isDefault(boardAdj) && <TweakButton secondary label="Reset colours to default" onClick={() => { setTweak('boardBrightness', 100); setTweak('boardContrast', 100); setTweak('boardHue', 0); }} />}
+        {/* one block, always the same height: Reset is there from the start (disabled until a slider is moved), since a button
+            that appeared with the first move rebalanced the two columns and sent Brightness from one to the other */}
+        <div className="twk-keep twk-board-colours">
+          <TweakSlider id="tw-board-brightness" label="Brightness" value={boardAdj.brightness} min={window.BoardThemes.SLIDERS.brightness.min} max={window.BoardThemes.SLIDERS.brightness.max} step={window.BoardThemes.SLIDERS.brightness.step} unit="%" onChange={(v) => setTweak('boardBrightness', v)} />
+          <TweakSlider id="tw-board-contrast" label="Contrast" value={boardAdj.contrast} min={window.BoardThemes.SLIDERS.contrast.min} max={window.BoardThemes.SLIDERS.contrast.max} step={window.BoardThemes.SLIDERS.contrast.step} unit="%" onChange={(v) => setTweak('boardContrast', v)} />
+          <TweakSlider id="tw-board-tint" label="Tint" value={boardAdj.tint} min={window.BoardThemes.SLIDERS.tint.min} max={window.BoardThemes.SLIDERS.tint.max} step={window.BoardThemes.SLIDERS.tint.step} unit="%" onChange={(v) => setTweak('boardTint', v)} />
+          <TweakSlider id="tw-board-saturation" label="Saturation" value={boardAdj.saturation} min={window.BoardThemes.SLIDERS.saturation.min} max={window.BoardThemes.SLIDERS.saturation.max} step={window.BoardThemes.SLIDERS.saturation.step} unit="%" onChange={(v) => setTweak('boardSaturation', v)} />
+          <TweakSlider id="tw-board-hue" label="Hue" value={boardAdj.hue} min={window.BoardThemes.SLIDERS.hue.min} max={window.BoardThemes.SLIDERS.hue.max} step={window.BoardThemes.SLIDERS.hue.step} format={(v) => `+ ${Math.round(v * 3.6)}°`} onChange={(v) => setTweak('boardHue', v)} />
+          <TweakButton secondary disabled={window.BoardThemes.isDefault(boardAdj)} label="Reset colours to default" onClick={() => { setTweak('boardBrightness', 100); setTweak('boardContrast', 100); setTweak('boardTint', 0); setTweak('boardSaturation', 100); setTweak('boardHue', 0); }} />
+        </div>
       </TweakSection>
       {!(board && board.game) && <TweakSection label="Board">
         {board ? <TweakToggle id="tw-flip" label="Flip board" value={!!t.flip} onChange={(v) => setTweak('flip', v)} /> : <>

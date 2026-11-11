@@ -592,7 +592,7 @@ function GameApp() {
   const pieces = usePieceSet(t.pieceSet);
   const pieceSet = window.PieceSets.byId(t.pieceSet);
   const boardTheme = window.BoardThemes.byId(t.boardTheme);
-  const boardAdj = window.BoardThemes.adjust({ brightness: t.boardBrightness, contrast: t.boardContrast, hue: t.boardHue });
+  const boardAdj = window.BoardThemes.adjust({ brightness: t.boardBrightness, contrast: t.boardContrast, tint: t.boardTint, saturation: t.boardSaturation, hue: t.boardHue });
   const X = useExportSettings({ t, setTweak, M, MV, TM, frameW, stem: fileStem, saveFile, pieceSet, boardTheme, boardAdj, soundSet, soundVolume }), video = X.video;
   const boardLook = useBoardLook(boardTheme.id, boardAdj, video.busy);
   const exportVideo = () => { setShareOpen(null); setPanel(false); setQueenOpen(false); X.run(); };
