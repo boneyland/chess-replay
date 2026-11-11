@@ -24,7 +24,7 @@ What each part of the repo is, with the pinned SHA-256 of every vendored file. B
   - `export.jsx`, `webp-core.js`: MP4, WebM and animated WebP export; `export-draw.js` paints each export frame layer by layer, handing html2canvas only what it can't draw
   - `sfx-core.js`, `sfx.jsx`: the move sounds
   - `piece-sets.js`: the piece sets (Settings › View › Pieces): their credits, which are kept out of exports, and loading the chosen one
-  - `board-themes.js`: the boards and their Brightness, Contrast and Hue sliders (Settings › View), and drawing a picture board through them
+  - `board-themes.js`: the boards and their Brightness, Contrast, Tint, Saturation and Hue sliders (Settings › View), and drawing a picture board through them
   - `drag-scroll.js`: a mouse drag scrolls whatever scrolls under it
   - `sample-analysis.js`: the sample game's analysis, trimmed
   - `sw.js`: the site's service worker (offline); `icons/`, `og-image.png`: web app icons and the link-preview image
