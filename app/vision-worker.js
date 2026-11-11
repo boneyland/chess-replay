@@ -50,6 +50,9 @@ function tensor(image) {
   if (!ctx) throw new Error('No canvas to draw the picture on');
   ctx.imageSmoothingEnabled = true;
   ctx.imageSmoothingQuality = 'high';
+  // on white: an opaque canvas starts black, and a diagram's transparent squares would be read as black ones
+  ctx.fillStyle = '#ffffff';
+  ctx.fillRect(0, 0, SIZE, SIZE);
   ctx.drawImage(image, 0, 0, SIZE, SIZE);
   const px = ctx.getImageData(0, 0, SIZE, SIZE).data;
   const data = new Float32Array(3 * PLANE);
