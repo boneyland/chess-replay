@@ -234,7 +234,11 @@ function useVideoExport({ fps, format, webp, mp4Quality, mp4Vfr = false, save, s
       const t0 = performance.now();
       let shown = t0;
       for (let i = 0; i < N; i++) {
-        if (stopRef.current) { await enc.cancel(); stage.done(); setState(null); return; }
+        if (stopRef.current) {
+          // the viewer's own Cancel: an encoder that fails to stop is no export failure
+          try { await enc.cancel(); } catch (_) {}
+          stage.done(); setState(null); return;
+        }
         seekStage(start + i / fps);
         // a frame whose layers all match the last one's (holds, the title and end cards) leaves the canvas as it is
         await enc.frame(await stage.draw(cx));
