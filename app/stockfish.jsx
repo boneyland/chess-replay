@@ -467,8 +467,15 @@ function EngineLines({ lines, pos, ply0, c, onPick, onHover, cloud }) {
   );
 }
 
-// Arrows for the lines' first moves, one line or several: line 1 the best line's, the others thinner and fainter
-const lineArrows = (r) => (r && r.lines && r.lines.length ? r.lines.filter((l) => l.pv && l.pv[0]).map((l) => ({ uci: l.pv[0], k: l.k })) : r && r.pv && r.pv[0] ? [{ uci: r.pv[0], k: 1 }] : null);
+// Arrows for the lines' first moves, one line or several: line 1 the best line's, the others thinner and fainter, each
+// as thick (w, 0 to 1) as its winning chances stand between the worst line's (0, the thinnest) and the best line's (1)
+const lineArrows = (r) => {
+  if (!(r && r.lines && r.lines.length)) return r && r.pv && r.pv[0] ? [{ uci: r.pv[0], k: 1 }] : null;
+  const ls = r.lines.filter((l) => l.pv && l.pv[0]), wc = (l) => (l.cp == null ? null : window.ChessCore.winChance(l.cp));
+  const best = ls.find((l) => l.k === 1), b = best ? wc(best) : null;
+  const gaps = ls.map((l) => (b == null || wc(l) == null ? null : Math.abs(b - wc(l)))), worst = Math.max(0, ...gaps.filter((g) => g != null));
+  return ls.map((l, i) => ({ uci: l.pv[0], k: l.k, w: gaps[i] == null ? 0 : worst > 0 ? 1 - gaps[i] / worst : 1 }));
+};
 
 const fmtSf = (cp) => {
   if (cp == null) return '…';
