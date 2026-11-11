@@ -55,9 +55,14 @@
         if (signal) signal.removeEventListener('abort', stop);
       }
       if (at !== f.size) throw new Error(f.name + ' arrived incomplete');
-      if ((await sha256(out)) !== f.sha256) throw new Error(f.name + ' does not match its pinned checksum');
+      const sum = await sha256(out);
+      halt(signal); // Cancel during the check
+      if (sum !== f.sha256) throw new Error(f.name + ' does not match its pinned checksum');
       return out;
     }
+
+    // a Cancel the fetch can no longer see (during the check or the cache puts) stops the download there
+    const halt = (signal) => { if (signal && signal.aborted) throw new DOMException('Cancelled', 'AbortError'); };
 
     // these files out of the cache, other kept files left alone
     const drop = async (cache = null) => { cache = cache || await caches.open(CACHE); for (const f of files) await cache.delete(urlOf(f)).catch(() => {}); };
@@ -76,11 +81,16 @@
       onProgress(0, total());
       const bodies = [];
       for (const f of files) bodies.push(await fetchFile(f, signal, (n) => { got += n; onProgress(got, total()); }));
+      halt(signal);
       const cache = await caches.open(CACHE);
       try {
-        for (let i = 0; i < files.length; i++) await cache.put(urlOf(files[i]), new Response(bodies[i], { headers: { 'content-type': files[i].type } }));
+        for (let i = 0; i < files.length; i++) {
+          await cache.put(urlOf(files[i]), new Response(bodies[i], { headers: { 'content-type': files[i].type } }));
+          halt(signal);
+        }
       } catch (e) {
         await drop(cache);
+        if (e && e.name === 'AbortError') throw e;
         throw new Error(/quota/i.test(e.name + e.message) ? 'Not enough storage space in this browser' : `The browser would not keep the ${what}`);
       }
       if (navigator.storage && navigator.storage.persist) navigator.storage.persist().catch(() => {});

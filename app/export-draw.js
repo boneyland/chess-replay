@@ -517,7 +517,7 @@
       const cx = cv.getContext('2d');
       cx.imageSmoothingQuality = 'high';
       cx.setTransform(scale, 0, 0, scale, -x0 * scale, -y0 * scale);
-      paint(cx, n, place, scale);
+      try { paint(cx, n, place, scale); } catch (e) { free(cv); throw e; } // an Unsupported layer goes to html2canvas: its canvas let go now (see free)
       return { bmp: cv, x: x0 * scale, y: y0 * scale };
     };
     let warm = false;

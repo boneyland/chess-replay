@@ -2040,6 +2040,51 @@ for (const name of BROWSERS) for (const site of SITES) {
       await p.getByRole('button', { name: 'Done' }).click();
       await assert.doesNotReject(field.waitFor({ state: 'detached', timeout: 5000 }));
       assert.equal(await shareFen(p), LICHESS + ' w - - 0 1');
+      // the screenshot with its light squares made transparent: read on white, as drawn on a page (an opaque canvas
+      // starts black, and the reader would see black squares), so the box is found and the read is the same
+      const clear = await p.evaluate(async (b64) => {
+        const bmp = await createImageBitmap(new Blob([Uint8Array.from(atob(b64), (c) => c.charCodeAt(0))], { type: 'image/png' }));
+        const cv = new OffscreenCanvas(bmp.width, bmp.height), g = cv.getContext('2d');
+        g.drawImage(bmp, 0, 0);
+        const d = g.getImageData(0, 0, cv.width, cv.height);
+        let n = 0;
+        for (let i = 0; i < d.data.length; i += 4) {
+          if (Math.abs(d.data[i] - 0xf0) < 12 && Math.abs(d.data[i + 1] - 0xd9) < 12 && Math.abs(d.data[i + 2] - 0xb5) < 12) { d.data[i + 3] = 0; n++; }
+        }
+        g.putImageData(d, 0, 0);
+        const out = new Uint8Array(await (await cv.convertToBlob({ type: 'image/png' })).arrayBuffer());
+        let s = '';
+        for (let i = 0; i < out.length; i += 0x8000) s += String.fromCharCode(...out.subarray(i, i + 0x8000));
+        return { b64: btoa(s), n, all: cv.width * cv.height };
+      }, fixture('vision-lichess.png', 'image/png').buffer.toString('base64'));
+      assert.ok(clear.n > clear.all / 4, `light squares made transparent: ${clear.n} of ${clear.all} pixels`);
+      await fromImage();
+      // a paste is taken only once the dialog is choosing (it checks for the kept copy first)
+      const choosing = () => dialog.getByRole('button', { name: 'Choose image' }).waitFor({ timeout: 5000 });
+      await choosing();
+      await paste({ name: 'clear.png', mimeType: 'image/png', buffer: Buffer.from(clear.b64, 'base64') });
+      await cropBox.waitFor({ timeout: 5000 });
+      await boxAt(cases.lichess.box, 'the transparent screenshot');
+      await read();
+      assert.equal(await field.inputValue(), LICHESS + ' w - - 0 1', 'transparent squares read as light ones');
+      await p.getByRole('button', { name: 'Cancel' }).click();
+      await assert.doesNotReject(field.waitFor({ state: 'detached', timeout: 5000 }));
+      // a picture over 50 megapixels is refused before it is decoded, and the dialog stays at choosing
+      await fromImage();
+      const huge = await p.evaluate(async () => {
+        const cv = new OffscreenCanvas(8000, 7000);
+        cv.getContext('2d').fillRect(0, 0, 1, 1);
+        const out = new Uint8Array(await (await cv.convertToBlob({ type: 'image/png' })).arrayBuffer());
+        let s = '';
+        for (let i = 0; i < out.length; i += 0x8000) s += String.fromCharCode(...out.subarray(i, i + 0x8000));
+        return btoa(s);
+      });
+      await choosing();
+      await paste({ name: 'huge.png', mimeType: 'image/png', buffer: Buffer.from(huge, 'base64') });
+      await assert.doesNotReject(dialog.getByRole('alert').filter({ hasText: 'That image is too large to read (over 50 megapixels)' }).waitFor({ timeout: 10000 }));
+      assert.equal(await cropBox.count(), 0, 'no crop box for a refused picture');
+      await dialog.getByRole('button', { name: 'Cancel' }).click();
+      await dialog.waitFor({ state: 'detached', timeout: 5000 });
       // the screenshot stored a quarter turned, upright by its EXIF orientation: the same read (the reader kept: no download)
       await fromImage();
       await choose(fixture('vision-exif6.jpg', 'image/jpeg'));

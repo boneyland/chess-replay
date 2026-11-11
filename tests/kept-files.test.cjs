@@ -12,7 +12,7 @@ globalThis.caches = {
     const m = store.get(name);
     return {
       async match(url) { return m.has(url) ? new Response(m.get(url)) : undefined; },
-      async put(url, r) { if (globalThis.putFails) throw globalThis.putFails; m.set(url, new Uint8Array(await r.arrayBuffer())); },
+      async put(url, r) { if (globalThis.putFails) throw globalThis.putFails; m.set(url, new Uint8Array(await r.arrayBuffer())); if (globalThis.onPut) globalThis.onPut(); },
       async delete(url) { return m.delete(url); },
     };
   },
@@ -54,7 +54,7 @@ const files = [
 const K = window.KeptFiles.make({ cache: 'kept-test', base: BASE, files, host: 'the site', what: 'board reader' });
 
 function reset() {
-  store.clear(); fetched.length = 0; storage.quota = 1e9; storage.usage = 0; storage.persisted = 0; globalThis.putFails = null; globalThis.stallAt = null;
+  store.clear(); fetched.length = 0; storage.quota = 1e9; storage.usage = 0; storage.persisted = 0; globalThis.putFails = null; globalThis.stallAt = null; globalThis.onPut = null;
   K.limits.stallMs = 30000;
   served = { 'a.bin': A, 'b.bin': B };
 }
@@ -111,6 +111,26 @@ test('too little storage (under total x 1.1) stops it before fetching; a refused
   globalThis.putFails = new Error('nope');
   await assert.rejects(K.download(), /The browser would not keep the board reader/);
   assert.equal(await K.present(), false);
+});
+
+test('Cancel during the checksum check or the cache puts keeps nothing and rejects as a cancel', async () => {
+  reset();
+  const subtle = globalThis.crypto.subtle, digest = subtle.digest;
+  let ctl = new AbortController();
+  // the abort lands while the last file is hashed, after its fetch has finished
+  subtle.digest = async function (...a) { const r = await digest.apply(subtle, a); if (a[1].length === B.length) ctl.abort(); return r; };
+  try {
+    await assert.rejects(K.download({ signal: ctl.signal }), (e) => e.name === 'AbortError');
+  } finally { subtle.digest = digest; }
+  assert.equal(await K.present(), false);
+  assert.equal(store.has('kept-test') ? store.get('kept-test').size : 0, 0);
+  reset();
+  ctl = new AbortController();
+  globalThis.onPut = () => ctl.abort(); // between the two puts
+  await assert.rejects(K.download({ signal: ctl.signal }), (e) => e.name === 'AbortError');
+  assert.equal(await K.present(), false);
+  assert.equal(store.get('kept-test').size, 0);
+  assert.equal(storage.persisted, 0);
 });
 
 test('present is true only with both files; remove empties the cache', async () => {

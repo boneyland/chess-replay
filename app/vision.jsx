@@ -20,6 +20,8 @@ function visionGrid(bitmap) {
     const w = Math.max(1, Math.round(bitmap.width * k)), h = Math.max(1, Math.round(bitmap.height * k));
     const g = new OffscreenCanvas(w, h).getContext('2d', { willReadFrequently: true });
     g.imageSmoothingQuality = 'high';
+    g.fillStyle = '#ffffff'; // on white, as the reader sees it: transparent pixels would read as black
+    g.fillRect(0, 0, w, h);
     g.drawImage(bitmap, 0, 0, w, h);
     const grey = G.grey(g.getImageData(0, 0, w, h).data, w, h);
     return { grey, found: G.findBoard(grey) };
@@ -30,6 +32,23 @@ function visionGrid(bitmap) {
 // the upload arrow of the drop tile and the drop area
 const VisionUpIcon = () => <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 15.5V5m-4.5 4.5L12 5l4.5 4.5M5 19h14" /></svg>;
 const VISION_BAD_FILE = 'That file isn’t an image this browser can open.';
+// The dialog's own caps, as GameApp refuses a file over 50 MB: a picture is decoded whole (4 bytes a pixel), and a
+// 20000 × 20000 one would take about 1.6 GB and end the tab with no message. 50 megapixels (200 MB decoded) still
+// takes a phone's largest photos; the reader never uses more than 2048 px of it
+const VISION_MAX_BYTES = 50e6, VISION_MAX_PIXELS = 50e6;
+const VISION_TOO_BIG = 'That image is too large to read (over 50 MB).';
+const VISION_TOO_MANY = 'That image is too large to read (over 50 megapixels): crop it or save it smaller first.';
+// the picture's width and height from its header, before it is decoded (an <img> that isn't drawn isn't decoded), or
+// null where the browser can't open it that way (createImageBitmap then says whether it can)
+function visionSize(f) {
+  return new Promise((ok) => {
+    const url = URL.createObjectURL(f), img = new Image();
+    const done = (v) => { URL.revokeObjectURL(url); ok(v); };
+    img.onload = () => done({ w: img.naturalWidth, h: img.naturalHeight });
+    img.onerror = () => done(null);
+    img.src = url;
+  });
+}
 // the crop box's handles: which edges each pulls, where it sits on the box (fractions of its width and height), its cursor
 const CROP_HANDLES = [
   ['n', 0.5, 0, 'ns-resize'], ['s', 0.5, 1, 'ns-resize'], ['w', 0, 0.5, 'ew-resize'], ['e', 1, 0.5, 'ew-resize'],
@@ -163,6 +182,10 @@ function VisionDialog({ again, onRead, onClose }) {
   const take = async (f) => {
     if (!f || reading) return;
     setErr('');
+    if (f.size > VISION_MAX_BYTES) { setErr(VISION_TOO_BIG); return; }
+    const size = await visionSize(f);
+    if (!live.current.alive) return;
+    if (size && size.w * size.h > VISION_MAX_PIXELS) { setErr(VISION_TOO_MANY); return; }
     let bitmap;
     try { bitmap = await createImageBitmap(f, { imageOrientation: 'from-image' }); } catch (e) { if (live.current.alive) setErr(VISION_BAD_FILE); return; }
     if (!live.current.alive) { bitmap.close(); return; }
@@ -244,7 +267,12 @@ function VisionDialog({ again, onRead, onClose }) {
       const png = cv.convertToBlob({ type: 'image/png' });
       const c = crop;
       crop = null;
-      const [logits, blob] = await Promise.all([V.read(c), png]);
+      // both settled before either failure is shown: a PNG that fails while the reader still runs would otherwise
+      // free Read board while Vision is busy, and the next read be refused as Already reading
+      const [rl, rp] = await Promise.allSettled([V.read(c), png]);
+      if (rl.status === 'rejected') throw rl.reason;
+      if (rp.status === 'rejected') throw rp.reason;
+      const logits = rl.value, blob = rp.value;
       live.current.reading = false;
       if (!live.current.alive) return;
       url = URL.createObjectURL(blob);
