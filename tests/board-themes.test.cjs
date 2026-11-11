@@ -49,16 +49,21 @@ test('the vendored boards are the files pinned in LAYOUT.md', () => {
 });
 
 test('adjust: the sliders’ values within Lichess’s ranges, the defaults for anything else', () => {
-  assert.deepEqual(B.adjust(), { brightness: 100, contrast: 100, hue: 0 });
-  assert.deepEqual(B.adjust({ brightness: 5, contrast: 900, hue: 'x' }), { brightness: 20, contrast: 200, hue: 0 });
+  assert.deepEqual(B.adjust(), { brightness: 100, contrast: 100, tint: 0, saturation: 100, hue: 0 });
+  assert.deepEqual(B.adjust({ brightness: 5, contrast: 900, tint: 101, saturation: -1, hue: 'x' }), { brightness: 20, contrast: 200, tint: 100, saturation: 0, hue: 0 });
   assert.equal(B.isDefault({}), true);
   assert.equal(B.isDefault({ hue: 1 }), false);
+  assert.equal(B.isDefault({ tint: 1 }), false);
+  assert.equal(B.isDefault({ saturation: 105 }), false);
 });
 
 test('css: the same change as a CSS filter, none at the defaults', () => {
   assert.equal(B.css({}), 'none');
   assert.equal(B.css({ brightness: 80, contrast: 150, hue: 30 }), 'brightness(80%) contrast(150%) hue-rotate(108deg)');
   assert.equal(B.css({ hue: 33 }), 'brightness(100%) contrast(100%) hue-rotate(118.8deg)');
+  // tint and saturation come before the hue, and only once moved
+  assert.equal(B.css({ tint: 60, saturation: 250, hue: 30 }), 'brightness(100%) contrast(100%) sepia(60%) saturate(250%) hue-rotate(108deg)');
+  assert.equal(B.css({ saturation: 0 }), 'brightness(100%) contrast(100%) saturate(0%) hue-rotate(0deg)');
 });
 
 test('filter: brightness, then contrast, then hue, as CSS’s filter functions in that order', () => {
@@ -73,6 +78,22 @@ test('filter: brightness, then contrast, then hue, as CSS’s filter functions i
   assert.deepEqual(f({ hue: 100 }, 181, 136, 99), [181, 136, 99]);
   // hue-rotate(180deg) of pure red, by the spec's matrix
   assert.deepEqual(f({ hue: 50 }, 255, 0, 0), [0, 109, 109]);
+});
+
+test('filter: tint (sepia) colours a grey, saturation strengthens it, and hue then turns it', () => {
+  const f = (a, ...rgb) => B.filter(a)(...rgb);
+  // sepia(100%) by the spec's matrix: a grey goes tan, white clamps to cream
+  assert.deepEqual(f({ tint: 100 }, 128, 128, 128), [173, 154, 120]);
+  assert.deepEqual(f({ tint: 100 }, 255, 255, 255), [255, 255, 239]);
+  assert.deepEqual(f({ tint: 50 }, 128, 128, 128), [150, 141, 124], 'half way there');
+  // saturate(): 0 is the grey of the colour's luminance, a grey stays as it is at any value
+  assert.deepEqual(f({ saturation: 0 }, 255, 0, 0), [54, 54, 54]);
+  assert.deepEqual(f({ saturation: 300 }, 90, 90, 90), [90, 90, 90]);
+  assert.deepEqual(f({ tint: 100, saturation: 300 }, 128, 128, 128), [208, 151, 49]);
+  // the grey boards take a colour: tinted, the hue is no longer a no-op
+  const turned = f({ tint: 100, hue: 50 }, 128, 128, 128);
+  assert.notDeepEqual(turned, [173, 154, 120]);
+  assert.ok(turned[2] > turned[0], 'half a turn of tan is a blue');
 });
 
 test('colours: a flat board’s squares and every board’s coordinates go through the sliders', () => {

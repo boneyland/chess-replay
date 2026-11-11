@@ -4678,6 +4678,54 @@ for (const name of BROWSERS) for (const site of SITES) {
       await dk.ctx.close();
     });
 
+    // Hue can't colour a grey board (hue-rotate() keeps a grey grey): Tint (sepia()) does, Saturation strengthens it,
+    // and the board follows each slider at once and keeps them over a reload
+    await t.test('desktop: Tint and Saturation colour a grey board', async () => {
+      const dk = await open(browser, { width: 1440, height: 900 });
+      await dk.page.addInitScript(() => { try { if (!localStorage.getItem('chess-video.tweaks.v1')) localStorage.setItem('chess-video.tweaks.v1', JSON.stringify({ boardTheme: 'grey' })); } catch (e) {} });
+      await dk.page.goto(base, { waitUntil: 'load' });
+      await loadedOn(dk.page);
+      const pic = dk.page.locator('.stage-frame img[src="boards/grey.jpg"]');
+      await pic.waitFor();
+      const filter = () => pic.evaluate((i) => i.style.filter);
+      assert.equal(await filter(), 'none');
+      await dk.page.getByRole('button', { name: 'Settings' }).click();
+      await dk.page.getByRole('tab', { name: 'View' }).click();
+      // Reset is there from the start, disabled, so moving a slider adds nothing and no slider changes column
+      const reset = dk.page.getByRole('button', { name: 'Reset colours to default' });
+      assert.equal(await reset.isDisabled(), true);
+      const left = () => dk.page.evaluate(() => ['brightness', 'contrast', 'tint', 'saturation', 'hue'].map((n) => Math.round(document.getElementById('tw-board-' + n).getBoundingClientRect().left)));
+      const cols = await left();
+      assert.equal(new Set(cols).size, 1, `the sliders share a column (${cols})`);
+      await dk.page.locator('#tw-board-tint').focus();
+      await dk.page.keyboard.press('End');
+      await dk.page.locator('#tw-board-saturation').focus();
+      await dk.page.keyboard.press('End');
+      const want = 'brightness(100%) contrast(100%) sepia(100%) saturate(300%) hue-rotate(0deg)';
+      await dk.page.waitForFunction((w) => document.querySelector('.stage-frame img[src="boards/grey.jpg"]').style.filter === w, want);
+      assert.equal(await reset.isDisabled(), false);
+      assert.deepEqual(await left(), cols, 'no slider changed column');
+      // the mouse on Reset shows the board as the reset would leave it, the sliders as they are; off it, the colours again
+      const rb = await reset.boundingBox();
+      await dk.page.mouse.move(rb.x + rb.width / 2, rb.y + rb.height / 2, { steps: 4 });
+      await dk.page.waitForFunction(() => document.querySelector('.stage-frame img[src="boards/grey.jpg"]').style.filter === 'none');
+      assert.equal(await dk.page.locator('#tw-board-tint').inputValue(), '100', 'the sliders keep their values');
+      assert.equal(await dk.page.locator('.board-picker .board-tile').evaluateAll((bs) => bs.some((b) => [...b.querySelectorAll('*')].some((e) => getComputedStyle(e).filter !== 'none'))), false, 'the tiles show the defaults too');
+      await dk.page.mouse.move(rb.x + rb.width / 2, rb.y - 150, { steps: 4 });
+      await dk.page.waitForFunction((w) => document.querySelector('.stage-frame img[src="boards/grey.jpg"]').style.filter === w, want);
+      await dk.page.reload({ waitUntil: 'load' });
+      await loadedOn(dk.page);
+      await pic.waitFor();
+      assert.equal(await filter(), want, 'remembered');
+      await dk.page.getByRole('button', { name: 'Settings' }).click();
+      await dk.page.getByRole('tab', { name: 'View' }).click();
+      await reset.click();
+      await dk.page.waitForFunction(() => document.querySelector('.stage-frame img[src="boards/grey.jpg"]').style.filter === 'none');
+      assert.deepEqual(await left(), cols, 'nor on Reset');
+      assert.deepEqual(dk.errors, []);
+      await dk.ctx.close();
+    });
+
     // a pinch doesn't zoom the page (Chromium only: the pinch is a DevTools gesture, and Firefox has no phone emulation)
     if (name === 'chromium') await t.test('phone: a pinch doesn\'t zoom the page', async () => {
       const ph = await open(browser, { width: 390, height: 844 }, { isMobile: true, hasTouch: true });

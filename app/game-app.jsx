@@ -592,9 +592,11 @@ function GameApp() {
   const pieces = usePieceSet(t.pieceSet);
   const pieceSet = window.PieceSets.byId(t.pieceSet);
   const boardTheme = window.BoardThemes.byId(t.boardTheme);
-  const boardAdj = window.BoardThemes.adjust({ brightness: t.boardBrightness, contrast: t.boardContrast, hue: t.boardHue });
+  const boardAdj = window.BoardThemes.adjust({ brightness: t.boardBrightness, contrast: t.boardContrast, tint: t.boardTint, saturation: t.boardSaturation, hue: t.boardHue });
   const X = useExportSettings({ t, setTweak, M, MV, TM, frameW, stem: fileStem, saveFile, pieceSet, boardTheme, boardAdj, soundSet, soundVolume }), video = X.video;
-  const boardLook = useBoardLook(boardTheme.id, boardAdj, video.busy);
+  // Settings' Reset colours to default, while the mouse is on it, shows the board as the reset would leave it (never in an export)
+  const [resetPreview, setResetPreview] = React.useState(false);
+  const boardLook = useBoardLook(boardTheme.id, resetPreview && !video.busy ? window.BoardThemes.adjust() : boardAdj, video.busy);
   const exportVideo = () => { setShareOpen(null); setPanel(false); setQueenOpen(false); X.run(); };
   const askQueen = () => { setQueenOpen((q) => !q); setPanel(false); };
   // the Queen panel opens centred over its button in the transport bar, or over the menu button when the dock is folded
@@ -759,7 +761,7 @@ function GameApp() {
         { id: 'game', label: 'Game', body: <GameSettings M={M} files={files} board={board} status={status} err={shownErr} commit={commit}
           commentary={!board && <CommentarySettings t={t} setTweak={setTweak} files={files} sources={sources} queenSays={queenSays} />}
           go={{ importGame, boardAsGame, backToGame, backToBoard: () => { const b = window.BoardCore.restore(files.fromBoard); if (b) commitBoard(b); }, backToSample: () => guard(() => commit(SAMPLE)), reset: () => setResetOpen(true) }} /> },
-        { id: 'view', label: 'View', body: <ViewSettings t={t} setTweak={setTweak} board={board} TM={TM} pieceSet={pieceSet} pieces={pieces} boardTheme={boardTheme} boardAdj={boardAdj} boardLook={boardLook} /> },
+        { id: 'view', label: 'View', body: <ViewSettings t={t} setTweak={setTweak} board={board} TM={TM} pieceSet={pieceSet} pieces={pieces} boardTheme={boardTheme} boardAdj={boardAdj} boardLook={boardLook} resetPreview={resetPreview} setResetPreview={setResetPreview} /> },
         { id: 'online', label: 'Online', body: <OnlineSettings t={t} setTweak={setTweak} sfKind={sfKind} /> },
         { id: 'sound', label: 'Sound', body: <SoundSettings t={t} setTweak={setTweak} soundSet={soundSet} soundVolume={soundVolume} /> },
       ]} />

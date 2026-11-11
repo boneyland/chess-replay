@@ -129,7 +129,11 @@ function GameSettings({ M, files, board, status, err, go, commit, commentary }) 
 
 // Settings › View: theme, text size, pieces and board, the board's options and the replay's pace. TM: the video's timing
 // (ChessCore.timing); pieces the piece set's loading (usePieceSet), boardLook the board picture's (useBoardLook)
-function ViewSettings({ t, setTweak, board, TM, pieceSet, pieces, boardTheme, boardAdj, boardLook }) {
+// resetPreview: the mouse is on Reset colours to default, so the board and the tiles show the defaults (the sliders keep
+// their values: what the reset would undo). Dropped when Settings closes, as no leave is told then
+function ViewSettings({ t, setTweak, board, TM, pieceSet, pieces, boardTheme, boardAdj, boardLook, resetPreview, setResetPreview }) {
+  React.useEffect(() => () => setResetPreview(false), []);
+  const plain = window.BoardThemes.isDefault(boardAdj);
   const queenInVideo = t.queenInVideo !== false, fmtLen = window.ChessCore.fmtLen;
   return <>
       <TweakSection label="Appearance">
@@ -139,13 +143,22 @@ function ViewSettings({ t, setTweak, board, TM, pieceSet, pieces, boardTheme, bo
         <div className="twk-note">{pieceSet.name} by {pieceSet.home ? <a href={pieceSet.home} target="_blank" rel="noopener">{pieceSet.by}</a> : pieceSet.by}, under <a href={pieceSet.licenceUrl} target="_blank" rel="noopener">{pieceSet.licence}</a>{pieceSet.id === window.PieceSets.DEFAULT ? '' : <>, from <a href="https://github.com/lichess-org/lila" target="_blank" rel="noopener">Lichess’s source</a></>}{window.PieceSets.NON_COMMERCIAL.includes(pieceSet.id) ? ' (non-commercial: a video exported with it may not be used commercially)' : ''}.{pieces.failed ? ' Couldn’t load it (offline?): the board keeps the pieces it had.' : ''}</div>
         {/* the note stays under the grid, not carried to the next column */}
         <div className="twk-keep">
-          <BoardPicker value={boardTheme.id} adj={boardAdj} onChange={(id) => setTweak('boardTheme', id)} />
+          <BoardPicker value={boardTheme.id} adj={resetPreview ? undefined : boardAdj} onChange={(id) => setTweak('boardTheme', id)} />
           <div className="twk-note">{boardTheme.name}{boardTheme.id === window.BoardThemes.DEFAULT ? '' : <>, from <a href="https://github.com/lichess-org/lila" target="_blank" rel="noopener">Lichess’s source</a>, by the lila authors and <a href="https://lichess.org/@/pirouetti" target="_blank" rel="noopener">pirouetti</a> under <a href="https://www.gnu.org/licenses/agpl-3.0.html" target="_blank" rel="noopener">AGPL-3.0-or-later</a></>}. The sliders change the board’s colours, in exports too.{boardLook.failed ? ' Couldn’t load it (offline?): the board keeps the one it had.' : ''}</div>
         </div>
-        <TweakSlider id="tw-board-brightness" label="Brightness" value={boardAdj.brightness} min={window.BoardThemes.SLIDERS.brightness.min} max={window.BoardThemes.SLIDERS.brightness.max} step={window.BoardThemes.SLIDERS.brightness.step} unit="%" onChange={(v) => setTweak('boardBrightness', v)} />
-        <TweakSlider id="tw-board-contrast" label="Contrast" value={boardAdj.contrast} min={window.BoardThemes.SLIDERS.contrast.min} max={window.BoardThemes.SLIDERS.contrast.max} step={window.BoardThemes.SLIDERS.contrast.step} unit="%" onChange={(v) => setTweak('boardContrast', v)} />
-        <TweakSlider id="tw-board-hue" label="Hue" value={boardAdj.hue} min={window.BoardThemes.SLIDERS.hue.min} max={window.BoardThemes.SLIDERS.hue.max} step={window.BoardThemes.SLIDERS.hue.step} format={(v) => `+ ${Math.round(v * 3.6)}°`} onChange={(v) => setTweak('boardHue', v)} />
-        {!window.BoardThemes.isDefault(boardAdj) && <TweakButton secondary label="Reset colours to default" onClick={() => { setTweak('boardBrightness', 100); setTweak('boardContrast', 100); setTweak('boardHue', 0); }} />}
+        {/* one block, always the same height: Reset is there from the start (disabled until a slider is moved), since a button
+            that appeared with the first move rebalanced the two columns and sent Brightness from one to the other */}
+        <div className="twk-keep twk-board-colours">
+          <TweakSlider id="tw-board-brightness" label="Brightness" value={boardAdj.brightness} min={window.BoardThemes.SLIDERS.brightness.min} max={window.BoardThemes.SLIDERS.brightness.max} step={window.BoardThemes.SLIDERS.brightness.step} unit="%" onChange={(v) => setTweak('boardBrightness', v)} />
+          <TweakSlider id="tw-board-contrast" label="Contrast" value={boardAdj.contrast} min={window.BoardThemes.SLIDERS.contrast.min} max={window.BoardThemes.SLIDERS.contrast.max} step={window.BoardThemes.SLIDERS.contrast.step} unit="%" onChange={(v) => setTweak('boardContrast', v)} />
+          <TweakSlider id="tw-board-tint" label="Tint" value={boardAdj.tint} min={window.BoardThemes.SLIDERS.tint.min} max={window.BoardThemes.SLIDERS.tint.max} step={window.BoardThemes.SLIDERS.tint.step} unit="%" onChange={(v) => setTweak('boardTint', v)} />
+          <TweakSlider id="tw-board-saturation" label="Saturation" value={boardAdj.saturation} min={window.BoardThemes.SLIDERS.saturation.min} max={window.BoardThemes.SLIDERS.saturation.max} step={window.BoardThemes.SLIDERS.saturation.step} unit="%" onChange={(v) => setTweak('boardSaturation', v)} />
+          <TweakSlider id="tw-board-hue" label="Hue" value={boardAdj.hue} min={window.BoardThemes.SLIDERS.hue.min} max={window.BoardThemes.SLIDERS.hue.max} step={window.BoardThemes.SLIDERS.hue.step} format={(v) => `+ ${Math.round(v * 3.6)}°`} onChange={(v) => setTweak('boardHue', v)} />
+          {/* a mouse only (a touch has no hover), and only with something to reset; the click ends it, as a disabled button tells no leave */}
+          <div className="twk-keep" onPointerEnter={(e) => e.pointerType === 'mouse' && !plain && setResetPreview(true)} onPointerLeave={() => setResetPreview(false)}>
+            <TweakButton secondary disabled={plain} label="Reset colours to default" onClick={() => { setResetPreview(false); setTweak('boardBrightness', 100); setTweak('boardContrast', 100); setTweak('boardTint', 0); setTweak('boardSaturation', 100); setTweak('boardHue', 0); }} />
+          </div>
+        </div>
       </TweakSection>
       {!(board && board.game) && <TweakSection label="Board">
         {board ? <TweakToggle id="tw-flip" label="Flip board" value={!!t.flip} onChange={(v) => setTweak('flip', v)} /> : <>

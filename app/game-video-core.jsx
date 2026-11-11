@@ -155,7 +155,7 @@ let BOARD_LOOK = { ...window.BoardThemes.colours('brown'), src: null, css: 'none
 // the picture worked out through the sliders instead (BoardThemes.render, which exportVideo waits for), as the export
 // can't paint a filter. Until a newly chosen board's file has loaded, the last board. failed: it couldn't be loaded.
 function useBoardLook(theme, adj, exporting) {
-  const BT = window.BoardThemes, id = BT.valid(theme), a = BT.adjust(adj), want = [id, a.brightness, a.contrast, a.hue].join('/');
+  const BT = window.BoardThemes, id = BT.valid(theme), a = BT.adjust(adj), want = BT.key(id, a);
   const pic = !!BT.byId(id).file;
   const [failed, setFailed] = React.useState(null);
   const [, bump] = React.useReducer((n) => n + 1, 0);

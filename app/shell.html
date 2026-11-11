@@ -420,6 +420,8 @@ body:has(.stage.stage-short) .twk-panel { bottom: calc(44px + var(--safe-b)); ma
 .twk-btn.secondary { background: var(--raise); color: var(--ink); border: 1px solid var(--line); }
 .twk-btn.danger { background: var(--danger); color: var(--panel); }
 .twk-btn:disabled { opacity: 0.6; cursor: progress; }
+/* nothing to reset yet, not something under way */
+.twk-board-colours .twk-btn:disabled { cursor: default; }
 .expl-row:hover, .expl-row:focus-visible { background: color-mix(in srgb, var(--accent) 12%, transparent); }
 .mv.expl-row:hover { outline: none; }
 /* an analysis line under the mouse (lineRow in game-video-core.jsx): the shadow carries the tint past the moves without moving them */
@@ -525,6 +527,6 @@ body:has(.stage:not(.stage-one)) .net-note { top: calc(64px + env(safe-area-inse
 <script src="https://cdnjs.cloudflare.com/ajax/libs/react/18.3.1/umd/react.production.min.js" integrity="sha384-DGyLxAyjq0f9SPpVevD6IgztCFlnMF6oW/XQGmfe+IsZ8TqEiDrcHkMLKI6fiB/Z" crossorigin="anonymous"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/react-dom/18.3.1/umd/react-dom.production.min.js" integrity="sha384-gTGxhz21lVGYNMcdJOyq01Edg0jhn/c22nsx0kyqP0TxaV5WVdsSH1fSDUf5YJj1" crossorigin="anonymous"></script>
 <script>
-window.TWEAK_DEFAULTS = { flip: false, bestArrows: true, cameraPush: false, secondsPerMove: 1.6, keyHold: 1.5, fastOpening: false, queenInVideo: true, scheme: 'Auto', textSize: 'Default', pieceSet: 'cburnett', boardTheme: 'brown', boardBrightness: 100, boardContrast: 100, boardHue: 0, exportFps: 8, exportFormat: 'MP4', webpWidth: 0, webpQuality: 75, mp4Quality: 'High', mp4Vfr: false, blunderGlow: true, commentary: true, commentPgn: true, commentNotes: true, commentQueen: true, sound: true, soundSet: 'Lichess sfx', soundVolume: 70, sfDepth: null, sfTime: 3, sfOwnDepth: null, sfOwnTime: 5, sfLines: 1, sfHash: 64, sfThreads: null, sfGameHash: 64, sfGameLines: 1, sfGameThreads: null, sfOn: true, sfEngine: 'Lite', tablebase: true, cloudEval: false, explorer: false, explorerDb: 'Lichess', explorerRating: 'Lichess default', explorerSpeed: 'Lichess default', explorerOpen: 'here', cloudPrefer: false, playClock: 'Off', playSide: 'w' };
+window.TWEAK_DEFAULTS = { flip: false, bestArrows: true, cameraPush: false, secondsPerMove: 1.6, keyHold: 1.5, fastOpening: false, queenInVideo: true, scheme: 'Auto', textSize: 'Default', pieceSet: 'cburnett', boardTheme: 'brown', boardBrightness: 100, boardContrast: 100, boardTint: 0, boardSaturation: 100, boardHue: 0, exportFps: 8, exportFormat: 'MP4', webpWidth: 0, webpQuality: 75, mp4Quality: 'High', mp4Vfr: false, blunderGlow: true, commentary: true, commentPgn: true, commentNotes: true, commentQueen: true, sound: true, soundSet: 'Lichess sfx', soundVolume: 70, sfDepth: null, sfTime: 3, sfOwnDepth: null, sfOwnTime: 5, sfLines: 1, sfHash: 64, sfThreads: null, sfGameHash: 64, sfGameLines: 1, sfGameThreads: null, sfOn: true, sfEngine: 'Lite', tablebase: true, cloudEval: false, explorer: false, explorerDb: 'Lichess', explorerRating: 'Lichess default', explorerSpeed: 'Lichess default', explorerOpen: 'here', cloudPrefer: false, playClock: 'Off', playSide: 'w' };
 </script>
 <!--SCRIPTS-->
