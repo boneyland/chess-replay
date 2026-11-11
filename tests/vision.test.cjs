@@ -77,3 +77,30 @@ test('a copy that is not kept is refused without a Worker; removing the copy sto
   assert.ok(workers[0].ended);
   await assert.rejects(p, /stopped/);
 });
+
+// last: the page then keeps to one thread
+test('a threaded load that never finishes is stopped after 30 s and started again on one thread', async (t) => {
+  t.mock.timers.enable({ apis: ['setTimeout'] });
+  const tick = () => new Promise((ok) => setImmediate(ok));
+  workers.length = 0;
+  await keep();
+  const p = V.read(bitmap());
+  for (let i = 0; i < 4; i++) await tick();
+  assert.equal(workers.length, 1);
+  assert.ok(workers[0].sent[0].threads > 1, 'threads first (this machine has more than one core)');
+  t.mock.timers.tick(29999);
+  await tick();
+  assert.equal(workers.length, 1, 'still waiting');
+  t.mock.timers.tick(1);
+  for (let i = 0; i < 6; i++) await tick();
+  assert.ok(workers[0].ended, 'the hung Worker is ended');
+  assert.equal(workers.length, 2);
+  assert.equal(workers[1].sent[0].threads, 1);
+  t.mock.timers.tick(60000);
+  await tick();
+  workers[1].answer({ type: 'ready' });
+  await tick();
+  workers[1].answer({ type: 'logits', logits: new Float32Array(832) });
+  assert.equal((await p).length, 832, 'the one-thread load is not timed out');
+  V.stop();
+});

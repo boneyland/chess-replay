@@ -147,7 +147,9 @@
     const spawn = () => {
       const w = worker = makeWorker();
       w.onmessage = (e) => { if (w === worker) onLine(String(e.data)); };
-      w.onerror = (e) => { if (w === worker) fail(e); };
+      // handled here (a replaced worker's too), so the browser needn't also report it as uncaught: WebKit did, as a bare
+      // "[object Event]", when a reload cut off a worker still loading (GitHub, 2026-11-11)
+      w.onerror = (e) => { if (e && e.preventDefault) e.preventDefault(); if (w === worker) fail(e); };
     };
     // a fresh worker, which gets every option again before the search that was running (q) runs on it (a stopped search
     // answers its last score); a boot under way goes on with the new worker
