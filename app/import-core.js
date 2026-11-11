@@ -1,6 +1,6 @@
 // Import game's paste box: what the pasted text is. A Lichess link (LichessCore.gameLink) is fetched by the dialog; one
 // line that looks like a FEN (or a lone [FEN "…"] tag) is a position, read by EditCore (legal or not; the caller decides
-// where it opens); anything else must build as a PGN. read(text) → { link } | { setup } | { pgn } | { error }
+// where it opens); anything else must be standard chess and build as a PGN (pgn()). read(text) → { link } | { setup } | { pgn } | { error }
 (function () {
   const looksFen = (t) => !/\n/.test(t) && (/^\[\s*FEN\s/i.test(t) || (t.split(/\s/)[0].match(/\//g) || []).length === 7);
 
@@ -14,9 +14,17 @@
       const r = window.EditCore.fromFen(t);
       return r.setup ? { setup: r.setup } : { error: r.error };
     }
-    try { window.ChessCore.buildGame({ pgn: t }); } catch (e) { return { error: (e && e.message) || 'That isn’t a PGN, FEN or Lichess link this page can read.' }; }
-    return { pgn: t };
+    return pgn(t);
   }
 
-  window.ImportCore = { read };
+  // A PGN, pasted or fetched from Lichess, as the page will open it: { pgn } when it is standard chess and builds, else
+  // { error } saying why, so the dialog can say so before it closes or changes anything
+  function pgn(text) {
+    const v = window.LichessCore && window.LichessCore.variant(text);
+    if (v) return { error: `That’s a ${v} game: only standard chess opens here.` };
+    try { window.ChessCore.buildGame({ pgn: text }); } catch (e) { return { error: (e && e.message) || 'That isn’t a PGN, FEN or Lichess link this page can read.' }; }
+    return { pgn: text };
+  }
+
+  window.ImportCore = { read, pgn };
 })();

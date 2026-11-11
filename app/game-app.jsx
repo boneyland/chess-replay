@@ -457,9 +457,10 @@ function GameApp() {
   // Import game's tiles and paste box (guard asked before the dialog opened): the picker's files close the dialog as they load
   const chooseFiles = () => inputRef.current.click();
   const importImage = () => { setImportOpen(false); setVision({ play: null, again: null, back: true }); };
-  // a pasted PGN is a loaded game, as a picked file; the dialog has checked it builds. link: the Lichess link it was
-  // fetched from (LichessCore.gameLink), which sets Flip as Lichess shows it (from Black's side for /black, else
-  // White's), and whose #ply opens the replay paused after that ply
+  // a pasted PGN is a loaded game, as a picked file; the dialog has checked it is standard chess and builds
+  // (ImportCore.pgn, a fetched one too), so closing it first loses nothing. link: the Lichess link it was fetched from
+  // (LichessCore.gameLink), which sets Flip as Lichess shows it (from Black's side for /black, else White's), and whose
+  // #ply opens the replay paused after that ply
   const pgnLoad = (text, link) => {
     setImportOpen(false); setQueenOpen(false);
     if (link) setTweak('flip', link.side === 'b');

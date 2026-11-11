@@ -509,8 +509,10 @@ function ImportDialog({ text: text0, auto, onChoose, onPgn, onFen, onImage, onCl
     const r = await window.LichessCore.fetchGame(link, { signal: c.signal });
     if (r.aborted || ctl.current !== c) return;
     ctl.current = null; setBusy(false);
-    if (r.error) setMsg(r.error); else if (r.list) setList({ games: r.list, link }); else onPgn(r.pgn, link);
+    if (r.error) setMsg(r.error); else if (r.list) setList({ games: r.list, link }); else pick(r.pgn, link);
   };
+  // a fetched game opens only once it is known to be standard chess and to build: else the message, the dialog kept
+  const pick = (pgn, link) => { const c = window.ImportCore.pgn(pgn); if (c.error) setMsg(c.error); else onPgn(pgn, link); };
   const open = (t = text) => {
     if (busy) return;
     const r = window.ImportCore.read(t);
@@ -520,21 +522,26 @@ function ImportDialog({ text: text0, auto, onChoose, onPgn, onFen, onImage, onCl
   const close = () => { if (ctl.current) ctl.current.abort(); onClose(); };
   const onKey = (e) => { if (e.key === 'Enter' && (e.ctrlKey || e.metaKey)) { e.preventDefault(); open(); } };
   const back = () => { setList(null); setMsg(''); };
-  const done = list && list.games.filter((g) => g.result).length;
+  // a listed game opens when it has ended and is standard chess; the others are greyed, saying why
+  const can = (g) => !!g.result && !g.variant;
+  const done = list && list.games.filter(can).length, playing = list && list.games.some((g) => !g.result), odd = list && list.games.some((g) => g.result && g.variant);
+  const greyed = playing && odd ? 'are still being played or aren’t standard chess' : playing ? 'are still being played' : 'aren’t standard chess';
   return (
     <DialogBox label="Import game" part="import-game" className="import-box" onClose={close}>
       {list ? <>
-        <div ref={body} className="fen-note">{done ? `${list.games.length} game${list.games.length === 1 ? '' : 's'}; pick one to open${done < list.games.length ? ' (the greyed ones are still being played)' : ''}.` : 'No game here has finished yet: they can be opened once they end.'}</div>
+        <div ref={body} className="fen-note">{done ? `${list.games.length} game${list.games.length === 1 ? '' : 's'}; pick one to open${done < list.games.length ? ` (the greyed ones ${greyed})` : ''}.`
+          : odd ? `None of these games can be opened here: they ${greyed}.` : 'No game here has finished yet: they can be opened once they end.'}</div>
         <div className="import-list">
           {list.games.map((g, i) => (
-            <button key={i} type="button" className="import-game" disabled={!g.result}
-              onClick={() => onPgn(g.pgn, { ...list.link, kind: 'game', id: list.link.id + '-' + (i + 1), side: null, ply: null })}>
+            <button key={i} type="button" className="import-game" disabled={!can(g)}
+              onClick={() => pick(g.pgn, { ...list.link, kind: 'game', id: list.link.id + '-' + (i + 1), side: null, ply: null })}>
               {g.board != null && <span className="import-board">{g.board}</span>}
               <span className="import-players">{g.white} – {g.black}</span>
-              <span className="import-result">{g.result || 'playing'}</span>
+              <span className="import-result">{g.result ? g.variant || g.result : 'playing'}</span>
             </button>
           ))}
         </div>
+        <div className="fen-msg" role="alert">{msg}</div>
         <div className="fen-btns">
           <button type="button" className="twk-btn secondary" onClick={back}>Back</button>
           <button type="button" className="twk-btn secondary" onClick={close}>Cancel</button>
@@ -661,7 +668,7 @@ function PlayDialog({ mode = 'human', setUpFen, here, clock, side, initial, onSt
 function LeaveDialog({ onLeave, onStay }) {
   return (
     <DialogBox label="Leave this game?" part="leave-game" onClose={onStay}>
-      <div className="fen-note">It stays in My games, to resume later; its clocks pause until the next move.</div>
+      <div className="fen-note">It stays in My games, its clocks stopped until you resume it there.</div>
       <div className="fen-btns">
         <button type="button" className="twk-btn secondary" data-autofocus onClick={onStay}>Keep playing</button>
         <button type="button" className="twk-btn" onClick={onLeave}>Leave the game</button>

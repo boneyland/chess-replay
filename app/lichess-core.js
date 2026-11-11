@@ -227,15 +227,19 @@
   }
   // a PGN's tags (the first game's), as written
   const pgnTags = (pgn) => { const o = {}; String(pgn).replace(/^\s*\[(\w+)\s+"((?:[^"\\]|\\.)*)"\]\s*$/gm, (_, k, v) => { if (!(k in o)) o[k] = v.replace(/\\(.)/g, '$1'); return ''; }); return o; };
+  // the chess variant a PGN says it is (its Variant tag), or null for standard chess: no tag, Standard, or Lichess's
+  // From Position (a standard game from a set-up position). The page plays only standard chess
+  const variant = (pgn) => { const v = (pgnTags(pgn).Variant || '').trim(); return !v || /^(standard|from position)$/i.test(v) ? null : v; };
   // a result tag the game has ended with
   const finished = (pgn) => /^(1-0|0-1|1\/2-1\/2)$/.test(pgnTags(pgn).Result || '');
-  // A round's or study's PGN as its games: { pgn, white, black, result ('1–0', '0–1', '½–½' or null: not finished), board }.
+  // A round's or study's PGN as its games: { pgn, white, black, result ('1–0', '0–1', '½–½' or null: not finished), board,
+  // variant (variant()) }.
   // A round not started yet holds a placeholder game with no players, left out
   const RESULT_TEXT = { '1-0': '1–0', '0-1': '0–1', '1/2-1/2': '½–½' };
   function listGames(text) {
     return window.ChessCore.splitGames(String(text)).filter((pgn) => { const g = pgnTags(pgn); return g.White || g.Black; }).map((pgn) => {
       const g = pgnTags(pgn), board = /^\d+\.(\d+)$/.exec(g.Round || '');
-      return { pgn, white: g.White || '?', black: g.Black || '?', result: RESULT_TEXT[g.Result] || null, board: board ? +board[1] : null };
+      return { pgn, white: g.White || '?', black: g.Black || '?', result: RESULT_TEXT[g.Result] || null, board: board ? +board[1] : null, variant: variant(pgn) };
     });
   }
   // Fetches a gameLink: { pgn } for a finished game, { list } for a round or study, or { error } saying what went
@@ -262,5 +266,5 @@
     return { pgn: text };
   }
 
-  window.LichessCore = { gameLink, pgnTags, finished, listGames, fetchGame, EXPLORER_URL, explorerUrl, explorerKey, parseExplorer, TB_URL, CLOUD_URL, TB_MAX_PIECES, BACKOFF_MS, pieceCount, fenOf, tbKey, tablebaseUrl, parseTablebase, flip, outcome, verdict, bar, evalCp, groups, cloudKey, cloudUrl, cloudMoves, parseCloud, create };
+  window.LichessCore = { gameLink, pgnTags, variant, finished, listGames, fetchGame, EXPLORER_URL, explorerUrl, explorerKey, parseExplorer, TB_URL, CLOUD_URL, TB_MAX_PIECES, BACKOFF_MS, pieceCount, fenOf, tbKey, tablebaseUrl, parseTablebase, flip, outcome, verdict, bar, evalCp, groups, cloudKey, cloudUrl, cloudMoves, parseCloud, create };
 })();
