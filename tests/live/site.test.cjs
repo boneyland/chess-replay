@@ -2059,6 +2059,9 @@ for (const name of BROWSERS) for (const site of SITES) {
       }, fixture('vision-lichess.png', 'image/png').buffer.toString('base64'));
       assert.ok(clear.n > clear.all / 4, `light squares made transparent: ${clear.n} of ${clear.all} pixels`);
       await fromImage();
+      // a paste is taken only once the dialog is choosing (it checks for the kept copy first)
+      const choosing = () => dialog.getByRole('button', { name: 'Choose image' }).waitFor({ timeout: 5000 });
+      await choosing();
       await paste({ name: 'clear.png', mimeType: 'image/png', buffer: Buffer.from(clear.b64, 'base64') });
       await cropBox.waitFor({ timeout: 5000 });
       await boxAt(cases.lichess.box, 'the transparent screenshot');
@@ -2076,6 +2079,7 @@ for (const name of BROWSERS) for (const site of SITES) {
         for (let i = 0; i < out.length; i += 0x8000) s += String.fromCharCode(...out.subarray(i, i + 0x8000));
         return btoa(s);
       });
+      await choosing();
       await paste({ name: 'huge.png', mimeType: 'image/png', buffer: Buffer.from(huge, 'base64') });
       await assert.doesNotReject(dialog.getByRole('alert').filter({ hasText: 'That image is too large to read (over 50 megapixels)' }).waitFor({ timeout: 10000 }));
       assert.equal(await cropBox.count(), 0, 'no crop box for a refused picture');
