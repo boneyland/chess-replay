@@ -1383,11 +1383,12 @@ function withDeeper(M) {
 }
 
 // The live search of a move of the loaded analysis, while paused on it (on), at the live searches' settings, and Go
-// deeper from it: what describes the position after the move (the eval, the Best line, the eval bar, and in the annotated PGN the
-// eval and, on the next move, the line: DEEPER_SHOWN); the ratings, graph and accuracy stay the analysis's. On a PGN's own
-// evals (Lichess's [%eval]s) too. The Stockfish switch on searches every move (auto), its result and lines in place of
-// the stored ones from its first depth; with it off, nothing is searched and Go deeper isn't offered; on a PGN's evals the annotated PGN, marks and graph stay the PGN's (nothing goes into DEEPER_SHOWN). Not on a position
-// the tablebase answered (its result is final): on says when
+// deeper from it: what describes the position after the move (the eval, the Best line, the eval bar, and in the
+// annotated PGN the eval and, on the next move, the line: DEEPER_SHOWN); the ratings, graph and accuracy stay the
+// analysis's. On a PGN's own evals (Lichess's [%eval]s) too. The Stockfish switch on searches every move (auto), its
+// result and lines in place of the stored ones from its first depth; with it off, nothing is searched and Go deeper
+// isn't offered. On a PGN's evals the annotated PGN, marks and graph stay the PGN's (nothing goes into DEEPER_SHOWN).
+// Not on a position the tablebase answered (its result is final): on says when
 function useGoDeeper(M, c, on, sf, tw) {
   const p = on ? M.plies[c] : null;
   // the live searches' settings (the Analysis panel's ☰: depth, time limit, lines), as for the viewer's own moves; the
@@ -1401,8 +1402,11 @@ function useGoDeeper(M, c, on, sf, tw) {
   const ev = useMoveEval({ engine: sf ? sf.engine : null, before: moves, after: moves, settings: base, fen: M.start.fen, stored: on ? { cp: cpOf(M, c), depth: storedDepth, pv: [], stored: true, src } : null, cloud: cloudSetting(tw), off: !sf || sf.off, auto: !!sf && !sf.off });
   const r = on && M.evalSource === 'analysis' && ev.after && !ev.after.stored && !ev.after.partial && ev.after.cp != null ? ev.after : null;
   React.useEffect(() => {
-    // the annotated PGN takes only results deeper than the analysis's (the panel shows a shallower live search too)
-    if (!r || (storedDepth && r.depth < storedDepth)) return;
+    // the annotated PGN takes only results as deep as the analysis's search of the move (the panel shows a shallower live
+    // search too); where the analysis doesn't say how deep that went (an analysis JSON without search_depth_after),
+    // only a pressed Go deeper's
+    const known = p && p.search && p.search.depth;
+    if (!r || (known ? r.depth < known : !(ev.level > 0))) return;
     const k = deeperKey(M, c), had = DEEPER_SHOWN.get(k);
     if (!had || r.depth > had.depth || (r.lines && r.lines.length > 1 && !(had.lines && had.lines.length > 1))) DEEPER_SHOWN.set(k, { cp: r.cp, depth: r.depth, pv: r.pv || [], lines: r.lines && r.lines.length > 1 ? r.lines : null });
   }, [r]);

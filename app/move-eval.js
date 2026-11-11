@@ -30,7 +30,7 @@
 //
 // watch(request, onChange) starts the cloud asks and the searches; onChange() runs after each change (never during
 // watch() itself). It returns { get, stop }:
-//   get(): { before, after, cloud, pending, progress, deeper, deeperTo, failed }
+//   get(): { before, after, cloud, pending, progress, deeper, deeperTo, failed, level }
 //     before, after: the result to show for each position (a search's, partial: true while it runs; the cloud's, source
 //       'cloud'; the stored one); null until there is one
 //     pending: local searches are still to finish; progress: 0–1 through them (each one's depth or time limit,
@@ -40,6 +40,7 @@
 //       deeperTo: the settings it would search at
 //     failed: why a Go deeper search didn't run (the engine wouldn't start, or stopped); the press is then undone, so
 //       deeper() comes back to try again
+//     level: the Go deeper level shown (0: the first search, or the stored result; with off, the deepest finished)
 //   stop(): cancels the searches, the timers and the cloud requests; nothing changes after it
 // keyOf(request): '' for a request that asks nothing, else a string that changes when a new watch is needed
 // positionKey(request): the key Go deeper's presses are counted under
@@ -125,6 +126,9 @@
         // auto search gives way to the stored result, with Go deeper to try again
         const fail = (msg) => { if (lv > 0) { presses.set(p.base, lv - 1); failed = msg; restart(); } else if (liveFirst) { liveFirst = false; failed = msg; restart(); } };
         (async () => {
+          // nothing to search (the stored result, or every search cached): no engine is started, so a failed start isn't
+          // retried by the run that gives way to the stored result
+          if (!todo) { await null; change((s) => ({ ...s, before: cached('before'), after: cached('after'), pending: false })); return; }
           let eng;
           try { eng = await engine.get(); } catch (e) { if (live) { change((s) => ({ ...s, pending: false })); fail('Stockfish didn’t start' + (e && e.message ? ': ' + e.message : '')); } return; }
           for (const which of WHICH) {
@@ -172,7 +176,7 @@
         // reach (AnalysisCore.cloudEnough)
         const cloudDeep = (r) => fromCloud(r) && r.depth >= A.cloudEnough(next.depth, own.name);
         const deeper = !off && done && !(cloudDeep(out.after) && cloudDeep(out.before)) && A.canGoDeeper(own, lv) ? () => { presses.set(p.base, lv + 1); failed = null; restart(); } : null;
-        return { ...out, deeper, deeperTo: deeper ? next : null, failed };
+        return { ...out, deeper, deeperTo: deeper ? next : null, failed, level: lv };
       }
 
       stopRun = run();

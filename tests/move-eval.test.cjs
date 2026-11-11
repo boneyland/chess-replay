@@ -23,7 +23,7 @@ function fakeEngine({ starts = Infinity } = {}) {
     },
     failed: () => null,
   };
-  return { calls, handle: { get: () => (gets++ < starts ? Promise.resolve(eng) : Promise.reject(new Error('no worker'))) } };
+  return { calls, gets: () => gets, handle: { get: () => (gets++ < starts ? Promise.resolve(eng) : Promise.reject(new Error('no worker'))) } };
 }
 const found = (cp, depth, pv = ['e7e5']) => ({ cp, depth, maxDepth: depth, pv, lines: [{ k: 1, cp, depth, pv }], nodes: 1000, timeMs: 500 });
 
@@ -344,6 +344,17 @@ test('auto: a live search that fails gives way to the stored result, with Go dee
   await tick(); await tick();
   assert.deepEqual([w.get().after.cp, w.get().after.stored, w.get().pending, typeof w.get().deeper], [50, true, false, 'function']);
   assert.match(w.get().failed, /didn’t start/);
+  assert.equal(e.gets(), 1, 'the stored result needs no engine: its start isn\'t tried again');
+  assert.equal(w.get().level, 0);
+});
+
+test('level: the Go deeper level shown', async () => {
+  const evals = ME.create(), e = fakeEngine();
+  const w = evals.watch(request(e), () => {});
+  assert.equal(w.get().level, 0);
+  await finishBoth(e, 0, found(30, 12), found(20, 12));
+  w.get().deeper();
+  assert.equal(w.get().level, 1);
 });
 
 test('stop() cancels the searches, the cloud\'s wait and its requests, and nothing changes after it', async (t) => {

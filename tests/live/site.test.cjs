@@ -67,15 +67,17 @@ async function shareFen(p) {
   await dialog.waitFor({ state: 'detached', timeout: 5000 });
   return fen;
 }
+// opts: the context's options, and newViewer: true for a page with no settings stored (the Stockfish switch left at its default)
 async function open(browser, viewport, opts) {
-  const ctx = await browser.newContext({ viewport, ...(PROXY_CA && browser.browserType().name() === 'firefox' ? { ignoreHTTPSErrors: true } : {}), ...opts });
+  const { newViewer, ...ctxOpts } = opts || {};
+  const ctx = await browser.newContext({ viewport, ...(PROXY_CA && browser.browserType().name() === 'firefox' ? { ignoreHTTPSErrors: true } : {}), ...ctxOpts });
   const cdn = process.env.LIVE_CDN_DIR;
   if (cdn) await ctx.route('https://cdnjs.cloudflare.com/ajax/libs/**', (r) => {
     const m = r.request().url().match(/\/(react|react-dom)\/18\.3\.1\/umd\/([\w.-]+)$/);
     return m ? r.fulfill({ path: path.join(cdn, m[1], 'package', 'umd', m[2]), contentType: 'text/javascript' }) : r.continue();
   });
   // the Stockfish switch on (off by default), unless a test sets sfOn itself
-  await ctx.addInitScript(engineOn);
+  if (!newViewer) await ctx.addInitScript(engineOn);
   // whatever the page's Content-Security-Policy blocks is an error, whether or not the browser logs it
   await ctx.addInitScript(() => document.addEventListener('securitypolicyviolation', (e) => console.error(`CSP blocked ${e.blockedURI || 'inline'} (${e.effectiveDirective})`)));
   const page = namePending(await ctx.newPage());
@@ -2862,10 +2864,8 @@ for (const name of BROWSERS) for (const site of SITES) {
     // Go deeper where the engine won't start (as on a tablet whose + only vanished): the press says so and the + comes back
     // a new viewer's Stockfish switch is off (2026-11-11): a loaded analysis shows its own evals and nothing searches
     await t.test('desktop: the Stockfish switch is off for a new viewer', async () => {
-      const g = await open(browser, { width: 1440, height: 900 });
+      const g = await open(browser, { width: 1440, height: 900 }, { newViewer: true });
       const p = g.page;
-      // no stored settings: open()'s seeding undone before the page reads them
-      await p.addInitScript(() => { try { localStorage.removeItem('chess-video.tweaks.v1'); } catch (e) {} });
       await p.addInitScript(spyEngine, {});
       await p.goto(base, { waitUntil: 'load' });
       await loadedOn(p);
