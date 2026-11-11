@@ -334,7 +334,7 @@ function useGameAnalysis(M, files, getFiles, commit, engine, settings, tbOn) {
 function FrameButton({ primary, color, onClick, children, label, disabled, compact, className }) {
   const c = color || C.best;
   return (
-    <button type="button" className={className} aria-label={label} disabled={disabled} onClick={(e) => { e.stopPropagation(); onClick(); }} onPointerDown={(e) => e.stopPropagation()}
+    <button type="button" className={['frame-btn', primary && 'frame-btn-primary', className].filter(Boolean).join(' ')} aria-label={label} disabled={disabled} onClick={(e) => { e.stopPropagation(); onClick(); }} onPointerDown={(e) => e.stopPropagation()}
       style={{ whiteSpace: 'nowrap', font: `600 ${tx(primary ? (compact ? 17 : 20) : (compact ? 14 : 15))}px ${MONO}`, letterSpacing: primary ? '0.02em' : '0.1em', textTransform: primary ? 'none' : 'uppercase', padding: primary ? (compact ? `${tx(7)}px ${tx(18)}px` : `${tx(12)}px ${tx(22)}px`) : (compact ? `${tx(4)}px ${tx(10)}px` : `${tx(5)}px ${tx(12)}px`), borderRadius: 4, cursor: disabled ? 'default' : 'pointer', opacity: disabled ? 0.4 : 1, userSelect: 'none', WebkitUserSelect: 'none', border: `1.5px solid ${c}`, background: primary ? c : 'transparent', color: primary ? C.bg : c }}>
       {children}
     </button>
@@ -433,7 +433,7 @@ function DeeperButton({ ev }) {
   if (!ev || !ev.deeper) return null;
   const t = ev.deeperTo, tip = t.depth == null ? `Go deeper: ${t.time_limit} s` : `Go deeper: depth ${t.depth}, up to ${t.time_limit} s`;
   return (
-    <button type="button" aria-label={tip} title={tip} onClick={(e) => { e.stopPropagation(); ev.deeper(); }} onPointerDown={(e) => e.stopPropagation()}
+    <button type="button" className="frame-btn" aria-label={tip} title={tip} onClick={(e) => { e.stopPropagation(); ev.deeper(); }} onPointerDown={(e) => e.stopPropagation()}
       style={{ ...NO_SELECT, flex: 'none', width: '1.5em', height: '1.5em', padding: 0, margin: '-0.25em 0 -0.25em -0.4em', borderRadius: 3, cursor: 'pointer', border: `1.5px solid ${C.best}`, background: 'transparent', color: C.best, font: `700 1.2em/1 ${MONO}`, letterSpacing: 0 }}>+</button>
   );
 }

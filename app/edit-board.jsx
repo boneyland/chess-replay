@@ -16,7 +16,7 @@ const SR_ONLY = { position: 'absolute', width: 1, height: 1, overflow: 'hidden',
 
 function TrayPiece({ p, size, held, handlers }) {
   return (
-    <button type="button" data-no-drag-scroll aria-label={trayLabel(p)} aria-pressed={held === p} {...handlers}
+    <button type="button" className="tray-piece" data-no-drag-scroll aria-label={trayLabel(p)} aria-pressed={held === p} {...handlers}
       onDragStart={(e) => e.preventDefault()}
       style={{ ...NO_SELECT, width: size, height: size, padding: 0, border: 'none', borderRadius: 4, cursor: 'grab', touchAction: 'none', background: held === p ? 'rgba(255,255,255,0.12)' : 'transparent', boxShadow: held === p ? `inset 0 0 0 4px ${BOARD.last}` : 'none' }}>
       <img src={img(p === p.toUpperCase() ? 'w' : 'b', p.toLowerCase())} alt="" draggable={false} style={{ width: size * 0.9, height: size * 0.9, display: 'block', margin: 'auto', pointerEvents: 'none', filter: p === p.toLowerCase() ? C.rim : 'none' }} />
@@ -149,7 +149,7 @@ function HoldButton({ onHold }) {
   // unmounted while held (the layout going to two columns), it lets go, or the picture would cover the board when it's back
   React.useEffect(() => () => onHold(false), []);
   return (
-    <button type="button" onPointerDown={(e) => { e.stopPropagation(); on(); }} onPointerUp={off} onPointerCancel={off} onPointerLeave={off} onBlur={off}
+    <button type="button" className="frame-btn" onPointerDown={(e) => { e.stopPropagation(); on(); }} onPointerUp={off} onPointerCancel={off} onPointerLeave={off} onBlur={off}
       onKeyDown={(e) => { if (e.key === ' ') { e.preventDefault(); on(); } }} onKeyUp={(e) => { if (e.key === ' ') off(); }}
       onContextMenu={(e) => e.preventDefault()}
       style={{ ...NO_SELECT, alignSelf: 'flex-start', touchAction: 'none', whiteSpace: 'nowrap', font: `600 ${tx(15)}px ${MONO}`, letterSpacing: '0.1em', textTransform: 'uppercase', padding: `${tx(5)}px ${tx(12)}px`, borderRadius: 4, cursor: 'pointer', border: `1.5px solid ${C.ink}`, background: 'transparent', color: C.ink }}>
@@ -249,7 +249,7 @@ function EditBoard({ setup, onChange, onDone, onCancel, fenText, onFenText, fenM
           <div style={{ display: 'flex', alignItems: 'center', gap: tx(10), flexWrap: 'wrap' }}>
             <FrameButton color={C.ink} onClick={() => onChange(E.start())}>Start</FrameButton>
             <FrameButton color={C.ink} onClick={() => onChange(E.empty())}>Empty</FrameButton>
-            <select aria-label="Side to move" value={setup.turn} onChange={(e) => onChange(E.setTurn(setup, e.target.value))} style={{ ...editField(), width: 'auto', flex: 1, minWidth: tx(180) }}>
+            <select className="frame-select" aria-label="Side to move" value={setup.turn} onChange={(e) => onChange(E.setTurn(setup, e.target.value))} style={{ ...editField(), width: 'auto', flex: 1, minWidth: tx(180) }}>
               <option value="w">White to move</option>
               <option value="b">Black to move</option>
             </select>
@@ -270,7 +270,7 @@ function EditBoard({ setup, onChange, onDone, onCancel, fenText, onFenText, fenM
           <div style={{ display: 'flex', flexWrap: 'wrap', alignItems: 'flex-start', columnGap: tx(24), rowGap: tx(10) }}>
             <label style={{ display: 'block' }}>
               {label('En passant')}
-              <select aria-label="En passant square" value={setup.ep} disabled={!epList.length}
+              <select className="frame-select" aria-label="En passant square" value={setup.ep} disabled={!epList.length}
                 onChange={(e) => onChange(E.setEp(setup, +e.target.value))}
                 title={epList.length ? 'Setting a square sets the half-move clock to 0' : 'No pawn of the other side could just have moved two'}
                 style={{ ...editField(), width: 'auto', minWidth: tx(110), color: epList.length ? C.ink : C.dim }}>
