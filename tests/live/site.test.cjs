@@ -655,6 +655,12 @@ for (const name of BROWSERS) for (const site of SITES) {
       assert.ok(dragged < end, 'the glide left the list scrolled up');
       await page.mouse.wheel(0, 120);
       await page.waitForFunction((d) => document.querySelector('.moves-list').scrollTop > d, dragged, { timeout: 3000 });
+      // scrolled away, the next move brings its line back into view even when it needs the same scroll as the last
+      await page.mouse.wheel(0, -5000);
+      await page.waitForFunction(() => document.querySelector('.moves-list').scrollTop === 0, null, { timeout: 3000 });
+      await page.locator('[data-ply][tabindex="0"]').focus();
+      await page.keyboard.press('ArrowRight');
+      await page.waitForFunction((e) => document.querySelector('.moves-list').scrollTop === e, end, { timeout: 3000 });
       await page.locator('[data-ply="0"]').click();
       await assert.doesNotReject(page.locator('.plabel').filter({ hasText: /^1\. / }).waitFor({ timeout: 3000 }));
       assert.equal(await top(), 0, 'the first move scrolled the list to its top');
