@@ -2419,7 +2419,8 @@ for (const name of BROWSERS) for (const site of SITES) {
     });
     // Lichess links in Import game (Lichess faked: the page's own fetch answers for lichess.org): a finished game opens
     // as a loaded game, its /black flipping the board and #ply opening there; an unfinished one and a 404 say so and
-    // keep the dialog; a broadcast round lists its games, the unfinished greyed, Back keeps the link
+    // keep the dialog, as do a variant game and one that doesn't build; a broadcast round lists its games, the unfinished
+    // and variant ones greyed, Back keeps the link
     // Safari focuses no button on a click, so a click on Open leaves the focus on the page: the dialog still takes the keys
     await t.test('desktop: a dialog takes Tab and Esc with the focus outside it', async () => {
       const pp = await open(browser, { width: 1440, height: 900 });
@@ -2440,7 +2441,7 @@ for (const name of BROWSERS) for (const site of SITES) {
       await pp.ctx.close();
     });
 
-    await t.test('desktop: Import game opens a Lichess game, refuses an unfinished one, and lists a round', async () => {
+    await t.test('desktop: Import game opens a Lichess game, refuses an unfinished, variant or broken one, and lists a round', async () => {
       const li = await open(browser, { width: 1440, height: 900 });
       const p = li.page, dialog = p.getByRole('dialog', { name: 'Import game' }), field = dialog.getByRole('textbox', { name: 'PGN, FEN or Lichess link' });
       await li.ctx.addInitScript(() => {
@@ -2449,7 +2450,9 @@ for (const name of BROWSERS) for (const site of SITES) {
           'https://lichess.org/game/export/Fin1shed?clocks=true&evals=true': [200, pgn('Lichess White', 'Lichess Black', '1-0', '-', '1. e4 { [%eval 0.3] [%clk 0:03:00] } 1... e5 { [%eval 0.25] [%clk 0:03:00] } 2. Nf3 Nc6 3. Bb5 a6 4. Ba4 Nf6')],
           'https://lichess.org/game/export/Play1ng0?clocks=true&evals=true': [200, pgn('A', 'B', '*', '-', '1. d4')],
           'https://lichess.org/game/export/N0tThere?clocks=true&evals=true': [404, ''],
-          'https://lichess.org/api/broadcast/round/R0und123.pgn': [200, pgn('Board One W', 'Board One B', '0-1', '3.1', '1. c4 c5') + pgn('Board Two W', 'Board Two B', '*', '3.2', '1. Nf3')],
+          'https://lichess.org/game/export/Crazy123?clocks=true&evals=true': [200, '[Variant "Crazyhouse"]\n' + pgn('C', 'D', '1-0', '-', '1. e4 d5 2. exd5 Qxd5 3. P@e4')],
+          'https://lichess.org/game/export/Br0ken12?clocks=true&evals=true': [200, pgn('E', 'F', '1-0', '-', '1. e4 e5 2. Ke3')],
+          'https://lichess.org/api/broadcast/round/R0und123.pgn': [200, pgn('Board One W', 'Board One B', '0-1', '3.1', '1. c4 c5') + pgn('Board Two W', 'Board Two B', '*', '3.2', '1. Nf3') + '[Variant "Atomic"]\n' + pgn('Board Three W', 'Board Three B', '1-0', '3.3', '1. e4')],
         };
         window.__li = [];
         window.fetch = function (u) {
@@ -2473,6 +2476,15 @@ for (const name of BROWSERS) for (const site of SITES) {
       await assert.doesNotReject(dialog.getByRole('alert').filter({ hasText: /still being played/ }).waitFor({ timeout: 5000 }));
       await field.fill(''); await field.click(); await p.keyboard.type('lichess.org/N0tThere'); await p.keyboard.press('ControlOrMeta+Enter');
       await assert.doesNotReject(dialog.getByRole('alert').filter({ hasText: /no game at that link/ }).waitFor({ timeout: 5000 }));
+      // a variant game, then one that doesn't build: each said under the box before anything changes (the dialog stays,
+      // /black leaves Flip alone)
+      const flip = () => p.evaluate(() => JSON.parse(localStorage.getItem('chess-video.tweaks.v1') || '{}').flip);
+      const flip0 = await flip();
+      await field.fill(''); await field.click(); await p.keyboard.type('https://lichess.org/Crazy123/black'); await p.keyboard.press('ControlOrMeta+Enter');
+      await assert.doesNotReject(dialog.getByRole('alert').filter({ hasText: /Crazyhouse game: only standard chess opens here/ }).waitFor({ timeout: 5000 }));
+      await field.fill(''); await field.click(); await p.keyboard.type('https://lichess.org/Br0ken12/black'); await p.keyboard.press('ControlOrMeta+Enter');
+      await assert.doesNotReject(dialog.getByRole('alert').filter({ hasText: /Ke3/ }).waitFor({ timeout: 5000 }));
+      assert.equal(await flip(), flip0, 'a game that failed left Flip alone');
       // a finished game, from Black's side at ply 4 (after 2... Nc6)
       await field.fill(''); await field.click(); await p.keyboard.type('https://lichess.org/Fin1shed/black#4'); await p.keyboard.press('ControlOrMeta+Enter');
       await assert.doesNotReject(dialog.waitFor({ state: 'detached', timeout: 5000 }));
@@ -2488,6 +2500,10 @@ for (const name of BROWSERS) for (const site of SITES) {
       await assert.doesNotReject(one.waitFor({ timeout: 5000 }));
       assert.equal(await two.isDisabled(), true, 'the unfinished game greyed');
       assert.match(await two.innerText(), /playing/);
+      const three = dialog.getByRole('button', { name: /Board Three W – Board Three B/ });
+      assert.equal(await three.isDisabled(), true, 'a variant game greyed');
+      assert.match(await three.innerText(), /Atomic/);
+      await assert.doesNotReject(dialog.getByText(/the greyed ones are still being played or aren’t standard chess/).waitFor({ timeout: 5000 }));
       await p.screenshot({ path: path.join(OUT, host + '-lichess-import-round.png') });
       await dialog.getByRole('button', { name: 'Back' }).click();
       assert.equal(await field.inputValue(), 'https://lichess.org/broadcast/test-tour/round-3/R0und123', 'Back keeps the link');
