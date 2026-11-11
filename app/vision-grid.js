@@ -4,7 +4,6 @@
 // fractions of the picture, as the crop box's. Nothing here touches the network or the model.
 (function () {
   const SIDE = 1024;
-  const D = 3; // the corner detector's quadrant size, in pixels
 
   // luma per pixel of an RGBA picture the caller has already scaled
   function grey(rgba, w, h) {
