@@ -1352,7 +1352,7 @@ function useOwnLineEval(M, line, sf, tw) {
   const on = !!(sf && vline && vline.upto >= 0 && (vline.src === 'you' || !sf.off));
   const before = on ? M.plies.slice(0, vline.at).map((p) => p.uci).concat(vline.moves.slice(0, vline.upto).map((m) => m.uci)) : null;
   const after = on ? before.concat([vline.moves[vline.upto].uci]) : null;
-  const ev = useMoveEval(sf ? sf.engine : null, before, after, sf ? sf.own : window.AnalysisCore.engineSettings().own, M.start.fen, null, cloudSetting(tw), !sf || sf.off);
+  const ev = useMoveEval({ engine: sf ? sf.engine : null, before, after, settings: sf ? sf.own : window.AnalysisCore.engineSettings().own, fen: M.start.fen, stored: null, cloud: cloudSetting(tw), off: !sf || sf.off });
   if (!on) return null;
   const posBefore = vline.upto > 0 ? vline.moves[vline.upto - 1].pos : vline.base || gamePos(vline.at - 1);
   const bm = ev.before && ev.before.best ? window.ChessCore.applyUci(posBefore, ev.before.best) : null;
@@ -1392,7 +1392,7 @@ function useGoDeeper(M, c, on, sf, tw) {
   const moves = on ? M.plies.slice(0, c + 1).map((q) => q.uci) : null;
   // the Stockfish switch on searches every move deeper by itself (auto), as a press of Go deeper would
   const src = M.evalSource === 'pgn' ? 'pgn' : M.engine;
-  const ev = useMoveEval(sf ? sf.engine : null, moves, moves, base, M.start.fen, on ? { cp: cpOf(M, c), depth: base.depth, pv: [], stored: true, src } : null, cloudSetting(tw), !sf || sf.off, !!sf && !sf.off);
+  const ev = useMoveEval({ engine: sf ? sf.engine : null, before: moves, after: moves, settings: base, fen: M.start.fen, stored: on ? { cp: cpOf(M, c), depth: base.depth, pv: [], stored: true, src } : null, cloud: cloudSetting(tw), off: !sf || sf.off, auto: !!sf && !sf.off });
   const r = on && M.evalSource === 'analysis' && ev.after && !ev.after.stored && !ev.after.partial && ev.after.cp != null ? ev.after : null;
   React.useEffect(() => {
     if (!r) return;
@@ -1407,7 +1407,7 @@ function useGoDeeper(M, c, on, sf, tw) {
 const NO_OWN = { depth: null, time_limit: 1, lines: 1 }; // the settings when there's no engine (on needs sf: nothing searched)
 function useGameMoveEval(M, c, on, sf, tw, gamePos) {
   const after = on ? M.plies.slice(0, c + 1).map((q) => q.uci) : null, before = on ? after.slice(0, -1) : null;
-  const ev = useMoveEval(sf ? sf.engine : null, before, after, sf ? sf.own : NO_OWN, M.start.fen, null, cloudSetting(tw), !sf || sf.off);
+  const ev = useMoveEval({ engine: sf ? sf.engine : null, before, after, settings: sf ? sf.own : NO_OWN, fen: M.start.fen, stored: null, cloud: cloudSetting(tw), off: !sf || sf.off });
   if (!on) return null;
   const bm = ev.before && ev.before.best ? window.ChessCore.applyUci(gamePos(c - 1), ev.before.best) : null;
   return { ...ev, bestSan: bm ? bm.san : null };
