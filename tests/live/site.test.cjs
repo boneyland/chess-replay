@@ -4705,6 +4705,14 @@ for (const name of BROWSERS) for (const site of SITES) {
       await dk.page.waitForFunction((w) => document.querySelector('.stage-frame img[src="boards/grey.jpg"]').style.filter === w, want);
       assert.equal(await reset.isDisabled(), false);
       assert.deepEqual(await left(), cols, 'no slider changed column');
+      // the mouse on Reset shows the board as the reset would leave it, the sliders as they are; off it, the colours again
+      const rb = await reset.boundingBox();
+      await dk.page.mouse.move(rb.x + rb.width / 2, rb.y + rb.height / 2, { steps: 4 });
+      await dk.page.waitForFunction(() => document.querySelector('.stage-frame img[src="boards/grey.jpg"]').style.filter === 'none');
+      assert.equal(await dk.page.locator('#tw-board-tint').inputValue(), '100', 'the sliders keep their values');
+      assert.equal(await dk.page.locator('.board-picker .board-tile').evaluateAll((bs) => bs.some((b) => [...b.querySelectorAll('*')].some((e) => getComputedStyle(e).filter !== 'none'))), false, 'the tiles show the defaults too');
+      await dk.page.mouse.move(rb.x + rb.width / 2, rb.y - 150, { steps: 4 });
+      await dk.page.waitForFunction((w) => document.querySelector('.stage-frame img[src="boards/grey.jpg"]').style.filter === w, want);
       await dk.page.reload({ waitUntil: 'load' });
       await loadedOn(dk.page);
       await pic.waitFor();
