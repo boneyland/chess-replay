@@ -1,6 +1,7 @@
 ---
 name: audit
 description: How to audit the whole chess-replay repo (or a large part of it) the same thorough way every time - one subagent per area reading its files in full, every finding checked against the code before it's reported, a coverage table, and a dated report with a fix plan that later sessions resume from. Use whenever the user asks to audit, review or sweep the whole repo, the codebase, all of app/, or "everything" for bugs, security, tech debt, test gaps, structure (rules only a browser test reaches) or docs drift, even if they don't say "audit". Not for reviewing one diff or PR (that's /code-review).
+argument-hint: "[correctness|security|debt|tests|structure|docs ...] [path...] [--max-agents N]"
 ---
 
 # Auditing chess-replay
@@ -11,6 +12,14 @@ changes (app changes on a `claude/<topic>` branch with a PR, per CLAUDE.md), fol
 **Cost:** the 2026-11-05 debt audit (6 agents, ~10,000 lines of source) took about 1.1 million subagent tokens, 3-6
 minutes per agent. An audit of all six kinds costs more than one kind; with the user's usage in mind, say so when the
 scope is "everything" and offer one kind at a time.
+
+## Arguments
+Given: `$ARGUMENTS`
+- Words that name a kind (correctness, security, debt, tests, structure, docs) pick those kinds; none named = all (warn about cost).
+- Paths (e.g. `app/explorer.jsx`, `app/`) narrow the scope to those files/folders.
+- `--max-agents N` caps the subagent count.
+- Anything else: ask before starting.
+With no arguments, settle the scope as in step 1.
 
 ## 1. Settle the scope
 Kinds of audit (the user may name one or several; with none named, do all of them):
