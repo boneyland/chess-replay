@@ -307,11 +307,11 @@ test('gameLink reads game links', () => {
 });
 test('gameLink reads broadcast and study links', () => {
   const bg = LC.gameLink('https://lichess.org/broadcast/kazchess-masters-almaty-2026/round-9/IKZUMzM4/SgsEz8ct');
-  assert.deepEqual({ k: bg.kind, id: bg.id, url: bg.url }, { k: 'game', id: 'SgsEz8ct', url: 'https://lichess.org/api/study/IKZUMzM4/SgsEz8ct.pgn?clocks=true&comments=true' });
+  assert.deepEqual({ k: bg.kind, id: bg.id, url: bg.url }, { k: 'game', id: 'SgsEz8ct', url: 'https://lichess.org/api/study/IKZUMzM4/SgsEz8ct.pgn?clocks=true&comments=true&variations=true' });
   const r = LC.gameLink('https://lichess.org/broadcast/kazchess-masters-almaty-2026/round-9/IKZUMzM4');
-  assert.deepEqual({ k: r.kind, id: r.id, url: r.url }, { k: 'list', id: 'IKZUMzM4', url: 'https://lichess.org/api/broadcast/round/IKZUMzM4.pgn' });
+  assert.deepEqual({ k: r.kind, id: r.id, url: r.url }, { k: 'list', id: 'IKZUMzM4', url: 'https://lichess.org/api/broadcast/round/IKZUMzM4.pgn?clocks=true&comments=true&variations=true' });
   assert.equal(LC.gameLink('lichess.org/broadcast/a-tour/round-1/IKZUMzM4#5').kind, 'list');
-  assert.equal(LC.gameLink('https://lichess.org/study/abcdEFGH/ijklMNOP#12').url, 'https://lichess.org/api/study/abcdEFGH/ijklMNOP.pgn?clocks=true&comments=true');
+  assert.equal(LC.gameLink('https://lichess.org/study/abcdEFGH/ijklMNOP#12').url, 'https://lichess.org/api/study/abcdEFGH/ijklMNOP.pgn?clocks=true&comments=true&variations=true');
   assert.equal(LC.gameLink('https://lichess.org/study/abcdEFGH/ijklMNOP#12').ply, 12);
   assert.equal(LC.gameLink('https://lichess.org/study/abcdEFGH').kind, 'list');
 });
@@ -333,6 +333,8 @@ test('finished and listGames', () => {
   assert.deepEqual(L.map((g) => g.variant), [null, null]);
   const mixed = LC.listGames('[White "A"]\n[Black "B"]\n[Variant "Atomic"]\n[Result "1-0"]\n\n1. e4 1-0\n');
   assert.equal(mixed[0].variant, 'Atomic', 'a variant game says which');
+  const lines = LC.listGames('[White "A"]\n[Black "B"]\n[Result "1-0"]\n\n1. e4 e5 (1... c5 2. Nf3) 2. Nf3 1-0\n');
+  assert.match(lines[0].pgn, /\(1\.\.\. c5 2\. Nf3\)/, "a round's game keeps its variations (best lines)");
 });
 test('variant: null for standard chess, else the Variant tag', () => {
   assert.equal(LC.variant('1. e4 e5'), null, 'no tag');
