@@ -1385,8 +1385,8 @@ function withDeeper(M) {
 // Go deeper on a move of the loaded analysis, while paused on it (on): from its own search (else the game settings),
 // what describes the position after the move (the eval, the Best line, the eval bar, and in the annotated PGN the
 // eval and, on the next move, the line: DEEPER_SHOWN); the ratings, graph and accuracy stay the analysis's. On a PGN's own
-// evals (Lichess's [%eval]s) too, as the Stockfish switch searches every move: the PGN's eval stands until the search
-// passes it, and the annotated PGN, marks and graph stay the PGN's (nothing goes into DEEPER_SHOWN). Not on a position
+// evals (Lichess's [%eval]s) too. The Stockfish switch on searches every move (auto), its result and lines in place of
+// the stored ones from its first depth; on a PGN's evals the annotated PGN, marks and graph stay the PGN's (nothing goes into DEEPER_SHOWN). Not on a position
 // the tablebase answered (its result is final): on says when
 function useGoDeeper(M, c, on, sf, tw) {
   const p = on ? M.plies[c] : null, settings = sf ? sf.game : window.AnalysisCore.ENGINE;
@@ -1399,7 +1399,8 @@ function useGoDeeper(M, c, on, sf, tw) {
   const ev = useMoveEval({ engine: sf ? sf.engine : null, before: moves, after: moves, settings: base, fen: M.start.fen, stored: on ? { cp: cpOf(M, c), depth: base.depth, pv: [], stored: true, src } : null, cloud: cloudSetting(tw), off: !sf || sf.off, auto: !!sf && !sf.off });
   const r = on && M.evalSource === 'analysis' && ev.after && !ev.after.stored && !ev.after.partial && ev.after.cp != null ? ev.after : null;
   React.useEffect(() => {
-    if (!r) return;
+    // the annotated PGN takes only results deeper than the analysis's (the panel shows a shallower live search too)
+    if (!r || (base.depth && r.depth < base.depth)) return;
     const k = deeperKey(M, c), had = DEEPER_SHOWN.get(k);
     if (!had || r.depth > had.depth || (r.lines && r.lines.length > 1 && !(had.lines && had.lines.length > 1))) DEEPER_SHOWN.set(k, { cp: r.cp, depth: r.depth, pv: r.pv || [], lines: r.lines && r.lines.length > 1 ? r.lines : null });
   }, [r]);

@@ -305,7 +305,7 @@ test('auto: a stored result\'s first Go deeper level runs without a press, and s
   const stored = { cp: 50, depth: 10, pv: [], stored: true, src: 'analysis A' };
   const req = request(e, { before: ['e2e4'], stored, auto: true });
   const w = evals.watch(req, () => {});
-  assert.deepEqual([w.get().after.cp, w.get().after.held, w.get().pending], [50, true, true]);
+  assert.deepEqual([w.get().after, w.get().pending], [null, true]);
   await tick();
   assert.equal(e.calls[0].q.depth, 16);
   e.calls[0].finish(found(44, 16));
@@ -313,6 +313,23 @@ test('auto: a stored result\'s first Go deeper level runs without a press, and s
   assert.deepEqual([w.get().after.cp, w.get().after.stored], [44, undefined]);
   const off = evals.watch({ ...req, engine: null, auto: false, off: true }, () => {});
   assert.equal(off.get().after.cp, 44);
+});
+
+test('auto: the live search shows from its first depth with its own lines, even where it ends shallower than the stored result', async () => {
+  const evals = ME.create(), e = fakeEngine();
+  const stored = { cp: 50, depth: 30, pv: [], stored: true, src: 'analysis A' };
+  const req = request(e, { before: ['e2e4'], stored, auto: true, settings: { ...OWN, lines: 3 } });
+  const w = evals.watch(req, () => {});
+  assert.deepEqual([w.get().after, w.get().pending], [null, true], 'nothing held from the stored result');
+  await tick();
+  assert.equal(e.calls[0].q.lines, 3);
+  e.calls[0].info({ cp: 20, depth: 1, pv: ['e7e5'] });
+  assert.deepEqual([w.get().after.cp, w.get().after.partial], [20, true]);
+  e.calls[0].finish({ ...found(44, 16), lines: [1, 2, 3].map((k) => ({ k, cp: 44 - k, depth: 16, pv: ['e7e5'] })) });
+  await tick();
+  assert.deepEqual([w.get().after.cp, w.get().after.lines.length], [44, 3], 'depth 16 shows, though the stored result was 30');
+  const off = evals.watch({ ...req, engine: null, auto: false, off: true }, () => {});
+  assert.equal(off.get().after.cp, 50, 'switched off, a shallower live search gives way to the stored result');
 });
 
 test('stop() cancels the searches, the cloud\'s wait and its requests, and nothing changes after it', async (t) => {
