@@ -2455,7 +2455,7 @@ for (const name of BROWSERS) for (const site of SITES) {
           'https://lichess.org/game/export/N0tThere?clocks=true&evals=true': [404, ''],
           'https://lichess.org/game/export/Crazy123?clocks=true&evals=true': [200, '[Variant "Crazyhouse"]\n' + pgn('C', 'D', '1-0', '-', '1. e4 d5 2. exd5 Qxd5 3. P@e4')],
           'https://lichess.org/game/export/Br0ken12?clocks=true&evals=true': [200, pgn('E', 'F', '1-0', '-', '1. e4 e5 2. Ke3')],
-          'https://lichess.org/api/broadcast/round/R0und123.pgn': [200, pgn('Board One W', 'Board One B', '0-1', '3.1', '1. c4 c5') + pgn('Board Two W', 'Board Two B', '*', '3.2', '1. Nf3') + '[Variant "Atomic"]\n' + pgn('Board Three W', 'Board Three B', '1-0', '3.3', '1. e4')],
+          'https://lichess.org/api/broadcast/round/R0und123.pgn?clocks=true&comments=true&variations=true': [200, pgn('Board One W', 'Board One B', '0-1', '3.1', '1. c4 c5') + pgn('Board Two W', 'Board Two B', '*', '3.2', '1. Nf3') + '[Variant "Atomic"]\n' + pgn('Board Three W', 'Board Three B', '1-0', '3.3', '1. e4')],
         };
         window.__li = [];
         window.fetch = function (u) {
