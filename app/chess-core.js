@@ -869,5 +869,26 @@
     for (let m = step; 2 * m - ply0 <= N; m += step) if (2 * (m - 1) - ply0 >= 0) ticks.push({ m, at: 2 * (m - 1) - ply0 });
     return ticks;
   }
-  window.ChessCore = { START_FEN, splitGames, fmtDate, fmtLen, hasLegal, inCheck, checkers, evalTicks, sqName: idxSq, CASTLE_HOME, canCastle, readFen, epFits, setupProblems, setupFen, epCapturable, fullFen, parseFen, fenAfter, moveNo, sqIndex: sqIdx, applySan, applyUci, stepFromUci, toFen, playLine, posFromFen, legalTargets, isPromotion, userMove, buildGame, withCommentary, commentarySources, classifyFile, plan, timing, schedule, cues, settledAt, clipRange, MATE_CP, MATE_STEP, MATE_MIN, mateCp, isMateCp, mateIn, WIN_K, WIN_DROP, winChance, plyCp, MARK_CLASS, pgnClk, pgnMoveNo, pgnReopens, pgnText, annotatedPgn, withSearches, notesText };
+  // A header line cut into text and web links: [{ text, url }], url only on an http(s) address (Lichess and Chess.com put
+  // the game's page in Site). Trailing punctuation (.,;:!?) and an unmatched closing bracket stay text
+  const links = (text) => {
+    const out = [], re = /https?:\/\/[^\s<>"']+/gi;
+    let at = 0, m;
+    while ((m = re.exec(text))) {
+      let u = m[0];
+      for (;;) {
+        const t = u.slice(-1);
+        if (/[.,;:!?]/.test(t)) u = u.slice(0, -1);
+        else if (t === ')' && (u.match(/\(/g) || []).length < (u.match(/\)/g) || []).length) u = u.slice(0, -1);
+        else break;
+      }
+      if (u.length <= u.indexOf('//') + 2) continue;
+      if (m.index > at) out.push({ text: text.slice(at, m.index) });
+      out.push({ text: u, url: u });
+      at = m.index + u.length; re.lastIndex = at;
+    }
+    if (at < text.length) out.push({ text: text.slice(at) });
+    return out;
+  };
+  window.ChessCore = { START_FEN, links, splitGames, fmtDate, fmtLen, hasLegal, inCheck, checkers, evalTicks, sqName: idxSq, CASTLE_HOME, canCastle, readFen, epFits, setupProblems, setupFen, epCapturable, fullFen, parseFen, fenAfter, moveNo, sqIndex: sqIdx, applySan, applyUci, stepFromUci, toFen, playLine, posFromFen, legalTargets, isPromotion, userMove, buildGame, withCommentary, commentarySources, classifyFile, plan, timing, schedule, cues, settledAt, clipRange, MATE_CP, MATE_STEP, MATE_MIN, mateCp, isMateCp, mateIn, WIN_K, WIN_DROP, winChance, plyCp, MARK_CLASS, pgnClk, pgnMoveNo, pgnReopens, pgnText, annotatedPgn, withSearches, notesText };
 })();
