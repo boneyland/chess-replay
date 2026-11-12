@@ -395,6 +395,15 @@
 
   // The result for people: the score and why
   const NAME = { w: 'White', b: 'Black' };
+  // a game's players: White and Black, or "You" and "Stockfish 19" against Stockfish
+  const playerName = (g, side) => (g && g.mode === 'stockfish' ? (side === g.you ? 'You' : 'Stockfish 19') : NAME[side]);
+  // where a board (its game, if it has one) started from, for a note ("from after 12. Nf3"); long: as a sentence's
+  // start ("From the position after 12. Nf3")
+  function fromText(b, { long = false } = {}) {
+    const g = b.game, t = g && g.from ? (long ? 'the position after ' : 'after ') + window.BoardCore.label(b, g.from - 1)
+      : b.fen === window.ChessCore.START_FEN ? 'the starting position' : 'a set-up position';
+    return (long ? 'From ' : 'from ') + t;
+  }
   function resultText(r) {
     const score = { '1-0': '1–0', '0-1': '0–1', '1/2-1/2': '½–½' }[r.result];
     const why = {
@@ -487,8 +496,8 @@
   // one, the time control and each move's clock
   function pgn(b) {
     const g = b.game, t = parseTc(g.tc), res = g.result ? g.result.result : '*';
-    const sf = g.mode === 'stockfish', name = (side) => (!sf ? NAME[side] : side === g.you ? 'You' : 'Stockfish 19');
-    const tags = [['Event', sf ? 'Play vs computer' : 'Play vs human'], ['Site', 'chess-replay'], ['Date', g.date], ['White', name('w')], ['Black', name('b')], ['Result', res]];
+    const sf = g.mode === 'stockfish';
+    const tags = [['Event', sf ? 'Play vs computer' : 'Play vs human'], ['Site', 'chess-replay'], ['Date', g.date], ['White', playerName(g, 'w')], ['Black', playerName(g, 'b')], ['Result', res]];
     const more = [];
     if (t) more.push(['TimeControl', `${t.base / 1000}+${t.inc / 1000}`]);
     if (g.result) more.push(['Termination', g.result.reason === 'time' ? 'time forfeit' : 'normal']);
@@ -499,6 +508,6 @@
 
   window.PlayCore = {
     canMate, lockedDead, positionKey, outcome, TIME_CONTROLS, parseTc, start, inProgress, played, begun, move, canTakeback, takeback, thinkMs, MIN_RATED_DEPTH, SHALLOW_DEPTH, BIG_LOSS_CP, rateMove, addCritique, critiqueText, HINTS, hintsLeft, hintFor, addHint,
-    resign, agreeDraw, claimable, claimDraw, fiftyRule, flag, recheck, setProver, pause, runClock, timeLeft, resultText, ending, resume, pgn,
+    resign, agreeDraw, claimable, claimDraw, fiftyRule, flag, recheck, setProver, pause, runClock, timeLeft, resultText, playerName, fromText, ending, resume, pgn,
   };
 })();

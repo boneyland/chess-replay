@@ -59,7 +59,7 @@
   const MOVE_ROW = 38, MOVE_BORDER = 2, MOVE_LINES = 5, MOVE_LINES_ONE = 3, TX = 0.8;
   const moveRow = (text) => MOVE_ROW * TX * text;
   // TIGHT: the panel's tighter padding (0.6 of it) and title gap (half) off the desktop in one column, and on a phone
-  // (game-video-core.jsx's tightAn), set by compute()
+  // (L.tight, which the views read), set by compute()
   let TIGHT = false;
   const moveChrome = (text) => (2 * PAD[0] * (TIGHT ? 0.6 : 1) + 15 * 1.4 + (TIGHT ? 6 : 12)) * TX * text + MOVE_BORDER;
   const movesMax = (text, lines = MOVE_LINES) => moveChrome(text) + lines * moveRow(text);
@@ -130,10 +130,12 @@
     return cols;
   }
 
-  // moves.rows: how many lines of moves fit under the list's title
+  // moves.rows: how many lines of moves fit under the list's title; moves.chrome: the height around the list (MoveList
+  // gives the list the rest of the box)
   function withMoves(m, text) {
     if (!m) return m;
-    m.rows = Math.max(0, Math.floor((m.h - moveChrome(text)) / moveRow(text) + 1e-6));
+    m.chrome = moveChrome(text);
+    m.rows = Math.max(0, Math.floor((m.h - m.chrome) / moveRow(text) + 1e-6));
     return m;
   }
 
@@ -272,7 +274,7 @@
   // view: 'replay' | 'free' | 'game' | 'edit'. video: playing or recording, when the page must fit the screen exactly.
   // cols overrides columns()'s choice; otherwise prevCols gives it hysteresis.
   // L.text is the text size the boxes were sized for (the viewer's, times the tier's scale); L.pad the panels' padding
-  // at text 1 (the views scale it with their text).
+  // at text 1 (the views scale it with their text); L.tight: the panels pack tighter (TIGHT).
   // vw, vh: the viewport's size (the stage area's when not given), which caps the board and sets the device tier.
   // dock: a short two-column window whose transport bar sits in the sidebar (L.dock is its box)
   function compute({ w, h, text = 1, view = 'replay', video = false, prevCols = null, cols = null, vw = w, vh = h, dock = false }) {
@@ -284,7 +286,7 @@
     if (c === 1 && tierOf(vw, vh) === 'phone') {
       TOP = PHONE_ONE.top; SIDE = PHONE_ONE.side; PAD = [PAD[0], PHONE_ONE.padX]; BAR_K = PHONE_ONE.barK; BAR_GAP = PHONE_ONE.barGap;
     }
-    return Object.assign((c === 1 ? oneColumn : twoColumns)({ w, h, text: t, view, video, dock: c === 2 && dock, vw, phone: tierOf(vw, vh) === 'phone' }), { text: t, tier: tierOf(vw, vh), pad: PAD });
+    return Object.assign((c === 1 ? oneColumn : twoColumns)({ w, h, text: t, view, video, dock: c === 2 && dock, vw, phone: tierOf(vw, vh) === 'phone' }), { text: t, tier: tierOf(vw, vh), pad: PAD, tight: TIGHT });
   }
 
   // The export's pixel scale for a w × h page: the screen's density, held so the longer side stays within 1920 px

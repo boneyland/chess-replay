@@ -361,3 +361,12 @@ test('turning a phone to portrait and back to landscape gives two columns again'
   assert.equal(step(769, 257, 777, 257), 2);
   assert.equal(LC.pickColumns({ w: 769, h: 257, vw: 777, vh: 257, was: null }), 2, 'a reload at that size');
 });
+
+// MoveList takes its chrome and tightness from LayoutCore, so the two never count the panel differently
+test('L.moves.chrome and L.tight are what MoveList draws', () => {
+  for (const [w, h, vw, vh] of [[1440, 900], [390, 844], [844, 390], [800, 1100], [1100, 800]]) {
+    const L = LC.compute({ w, h, vw: vw || w, vh: vh || h });
+    assert.equal(L.tight, L.tier !== 'desktop' && (L.cols === 1 || L.tier === 'phone'), `${w}×${h}`);
+    if (L.moves) assert.ok(Math.abs(L.moves.chrome - chromeOf(L)) < 1e-9, `${w}×${h}: ${L.moves.chrome} vs ${chromeOf(L)}`);
+  }
+});

@@ -157,8 +157,8 @@ test('the page links a web app manifest, and its icons are written next to it', 
   const m = JSON.parse(fs.readFileSync(path.join(site, 'manifest.webmanifest'), 'utf8'));
   assert.equal(m.start_url, './');
   assert.match(m.display, /^(fullscreen|standalone)$/);
-  const bg = fs.readFileSync(path.join(ROOT, 'app', 'shell.html'), 'utf8').match(/--bg: (#\w+)/)[1];
-  assert.equal(m.background_color, bg, '--bg in app/shell.html');
+  const bg = fs.readFileSync(path.join(site, 'chess-game-video.html'), 'utf8').match(/--bg: (#\w+)/)[1];
+  assert.equal(m.background_color, bg, '--bg in the page');
   const png = (f) => { const b = fs.readFileSync(path.join(site, f)); assert.equal(b.subarray(1, 4).toString(), 'PNG', f); return `${b.readUInt32BE(16)}x${b.readUInt32BE(20)}`; };
   for (const ic of m.icons) assert.equal(png(ic.src), ic.sizes, ic.src);
   assert.deepEqual(m.icons.map((ic) => ic.sizes).sort(), ['192x192', '512x512', '512x512']);

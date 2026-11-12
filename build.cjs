@@ -8,7 +8,10 @@ const read = (p) => fs.readFileSync(p, 'utf8');
 // served next to the page as sounds/<set>/<Kind>.mp3 (Sfx.soundUrl) and kept by the service worker from the first visit
 const SOUNDS = path.join(dir, 'vendor', 'sounds');
 const SOUND_FILES = ['futuristic', 'lisp', 'nes', 'piano', 'sfx'].flatMap((set) => ['Move', 'Capture', 'Check', 'Victory', 'Draw'].map((f) => `sounds/${set}/${f}.mp3`));
+// the theme's colours (app/theme.js), which the page also loads: shell.html's CSS tokens and the manifest's colour
+const THEME = (() => { const w = {}; new Function('window', read(path.join(app, 'theme.js')))(w); return w.THEME; })();
 const units = [
+  ['theme.js', read(path.join(app, 'theme.js'))],
   ['pieces.js', read(path.join(src, 'pieces.js'))],
   ['piece-sets.js', read(path.join(app, 'piece-sets.js'))],
   ['board-themes.js', read(path.join(app, 'board-themes.js'))],
@@ -49,7 +52,7 @@ const scripts = units.map(([name, code]) => {
   if (/<\/script/i.test(code)) throw new Error(name + ' contains </script');
   return `<script>\n// ${name}\n(function () {\n${code}\n})();\n</script>`;
 }).join('\n');
-const page = read(path.join(app, 'shell.html'));
+const page = read(path.join(app, 'shell.html')).replace(/\/\*THEME:(light|dark)\*\//g, (_, m) => THEME.css(m));
 const out = page.replace('<!--SCRIPTS-->', () => scripts); // a function, so $' or $& in the code stay as they are
 fs.mkdirSync(path.join(dir, 'out', 'site'), { recursive: true });
 // what a shared link and the browser tab show
@@ -77,8 +80,8 @@ const site = `<!doctype html>
 <meta property="og:image:height" content="944">
 <meta property="og:image:alt" content="A game replaying: the board with a best-move arrow, the move list, commentary, Stockfish and Queen's analysis and the eval graph">
 <meta name="twitter:card" content="summary_large_image">
-<meta name="theme-color" content="#f2ece3" media="(prefers-color-scheme: light)">
-<meta name="theme-color" content="#13100f" media="(prefers-color-scheme: dark)">
+<meta name="theme-color" content="${THEME.light.bg}" media="(prefers-color-scheme: light)">
+<meta name="theme-color" content="${THEME.dark.bg}" media="(prefers-color-scheme: dark)">
 <link rel="icon" href="${ICON}">
 <link rel="manifest" href="manifest.webmanifest">
 <link rel="apple-touch-icon" href="apple-touch-icon.png">
@@ -178,7 +181,7 @@ for (const f of filesIn(ICONS)) put(f, path.join(ICONS, f), { keep: true });
 const manifest = {
   name: 'Chess Replay', short_name: 'Chess Replay', description: DESCRIPTION,
   start_url: './', scope: './', display: 'fullscreen', display_override: ['fullscreen', 'standalone'], orientation: 'any',
-  background_color: '#f2ece3', theme_color: '#f2ece3', // --bg in app/shell.html (light)
+  background_color: THEME.light.bg, theme_color: THEME.light.bg, // --bg (light)
   icons: [
     { src: 'icon-192.png', sizes: '192x192', type: 'image/png', purpose: 'any' },
     { src: 'icon-512.png', sizes: '512x512', type: 'image/png', purpose: 'any' },

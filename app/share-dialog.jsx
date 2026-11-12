@@ -130,7 +130,7 @@ function ShareDialog({ fen, board, pgn, x, setTweak, onFail, onReplay, onExport,
         <div className="twk-note">{board.steps.length ? 'A video or WebP is made from a loaded game: replay these moves as one, then export it here.' : 'Play some moves first; then they can be replayed as a game and exported as a video.'}</div>
         {board.steps.length > 0 && <TweakButton label="Replay these moves as a game" onClick={onReplay} />}
       </TweakSection>}
-      <div className="fen-btns"><button type="button" className="twk-btn secondary" data-autofocus onClick={onClose}>Close</button></div>
+      <div className="dlg-btns"><button type="button" className="twk-btn secondary" data-autofocus onClick={onClose}>Close</button></div>
     </DialogBox>
   );
 }

@@ -4,19 +4,19 @@ const cl01 = (v) => clamp(v, 0, 1);
 const { winChance, plyCp } = window.ChessCore;
 
 // Frame palettes; light-theme text colours are at least 4.5:1 on the panel. Board squares and the eval bar's white/black halves are the sides' colours and stay put.
+// The colours the page's CSS has too come from its theme (app/theme.js, which says what differs on purpose)
+const themed = (t) => ({ bg: t.bg, panel: t.panel, line: t.line, ink: t.ink, dim: t.dim, last: t.accent, best: t.ok, mistake: t.warn, blunder: t.danger, none: t.ink, queen: t.queen });
 const PALETTES = {
   dark: {
-    bg: '#13100f', panel: '#1b1715', line: 'rgba(255,236,214,0.09)', ctlLine: 'rgba(255,236,214,0.4)', ink: '#efe8de', dim: '#9a8e82',
-    light: '#f0d9b5', dark: '#b58863', last: '#e3b55b', engine: '#5c5c5c',
-    best: '#62c483', inaccuracy: '#e6c14d', mistake: '#ec9442', blunder: '#e4553f', none: '#efe8de',
-    good: '#5aa9e6', brilliant: '#3cc7bd', interesting: '#c98be0', queen: '#e0609f',
+    ...themed(window.THEME.dark), ctlLine: 'rgba(255,236,214,0.4)',
+    light: '#f0d9b5', dark: '#b58863', engine: '#5c5c5c', inaccuracy: '#e6c14d',
+    good: '#5aa9e6', brilliant: '#3cc7bd', interesting: '#c98be0',
     off: '#2a2320', scrim: '19,16,15', haloBoard: '0 0 3px rgba(255,236,214,0.5), 0 0 16px rgba(255,236,214,0.26), 0 0 44px rgba(255,236,214,0.18), ', halo: '0 0 3px rgba(255,236,214,0.3), 0 0 14px rgba(255,236,214,0.14), 0 0 36px rgba(255,236,214,0.1), ', rim: 'drop-shadow(0 0 1px rgba(239,232,222,0.95)) drop-shadow(0 0 1px rgba(239,232,222,0.6))',
   },
   light: {
-    bg: '#f2ece3', panel: '#fbf7f1', line: 'rgba(60,40,20,0.13)', ctlLine: 'rgba(60,40,20,0.5)', ink: '#2a211b', dim: '#6b5f53',
-    light: '#f0d9b5', dark: '#b58863', last: '#8a5e15', engine: '#5c5c5c',
-    best: '#237a46', inaccuracy: '#8a6a0a', mistake: '#b05616', blunder: '#c63b29', none: '#2a211b',
-    good: '#2a6fae', brilliant: '#1a7a73', interesting: '#8f4fab', queen: '#c03f7c',
+    ...themed(window.THEME.light), ctlLine: 'rgba(60,40,20,0.5)',
+    light: '#f0d9b5', dark: '#b58863', engine: '#5c5c5c', inaccuracy: '#8a6a0a',
+    good: '#2a6fae', brilliant: '#1a7a73', interesting: '#8f4fab',
     off: '#e4dbcd', scrim: '242,236,227', halo: '', haloBoard: '', rim: 'none',
   },
 };
@@ -63,7 +63,7 @@ const HEADLINE = 28;
 // a short Analysis panel (one column below a desktop, a phone held sideways) packs tighter: a smaller headline, about
 // half the vertical spacing, and thinner padding at its top and bottom (Moves and Commentary take the padding and the
 // title row's gap too: Panel's tight)
-const tightAn = () => L.tier !== 'desktop' && (L.cols === 1 || L.tier === 'phone');
+const tightAn = () => L.tight; // LayoutCore's, which sizes the boxes for it
 const headline = () => tx(tightAn() ? 22 : HEADLINE);
 const anGap = (px) => tx(tightAn() ? Math.round(px / 2) : px);
 // A paused one-column page flows (L.flow): the panels stack under the board as a column, each as tall as its contents,
@@ -837,9 +837,9 @@ function MoveList({ M, T, S, a, paused, onPick, deadAt, end, startAt }) {
   // the extra space before a move number (or the result): on the item before it, not the number's left, so a number that
   // wraps to the start of a line isn't indented
   const NUM_GAP = tx(6);
-  // a flowing list grows up to maxRows lines, then scrolls; a placed one takes all the box's height under its title (the
-  // tight panel's padding and title gap where it has them, as LayoutCore counts them)
-  const listH = L.moves.flow ? null : Math.max(ROW, L.moves.h - 2 * tx(L.pad[0] * (tightAn() ? 0.6 : 1)) - tx(15) * 1.4 - (tightAn() ? anGap(12) : tx(12)) - 2);
+  // a flowing list grows up to maxRows lines, then scrolls; a placed one takes all the box's height under its title
+  // (LayoutCore's moves.chrome: the panel's padding, title row and borders, tight where the panel is)
+  const listH = L.moves.flow ? null : Math.max(ROW, L.moves.h - L.moves.chrome);
   const k = c >= 0 ? MOTION.move(cl01((T - S.tp[c]) / 0.35)) : 1, listRef = React.useRef(null);
   // a new move scrolls the list by whole lines so the move's line keeps one line under it (none in a box of one line,
   // where the move's own line must show), sliding there as the move plays, and leaves it
@@ -1233,6 +1233,20 @@ function EndCard({ M, T, CUES }) {
 }
 
 // ---------- composition ----------
+// A pointer event's place on the board element el: { x, y } in board pixels and sq, its square through view(). clamp:
+// a point past the edge is on the edge's square (a move's drag); else sq is -1 off the board (the editor's drag off it)
+function boardPoint(el, e, clamp) {
+  const r = el.getBoundingClientRect(), x = ((e.clientX - r.left) / r.width) * BW, y = ((e.clientY - r.top) / r.height) * BW;
+  const on = clamp || (x >= 0 && x < BW && y >= 0 && y < BW);
+  if (!on) return { x, y, sq: -1 };
+  const [vx, vy] = view(Math.max(0, Math.min(7, Math.floor(x / SQ))), Math.max(0, Math.min(7, Math.floor(y / SQ))));
+  return { x, y, sq: vy * 8 + vx };
+}
+// A press is a drag once the pointer is DRAG_PX board pixels from where it went down; also asked where it is let go, as
+// the render with the last move's state may not have run yet (a quick flick read as a tap). d: { x0, y0, moved }
+const DRAG_PX = 14;
+const dragMoved = (d, p) => d.moved || Math.hypot(p.x - d.x0, p.y - d.y0) > DRAG_PX;
+
 // The board's pointer input: tap-tap and drag moves, and the promotion picker. pos is the position on the board;
 // onPick() runs when a piece of the side to move is picked up, onMiss() after a tap or drop that played nothing,
 // onMove(step) with a legal move (a ChessCore.userMove step, promotion piece included)
@@ -1249,14 +1263,7 @@ function useBoardInput({ pos, onPick, onMiss, onMove }) {
     return true;
   };
   const targets = sel != null ? window.ChessCore.legalTargets(pos, sel) : [];
-  const boardXY = (e) => {
-    const r = e.currentTarget.getBoundingClientRect(), x = ((e.clientX - r.left) / r.width) * BW, y = ((e.clientY - r.top) / r.height) * BW;
-    const [vx, vy] = view(Math.max(0, Math.min(7, Math.floor(x / SQ))), Math.max(0, Math.min(7, Math.floor(y / SQ))));
-    return { x, y, sq: vy * 8 + vx };
-  };
-  // a drag once the pointer is 14 px from where it went down; also asked where it is let go, as the render with the last
-  // move's state may not have run yet (a quick flick read as a tap)
-  const moved = (d, p) => d.moved || Math.hypot(p.x - d.x0, p.y - d.y0) > 14;
+  const boardXY = (e) => boardPoint(e.currentTarget, e, true), moved = dragMoved;
   const handlers = {
     onDown: (e) => {
       const p = boardXY(e);
