@@ -144,3 +144,11 @@ test('a Chess960 board writes Variant before SetUp and FEN, even for 518', () =>
   assert.match(t, /\[Black "Black"\]\n\[Result "\*"\]\n\[Variant "Chess960"\]\n\[SetUp "1"\]\n\[FEN "rnbqkbnr\/pppppppp\/8\/8\/8\/8\/PPPPPPPP\/RNBQKBNR w KQkq - 0 1"\]/);
   assert.doesNotMatch(B.pgn(B.fromFen(), '2026.11.13'), /Variant|SetUp/);
 });
+test('a board with no label but Chess960 rights in its start (a pasted or edited 960 setup) is tagged Chess960 too', () => {
+  const fen = CC.chess960Fen(612), b = B.fromFen(fen);
+  assert.equal('chess960' in b, false);
+  const t = B.pgn(b, '2026.11.13');
+  assert.match(t, /\[Variant "Chess960"\]\n\[SetUp "1"\]\n\[FEN "rbbnqkrn\/pppppppp\/8\/8\/8\/8\/PPPPPPPP\/RBBNQKRN w KQkq - 0 1"\]/);
+  // a standard set-up position without castling rights stays untagged
+  assert.doesNotMatch(B.pgn(B.fromFen('4k3/8/8/8/8/8/4P3/4K3 w - - 0 1'), '2026.11.13'), /Variant/);
+});

@@ -2157,6 +2157,25 @@ for (const name of BROWSERS) for (const site of SITES) {
       assert.equal(st.chess960, 0);
       assert.equal(st.game, undefined, 'a free board, not a game');
       assert.match(await p.locator('.part-game-info').innerText(), /Chess960 #0\b/i);
+      // Play vs computer from that board (Set-up position, as it has no moves): the game keeps its number
+      await p.getByRole('button', { name: 'Menu', exact: true }).click();
+      await p.getByRole('button', { name: 'Play vs computer' }).click();
+      dialog = p.getByRole('dialog', { name: 'Play vs computer' });
+      await dialog.waitFor({ timeout: 3000 });
+      assert.equal(await dialog.getByRole('radiogroup', { name: 'Start from' }).getByRole('radio', { name: 'Set-up position' }).getAttribute('aria-checked'), 'true');
+      await dialog.getByRole('radiogroup', { name: 'Time control' }).getByRole('radio', { name: 'Off' }).click();
+      await dialog.getByRole('button', { name: 'Start game' }).click();
+      await dialog.waitFor({ state: 'detached', timeout: 3000 });
+      await assert.doesNotReject(p.locator('.part-game').waitFor({ timeout: 5000 }));
+      st = await stored();
+      assert.equal(st.chess960, 0, 'the set-up board\'s label carries into the game');
+      assert.equal(rank1(st.fen), 'BBQNNRKR');
+      assert.match(await p.locator('.part-game-details').innerText(), /Chess960 #0\b/i);
+      assert.match(await p.evaluate(() => window.PlayCore.pgn(window.BoardCore.restore(JSON.parse(localStorage.getItem('chess-video.files.v1')).board))), /\[Variant "Chess960"\]/);
+      await p.getByRole('button', { name: 'Resign', exact: true }).click();
+      await p.getByText('Resign this game?').waitFor({ timeout: 3000 });
+      await p.getByRole('button', { name: 'Resign', exact: true }).click();
+      await assert.doesNotReject(p.getByRole('button', { name: 'Play again' }).waitFor({ timeout: 5000 }));
       // Random again: a fresh position each time, never the standard one
       await p.getByRole('button', { name: 'Menu', exact: true }).click();
       await p.getByRole('button', { name: 'Chess960 position' }).click();
@@ -2171,6 +2190,7 @@ for (const name of BROWSERS) for (const site of SITES) {
       // Set-up position, From image and This position stay where they were in Start from
       await p.getByRole('button', { name: 'Menu', exact: true }).click();
       await p.getByRole('button', { name: 'Play vs human' }).click();
+      dialog = p.getByRole('dialog', { name: 'Play vs human' });
       await dialog.waitFor({ timeout: 3000 });
       const froms = await dialog.getByRole('radiogroup', { name: 'Start from' }).getByRole('radio').allInnerTexts();
       assert.deepEqual(froms.filter((x) => x !== 'From image'), ['Starting position', 'Set-up position', 'Chess960']);

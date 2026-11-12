@@ -31,8 +31,9 @@
   // The board's whole line (not only up to the move shown) as a PGN ending in res (ChessCore.pgnText): the tags, SetUp and
   // Variant for a Chess960 board, FEN after them when the start isn't the standard one (or the board is a Chess960 one), then `more`; after(j) is the comment written after step j's move
   // ('' for none)
+  // A board with no label whose start has Chess960 rights (pos.rooks: a pasted or edited 960 setup) is tagged too
   function pgnOf(b, tags, res, { more = [], after = () => '' } = {}) {
-    const c = label960(b.chess960) !== undefined;
+    const c = label960(b.chess960) !== undefined || CC().is960(b.start.pos);
     const all = tags.concat(c ? [['Variant', 'Chess960']] : [], c || b.fen !== CC().START_FEN ? [['SetUp', '1'], ['FEN', b.fen]] : [], more), toks = [];
     b.steps.forEach((s, j) => {
       toks.push(CC().pgnMoveNo(b.start.ply0 + j, j === 0 || CC().pgnReopens(toks[toks.length - 1])) + s.san);

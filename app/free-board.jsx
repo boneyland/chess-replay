@@ -214,7 +214,7 @@ function GameInfo({ board }) {
               ))}
             </div>
           ) : note('Stockfish found no inaccuracy, mistake or blunder in your moves.')}
-          {note(`You played ${side}, f${from.slice(1)}${hintsUsed ? `, with ${hintsUsed} hint${hintsUsed === 1 ? '' : 's'}` : ''}. Analyse on the free board shows Stockfish’s eval of every move.`)}
+          {note(`You played ${side}, ${from.charAt(0).toLowerCase() + from.slice(1)}${hintsUsed ? `, with ${hintsUsed} hint${hintsUsed === 1 ? '' : 's'}` : ''}. Analyse on the free board shows Stockfish’s eval of every move.`)}
         </React.Fragment>
       );
     } else {

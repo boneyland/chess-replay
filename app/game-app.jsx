@@ -436,14 +436,18 @@ function GameApp() {
   const playHuman = playIn('human'), playSf = playIn('stockfish');
   // against Stockfish the side is remembered as picked, and Random resolved here, for this game
   // This position (here): a game played on after the moves to it, which it keeps. chess960: the Chess960 start's number
-  // (pick960 the choice that gave it)
+  // (pick960 the choice that gave it); a game from the open board's position (Set-up position, This position) keeps that
+  // board's Chess960 label, and one from a loaded Chess960 game's moves that game's
   const startGame = (mode, { fen, here, chess960, pick960, tc, you }) => {
     setQueenOpen(false); setTweak('playClock', tc || 'Off');
     if (mode === 'stockfish') setTweak('playSide', you);
     if (pick960) remember960(pick960);
     const side = you === 'random' ? (Math.random() < 0.5 ? 'w' : 'b') : you;
-    const from = here && window.BoardCore.restore({ fen: here.fen, moves: here.moves });
-    commitBoard(window.PlayCore.start(from || window.BoardCore.fromFen(fen, { chess960 }), tc, null, { ...(mode === 'stockfish' ? { mode, you: side } : {}), keep: !!from }));
+    const startFen = here ? here.fen : fen;
+    // (Starting position from a board labelled 518 is a standard game: only here, or a set-up FEN, inherits)
+    const label = chess960 != null ? chess960 : board ? (board.fen === startFen && (here || fen !== window.ChessCore.START_FEN) ? board.chess960 : undefined) : here && M.chess960 != null && M.chess960 !== false ? M.chess960 : undefined;
+    const from = here && window.BoardCore.restore({ fen: here.fen, moves: here.moves, chess960: label });
+    commitBoard(window.PlayCore.start(from || window.BoardCore.fromFen(fen, { chess960: label }), tc, null, { ...(mode === 'stockfish' ? { mode, you: side } : {}), keep: !!from }));
   };
   const playStart = (choice) => { const mode = playOpen; setPlayOpen(null); startGame(mode, choice); };
   // Set-up position with no position set up: the editor first, keeping the dialog's choices
