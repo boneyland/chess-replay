@@ -398,10 +398,12 @@
   // a game's players: White and Black, or "You" and "Stockfish 19" against Stockfish
   const playerName = (g, side) => (g && g.mode === 'stockfish' ? (side === g.you ? 'You' : 'Stockfish 19') : NAME[side]);
   // where a board (its game, if it has one) started from, for a note ("from after 12. Nf3"); long: as a sentence's
-  // start ("From the position after 12. Nf3")
+  // start ("From the position after 12. Nf3"). A Chess960 board names its position by number ("from Chess960 #612"),
+  // 518 too, or "a Chess960 position" when the number isn't known
   function fromText(b, { long = false } = {}) {
-    const g = b.game, t = g && g.from ? (long ? 'the position after ' : 'after ') + window.BoardCore.label(b, g.from - 1)
-      : b.fen === window.ChessCore.START_FEN ? 'the starting position' : 'a set-up position';
+    const g = b.game, c = b.chess960, t = g && g.from ? (long ? 'the position after ' : 'after ') + window.BoardCore.label(b, g.from - 1)
+      : Number.isInteger(c) ? `Chess960 #${c}` : c === true ? 'a Chess960 position'
+        : b.fen === window.ChessCore.START_FEN ? 'the starting position' : 'a set-up position';
     return (long ? 'From ' : 'from ') + t;
   }
   function resultText(r) {

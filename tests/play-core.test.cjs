@@ -635,6 +635,10 @@ test('the players\' names and where a game started, said one way everywhere', ()
   const later = P.start(playAll(B.fromFen(), ['e2e4', 'e7e5', 'g1f3']), null, '2026.11.12', { keep: true });
   assert.equal(later.game.from, 3);
   assert.equal(P.fromText(later), 'from after 2. Nf3');
+  // a Chess960 board names its number (0 and 518 too), or says Chess960 when it isn't known
+  assert.equal(P.fromText(B.fromFen(window.ChessCore.chess960Fen(0), { chess960: 0 })), 'from Chess960 #0');
+  assert.equal(P.fromText(B.fromFen(undefined, { chess960: 518 }), { long: true }), 'From Chess960 #518');
+  assert.equal(P.fromText(B.fromFen(window.ChessCore.chess960Fen(612), { chess960: true })), 'from a Chess960 position');
   assert.equal(P.fromText(later, { long: true }), 'From the position after 2. Nf3');
 });
 

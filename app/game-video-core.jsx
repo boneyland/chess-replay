@@ -839,7 +839,7 @@ function SideBar({ side, a, name, rating, taken, pts, clock }) {
 // titles and ratings are the player bars'
 function Header({ M, a }) {
   const teams = M.white.team && M.black.team ? `${M.white.team} vs ${M.black.team}` : M.white.team || M.black.team;
-  const lines = [[M.event, M.round && 'Round ' + M.round, teams].filter(Boolean).join(' · '), [M.site, M.date].filter(Boolean).join(' · '), M.chess960 && (M.chess960 === true ? 'Chess960' : `Chess960 #${M.chess960}`), [M.eco, M.opening].filter(Boolean).join(' ')].filter(Boolean);
+  const lines = [[M.event, M.round && 'Round ' + M.round, teams].filter(Boolean).join(' · '), [M.site, M.date].filter(Boolean).join(' · '), (M.chess960 === true ? 'Chess960' : Number.isInteger(M.chess960) ? `Chess960 #${M.chess960}` : ''), [M.eco, M.opening].filter(Boolean).join(' ')].filter(Boolean);
   return (
     <Panel box={L.header} part="game-info" a={a} style={{ padding: `${tx(10)}px ${tx(L.pad[1])}px`, display: 'flex', flexDirection: 'column', justifyContent: 'center', gap: tx(4), font: `500 ${tx(16)}px/1.35 ${MONO}`, color: C.dim }}>
       {lines.map((t, i) => <SideScroll key={i} style={{ display: 'block', color: C.ink }}>{window.ChessCore.links(t).map((p, j) => p.url

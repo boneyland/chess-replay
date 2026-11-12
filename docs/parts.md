@@ -54,6 +54,7 @@ Each is `part-<name>-dialog`, on the dialog box itself.
 | `part-import-game-dialog` | Import game |
 | `part-position-from-image-dialog` | Position from image |
 | `part-play-dialog` | Play vs human / Play vs computer |
+| `part-chess960-dialog` | Chess960 position (Menu › Explore) |
 | `part-leave-game-dialog` | Leave this game? |
 | `part-my-games-dialog` | My games |
 | `part-shortcuts-dialog` | Keyboard shortcuts |
