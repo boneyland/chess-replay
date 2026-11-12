@@ -153,7 +153,11 @@ test('the real worker answers from vendor/chasolver.wasm', async () => {
     const { parentPort } = require('worker_threads'), fs = require('fs');
     globalThis.self = globalThis;
     globalThis.postMessage = (m) => parentPort.postMessage(m);
-    globalThis.fetch = async (u) => new Response(fs.readFileSync(${JSON.stringify(path.join(__dirname, '..', 'vendor'))} + '/' + u));
+    globalThis.location = { search: '?v=deploy1' }; // the page's deploy, which the worker asks its wasm with
+    globalThis.fetch = async (u) => {
+      if (u !== 'chasolver.wasm?v=deploy1') throw new Error('asked for ' + u);
+      return new Response(fs.readFileSync(${JSON.stringify(path.join(__dirname, '..', 'vendor'))} + '/chasolver.wasm'));
+    };
     parentPort.on('message', (data) => self.onmessage({ data }));
     require(${JSON.stringify(path.join(__dirname, '..', 'app', 'dead-worker.js'))});`;
   const make = () => {

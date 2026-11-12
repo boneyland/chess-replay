@@ -187,6 +187,22 @@ test('the service worker keeps the page, its files and every CDN file the page l
   for (const u of cdn) assert.ok(REMOTE.includes(u), u);
   assert.ok(REMOTE.some((u) => u.startsWith('https://fonts.googleapis.com/css2?')), 'the fonts');
   assert.match(page, /navigator\.serviceWorker\.register\('sw\.js'/);
+  // the page asks for its Workers and libraries with this deploy's VERSION, the one sw.js answers from its copy
+  assert.ok(page.includes(`window.siteFile = (f) => f + '?v=${sw.match(/^const VERSION = '([0-9a-f]{16})';/m)[1]}';`));
+  for (const u of REMOTE) assert.ok(!/\/$/.test(u), u);
+});
+
+test('sw.js\'s VERSION changes with a file it keeps only as it is used (a piece set), not only the ones it keeps at install', () => {
+  const site = path.join(ROOT, 'out', 'site'), version = () => fs.readFileSync(path.join(site, 'sw.js'), 'utf8').match(/^const VERSION = '([0-9a-f]+)';/m)[1];
+  const piece = path.join(ROOT, 'vendor', 'pieces', fs.readdirSync(path.join(ROOT, 'vendor', 'pieces')).filter((s) => !s.startsWith('.'))[0]);
+  const file = path.join(piece, fs.readdirSync(piece).filter((f) => !f.startsWith('.'))[0]), was = fs.readFileSync(file);
+  execFileSync(process.execPath, [path.join(ROOT, 'build.cjs')], { cwd: ROOT });
+  const before = version();
+  try {
+    fs.writeFileSync(file, Buffer.concat([was, Buffer.from('\n')]));
+    execFileSync(process.execPath, [path.join(ROOT, 'build.cjs')], { cwd: ROOT });
+    assert.notEqual(version(), before);
+  } finally { fs.writeFileSync(file, was); execFileSync(process.execPath, [path.join(ROOT, 'build.cjs')], { cwd: ROOT }); }
 });
 
 // the page doesn't zoom; a browser set to ignore that still can

@@ -13,7 +13,8 @@ const SF_ASM_FIX = SF_IOS ? 'Update to iOS 16.4 or later' : 'Use Chrome';
 const SF_ASM_NOTE = `This browser can’t run Stockfish’s WebAssembly (it has no WebAssembly SIMD), so Stockfish runs as JavaScript (asm.js), which is very slow and weak. ${SF_IOS ? SF_ASM_FIX : 'Open this page in Chrome'} for full-strength Stockfish.`;
 // the same, in a line (the Analysis panel's tip row)
 const SF_ASM_SHORT = `No WebAssembly SIMD: Stockfish is very slow and weak here. ${SF_ASM_FIX}`;
-const sfMakeWorker = (file) => () => new Worker(file + '.js');
+// (this deploy's files, window.siteFile; a wasm build's glue is told its wasm's URL after the #, else it would drop the ?v=)
+const sfMakeWorker = (file, wasm) => () => new Worker(window.siteFile(file + '.js') + (wasm ? '#' + encodeURIComponent(new URL(window.siteFile(file + '.wasm'), document.baseURI).href) : ''));
 // A missing engine file only shows up inside the worker (it never reaches the page as an error), so the
 // page checks the wasm is there first rather than waiting out the start timeout
 // A threaded engine must start its threads and answer a depth-1 search this soon after it loads (SFEngine's probeMs:
@@ -30,7 +31,7 @@ const SF_ASM_LOAD_MS = 120000;
 // for all of that (the page has drawn by then, and the engine compiles in its own worker)
 const SF_ASM_EARLY_MS = 1500;
 // url: the engine file to check (its .wasm, or the asm.js build's one .js)
-const sfFilesPresent = (url) => fetch(url, { method: 'HEAD', cache: 'no-store' }).then((r) => r.ok, () => false);
+const sfFilesPresent = (url) => fetch(window.siteFile(url), { method: 'HEAD', cache: 'no-store' }).then((r) => r.ok, () => false);
 
 // Whether Stockfish may search with threads on this page ({ on, cores, reason }, SFEngine.threadSupport); a threaded
 // engine that won't start or dies turns them off for the rest of the page, with the reason the engine menu shows
@@ -115,7 +116,7 @@ function useEngine(hashMB, threads, kind = 'lite', onBroken, onHashFail) {
         } else {
           const file = kk === 'asm' ? SF_FILE_ASM : withThreads ? SF_FILE_THREADS : SF_FILE;
           if (!(await sfFilesPresent(file + (kk === 'asm' ? '.js' : '.wasm')))) throw new Error('The Stockfish files are missing next to this page');
-          make = sfMakeWorker(file);
+          make = sfMakeWorker(file, kk !== 'asm');
         }
         threaded.current = withThreads;
         // an engine that dies before it is ready is start()'s to handle: ready() rejects, and a threaded one falls back,

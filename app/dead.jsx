@@ -6,7 +6,7 @@
 let DEAD = null;
 const deadClient = () => {
   if (DEAD) return DEAD;
-  DEAD = window.DeadCore.create({ makeWorker: () => new Worker('dead-worker.js') });
+  DEAD = window.DeadCore.create({ makeWorker: () => new Worker(window.siteFile('dead-worker.js')) });
   window.PlayCore.setProver((pos, c) => { const v = DEAD.cached(deadFen(pos), c); return v === 'unwinnable' ? true : v === 'winnable' ? false : null; });
   return DEAD;
 };

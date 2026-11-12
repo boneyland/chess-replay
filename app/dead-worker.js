@@ -5,7 +5,8 @@
 const VERDICTS = ['unwinnable', 'winnable', 'undecided', 'undecided']; // solve(): 3 is a FEN it refuses
 const BUF_LEN = 256;
 let X = null;
-const ready = fetch('chasolver.wasm')
+// (with the Worker's own ?v=, the page's deploy: see window.siteFile in build.cjs)
+const ready = fetch('chasolver.wasm' + self.location.search)
   .then((r) => { if (!r.ok) throw new Error('chasolver.wasm: HTTP ' + r.status); return r.arrayBuffer(); })
   .then((b) => WebAssembly.instantiate(b, {}))
   .then((r) => { X = r.instance.exports; });

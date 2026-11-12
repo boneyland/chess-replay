@@ -164,7 +164,8 @@ const editBox = async (page) => {
 // noMemory: every Hash does, so even the 64 MB fallback fails
 function spyEngine({ cores = 8, noSharedMemory = false, hang = 0, hangReady = 0, hangSearch = 0, bigHash = 0, noMemory = false } = {}) {
   // at: when each worker started, ended: [which, when] each was terminated (ms since the page began)
-  const seen = window.__sf = { urls: [], posted: [], nps: [], at: [], ended: [] };
+  // urls: each engine worker's file, without the ?v= and # the page adds (window.siteFile); raw: as started
+  const seen = window.__sf = { urls: [], raw: [], posted: [], nps: [], at: [], ended: [] };
   Object.defineProperty(Navigator.prototype, 'hardwareConcurrency', { get: () => cores });
   if (noSharedMemory) delete window.SharedArrayBuffer;
   const W = window.Worker;
@@ -172,9 +173,10 @@ function spyEngine({ cores = 8, noSharedMemory = false, hang = 0, hangReady = 0,
     constructor(url, ...rest) {
       super(url, ...rest);
       // the dead-position prover's worker (chasolver) isn't an engine
-      if (/dead-worker\.js$/.test(String(url))) { this.n = -1; return; }
-      this.n = seen.urls.push(String(url)) - 1; seen.at.push(Math.round(performance.now()));
-      const threaded = /stockfish-19-lite\.js$/.test(String(url));
+      const file = String(url).replace(/[?#].*$/, '');
+      if (/dead-worker\.js$/.test(file)) { this.n = -1; return; }
+      this.n = seen.urls.push(file) - 1; seen.raw.push(String(url)); seen.at.push(Math.round(performance.now()));
+      const threaded = /stockfish-19-lite\.js$/.test(file);
       this.mute = threaded && hangReady-- > 0 ? /^uci$/ : threaded && hang-- > 0 ? /^go/ : threaded && hangSearch-- > 0 ? /^go (?!depth 1$)/ : null;
     }
     terminate() { if (this.n >= 0) seen.ended.push([this.n, Math.round(performance.now())]); return super.terminate(); }
@@ -1191,6 +1193,8 @@ for (const name of BROWSERS) for (const site of SITES) {
         await p.waitForFunction(() => (document.body.innerText.match(/^[+−]?\d+\.\d\d( d\d+)?\s+1…/gm) || []).length === 3, null, { timeout: 45000 });
         const seen = await p.evaluate(() => window.__sf);
         assert.ok(seen.urls.some((u) => /stockfish-19-lite\.js$/.test(u)), 'the threaded build: ' + seen.urls.join(' '));
+        // this deploy's files (sw.js answers another deploy's from the network), the glue told its wasm's versioned URL
+        assert.ok(seen.raw.every((u) => /^stockfish-19-lite(-single)?\.js\?v=[0-9a-f]{16}#http.*stockfish-19-lite(-single)?\.wasm%3Fv%3D[0-9a-f]{16}$/.test(u)), seen.raw.join(' '));
         assert.equal(seen.posted.includes(`setoption name Threads value ${threads}`), threads > 1, seen.posted.filter((m) => m.startsWith('setoption')).join(' | '));
         // Firefox: the first threaded engine in a page may fail its probe search, and a second one starts (useEngine)
         t.diagnostic(`threads ${threads}: ${seen.urls.filter((u) => /stockfish-19-lite\.js$/.test(u)).length} threaded worker(s) started`);
@@ -3038,7 +3042,7 @@ for (const name of BROWSERS) for (const site of SITES) {
       const p = gd.page, got = [];
       // (only the page's check is fooled: SFEngine.simdSupport's test is 31 bytes)
       await gd.ctx.addInitScript(() => { const v = WebAssembly.validate; WebAssembly.validate = (b) => (b.length === 31 ? false : v(b)); });
-      p.on('request', (r) => { const f = r.url().split('/').pop(); if (/^stockfish-/.test(f)) got.push(f); });
+      p.on('request', (r) => { const f = r.url().split('/').pop().replace(/[?#].*$/, ''); if (/^stockfish-/.test(f)) got.push(f); });
       await p.goto(base, { waitUntil: 'load' });
       await loadedOn(p);
       // it starts with the page, before anything asks for a search (it takes long to start on the slow devices that need it)
