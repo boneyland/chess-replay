@@ -481,12 +481,12 @@
   }
 
   // compositor(root, { W, H, scale, html2canvas, skip, frame }) gives draw(cx), which paints the stage as it is now into cx
-  // (W × H, the stage's CSS px times scale; frame { x, w }: where the stage goes across a wider cx, which is filled with
-  // its colour and nothing drawn outside it, as on screen the frame clips the page), reusing every layer whose markup hasn't changed, and resolves whether it
+  // (W × H, the stage's CSS px times scale; frame { x, y, w, h }: where the stage goes in a larger cx, which is filled
+  // with its colour and nothing drawn outside it, as on screen the frame clips the page), reusing every layer whose markup hasn't changed, and resolves whether it
   // painted: when the layers, their order, their camera push and the stage's colour are all as the last draw into
   // this cx left them, cx is left as it is (false), so a held frame costs one look at the layers. skip(target) is html2canvas's
   // ignoreElements for a capture of target. stats counts the layers drawn each way.
-  function compositor(root, { W, H, scale, html2canvas, skip, frame = { x: 0, w: W } }) {
+  function compositor(root, { W, H, scale, html2canvas, skip, frame = { x: 0, y: 0, w: W, h: H } }) {
     let cache = new Map(), last = { cx: null, layers: [], look: null };
     const stats = { painted: 0, captured: 0, reused: 0, why: {} };
     root.setAttribute('data-export-root', '');
@@ -559,7 +559,7 @@
       cx.imageSmoothingQuality = 'high';
       cx.fillStyle = '#ffffff'; cx.fillRect(0, 0, W, H);
       if (!clear(bg)) { cx.fillStyle = bg; cx.fillRect(0, 0, W, H); }
-      if (frame.x || frame.w !== W) { cx.beginPath(); cx.rect(frame.x, 0, frame.w, H); cx.clip(); cx.translate(frame.x, 0); }
+      if (frame.x || frame.y || frame.w !== W || frame.h !== H) { cx.beginPath(); cx.rect(frame.x, frame.y, frame.w, frame.h); cx.clip(); cx.translate(frame.x, frame.y); }
       // a faded box's layers go on a canvas of their own, drawn at the box's opacity once its last layer is on it
       let top = null, gc = null;
       const flush = () => {

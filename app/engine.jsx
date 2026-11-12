@@ -59,6 +59,13 @@ function useDismiss(open, ref, close) {
 
 
 // still: a board without a timeline (the free board): no playing, no seeking keys, and a transport bar of moves only
+// the page's own margins above and below the frame, which an export keeps (export.jsx): the stage's padding and, above,
+// the area's (one column's); not the transport bar and its gap, nor an Offline tag. area: the .stage-area element
+const stageMargins = (area) => {
+  const s = getComputedStyle(area.parentElement), a = getComputedStyle(area), n = (v) => parseFloat(v) || 0;
+  return { top: n(s.paddingTop) + n(a.paddingTop), bottom: n(s.paddingBottom) };
+};
+
 // top: an optional line above the frame (the page's Offline tag); the page lays out at the size of the room left
 // fps: the export's frame rate, the step of the , and . keys
 function Stage({ menu, top, onLayout, duration, background, playback, nav, still, forceVideo, text = 1, clock, fps = 8, children }) {
@@ -100,12 +107,12 @@ function Stage({ menu, top, onLayout, duration, background, playback, nav, still
       // the area's own padding (one column's, shell.html) is outside the page
       const cs = getComputedStyle(el), px = (k) => parseFloat(cs[k]) || 0;
       const w = el.clientWidth - px('paddingLeft') - px('paddingRight'), h = el.clientHeight - px('paddingTop') - px('paddingBottom');
-      const sh = el.parentElement.clientHeight, ox = el.offsetLeft, oy = el.offsetTop;
+      const sh = el.parentElement.clientHeight, ox = el.offsetLeft, oy = el.offsetTop, m = stageMargins(el), my = m.top + m.bottom;
       // the viewport, which caps the board's size (LayoutCore)
       const vw = document.documentElement.clientWidth, vh = document.documentElement.clientHeight;
       const cols = LayoutCore.pickColumns({ w, h, vw, vh, text, video, was: colsRef.current, off });
       colsRef.current = cols;
-      setArea((a) => (a.w === w && a.h === h && a.cols === cols && a.sh === sh && a.vw === vw && a.vh === vh && a.ox === ox && a.oy === oy ? a : { w, h, cols, sh, vw, vh, ox, oy }));
+      setArea((a) => (a.w === w && a.h === h && a.cols === cols && a.sh === sh && a.vw === vw && a.vh === vh && a.ox === ox && a.oy === oy && a.my === my ? a : { w, h, cols, sh, vw, vh, ox, oy, my }));
     };
     measure();
     const ro = new ResizeObserver(measure);
@@ -119,8 +126,9 @@ function Stage({ menu, top, onLayout, duration, background, playback, nav, still
   const short = cols === 2 && sh < 500;
   const narrow = w < 900, phone = cols === 1 || narrow || short;
   const dock = short ? LayoutCore.compute({ w, h, text, video, cols, dock: true, vw: area.vw, vh: area.vh }).dock : null;
-  // the export's pixel width: the viewport's width at the device's pixel ratio, held to 1920 on its longer side (export.jsx)
-  const exportW = LayoutCore.exportPx(area.vw, LayoutCore.exportScale(area.vw, h, window.devicePixelRatio));
+  // the export's pixel width: the viewport's width at the device's pixel ratio, held to 1920 on its longer side (the
+  // frame's height and the page's margins above and below it, export.jsx)
+  const exportW = LayoutCore.exportPx(area.vw, LayoutCore.exportScale(area.vw, h + (area.my || 0), window.devicePixelRatio));
   // onLayout(true, w, short): a phone layout (one column, under 900 px wide, or the bar in the sidebar), where the page folds its buttons into a
   // menu; w is the export's width; short: the transport bar is in the sidebar
   React.useLayoutEffect(() => { if (onLayout) onLayout(phone, exportW, short); }, [phone, exportW, short]);
@@ -342,4 +350,4 @@ function CompositionStage({ menu, top, onLayout, scenes, playback, bg, nav, stil
   );
 }
 
-Object.assign(window, { Easing, clamp, CompositionStage, useComposition, useTimeline, useFrame, isTypingTarget, hasModifier, useKeydown, useDismiss });
+Object.assign(window, { Easing, clamp, CompositionStage, useComposition, useTimeline, useFrame, isTypingTarget, hasModifier, useKeydown, useDismiss, stageMargins });
