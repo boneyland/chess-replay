@@ -116,3 +116,31 @@ test('pgnOf writes as the annotated PGN does: tag values escaped, moves wrapped 
   // the export reads it back
   assert.equal(CC.buildGame({ pgn: text }).plies.length, 16);
 });
+
+test('a Chess960 board keeps its number and a played 960 castle through save and restore', () => {
+  const fen = CC.chess960Fen(612);
+  let b = B.fromFen(fen, { chess960: 612 });
+  assert.equal(b.chess960, 612);
+  for (const u of ['e2e4', 'e7e5', 'f1g1']) b = B.play(b, step(b, u));
+  assert.equal(b.steps[2].san, 'O-O');
+  const saved = JSON.parse(JSON.stringify(B.save(b)));
+  assert.equal(saved.chess960, 612);
+  const r = B.restore(saved);
+  assert.equal(r.chess960, 612);
+  assert.deepEqual(B.ucis(r), ['e2e4', 'e7e5', 'f1g1']);
+  assert.equal(r.steps[2].san, 'O-O');
+  assert.equal(B.save(B.fromFen()).chess960, undefined, 'standard boards carry none');
+  assert.equal('chess960' in B.fromFen(), false);
+  assert.equal(B.fromFen(fen, { chess960: true }).chess960, true);
+});
+test('restore keeps a chess960 label of 0-959 or true and drops anything else', () => {
+  const base = B.save(B.fromFen());
+  for (const v of [0, 518, 959, true]) assert.equal(B.restore({ ...base, chess960: v }).chess960, v);
+  for (const v of [960, -1, 1.5, '612', false, null, {}, NaN]) assert.equal('chess960' in B.restore({ ...base, chess960: v }), false, String(v));
+});
+test('a Chess960 board writes Variant before SetUp and FEN, even for 518', () => {
+  const b = B.fromFen(CC.START_FEN, { chess960: 518 });
+  const t = B.pgn(b, '2026.11.13');
+  assert.match(t, /\[Black "Black"\]\n\[Result "\*"\]\n\[Variant "Chess960"\]\n\[SetUp "1"\]\n\[FEN "rnbqkbnr\/pppppppp\/8\/8\/8\/8\/PPPPPPPP\/RNBQKBNR w KQkq - 0 1"\]/);
+  assert.doesNotMatch(B.pgn(B.fromFen(), '2026.11.13'), /Variant|SetUp/);
+});

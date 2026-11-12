@@ -131,6 +131,11 @@
         if (!inCheck(applyMove(pos, i, j, null).b, pos.turn)) return true;
       }
     }
+    // a Chess960 castle is a king move onto its rook, which canReach doesn't know; legalMove checks it without SAN, so no recursion
+    if (pos.rooks) {
+      const k = kingIdx(pos.b, pos.turn);
+      if (k >= 0) for (const side of ['a', 'h']) { const rk = castleRook(pos.b, rightOf(pos.turn, side), pos.rooks); if (rk >= 0 && legalMove(pos, k, rk)) return true; }
+    }
     return false;
   }
   const tOf = (p) => p.toLowerCase();
