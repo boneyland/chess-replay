@@ -37,6 +37,7 @@ class by hand on anything else.
 
 | Class | Name | What and where | Code name |
 | --- | --- | --- | --- |
+| `part-castle-buttons` | Castle buttons | Castle a-side / Castle h-side, each while that castle is legal in a Chess960 position and the viewer may move: under the Analysis panel's move on the free board, in the Game panel on the viewer's turn at the game's last move (never on Stockfish's), under the replay's own line. Its companion, the castle-or-move question over the board (a king dropped one square from c or g), is `CastleAsk` | `CastleButtons` (`app/game-video-core.jsx`) |
 | `part-transport-bar` | Transport bar | Back to start, step, play/pause, the seek bar and times, the move label; under the page, or at the foot of the sidebar in a short two-column window | `PlaybackBar`, `.pbar` |
 | `part-dock` | Dock | The app's buttons: Import game, Menu, and the Share and export, Settings and Full screen icons (in the folded menu on a phone) | `.dock-items` |
 | `part-play-explore-menu` | Dock menu | The pop-up of the dock's Menu button, in three groups: Explore, Play, More (Keyboard shortcuts, Ask Queen) (desktop; on a phone its items are in the folded menu). The class keeps the button's old name, Play/Explore | `.dock-pop` |

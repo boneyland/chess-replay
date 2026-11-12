@@ -239,7 +239,8 @@ function GameInfo({ board }) {
 // and Claim a draw when the side to move can (vs human: a threefold repetition or the fifty-move rule),
 // or the result with Play again beside it and Analyse on the free board below. down: why Stockfish can't answer, if so,
 // and retry asks it again (Try again). tip: against Stockfish, the hint's state { san, left, wait, failed, ask } (FreeBoard's hintInfo)
-function GameStatus({ board, onChange, down, why, retry, tip }) {
+// onMove(step) plays a move as the board does: a Chess960 game's Castle buttons, shown on the viewer's turn at the game's last move
+function GameStatus({ board, onChange, down, why, retry, tip, onMove }) {
   const P = window.PlayCore, G = board.game, last = board.steps.length ? board.steps[board.steps.length - 1] : null;
   const turn = (last ? last.pos : board.start.pos).turn, side = sideName(turn), sfGame = G.mode === 'stockfish';
   // the question waiting on an answer: 'resign' or 'draw'; another position or result drops it
@@ -282,6 +283,7 @@ function GameStatus({ board, onChange, down, why, retry, tip }) {
           {big(mine ? 'Your move' : trouble ? 'Stockfish to move' : 'Stockfish is thinking…', C.last)}
           {small(check ? 'Check' : trouble || clockNote, check || trouble ? C.blunder : C.dim)}
         </div>
+        {mine && !behind && !ask && <CastleButtons pos={last ? last.pos : board.start.pos} onMove={onMove} />}
         {ask === 'resign' ? row(<React.Fragment>
           <span style={{ font: `600 ${tx(18)}px ${SANS}`, color: C.ink }}>Resign this game?</span>
           <FrameButton color={C.blunder} onClick={() => onChange(P.resign(board, now(), G.you))}>Resign</FrameButton>
@@ -309,6 +311,7 @@ function GameStatus({ board, onChange, down, why, retry, tip }) {
         {big(`${side} to move`, C.last)}
         {small(check ? 'Check' : claimNote || clockNote, check ? C.blunder : claim ? C.last : C.dim)}
       </div>
+      {!behind && !ask && <CastleButtons pos={last ? last.pos : board.start.pos} onMove={onMove} />}
       {ask ? row(<React.Fragment>
         <span style={{ font: `600 ${tx(18)}px ${SANS}`, color: C.ink }}>{ask === 'resign' ? `Resign as ${side}?` : `${side} offers a draw. ${side === 'White' ? 'Black' : 'White'}, accept?`}</span>
         <FrameButton color={ask === 'resign' ? C.blunder : C.last} onClick={() => onChange(ask === 'resign' ? P.resign(board, now()) : P.agreeDraw(board, now()))}>{ask === 'resign' ? 'Resign' : 'Accept'}</FrameButton>
@@ -435,7 +438,7 @@ function FreeBoard({ board, onChange, tw, setTweak, onLichess, sf, nav, orient, 
   const goIf = (to) => { if (to >= -1 && to <= last && to !== upto) go(to); };
   useKeydown((e) => {
     if (e.shiftKey || hasModifier(e)) return;
-    if (e.code === 'Escape' && input.promo) { e.preventDefault(); input.cancelPromo(); return; }
+    if (e.code === 'Escape' && (input.promo || input.castle)) { e.preventDefault(); input.cancelPromo(); return; }
     const to = { ArrowLeft: upto - 1, ArrowRight: upto + 1, Home: -1, End: last }[e.code];
     if (to == null) return;
     e.preventDefault();
@@ -461,22 +464,24 @@ function FreeBoard({ board, onChange, tw, setTweak, onLichess, sf, nav, orient, 
       <BoardSpace onStep={!steps.length ? null : (d) => goIf(upto + d)}>
         <LineBoard a={1} sq={boardSquares()} v={pv && pv.length ? { upto: upto + pv.length, moves: [...steps.slice(0, upto + 1), ...pv], base: board.start.pos, src: 'you' } : { upto, moves: steps, base: board.start.pos, src: 'you' }} hide={input.drag && input.drag.moved ? input.drag.from : null} arrows={hintMove ? [{ uci: had.best, k: 1 }] : hovArrows(!G && tw.bestArrows !== false ? lineArrows(ev.after) : null, hov)} sel={input.sel} />
         <BoardDraw draw={draw} hidden={!!(pv && pv.length)}>
-          <BoardTouch pos={pos} targets={input.targets} drag={input.drag} promo={input.promo} {...(still ? stillInput : input.handlers)} />
+          <BoardTouch pos={pos} targets={input.targets} drag={input.drag} promo={input.promo} castle={input.castle} onCastle={input.pickCastle} {...(still ? stillInput : input.handlers)} />
         </BoardDraw>
       </BoardSpace>
       <FreeBar pos={pos} side="w" a={1} clock={clockOf('w')} name={G ? window.PlayCore.playerName(G, 'w') : null} />
       {L.header && <Header M={HM} a={1} />}
       <MoveList M={MV} T={upto + 0.999} S={S} a={1} paused onPick={go} deadAt={deadAt} end={end} startAt={G && G.from} />
       {G ? <GameInfo board={board} /> : tb ? <TablebaseExplorer t={tb} posKey={boardKey} onPlay={onBook} /> : xl ? <LichessExplorer x={xl} tw={tw} setTweak={setTweak} onGame={onLichess} posKey={boardKey} onPlay={onBook} onHover={setHov} white={pos.turn === 'w'} fallback={<OpeningExplorer board={board} book={book} onPlay={onBook} onHover={setHov} />} /> : <OpeningExplorer board={board} book={book} onPlay={onBook} onHover={setHov} />}
-      {G ? <Panel box={L.analysis} part="game" a={1} style={NO_SELECT} title="Game"><GameStatus board={board} onChange={onChange} down={opponent.down} why={sf.why} retry={opponent.retry} tip={hintInfo} /></Panel>
+      {G ? <Panel box={L.analysis} part="game" a={1} style={NO_SELECT} title="Game"><GameStatus board={board} onChange={onChange} down={opponent.down} why={sf.why} retry={opponent.retry} tip={hintInfo} onMove={play} /></Panel>
         : <AnalysisPanel box={L.analysis} a={1} paused depth={down && !sf.off ? null : searchDepth(ev.after)} deep={ev}>
         {upto < 0
           ? <React.Fragment>
             <StartAnalysis board={board} ev={ev} status={sfStatus} why={sf.why} onLine={onReply} onHover={setPv} />
+            <CastleButtons pos={pos} onMove={play} />
             {rule && <div style={{ marginTop: tx(12), paddingTop: tx(12), borderTop: `1px solid ${C.line}` }}><RuleBlock w={rule} /></div>}
           </React.Fragment>
           : <React.Fragment>
             <OwnMoveAnalysis M={MV} vline={{ at: 0, moves: steps, upto, src: 'you' }} own={own} status={sfStatus} why={sf.why} onReply={onReply} onHover={setPv} />
+            <CastleButtons pos={pos} onMove={play} />
             {rule && <div style={{ marginTop: tx(12), paddingTop: tx(12), borderTop: `1px solid ${C.line}` }}><RuleBlock w={rule} /></div>}
           </React.Fragment>}
       </AnalysisPanel>}

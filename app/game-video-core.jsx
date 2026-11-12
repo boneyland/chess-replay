@@ -581,7 +581,37 @@ function DragGhost({ el, piece, x, y }) {
 // The pieces a pawn can become, in the picker's order, and where each sits: a column on the promotion square's file
 const PROMO_PIECES = ['q', 'n', 'r', 'b'];
 const promoPieces = (pr) => PROMO_PIECES.map((t, k) => ({ t, sq: pr.to + (pr.white ? 8 : -8) * k }));
-function BoardTouch({ pos, targets, drag, promo, onDown, onMove, onUp, onCancel }) {
+// A 960 castle's side as the page names it: 'Castle a-side' / 'Castle h-side'
+const castleName = (side) => `Castle ${side}-side`;
+// The castle-or-move question over the board (BoardTouch, castle: useBoardInput's): Castle a-side/h-side, and Move the
+// king to g1 when that king step is legal too. A press anywhere else reaches BoardTouch, which lets it go (the king stays);
+// its buttons take their own presses. In board pixels, so it scales with the board
+function CastleAsk({ castle, onPick }) {
+  const btn = (primary) => ({ font: `600 28px ${MONO}`, letterSpacing: '0.02em', padding: '14px 26px', borderRadius: 6, cursor: 'pointer', whiteSpace: 'nowrap', border: `2px solid ${BOARD.last}`, background: primary ? BOARD.last : 'transparent', color: primary ? BOARD.bg : BOARD.last });
+  const press = (choice) => ({ onPointerDown: (e) => e.stopPropagation(), onClick: (e) => { e.stopPropagation(); onPick(choice); } });
+  return (
+    <div style={{ position: 'absolute', inset: 0, display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 7, pointerEvents: 'none' }}>
+      <div role="dialog" aria-label="Castle or move the king" className="castle-ask"
+        style={{ pointerEvents: 'auto', cursor: 'default', display: 'flex', flexDirection: 'column', alignItems: 'stretch', gap: 16, padding: 24, borderRadius: 10, background: BOARD.bg, boxShadow: '0 8px 30px rgba(0,0,0,0.55)' }}>
+        <button type="button" style={btn(true)} {...press('castle')}>{castleName(castle.side)}</button>
+        {castle.alsoMove && <button type="button" style={btn(false)} {...press('move')}>Move the king to {window.ChessCore.sqName(castle.to)}</button>}
+      </div>
+    </div>
+  );
+}
+// The legal Chess960 castles of the side to move as buttons, a-side first (part castle-buttons): nothing in a standard
+// position or with no legal castle. Shown where the viewer may move (the free board, a game on the viewer's turn, the
+// replay's own line); onMove(step) plays the castle as a drag would
+function CastleButtons({ pos, onMove, style }) {
+  const ms = pos ? window.ChessCore.castleMoves(pos) : [];
+  if (!ms.length) return null;
+  return (
+    <div className="part-castle-buttons" style={{ display: 'flex', flexWrap: 'wrap', gap: tx(12), marginTop: tx(14), userSelect: 'none', WebkitUserSelect: 'none', ...style }}>
+      {ms.map((m) => <FrameButton key={m.side} color={C.last} onClick={() => onMove(m.step)}>{castleName(m.side)}</FrameButton>)}
+    </div>
+  );
+}
+function BoardTouch({ pos, targets, drag, promo, castle, onCastle, onDown, onMove, onUp, onCancel }) {
   const dragged = drag && drag.moved ? pos.b[drag.from] : null, el = React.useRef(null);
   return (
     <div ref={el} data-no-drag-scroll onPointerDown={onDown} onPointerMove={onMove} onPointerUp={onUp} onPointerCancel={onCancel}
@@ -602,6 +632,8 @@ function BoardTouch({ pos, targets, drag, promo, onDown, onMove, onUp, onCancel 
           <img src={img(promo.white ? 'w' : 'b', t)} alt="" style={{ width: SQ * 0.86, height: SQ * 0.86 }} />
         </div>
       ))}
+      {castle && <div style={{ position: 'absolute', inset: 0, background: 'rgba(21,16,13,0.45)', pointerEvents: 'none', zIndex: 4 }} />}
+      {castle && <CastleAsk castle={castle} onPick={onCastle} />}
     </div>
   );
 }
@@ -972,7 +1004,8 @@ function Commentary({ M, T, S, a, book, line }) {
 // fifty: PlayCore.fiftyRule's note for the position on the board, shown where no dead-position block is
 // moveEval: Stockfish's search of the move paused on, in a game without an analysis (useGameMoveEval); gamePos(c): the
 // position after ply c
-function Analysis({ M, T, S, a, vline, onLine, onPreview, onReplyHover, paused, sf, own, onReply, deep, moveEval, gamePos, tb, onTb, dead, fifty }) {
+// castle: { pos, onMove } while the viewer's own line is shown and may take a move, for a Chess960 position's Castle buttons
+function Analysis({ M, T, S, a, vline, onLine, onPreview, onReplyHover, paused, sf, own, onReply, deep, moveEval, gamePos, tb, onTb, dead, fifty, castle }) {
   const c = lastPly(T, S);
   // Stockfish runs as asm.js here (stockfish.jsx, which a page without the engine doesn't load)
   const sfAsm = typeof SF_SIMD !== 'undefined' && !SF_SIMD;
@@ -992,6 +1025,7 @@ function Analysis({ M, T, S, a, vline, onLine, onPreview, onReplyHover, paused, 
     return (
       <AnalysisPanel box={box} a={a} paused={paused} depth={sf && !sf.off && (sf.status === 'unavailable' || sf.status === 'stopped') ? null : searchDepth(own.after)} deep={own}>
         <OwnMoveAnalysis M={M} vline={vline} own={own} who={vline.src === 'you' || vline.upto >= picked(vline) ? undefined : lineName(vline.src).toUpperCase()} status={!sf ? 'idle' : sf.busy ? 'busy' : sf.off ? 'off' : sf.status} why={sf ? sf.why : ''} onReply={onReply} onHover={onReplyHover} top={tbAt(false)} />
+        {castle && <CastleButtons pos={castle.pos} onMove={castle.onMove} />}
         {deadEl}
         <span style={{ display: 'block', marginTop: tx(8), font: `500 ${tx(15)}px ${MONO}`, color: C.dim }}>{shownLineNote(M, vline)}</span>
       </AnalysisPanel>
@@ -1250,26 +1284,51 @@ function boardPoint(el, e, clamp) {
 const DRAG_PX = 14;
 const dragMoved = (d, p) => d.moved || Math.hypot(p.x - d.x0, p.y - d.y0) > DRAG_PX;
 
-// The board's pointer input: tap-tap and drag moves, and the promotion picker. pos is the position on the board;
-// onPick() runs when a piece of the side to move is picked up, onMiss() after a tap or drop that played nothing,
-// onMove(step) with a legal move (a ChessCore.userMove step, promotion piece included)
+// The board's pointer input: tap-tap and drag moves, the promotion picker, and in a Chess960 position the castle-or-move
+// question. pos is the position on the board; onPick() runs when a piece of the side to move is picked up, onMiss() after
+// a tap or drop that played nothing, onMove(step) with a legal move (a ChessCore.userMove step, promotion piece included)
 function useBoardInput({ pos, onPick, onMiss, onMove }) {
+  const CC = window.ChessCore;
   const [sel, setSel] = React.useState(null); // selected square (0 = a8)
   const [drag, setDrag] = React.useState(null); // { from, x, y, x0, y0, moved, again (pressed on the selected piece) } in board pixels
   const [promo, setPromo] = React.useState(null); // { from, to, white }: a pawn move waiting for its piece
-  // a promotion first shows the picker, and plays once a piece is picked
+  // { from, to, side, step, alsoMove }: a 960 king dropped one square from c or g, waiting for castle or king move
+  const [castle, setCastle] = React.useState(null);
+  // a promotion first shows the picker, and plays once a piece is picked. A 960 king dropped where castling is legal
+  // (CC.castleTarget) castles at once from two or more squares away or on its own rook, and asks from one square away,
+  // where a king step could be meant; a standard position never gets here (castleTarget is null)
   const playMove = (from, to, piece) => {
-    if (!piece && window.ChessCore.isPromotion(pos, from, to)) { setPromo({ from, to, white: pos.turn === 'w' }); return true; }
-    const step = window.ChessCore.userMove(pos, from, to, piece);
+    const ct = !piece && CC.castleTarget(pos, from, to);
+    if (ct) {
+      const m = CC.castleMoves(pos).find((x) => x.side === ct.side);
+      if (!ct.ask) onMove(m.step); else setCastle({ from, to, side: ct.side, step: m.step, alsoMove: CC.userMove(pos, from, to) });
+      return true;
+    }
+    if (!piece && CC.isPromotion(pos, from, to)) { setPromo({ from, to, white: pos.turn === 'w' }); return true; }
+    const step = CC.userMove(pos, from, to, piece);
     if (!step) return false;
     onMove(step);
     return true;
   };
-  const targets = sel != null ? window.ChessCore.legalTargets(pos, sel) : [];
+  // the selected piece's squares; a 960 king's castling squares (c, g) too, where castling is legal from it
+  const castleTo = (from) => (pos.rooks ? [2, 6].map((x) => (from >> 3) * 8 + x).filter((to) => CC.castleTarget(pos, from, to)) : []);
+  const targets = sel != null ? [...new Set([...CC.legalTargets(pos, sel), ...castleTo(sel)])] : [];
+  // the question's answer: 'castle', 'move' (the king step) or null (let go: the king stays). Each is read again from the
+  // position now on the board, so a question left open across a step (an arrow key) plays nothing stale
+  const pickCastle = (choice) => {
+    const c = castle;
+    setCastle(null);
+    if (!c) return;
+    const ct = CC.castleTarget(pos, c.from, c.to), m = ct && ct.side === c.side && CC.castleMoves(pos).find((x) => x.side === c.side);
+    const step = choice === 'castle' ? m && m.step : choice === 'move' && c.alsoMove ? CC.userMove(pos, c.from, c.to) : null;
+    if (step) onMove(step); else onMiss();
+  };
   const boardXY = (e) => boardPoint(e.currentTarget, e, true), moved = dragMoved;
   const handlers = {
     onDown: (e) => {
       const p = boardXY(e);
+      // the castle question open: a press anywhere but its buttons (which take their own presses) lets it go
+      if (castle) { pickCastle(null); return; }
       if (promo) {
         // the picker's squares run from the promotion square towards the middle; anywhere else takes the move back
         const k = promoPieces(promo).findIndex((q) => q.sq === p.sq);
@@ -1295,9 +1354,10 @@ function useBoardInput({ pos, onPick, onMiss, onMove }) {
     },
     onCancel: () => setDrag(null),
   };
-  const cancelPromo = () => setPromo(null);
-  const clear = () => { setSel(null); setDrag(null); setPromo(null); };
-  return { sel, drag, promo, targets, handlers, cancelPromo, clear };
+  // Esc: the promotion picker or the castle question goes, playing nothing
+  const cancelPromo = () => { setPromo(null); setCastle(null); };
+  const clear = () => { setSel(null); setDrag(null); setPromo(null); setCastle(null); };
+  return { sel, drag, promo, castle, pickCastle, targets, handlers, cancelPromo, clear };
 }
 
 // When the schedule changes (a Queen answer lengthens a move's hold, a commentary source is turned off), keep the board
@@ -1463,7 +1523,7 @@ function useReplayNav({ nav, M, S, c, line, input, goTo, fen, keys = true }) {
   React.useEffect(() => { if (nav && nav.listen) nav.listen(); }, [navSig]);
   useKeydown((e) => {
     if (e.shiftKey || hasModifier(e)) return;
-    if (e.code === 'Escape' && input.promo) { e.preventDefault(); input.cancelPromo(); leaveIfEmpty(); return; }
+    if (e.code === 'Escape' && (input.promo || input.castle)) { e.preventDefault(); input.cancelPromo(); leaveIfEmpty(); return; }
     if (e.code === 'Escape' && vline) { e.preventDefault(); setVline(null); return; }
     if (e.code !== 'ArrowLeft' && e.code !== 'ArrowRight' && e.code !== 'End') return;
     e.preventDefault();
@@ -1552,14 +1612,14 @@ function GameVideo({ M, tw, d, probe, queen, nav, scheme, sf, orient }) {
           <BoardSpace onStep={tw.exporting ? null : stepBy}>
             <Board M={M} T={T} S={S} a={enter(0)} arrows={tw.bestArrows} pieces={pieces} queen={queen} vline={pv || vline} hide={input.drag && input.drag.moved ? input.drag.from : null} lines={tw.bestArrows ? (own ? lineArrows(own.after) : !playing && !pv && !vline && cNow >= 0 ? (moveEval ? lineArrows(moveEval.after) : nextArrows(M, cNow, liveAfter)) : null) : null} idle={!playing && !pv && !vline} sel={input.sel} />
             <BoardDraw draw={draw} hidden={playing || !!pv}>
-              <BoardTouch pos={touchPos} targets={input.targets} drag={input.drag} promo={input.promo} {...input.handlers} />
+              <BoardTouch pos={touchPos} targets={input.targets} drag={input.drag} promo={input.promo} castle={input.castle} onCastle={input.pickCastle} {...input.handlers} />
             </BoardDraw>
           </BoardSpace>
           <PlayerBar M={M} T={T} S={S} side="w" a={enter(1)} pieces={pieces} />
           {L.header && <Header M={M} a={enter(2)} />}
           <MoveList M={M} T={T} S={S} a={enter(3)} paused={!playing} onPick={goTo} deadAt={deadAt} end={end} />
           <Commentary M={M} T={T} S={S} a={enter(4)} book={sf ? sf.book : null} line={lineKey ? { book: lineBook } : null} />
-          <Analysis M={M} T={T} S={S} a={enter(5)} vline={vline} onLine={onLine} onPreview={onPreview} onReplyHover={onReplyHover} paused={!playing} sf={sf} own={own} onReply={onReply} deep={gameEval} moveEval={moveEval} gamePos={line.gamePos} tb={tb} onTb={onTb} dead={dead} fifty={fifty} />
+          <Analysis M={M} T={T} S={S} a={enter(5)} vline={vline} onLine={onLine} onPreview={onPreview} onReplyHover={onReplyHover} paused={!playing} sf={sf} own={own} onReply={onReply} deep={gameEval} moveEval={moveEval} gamePos={line.gamePos} tb={tb} onTb={onTb} dead={dead} fifty={fifty} castle={!playing && vline ? { pos: touchPos, onMove: (step) => { input.clear(); playOwn(step); } } : null} />
           {L.plot && <EvalPlot M={M} T={T} S={S} a={enter(6)} paused={!playing} onPick={goTo} />}
         </div>
         <div style={{ position: 'absolute', inset: 0, pointerEvents: 'none', boxShadow: `inset 0 0 220px rgba(228,85,63,${0.55 * flash})` }} />
