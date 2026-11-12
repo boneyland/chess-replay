@@ -287,6 +287,8 @@ function GameApp() {
   guardRef.current = guard;
   const hf = useHfAuth();
   const Q = useQueen(M, hf);
+  // Ask Queen reads standard chess only: not on a free board, nor in a Chess960 game (its start, never position 518)
+  const askable = !board && !window.ChessCore.is960(M.start.pos);
   // the engine drop-down: Full runs once its download is kept; until then Lite does
   const full = useFullEngine();
   const sfKind = !SF_SIMD ? 'asm' : t.sfEngine === 'Full' && full.state === 'ready' ? 'full' : 'lite';
@@ -598,7 +600,7 @@ function GameApp() {
   React.useEffect(() => { if (kindSeen.current !== sfKind) { kindSeen.current = sfKind; analysisStop.current(); } }, [sfKind]);
   // Lichess's opening book per ply, built after the first paint (about 0.25 s the first time)
   const [book, setBook] = React.useState(null);
-  React.useEffect(() => { setBook(null); const id = setTimeout(() => { try { setBook(window.Openings.book().byPly(M.plies.map((p) => p.uci), M.start.fen)); } catch (e) {} }, 50); return () => clearTimeout(id); }, [M]);
+  React.useEffect(() => { setBook(null); if (window.ChessCore.is960(M.start.pos)) return undefined; const id = setTimeout(() => { try { setBook(window.Openings.book().byPly(M.plies.map((p) => p.uci), M.start.fen)); } catch (e) {} }, 50); return () => clearTimeout(id); }, [M]);
   const soundSet = window.Sfx.SETS.includes(t.soundSet) ? t.soundSet : window.Sfx.SETS[0];
   const soundVolume = Number.isFinite(+t.soundVolume) ? +t.soundVolume : 70;
   // the page's rem is 16 px × this, so the overlays (dock, bars, Settings, menus, dialogs) follow the Text size setting; the panels get it through Stage's text
@@ -660,7 +662,7 @@ function GameApp() {
   const newGroups = [{ label: 'Explore', items: [{ label: 'Starting position', run: newBoard }, { label: 'Edit position', run: editPosition }, { label: 'Chess960 position', run: explore960 }] },
     { label: 'Play', items: [{ label: 'Play vs human', run: playHuman }, { label: 'Play vs computer', run: playSf }, { label: 'My games', run: myGames }] },
     // Ask Queen sits here on the wide layouts; the folded menu keeps it in its last row. The folded menu's shortcuts item is hidden on a touch screen
-    { label: 'More', items: [{ label: 'Keyboard shortcuts', run: openKeys }, ...(!phone && !board ? [{ label: 'Ask Queen', cls: 'dock-queen', run: () => { setNewMenu(false); askQueen(); } }] : [])] }];
+    { label: 'More', items: [{ label: 'Keyboard shortcuts', run: openKeys }, ...(!phone && askable ? [{ label: 'Ask Queen', cls: 'dock-queen', run: () => { setNewMenu(false); askQueen(); } }] : [])] }];
   const newItems = newGroups.map((g) => <div key={g.label} className={`dock-group dock-group-${g.label.toLowerCase()}`}>
     <span className="dock-menu-label">{g.label}</span>
     {g.items.map((it) => <button key={it.label} type="button" className={it.cls ? 'dock-btn ' + it.cls : 'dock-btn'} onClick={it.run}>{it.label}</button>)}
@@ -683,7 +685,7 @@ function GameApp() {
       )}
       {/* Share and export, Settings and Full screen are icons in every layout; on the phone they share the menu's last row with Ask Queen */}
       <div className="dock-icons">
-      {phone && !board && <button type="button" className="dock-btn dock-queen" aria-expanded={queenOpen} onClick={() => { setMenu(false); askQueen(); }}>Ask Queen</button>}
+      {phone && askable && <button type="button" className="dock-btn dock-queen" aria-expanded={queenOpen} onClick={() => { setMenu(false); askQueen(); }}>Ask Queen</button>}
       <button type="button" className="dock-btn dock-iconic" aria-label="Share and export" title="Share and export" aria-haspopup="dialog" onClick={openShare}>
         <svg className="dock-icon" width="16" height="16" viewBox="0 0 16 16" fill="none" aria-hidden="true"><path d={SHARE} stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round" /></svg>
       </button>
@@ -771,7 +773,7 @@ function GameApp() {
       {gamesOpen && <MyGamesDialog games={gamesOpen} current={board && window.PlayCore.inProgress(board) ? board.game.id : null} onReplay={replayGame} onResume={resumeGame} onDelete={deleteGame} onClose={closeGames} />}
       {open960 && <Chess960Dialog pick={pick960Of(t)} onOpen={open960Board} onClose={close960} />}
       {leave && <LeaveDialog onStay={() => setLeave(null)} onLeave={() => { const run = leave.run; setLeave(null); keepLeft(board); run(); }} />}
-      {queenOpen && !board && <QueenPanel key={gameKey} M={M} Q={Q} hf={hf} probe={probe} live={queenLive} onClose={closeQueen} onOverlay={setQueenArrow} onSave={saveQueen} left={queenLeft} />}
+      {queenOpen && askable && <QueenPanel key={gameKey} M={M} Q={Q} hf={hf} probe={probe} live={queenLive} onClose={closeQueen} onOverlay={setQueenArrow} onSave={saveQueen} left={queenLeft} />}
       <TweaksPanel open={panel} onClose={closePanel} tab={panelTab} onTab={setPanelTab} tabs={[
         { id: 'game', label: 'Game', body: <GameSettings M={M} files={files} board={board} status={status} err={shownErr} commit={commit}
           commentary={!board && <CommentarySettings t={t} setTweak={setTweak} files={files} sources={sources} queenSays={queenSays} />}

@@ -330,7 +330,10 @@ function GameStatus({ board, onChange, down, why, retry, tip, onMove }) {
 
 function FreeBoard({ board, onChange, tw, setTweak, onLichess, sf, nav, orient, book }) {
   const frame = useFrame();
-  setLayout(frame, board.game ? 'game' : 'free'); // before the children render, which read the layout
+  // a Chess960 board (its start, whatever the rights are now) has no Commentary box: the explorer, the opening names and
+  // the tablebase are standard chess only
+  const std = !window.ChessCore.is960(board.start.pos);
+  setLayout(frame, board.game ? 'game' : 'free', !board.game && !std); // before the children render, which read the layout
   // a paused one-column page is as tall as its panels; the stage scrolls it
   const flowRef = React.useRef(null);
   useFlowHeight(frame, flowRef);
@@ -391,10 +394,10 @@ function FreeBoard({ board, onChange, tw, setTweak, onLichess, sf, nav, orient, 
   // result replaces the eval in the bar. chasolver on it: in a game it ends the game (the answer may come after the
   // move: PlayCore's recheck), and nothing shows; elsewhere DEAD on the eval bar and the Analysis panel's block
   const boardFen = () => window.ChessCore.fenAfter(board.fen, steps.slice(0, upto + 1).map((s) => s.san), pos);
-  const { tb, dead, fifty, fen } = useBoardFacts({ pos, fen: boardFen, tbOn: !G, tablebase: tw.tablebase !== false });
+  const { tb, dead, fifty, fen } = useBoardFacts({ pos, fen: boardFen, tbOn: !G && std, tablebase: tw.tablebase !== false });
   const tbv = tbBar(tb), deadv = G ? null : deadBar(dead);
   // Lichess's opening explorer (Settings › Online), asked where the tablebase isn't, in place of the local book
-  const xf = explorerFilters(tw), xl = useExplorer(G || tb ? null : fen, tw.explorer === true, xf);
+  const xf = explorerFilters(tw), xl = useExplorer(G || tb || !std ? null : fen, tw.explorer === true, xf);
   // the running clock: redrawn ten times a second, and the game ends when it reaches zero
   const running = live && G.clock && G.clock.since != null;
   const [, tick] = React.useState(0);
@@ -454,7 +457,7 @@ function FreeBoard({ board, onChange, tw, setTweak, onLichess, sf, nav, orient, 
   // the result after the last move: a game's, else the last position's own end (checkmate, stalemate, a dead position)
   const end = G ? (G.result ? P.ending({ r: G.result }) : null) : steps.length ? P.ending({ pos: steps[last].pos, dead: deadAt != null }) : null;
   const S = React.useMemo(() => ({ N: steps.length, tp: steps.map((_, i) => i) }), [steps.length]);
-  const named = boardOpening(board, book);
+  const named = std ? boardOpening(board, book) : null;
   const from = window.PlayCore.fromText(board);
   // the free board's Game info (a game's layout has none)
   const HM = { white: { name: 'White' }, black: { name: 'Black' }, event: 'Free board', site: from, eco: named && named.eco, opening: named && named.name };
@@ -471,7 +474,7 @@ function FreeBoard({ board, onChange, tw, setTweak, onLichess, sf, nav, orient, 
       <FreeBar pos={pos} side="w" a={1} clock={clockOf('w')} name={G ? window.PlayCore.playerName(G, 'w') : null} />
       {L.header && <Header M={HM} a={1} />}
       <MoveList M={MV} T={upto + 0.999} S={S} a={1} paused onPick={go} deadAt={deadAt} end={end} startAt={G && G.from} />
-      {G ? <GameInfo board={board} /> : tb ? <TablebaseExplorer t={tb} posKey={boardKey} onPlay={onBook} /> : xl ? <LichessExplorer x={xl} tw={tw} setTweak={setTweak} onGame={onLichess} posKey={boardKey} onPlay={onBook} onHover={setHov} white={pos.turn === 'w'} fallback={<OpeningExplorer board={board} book={book} onPlay={onBook} onHover={setHov} />} /> : <OpeningExplorer board={board} book={book} onPlay={onBook} onHover={setHov} />}
+      {G ? <GameInfo board={board} /> : !std ? null : tb ? <TablebaseExplorer t={tb} posKey={boardKey} onPlay={onBook} /> : xl ? <LichessExplorer x={xl} tw={tw} setTweak={setTweak} onGame={onLichess} posKey={boardKey} onPlay={onBook} onHover={setHov} white={pos.turn === 'w'} fallback={<OpeningExplorer board={board} book={book} onPlay={onBook} onHover={setHov} />} /> : <OpeningExplorer board={board} book={book} onPlay={onBook} onHover={setHov} />}
       {G ? <Panel box={L.analysis} part="game" a={1} style={NO_SELECT} title="Game"><GameStatus board={board} onChange={onChange} down={opponent.down} why={sf.why} retry={opponent.retry} tip={hintInfo} onMove={play} /></Panel>
         : <AnalysisPanel box={L.analysis} a={1} paused depth={down && !sf.off ? null : searchDepth(ev.after)} deep={ev}>
         {upto < 0

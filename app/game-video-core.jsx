@@ -46,8 +46,8 @@ const SQ = 96, BW = SQ * 8;
 // picture scaled into its box (BoardSpace). TX: panel and player-bar text sizes are written at the old 1920 frame's
 // sizes, times 0.8 and the viewer's text size, through tx().
 let L = window.LayoutCore.compute({ w: 1440, h: 900 }), TX = 0.8, TEXT = 1;
-const setLayout = (frame, view = 'replay') => {
-  L = window.LayoutCore.compute({ w: frame.w, h: frame.h, text: frame.text, view, video: frame.video, cols: frame.cols, dock: frame.dock, vw: frame.vw, vh: frame.vh });
+const setLayout = (frame, view = 'replay', noComment = false) => {
+  L = window.LayoutCore.compute({ noComment, w: frame.w, h: frame.h, text: frame.text, view, video: frame.video, cols: frame.cols, dock: frame.dock, vw: frame.vw, vh: frame.vh });
   TEXT = L.text; TX = 0.8 * TEXT; // the viewer's text size, times the device tier's (smaller on phones and tablets)
 };
 const tx = (px) => Math.round(px * TX * 10) / 10;
@@ -1578,7 +1578,7 @@ function GameVideo({ M, tw, d, probe, queen, nav, scheme, sf, orient }) {
   // the book name of the position on the board while a line is shown (it can reach openings the game never played)
   const lineKey = vline && vline.upto >= 0 ? line.moves().map((p) => p.uci).join(' ') : null;
   const lineBook = React.useMemo(() => {
-    if (!lineKey || !window.Openings) return null;
+    if (!lineKey || !window.Openings || window.ChessCore.is960(M.start.pos)) return null;
     try { return window.Openings.book().byPly(lineKey.split(' '), M.start.fen).pop() || null; } catch (e) { return null; }
   }, [lineKey, M.start.fen]);
   const settled = (i) => window.ChessCore.settledAt(S, CUES, i);

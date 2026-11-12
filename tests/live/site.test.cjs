@@ -2271,6 +2271,53 @@ for (const name of BROWSERS) for (const site of SITES) {
       assert.deepEqual(ep.errors, []);
       await ep.ctx.close();
     });
+    // The Lichess explorer's panel, opening names and Ask Queen are standard chess only (design: Features in a 960 game):
+    // a Chess960 free board (its start, not the current rights) shows no Opening explorer and no gap where it was, a loaded
+    // 960 game has no Ask Queen, and position 518, which plays as standard chess, keeps all of them
+    await t.test('desktop: a Chess960 board and game have no opening explorer or Ask Queen; position 518 keeps them', async () => {
+      const ep = await open(browser, { width: 1440, height: 900 });
+      const p = ep.page;
+      await p.goto(base, { waitUntil: 'load' });
+      await loadedOn(p);
+      const explore960 = async (no) => {
+        await p.getByRole('button', { name: 'Menu', exact: true }).click();
+        await p.getByRole('button', { name: 'Chess960 position' }).click();
+        const dlg = p.getByRole('dialog', { name: 'Chess960 position' });
+        await dlg.waitFor({ timeout: 3000 });
+        const random = dlg.getByRole('checkbox', { name: 'Random' });
+        if (await random.isChecked()) await random.click();
+        await typeFen(dlg.getByRole('textbox', { name: 'Position number' }), String(no));
+        await dlg.getByRole('button', { name: 'Open' }).click();
+        await dlg.waitFor({ state: 'detached', timeout: 3000 });
+        await assert.doesNotReject(p.locator('.plabel').filter({ hasText: /^Start$/ }).waitFor({ timeout: 5000 }));
+      };
+      // position 0: no explorer, Analysis straight under Moves (no gap where it stood), no Ask Queen
+      await explore960(0);
+      assert.equal(await p.locator('.part-opening-explorer').count(), 0, 'no Opening explorer on a 960 board');
+      assert.equal(await p.getByText('Loading the opening book').count(), 0);
+      const gap = await p.evaluate(() => { const m = document.querySelector('.part-moves').getBoundingClientRect(), a = document.querySelector('.part-analysis').getBoundingClientRect(); return { below: a.top - m.bottom, h: a.height, mh: m.height }; });
+      assert.ok(gap.below >= 0 && gap.below < 16, `Analysis under Moves without a gap (${JSON.stringify(gap)})`);
+      await p.getByRole('button', { name: 'Menu', exact: true }).click();
+      assert.equal(await p.getByRole('button', { name: 'Keyboard shortcuts' }).count(), 1, 'the menu is open');
+      assert.equal(await p.getByRole('button', { name: 'Ask Queen' }).count(), 0);
+      await p.keyboard.press('Escape');
+      await p.screenshot({ path: path.join(ROOT, 'tests', 'out', 'chess960', 'no-explorer-desktop.png') });
+      // position 518 plays as standard chess: the explorer is there
+      await explore960(518);
+      await assert.doesNotReject(p.locator('.part-opening-explorer').waitFor({ timeout: 5000 }));
+      // a loaded Chess960 game: no Ask Queen
+      await p.getByRole('button', { name: 'Import game' }).click();
+      const box = p.getByRole('textbox', { name: 'PGN, FEN or Lichess link' });
+      await typeFen(box, '[Variant "Chess960"]\n[SetUp "1"]\n[FEN "brknqbnr/pppppppp/8/8/8/8/PPPPPPPP/BRKNQBNR w KQkq - 0 1"]\n\n1. Nc3 e6 2. O-O-O Nf6 *');
+      await p.getByRole('button', { name: 'Open', exact: true }).click();
+      await assert.doesNotReject(p.getByRole('button', { name: 'Play (space)' }).waitFor({ timeout: 5000 }));
+      await p.getByRole('button', { name: 'Menu', exact: true }).click();
+      assert.equal(await p.getByRole('button', { name: 'Keyboard shortcuts' }).count(), 1, 'the menu is open');
+      assert.equal(await p.getByRole('button', { name: 'Ask Queen' }).count(), 0, 'no Ask Queen in a 960 game');
+      await p.keyboard.press('Escape');
+      assert.deepEqual(ep.errors, []);
+      await ep.ctx.close();
+    });
     // Position from image (the board reader in a Worker, its 56 MB downloaded from the site on the click): a Lichess
     // screenshot reads exactly, turned and read again; a pasted picture replaces the one at Back to crop; the same
     // screenshot turned a quarter in the file with EXIF Orientation 6 reads the same; a file that isn't a picture and

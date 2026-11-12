@@ -399,3 +399,20 @@ test('engineSettings: the game analysis lines setting', () => {
   assert.equal(A.engineSettings({ sfGameLines: 9 }).game.lines, 1);
   assert.equal(A.engineSettings({}).game.lines, 1);
 });
+
+// the opening book and its names are standard chess only (a 960 start, never 518, which is standard)
+test('runAnalysis consults no opening book from a Chess960 start, and does from position 518', async () => {
+  const CC = window.ChessCore, real = window.Openings, asked = [];
+  window.Openings = { book: () => ({ identify: (u, f) => { asked.push(f); return { eco: 'C20', name: 'King\'s Pawn Game' }; } }) };
+  try {
+    const f960 = CC.chess960Fen(0), f518 = CC.chess960Fen(518);
+    assert.ok(CC.fenIs960(f960) && !CC.fenIs960(f518));
+    const mk = (startFen, ucis, sans) => A.runAnalysis({ engine: fakeEngine(), ucis, sans, startFen, headers: {}, signal: { aborted: false }, onProgress: () => {} });
+    const j960 = await mk(f960, ['b2b3'], ['b3']);
+    assert.equal(asked.length, 0);
+    assert.equal(j960.opening_name, '');
+    const j518 = await mk(f518, ['e2e4'], ['e4']);
+    assert.deepEqual(asked, [f518]);
+    assert.equal(j518.opening_name, 'King\'s Pawn Game');
+  } finally { window.Openings = real; }
+});

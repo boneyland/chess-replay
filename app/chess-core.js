@@ -616,7 +616,7 @@
     // the PGN's opening, else the analysis file's, else Lichess's opening book (as AnalysisData.name_opening)
     const known = (n) => clean(n) && n !== 'Unknown';
     let opening = known(H.Opening) ? { eco: clean(H.ECO), name: H.Opening } : A && known(A.opening_name) ? { eco: A.opening_eco || '', name: A.opening_name } : null;
-    if (!opening && window.Openings) { try { opening = window.Openings.book().identify(plies.map((p) => p.uci), start.fen); } catch (e) {} }
+    if (!opening && window.Openings && !is960(start.pos)) { try { opening = window.Openings.book().identify(plies.map((p) => p.uci), start.fen); } catch (e) {} }
     if (!opening) opening = { eco: clean(H.ECO), name: '' };
     const round = clean(H.Round) || (A && clean(A.round_num)) || '';
     return {
