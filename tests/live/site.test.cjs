@@ -1329,6 +1329,26 @@ for (const name of BROWSERS) for (const site of SITES) {
       }
     });
 
+    // the check that the engine's file is there (a HEAD request) can hang too: after SF_CHECK_MS the engine starts anyway
+    await t.test('desktop: an engine file check that never answers doesn\'t stop the engine starting', async () => {
+      const nb = await open(browser, { width: 1440, height: 900 });
+      const p = nb.page;
+      await p.addInitScript(spyEngine, {});
+      await p.addInitScript(() => {
+        window.__heads = 0;
+        const f = window.fetch;
+        window.fetch = (u, o) => (o && o.method === 'HEAD' && /stockfish-19-lite/.test(String(u)) ? (window.__heads++, new Promise((ok, no) => { if (o.signal) o.signal.addEventListener('abort', () => no(new DOMException('aborted', 'AbortError'))); })) : f(u, o));
+        try { localStorage.setItem('chess-video.tweaks.v1', JSON.stringify({ sfOwnTime: 1 })); } catch (e) {}
+      });
+      await p.goto(base, { waitUntil: 'load' });
+      await loadedOn(p);
+      const seen = await ownMoveRated(p);
+      assert.ok(await p.evaluate(() => window.__heads) >= 1, 'the check was asked');
+      assert.ok(seen.urls.length >= 1 && seen.at[0] >= 10000, `the engine started after the check gave up: ${seen.urls.join(' ')} at ${seen.at.join(' ')}`);
+      assert.deepEqual(nb.errors, []);
+      await nb.ctx.close();
+    });
+
     // a search that hangs after the probe: the engine moves it to a fresh worker 5 s past its movetime (SFEngine's hangMs),
     // and the move is still rated with threads
     await t.test('desktop: a threaded engine that stops answering mid-search is replaced and the search still runs', { timeout: 120000 }, async () => {
