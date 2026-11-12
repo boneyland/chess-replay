@@ -646,8 +646,9 @@ function start960(pick) {
   return n == null ? null : { fen: window.ChessCore.chess960Fen(n), chess960: n };
 }
 // The Random box and the Position number field (disabled while Random is ticked), and under them what's wrong with the
-// number, else what the choice does. Used by the Play dialogs' Start from › Chess960 and by Explore › Chess960 position
-function Chess960Pick({ random, no, onChange }) {
+// number, else what the choice does. Used by the Play dialogs' Start from › Chess960 and by Explore › Chess960 position.
+// focus: the number field takes the dialog's first focus (when the dialog opens with Start disabled)
+function Chess960Pick({ random, no, onChange, focus }) {
   const bad = !random && no960(no) == null, id = React.useId();
   return (
     <div className="play-row pick-960">
@@ -658,7 +659,7 @@ function Chess960Pick({ random, no, onChange }) {
         <label className="pick-960-no">
           <span>Position number</span>
           <input type="text" inputMode="numeric" className="twk-field dlg-field" placeholder="0–959" maxLength={4} spellCheck={false} autoComplete="off"
-            disabled={random} value={no} aria-invalid={bad} aria-describedby={bad ? id : undefined} onChange={(e) => onChange({ random, no: e.target.value })} />
+            disabled={random} value={no} data-autofocus={focus ? '' : undefined} aria-invalid={bad} aria-describedby={bad ? id : undefined} onChange={(e) => onChange({ random, no: e.target.value })} />
         </label>
       </div>
       {bad ? <div id={id} className="dlg-msg" role="alert">Enter a number from 0 to 959.</div>
@@ -672,13 +673,15 @@ function Chess960Pick({ random, no, onChange }) {
 // open with (Settings'); onOpen({ fen, chess960, pick })
 function Chess960Dialog({ pick, onOpen, onClose }) {
   const [c, setC] = React.useState(pick), at = !c.random && no960(c.no) == null ? null : c;
+  // opened with Random off and no number: Open starts disabled, so the number field takes the focus
+  const [focusNo] = React.useState(!at);
   return (
     <DialogBox label="Chess960 position" part="chess960" onClose={onClose}>
-      <Chess960Pick random={c.random} no={c.no} onChange={setC} />
+      <Chess960Pick random={c.random} no={c.no} onChange={setC} focus={focusNo} />
       <div className="dlg-note">It opens on the free board, where you play both sides.</div>
       <div className="dlg-btns">
         <button type="button" className="twk-btn secondary" onClick={onClose}>Cancel</button>
-        <button type="button" className="twk-btn" data-autofocus disabled={!at} onClick={() => { const s = start960(c); if (s) onOpen({ ...s, pick: c }); }}>Open</button>
+        <button type="button" className="twk-btn" data-autofocus={focusNo ? undefined : ''} disabled={!at} onClick={() => { const s = start960(c); if (s) onOpen({ ...s, pick: c }); }}>Open</button>
       </div>
     </DialogBox>
   );
@@ -705,6 +708,7 @@ function PlayDialog({ mode = 'human', setUpFen, here, clock, side, initial, pick
   const [c960, setC960] = React.useState(pick960 || { random: true, no: '' });
   const editFirst = from === 'setup' && !setUpFen, image = from === 'image' && !!onFromImage, is960 = from === '960';
   const bad960 = is960 && !c960.random && no960(c960.no) == null;
+  const [focusNo] = React.useState(bad960);
   const choices = { tc, you: sfGame ? you : null };
   const start = () => {
     if (image) return onFromImage(choices);
@@ -718,7 +722,7 @@ function PlayDialog({ mode = 'human', setUpFen, here, clock, side, initial, pick
   return (
     <DialogBox label={sfGame ? 'Play vs computer' : 'Play vs human'} part="play" onClose={onClose}>
       <DialogChoice label="Start from" value={from} options={froms} onChange={setFrom} />
-      {is960 && <Chess960Pick random={c960.random} no={c960.no} onChange={setC960} />}
+      {is960 && <Chess960Pick random={c960.random} no={c960.no} onChange={setC960} focus={focusNo} />}
       {sfGame && <DialogChoice label="You play" value={you} options={[{ label: 'White', value: 'w' }, { label: 'Black', value: 'b' }, { label: 'Random', value: 'random' }]} onChange={setYou} />}
       <DialogChoice label="Time control" value={tc} options={[{ label: 'Off', value: null }].concat(window.PlayCore.TIME_CONTROLS.map((x) => ({ label: x, value: x })))} onChange={setTc} />
       {from === 'here' && at && <div className="dlg-note play-here-note">{n ? `The game goes on from the position on the board, keeping the ${n} move${n === 1 ? '' : 's'} before it; Take back stops there.` : 'The game starts from the position on the board.'}</div>}
@@ -727,7 +731,7 @@ function PlayDialog({ mode = 'human', setUpFen, here, clock, side, initial, pick
         : 'Two players at this screen. The board turns after each move, so the side to move plays from the bottom; Take back is a button by Resign. Stockfish stays off until the game ends.'}</div>
       <div className="dlg-btns">
         <button type="button" className="twk-btn secondary" onClick={onClose}>Cancel</button>
-        <button type="button" className="twk-btn" data-autofocus disabled={bad960} onClick={start}>{image ? 'Choose image…' : editFirst ? 'Set up position…' : 'Start game'}</button>
+        <button type="button" className="twk-btn" data-autofocus={focusNo ? undefined : ''} disabled={bad960} onClick={start}>{image ? 'Choose image…' : editFirst ? 'Set up position…' : 'Start game'}</button>
       </div>
     </DialogBox>
   );
