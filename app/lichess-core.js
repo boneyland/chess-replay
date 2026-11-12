@@ -83,15 +83,16 @@
 
   // the cloud's key: the board, side, castling and en passant square (the clocks don't change its answer), and the lines
   const cloudKey = (fen, lines = 1) => String(fen).trim().split(/\s+/).slice(0, 4).join(' ') + '|' + lines;
-  const cloudUrl = (fen, lines = 1) => CLOUD_URL + '?fen=' + encodeURIComponent(fen) + '&multiPv=' + lines;
+  const cloudUrl = (fen, lines = 1) => CLOUD_URL + '?fen=' + encodeURIComponent(fen) + '&multiPv=' + lines + (window.ChessCore.fenIs960(fen) ? '&variant=chess960' : '');
   // A cloud line's moves as the page's UCI: Lichess writes castling as the king taking its rook (e1h1), the engine and
   // the board as the king's two steps (e1g1); walked from fen, stopping at the first move that isn't legal
   function cloudMoves(fen, moves) {
     const CC = window.ChessCore, out = [];
     let pos = CC.posFromFen(fen);
+    const std = !CC.is960(pos); // in Chess960 the cloud's king-takes-rook is the page's castle too
     for (let u of String(moves || '').trim().split(/\s+/).filter(Boolean)) {
       const from = CC.sqIndex(u.slice(0, 2)), to = CC.sqIndex(u.slice(2, 4)), k = pos.b[from], r = pos.b[to];
-      if (k && r && k.toLowerCase() === 'k' && r === (k === 'K' ? 'R' : 'r')) u = u.slice(0, 2) + (to % 8 > from % 8 ? 'g' : 'c') + u[3];
+      if (std && k && r && k.toLowerCase() === 'k' && r === (k === 'K' ? 'R' : 'r')) u = u.slice(0, 2) + (to % 8 > from % 8 ? 'g' : 'c') + u[3];
       const a = CC.applyUci(pos, u);
       if (!a) break;
       out.push(u); pos = a.pos;

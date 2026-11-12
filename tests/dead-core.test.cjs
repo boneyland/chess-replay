@@ -5,6 +5,7 @@ const assert = require('node:assert/strict');
 const path = require('path');
 const { Worker: ThreadWorker } = require('worker_threads');
 const { loadUnit } = require('./load.cjs');
+loadUnit('chess-core.js');
 loadUnit('dead-core.js');
 const D = window.DeadCore;
 
@@ -173,4 +174,11 @@ test('the real worker answers from vendor/chasolver.wasm', async () => {
     assert.deepEqual(await c.both(START), { w: 'winnable', b: 'winnable' });
     assert.equal(await c.ask('not a fen', 'w'), 'undecided');
   } finally { c.close(); }
+});
+
+test('fenFor: castling rights dropped for a 960 position (chasolver refuses X-FEN rights), kept for standard', () => {
+  const CC = window.ChessCore;
+  const f960 = CC.parseFen('4k3/8/8/8/8/8/8/R4K1R w HA - 3 9').pos, std = CC.parseFen('4k3/8/8/8/8/8/8/R3K2R w KQ - 3 9').pos;
+  assert.equal(D.fenFor(f960), '4k3/8/8/8/8/8/8/R4K1R w - - 0 1');
+  assert.equal(D.fenFor(std), '4k3/8/8/8/8/8/8/R3K2R w KQ - 0 1');
 });

@@ -11,9 +11,8 @@ const deadClient = () => {
   return DEAD;
 };
 
-// a position's FEN for chasolver: castling rights only where the king and rook are still at home (it refuses a FEN whose
-// rights don't fit the pieces, as an edited start's might not; ChessCore.fullFen); the move counters don't matter to it
-const deadFen = (pos) => window.ChessCore.fullFen(pos, { counters: [0, 1] });
+// a position's FEN for chasolver (DeadCore.fenFor)
+const deadFen = (pos) => window.DeadCore.fenFor(pos);
 
 const DEAD_BOTH = { w: 'unwinnable', b: 'unwinnable' };
 // chasolver's answers for the position (null asks nothing): { w, b }, each 'unwinnable', 'winnable', 'undecided' or

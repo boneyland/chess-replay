@@ -374,3 +374,12 @@ test('fetchGame: a finished game, an unfinished one, errors and a list', async (
   assert.match((await LC.fetchGame(LC.gameLink('lichess.org/broadcast/t/r/IKZUMzM4'), { fetchFn: reply(200, '') })).error, /no games there yet/);
   assert.match((await LC.fetchGame(LC.gameLink('lichess.org/broadcast/t/r/IKZUMzM4'), { fetchFn: reply(200, '[Event "R"]\n[Result "*"]\n\n*\n') })).error, /no games there yet/, 'a round not started');
 });
+
+test('cloud in a 960 position: variant=chess960 in the URL, a distinct key, castling stays king-takes-rook', () => {
+  const F = '4k3/8/8/8/8/8/8/R4K1R w HA - 0 1', S = '4k3/8/8/8/8/8/8/R3K2R w KQ - 0 1';
+  assert.equal(LC.cloudUrl(F, 2), 'https://lichess.org/api/cloud-eval?fen=' + encodeURIComponent(F) + '&multiPv=2&variant=chess960');
+  assert.equal(LC.cloudUrl(S, 2), 'https://lichess.org/api/cloud-eval?fen=' + encodeURIComponent(S) + '&multiPv=2');
+  assert.notEqual(LC.cloudKey(F, 1), LC.cloudKey(S, 1));
+  assert.deepEqual(LC.cloudMoves(F, 'f1h1 e8e7'), ['f1h1', 'e8e7']);
+  assert.deepEqual(LC.cloudMoves(S, 'e1h1 e8e7'), ['e1g1', 'e8e7']);
+});

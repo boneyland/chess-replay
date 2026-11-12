@@ -105,5 +105,10 @@
     return null;
   }
 
-  window.DeadCore = { key, create, firstDead };
+  // a position's FEN for chasolver: castling rights only where the king and rook are still at home (it refuses a FEN whose
+  // rights don't fit the pieces, as an edited start's might not; ChessCore.fullFen); none in Chess960 (it knows no X-FEN
+  // rights, and a castle can't change whether a side can still mate); the move counters don't matter to it
+  const fenFor = (pos) => window.ChessCore.fullFen(window.ChessCore.is960(pos) ? { ...pos, castle: '' } : pos, { counters: [0, 1] });
+
+  window.DeadCore = { key, create, firstDead, fenFor };
 })();
