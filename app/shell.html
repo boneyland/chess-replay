@@ -3,32 +3,22 @@
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans:wght@400;500;600&family=Instrument+Serif:ital@0;1&family=JetBrains+Mono:wght@500;600;700&family=Noto+Sans+Symbols+2&display=swap">
 <style>
-/* Layout: one 1920×1080 broadcast frame scaled to fit, transport bar below with the controls at its end.
-   Theme: light tokens on :root; dark from the system (unless the page is set to Light) or the page's own Dark
-   setting (data-scheme). */
+/* Theme: light tokens on :root; dark from the system (unless the page is set to Light) or the page's own Dark
+   setting (data-scheme). build.cjs writes the tokens (app/theme.js) in at each THEME mark. */
 :root {
-  --bg: #f2ece3; --panel: #fbf7f1; --raise: #ebe3d6; --line: rgba(60, 40, 20, 0.14); --line-strong: rgba(60, 40, 20, 0.3);
-  --ink: #2a211b; --dim: #6b5f53; --accent: #8a5e15; --accent-ink: #fffaf2; --danger: #c0392b; --ok: #237a46;
-  --warn: #b05616; --queen: #c03f7c; --track: rgba(60, 40, 20, 0.16); --btn: var(--raise); --btn-line: var(--line); --btn-hover: #ddd2c0;
-  --panel-glass: #fbf7f1; --net-tint: 22%; --net-line: 60%; --scrim: rgba(242, 236, 227, 0.86); --shadow: rgba(60, 40, 20, 0.18); --halo: 0 0 0 transparent;
+  /*THEME:light*/
   --mono: "JetBrains Mono", ui-monospace, SFMono-Regular, Menlo, monospace;
   --sans: "IBM Plex Sans", system-ui, -apple-system, "Segoe UI", sans-serif;
   color-scheme: light;
 }
 @media (prefers-color-scheme: dark) {
   :root:not([data-scheme="light"]) {
-    --bg: #13100f; --panel: #1b1715; --raise: #241e1b; --line: rgba(255, 236, 214, 0.1); --line-strong: rgba(255, 236, 214, 0.25);
-    --ink: #efe8de; --dim: #9a8e82; --accent: #e3b55b; --accent-ink: #15100d; --danger: #e4553f; --ok: #62c483;
-    --warn: #ec9442; --queen: #e0609f; --track: rgba(255, 236, 214, 0.16); --btn: #3a312c; --btn-line: rgba(255, 236, 214, 0.28); --btn-hover: #5a4d44;
-    --panel-glass: #1b1715; --net-tint: 26%; --net-line: 65%; --scrim: rgba(19, 16, 15, 0.82); --shadow: rgba(0, 0, 0, 0.45); --halo: 0 0 3px rgba(255, 236, 214, 0.3), 0 0 14px rgba(255, 236, 214, 0.14), 0 0 36px rgba(255, 236, 214, 0.1), 0 10px 40px rgba(255, 236, 214, 0.07);
+    /*THEME:dark*/
     color-scheme: dark;
   }
 }
 :root[data-scheme="dark"] {
-  --bg: #13100f; --panel: #1b1715; --raise: #241e1b; --line: rgba(255, 236, 214, 0.1); --line-strong: rgba(255, 236, 214, 0.25);
-  --ink: #efe8de; --dim: #9a8e82; --accent: #e3b55b; --accent-ink: #15100d; --danger: #e4553f; --ok: #62c483;
-  --warn: #ec9442; --queen: #e0609f; --track: rgba(255, 236, 214, 0.16); --btn: #3a312c; --btn-line: rgba(255, 236, 214, 0.28); --btn-hover: #5a4d44;
-  --panel-glass: #1b1715; --net-tint: 26%; --net-line: 65%; --scrim: rgba(19, 16, 15, 0.82); --shadow: rgba(0, 0, 0, 0.45); --halo: 0 0 3px rgba(255, 236, 214, 0.3), 0 0 14px rgba(255, 236, 214, 0.14), 0 0 36px rgba(255, 236, 214, 0.1), 0 10px 40px rgba(255, 236, 214, 0.07);
+  /*THEME:dark*/
   color-scheme: dark;
 }
 html { height: 100%; box-sizing: border-box; font-size: calc(16px * var(--text, 1)); }
@@ -201,30 +191,30 @@ body:has(.stage-one) .twk-panel { bottom: calc(51px + var(--safe-b)); max-height
 }
 .dock-menu-label { padding: 6px 4px 0; font: 600 0.6875rem var(--mono); letter-spacing: 0.14em; text-transform: uppercase; color: var(--accent); }
 /* the dialogs (Import game, Play, My games): a centred box over a scrim, which also keeps taps off the board */
-.fen-scrim { position: fixed; inset: 0; z-index: 85; display: grid; place-items: center; padding: 16px; background: var(--scrim); }
-.fen-box {
+.dlg-scrim { position: fixed; inset: 0; z-index: 85; display: grid; place-items: center; padding: 16px; background: var(--scrim); }
+.dlg-box {
   width: min(560px, 100%); display: flex; flex-direction: column; gap: 12px; padding: 16px 18px 18px; border-radius: 6px;
   background: var(--panel-glass); color: var(--ink); border: 1px solid var(--line); box-shadow: 0 16px 48px var(--shadow), var(--halo);
 }
-.fen-title { font: 600 0.75rem var(--mono); letter-spacing: 0.12em; text-transform: uppercase; color: var(--dim); }
-.fen-box .fen-field { height: 38px; padding: 0 10px; font: 500 0.8125rem var(--mono); }
-.fen-box .pgn-field { height: min(40vh, 280px); padding: 8px 10px; resize: vertical; line-height: 1.45; }
-.fen-box .fen-field::placeholder { color: var(--dim); opacity: 0.7; }
+.dlg-title { font: 600 0.75rem var(--mono); letter-spacing: 0.12em; text-transform: uppercase; color: var(--dim); }
+.dlg-box .dlg-field { height: 38px; padding: 0 10px; font: 500 0.8125rem var(--mono); }
+.dlg-box .pgn-field { height: min(40vh, 280px); padding: 8px 10px; resize: vertical; line-height: 1.45; }
+.dlg-box .dlg-field::placeholder { color: var(--dim); opacity: 0.7; }
 /* 16px stops a phone's browser zooming in on the field */
-@media (pointer: coarse) { .fen-box .fen-field { font-size: 16px; } }
-.fen-msg { font: 500 0.75rem/1.45 var(--mono); color: var(--danger); }
-.fen-note { font: 0.75rem/1.45 var(--sans); color: var(--dim); }
-.fen-btns { display: flex; justify-content: flex-end; gap: 8px; }
-.fen-btns .twk-btn { min-height: 34px; padding: 4px 16px; }
+@media (pointer: coarse) { .dlg-box .dlg-field { font-size: 16px; } }
+.dlg-msg { font: 500 0.75rem/1.45 var(--mono); color: var(--danger); }
+.dlg-note { font: 0.75rem/1.45 var(--sans); color: var(--dim); }
+.dlg-btns { display: flex; justify-content: flex-end; gap: 8px; }
+.dlg-btns .twk-btn { min-height: 34px; padding: 4px 16px; }
 /* Keyboard shortcuts: groups of keys and what they do, scrolling inside the dialog */
 /* Position from image: a wider dialog with larger text; its pick step's tiles, and the drop area over them (or the
    picture) while an image is held over them */
-.fen-box.vision-box { width: min(760px, 100%); max-height: calc(100dvh - 32px); overflow-y: auto; gap: 16px; padding: 22px 26px 24px; }
-.vision-box .fen-title { font-size: 0.875rem; }
-.vision-box .fen-note, .vision-box .twk-note { font-size: 0.9375rem; line-height: 1.5; }
-.vision-box .fen-msg { font-size: 0.875rem; }
-.vision-box .fen-btns .twk-btn { min-height: 40px; padding: 6px 20px; font-size: 0.9375rem; }
-.vision-box .fen-btns .vision-remove { min-height: 34px; padding: 4px 12px; font-size: 0.8125rem; }
+.dlg-box.vision-box { width: min(760px, 100%); max-height: calc(100dvh - 32px); overflow-y: auto; gap: 16px; padding: 22px 26px 24px; }
+.vision-box .dlg-title { font-size: 0.875rem; }
+.vision-box .dlg-note, .vision-box .twk-note { font-size: 0.9375rem; line-height: 1.5; }
+.vision-box .dlg-msg { font-size: 0.875rem; }
+.vision-box .dlg-btns .twk-btn { min-height: 40px; padding: 6px 20px; font-size: 0.9375rem; }
+.vision-box .dlg-btns .vision-remove { min-height: 34px; padding: 4px 12px; font-size: 0.8125rem; }
 .vision-zone { position: relative; }
 .vision-tiles { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
 .vision-tile { display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 10px; min-height: 160px; padding: 16px; border-radius: 6px;
@@ -240,17 +230,17 @@ body:has(.stage-one) .twk-panel { bottom: calc(51px + var(--safe-b)); max-height
 .vision-drop b { font: 600 1.125rem var(--sans); color: var(--ink); }
 .vision-drop span { font: 0.875rem var(--sans); color: var(--dim); }
 @media (max-width: 520px) {
-  .fen-box.vision-box { padding: 16px 16px 18px; gap: 12px; }
+  .dlg-box.vision-box { padding: 16px 16px 18px; gap: 12px; }
   .vision-tile { min-height: 128px; font-size: 1rem; }
 }
-.fen-box:has(.keys-body) { width: min(640px, 100%); max-height: calc(100dvh - 32px); }
+.dlg-box:has(.keys-body) { width: min(640px, 100%); max-height: calc(100dvh - 32px); }
 /* Import game: the file and picture tiles (vision-tile) over the paste box; the page's drop overlay shows over it */
-.fen-box.import-box { width: min(640px, 100%); max-height: calc(100dvh - 32px); overflow-y: auto; }
+.dlg-box.import-box { width: min(640px, 100%); max-height: calc(100dvh - 32px); overflow-y: auto; }
 .import-box .vision-tile { min-height: 120px; }
 /* Share and export: Settings' controls in sections (FEN, PGN, Export video), scrolling inside the dialog. Its classes are
    xfer-*, never share-*: content blockers' social lists (Fanboy's, in uBlock Origin) hide .share-row, .share-box and the like,
    which hid the whole box in a Firefox with one (2026-11-04) */
-.fen-box.xfer-box { width: min(520px, 100%); max-height: calc(100dvh - 32px); overflow-y: auto; gap: 18px; font: 0.75rem/1.4 var(--sans); scrollbar-width: thin; }
+.dlg-box.xfer-box { width: min(520px, 100%); max-height: calc(100dvh - 32px); overflow-y: auto; gap: 18px; font: 0.75rem/1.4 var(--sans); scrollbar-width: thin; }
 /* a row: the FEN's field or a Download button, and a square copy button on its right */
 .xfer-row { display: flex; gap: 8px; }
 .xfer-row > .twk-btn:not(.xfer-copy) { flex: 1; min-height: 34px; }
@@ -283,7 +273,7 @@ body:has(.stage-one) .twk-panel { bottom: calc(51px + var(--safe-b)); max-height
 .keys-list dd { margin: 0; font: 0.8125rem/1.4 var(--sans); color: var(--ink); }
 .keys-list kbd { padding: 1px 6px; border-radius: 3px; border: 1px solid var(--btn-line); background: var(--btn); color: var(--ink); font: 600 0.6875rem/1.5 var(--mono); }
 @media (min-width: 900px) {
-  .fen-box:has(.keys-body) { width: min(900px, 100%); }
+  .dlg-box:has(.keys-body) { width: min(900px, 100%); }
   .keys-body { display: block; columns: 2; column-gap: 28px; }
   .keys-group { break-inside: avoid; margin-bottom: 14px; }
   .keys-list { grid-template-columns: minmax(max-content, 8.5rem) 1fr; }
@@ -441,7 +431,7 @@ body:has(.stage.stage-short) .twk-panel { bottom: calc(44px + var(--safe-b)); ma
   .twk-toggle:not([data-on="1"]):hover { background: color-mix(in srgb, var(--ink) 32%, transparent); }
   .twk-slider:hover { filter: brightness(1.15); }
   select.twk-field:not(:disabled):hover { background: var(--btn-hover); border-color: var(--line-strong); }
-  .twk-note a:hover, .fen-note a:hover, .info-link:hover { color: color-mix(in srgb, var(--accent) 60%, var(--ink)); text-decoration-thickness: 2px; }
+  .twk-note a:hover, .dlg-note a:hover, .info-link:hover { color: color-mix(in srgb, var(--accent) 60%, var(--ink)); text-decoration-thickness: 2px; }
   .expl-game:hover { color: var(--ink) !important; text-decoration: underline; }
   .q-stop:hover { background: var(--btn-hover); border-color: var(--line-strong); }
   .q-mini:hover { background: color-mix(in srgb, var(--queen) 18%, transparent); border-color: var(--queen); }
@@ -455,7 +445,7 @@ body:has(.stage.stage-short) .twk-panel { bottom: calc(44px + var(--safe-b)); ma
 .q-panel .twk-hd b { color: var(--queen); }
 .q-hd { display: flex; align-items: center; gap: 8px; }
 .q-exp { padding: 1px 6px; border-radius: 2px; border: 1px solid color-mix(in srgb, var(--queen) 55%, transparent); color: var(--queen); font: 600 0.625rem var(--mono); letter-spacing: 0.1em; text-transform: uppercase; }
-.twk-note a, .fen-note a, .info-link { color: var(--accent); }
+.twk-note a, .dlg-note a, .info-link { color: var(--accent); }
 .twk-info { flex: none; width: 15px; height: 15px; margin-left: 6px; padding: 0; vertical-align: 1px; border: 1px solid var(--dim); border-radius: 50%; background: var(--dim); color: var(--panel); font: italic 600 0.6875rem/13px Georgia, serif; cursor: help; }
 .twk-info:hover, .twk-info[aria-expanded="true"] { background: var(--ink); border-color: var(--ink); }
 .twk-btn-row { display: flex; align-items: center; gap: 4px; }
@@ -528,10 +518,10 @@ body:has(.stage.stage-short) .twk-panel { bottom: calc(44px + var(--safe-b)); ma
 /* the offline note tinted red (the danger colour), Back online green (the ok one), so each stands out from the page */
 .net-note-off { background: color-mix(in srgb, var(--danger) var(--net-tint), var(--panel-glass)); border-color: color-mix(in srgb, var(--danger) var(--net-line), transparent); }
 .net-note-on { background: color-mix(in srgb, var(--ok) var(--net-tint), var(--panel-glass)); border-color: color-mix(in srgb, var(--ok) var(--net-line), transparent); }
-/* Copy FEN's note: the FEN in a read-only field, where a click selects all of it; it wraps anywhere on a phone, and
-   is as tall as its lines where the browser can size a field to its content */
-.fen-note { max-width: min(640px, calc(100% - 32px)); }
-.fen-note-fen { display: block; width: min(46ch, 100%); margin-top: 4px; padding: 2px 6px; border: 1px solid var(--line); border-radius: 2px; background: var(--bg); color: inherit; font: inherit; font-family: var(--mono); overflow-wrap: anywhere; resize: none; overflow: hidden; field-sizing: content; }
+/* Copy FEN's note (a toast of its own, not the dialogs' note text): the FEN in a read-only field, where a click selects
+   all of it; it wraps anywhere on a phone, and is as tall as its lines where the browser can size a field to its content */
+.copy-note { max-width: min(640px, calc(100% - 32px)); }
+.copy-note-fen { display: block; width: min(46ch, 100%); margin-top: 4px; padding: 2px 6px; border: 1px solid var(--line); border-radius: 2px; background: var(--bg); color: inherit; font: inherit; font-family: var(--mono); overflow-wrap: anywhere; resize: none; overflow: hidden; field-sizing: content; }
 /* the offline note reads larger on a desktop's full-size page */
 body:has(.stage:not(.stage-one)) .net-note { top: calc(64px + env(safe-area-inset-top, 0px)); gap: 14px; padding: 14px 12px 14px 20px; border-radius: 6px; font-size: 1rem; }
 .net-chip::before { content: ""; width: 7px; height: 7px; border-radius: 50%; background: var(--danger); }

@@ -72,19 +72,13 @@ function useEditInput({ setup, onChange }) {
   const carrying = carry != null && setup.b[carry] ? carry : null; // (gone if the piece was moved some other way)
   const [drag, setDrag] = React.useState(null); // { piece, from (a square, or null from the tray), x, y, x0, y0, moved }
   const boardEl = React.useRef(null), dragged = React.useRef(false);
-  const at = (e) => {
-    const r = boardEl.current.getBoundingClientRect(), x = ((e.clientX - r.left) / r.width) * BW, y = ((e.clientY - r.top) / r.height) * BW;
-    const on = x >= 0 && x < BW && y >= 0 && y < BW, [vx, vy] = on ? view(Math.floor(x / SQ), Math.floor(y / SQ)) : [0, 0];
-    return { x, y, sq: on ? vy * 8 + vx : -1 };
-  };
+  const at = (e) => boardPoint(boardEl.current, e, false); // off the board is sq -1
   const start = (e, piece, from) => {
     const p = at(e);
     try { e.currentTarget.setPointerCapture(e.pointerId); } catch (err) {}
     setDrag({ piece, from, x: p.x, y: p.y, x0: p.x, y0: p.y, moved: false });
   };
-  // a drag once the pointer is 14 px from where it went down; also asked where it is let go, as the render with the last
-  // move's state may not have run yet (a quick flick read as a tap)
-  const moved = (d, p) => d.moved || Math.hypot(p.x - d.x0, p.y - d.y0) > 14;
+  const moved = dragMoved;
   const follow = (e) => { if (!drag) return; const p = at(e); setDrag((d) => d && { ...d, x: p.x, y: p.y, moved: moved(d, p) }); };
   const E = window.EditCore;
   const handlers = {
@@ -242,9 +236,9 @@ function EditBoard({ setup, onChange, onDone, onCancel, fenText, onFenText, fenM
             </div>
           )}
           <div>
-            <input type="text" aria-label="FEN" aria-describedby="edit-fen-msg" spellCheck={false} autoComplete="off" autoCapitalize="off" autoCorrect="off"
+            <input type="text" aria-label="FEN" aria-describedby="edit-dlg-msg" spellCheck={false} autoComplete="off" autoCapitalize="off" autoCorrect="off"
               value={fenText} onChange={(e) => onFenText(e.target.value)} style={editField()} />
-            <div id="edit-fen-msg" role="alert" style={{ font: `500 ${tx(14)}px ${MONO}`, color: C.blunder, marginTop: fenMsg ? tx(6) : 0 }}>{fenMsg}</div>
+            <div id="edit-dlg-msg" role="alert" style={{ font: `500 ${tx(14)}px ${MONO}`, color: C.blunder, marginTop: fenMsg ? tx(6) : 0 }}>{fenMsg}</div>
           </div>
           <div style={{ display: 'flex', alignItems: 'center', gap: tx(10), flexWrap: 'wrap' }}>
             <FrameButton color={C.ink} onClick={() => onChange(E.start())}>Start</FrameButton>

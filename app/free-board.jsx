@@ -97,8 +97,6 @@ function StartAnalysis({ board, ev, status, why, onLine, onHover }) {
 // the side to move in a game: after its last move (a game always shows its last move while it goes on)
 const gameTurn = (board) => (board.steps.length ? board.steps[board.steps.length - 1].pos : board.start.pos).turn;
 const sideName = (side) => (side === 'w' ? 'White' : 'Black');
-// the names in a game's bars and header: "You" and "Stockfish 19" against Stockfish
-const playerName = (G, side) => (G && G.mode === 'stockfish' ? (side === G.you ? 'You' : 'Stockfish 19') : sideName(side));
 
 // Stockfish's reply lands no sooner than this after the player's move, so it reads as a reply rather than a jump
 // (within its think time, which the pause shares as it runs on Stockfish's clock: a low clock skips it)
@@ -186,7 +184,7 @@ function GameInfo({ board }) {
   const G = board.game, sfGame = G.mode === 'stockfish';
   const note = (txt) => <span style={{ display: 'block', marginTop: tx(10), font: `400 ${tx(19)}px/1.4 ${SANS}`, color: C.dim }}>{txt}</span>;
   const heading = (txt, col) => <span className="game-info-head" style={{ display: 'block', font: `400 ${tx(40)}px/1.14 ${SERIF}`, color: col || C.ink }}>{txt}</span>;
-  const from = G.from ? `From the position after ${window.BoardCore.label(board, G.from - 1)}` : board.fen === window.ChessCore.START_FEN ? 'From the starting position' : 'From a set-up position';
+  const from = window.PlayCore.fromText(board, { long: true });
   let body;
   if (!sfGame) {
     body = (
@@ -453,20 +451,20 @@ function FreeBoard({ board, onChange, tw, setTweak, onLichess, sf, nav, orient, 
   const end = G ? (G.result ? P.ending({ r: G.result }) : null) : steps.length ? P.ending({ pos: steps[last].pos, dead: deadAt != null }) : null;
   const S = React.useMemo(() => ({ N: steps.length, tp: steps.map((_, i) => i) }), [steps.length]);
   const named = boardOpening(board, book);
-  const from = board.fen === window.ChessCore.START_FEN ? 'from the starting position' : 'from a set-up position';
+  const from = window.PlayCore.fromText(board);
   // the free board's Game info (a game's layout has none)
   const HM = { white: { name: 'White' }, black: { name: 'Black' }, event: 'Free board', site: from, eco: named && named.eco, opening: named && named.name };
   return (
     <div className="stage-view" ref={flowRef} style={{ position: 'absolute', inset: 0, background: C.bg, ...flowStyle() }}>
       {!G && (deadv || tbv ? <EvalBarView cp={(deadv || tbv).cp} txt={(deadv || tbv).txt} a={1} /> : <EvalBarView cp={cp == null ? 0 : cp} txt={cp == null ? (down ? '' : '…') : fmtSf(cp)} a={1} />)}
-      <FreeBar pos={pos} side="b" a={1} clock={clockOf('b')} name={G ? playerName(G, 'b') : null} />
+      <FreeBar pos={pos} side="b" a={1} clock={clockOf('b')} name={G ? window.PlayCore.playerName(G, 'b') : null} />
       <BoardSpace onStep={!steps.length ? null : (d) => goIf(upto + d)}>
         <LineBoard a={1} sq={boardSquares()} v={pv && pv.length ? { upto: upto + pv.length, moves: [...steps.slice(0, upto + 1), ...pv], base: board.start.pos, src: 'you' } : { upto, moves: steps, base: board.start.pos, src: 'you' }} hide={input.drag && input.drag.moved ? input.drag.from : null} arrows={hintMove ? [{ uci: had.best, k: 1 }] : hovArrows(!G && tw.bestArrows !== false ? lineArrows(ev.after) : null, hov)} sel={input.sel} />
         <BoardDraw draw={draw} hidden={!!(pv && pv.length)}>
           <BoardTouch pos={pos} targets={input.targets} drag={input.drag} promo={input.promo} {...(still ? stillInput : input.handlers)} />
         </BoardDraw>
       </BoardSpace>
-      <FreeBar pos={pos} side="w" a={1} clock={clockOf('w')} name={G ? playerName(G, 'w') : null} />
+      <FreeBar pos={pos} side="w" a={1} clock={clockOf('w')} name={G ? window.PlayCore.playerName(G, 'w') : null} />
       {L.header && <Header M={HM} a={1} />}
       <MoveList M={MV} T={upto + 0.999} S={S} a={1} paused onPick={go} deadAt={deadAt} end={end} startAt={G && G.from} />
       {G ? <GameInfo board={board} /> : tb ? <TablebaseExplorer t={tb} posKey={boardKey} onPlay={onBook} /> : xl ? <LichessExplorer x={xl} tw={tw} setTweak={setTweak} onGame={onLichess} posKey={boardKey} onPlay={onBook} onHover={setHov} white={pos.turn === 'w'} fallback={<OpeningExplorer board={board} book={book} onPlay={onBook} onHover={setHov} />} /> : <OpeningExplorer board={board} book={book} onPlay={onBook} onHover={setHov} />}
@@ -499,7 +497,7 @@ function ImportDialog({ text: text0, auto, onChoose, onPgn, onFen, onImage, onCl
   // the list takes focus on its first game that can open; Back gives it back to the box
   React.useEffect(() => {
     if (!shown.current) { shown.current = true; return; }
-    const el = body.current && body.current.closest('[role="dialog"]').querySelector(list ? '.import-game:not(:disabled), .import-list ~ .fen-btns button' : 'textarea');
+    const el = body.current && body.current.closest('[role="dialog"]').querySelector(list ? '.import-game:not(:disabled), .import-list ~ .dlg-btns button' : 'textarea');
     if (el) el.focus();
   }, [list]);
   const coarse = !!(window.matchMedia && window.matchMedia('(pointer: coarse)').matches); // a touch screen: nothing to drag from
@@ -529,7 +527,7 @@ function ImportDialog({ text: text0, auto, onChoose, onPgn, onFen, onImage, onCl
   return (
     <DialogBox label="Import game" part="import-game" className="import-box" onClose={close}>
       {list ? <>
-        <div ref={body} className="fen-note">{done ? `${list.games.length} game${list.games.length === 1 ? '' : 's'}; pick one to open${done < list.games.length ? ` (the greyed ones ${greyed})` : ''}.`
+        <div ref={body} className="dlg-note">{done ? `${list.games.length} game${list.games.length === 1 ? '' : 's'}; pick one to open${done < list.games.length ? ` (the greyed ones ${greyed})` : ''}.`
           : odd ? `None of these games can be opened here: they ${greyed}.` : 'No game here has finished yet: they can be opened once they end.'}</div>
         <div className="import-list">
           {list.games.map((g, i) => (
@@ -541,8 +539,8 @@ function ImportDialog({ text: text0, auto, onChoose, onPgn, onFen, onImage, onCl
             </button>
           ))}
         </div>
-        <div className="fen-msg" role="alert">{msg}</div>
-        <div className="fen-btns">
+        <div className="dlg-msg" role="alert">{msg}</div>
+        <div className="dlg-btns">
           <button type="button" className="twk-btn secondary" onClick={back}>Back</button>
           <button type="button" className="twk-btn secondary" onClick={close}>Cancel</button>
         </div>
@@ -559,14 +557,14 @@ function ImportDialog({ text: text0, auto, onChoose, onPgn, onFen, onImage, onCl
             <small>a screenshot, diagram or photo of a board</small>
           </button>}
         </div>
-        <textarea className="twk-field fen-field pgn-field" aria-label="PGN, FEN or Lichess link" aria-describedby="import-msg" data-autofocus spellCheck={false} autoComplete="off" autoCapitalize="off" autoCorrect="off"
+        <textarea className="twk-field dlg-field pgn-field" aria-label="PGN, FEN or Lichess link" aria-describedby="import-msg" data-autofocus spellCheck={false} autoComplete="off" autoCapitalize="off" autoCorrect="off"
           placeholder={'Or paste a PGN, a FEN or a Lichess link\n\n1. e4 e5 2. Nf3 Nc6 …\nhttps://lichess.org/…'} value={text} readOnly={busy} onKeyDown={onKey} onChange={(e) => { setText(e.target.value); setMsg(''); }} />
-        <div className="fen-info">
-          <div id="import-msg" className="fen-msg" role="alert">{msg}</div>
-          {busy ? <div className="fen-note" role="status">Fetching from Lichess…</div>
-            : !msg && <div className="fen-note">A PGN opens as a loaded game (tags, comments, evals and a [FEN] start are read; the first game of several), a FEN on the free board, or in Edit position when it isn’t legal. A Lichess link (a finished game, a broadcast or a study) is fetched from Lichess. Ctrl+Enter opens it.</div>}
+        <div className="dlg-info">
+          <div id="import-msg" className="dlg-msg" role="alert">{msg}</div>
+          {busy ? <div className="dlg-note" role="status">Fetching from Lichess…</div>
+            : !msg && <div className="dlg-note">A PGN opens as a loaded game (tags, comments, evals and a [FEN] start are read; the first game of several), a FEN on the free board, or in Edit position when it isn’t legal. A Lichess link (a finished game, a broadcast or a study) is fetched from Lichess. Ctrl+Enter opens it.</div>}
         </div>
-        <div className="fen-btns">
+        <div className="dlg-btns">
           <button type="button" className="twk-btn secondary" onClick={close}>Cancel</button>
           <button type="button" className="twk-btn" disabled={busy} onClick={() => open()}>Open</button>
         </div>
@@ -604,9 +602,9 @@ function DialogBox({ label, part, className, onClose, children }) {
     return () => window.removeEventListener('keydown', away, true);
   }, []);
   return (
-    <div className="fen-scrim" onPointerDown={(e) => { if (e.target === e.currentTarget) onClose(); }}>
-      <div ref={box} className={['fen-box', className, part && `part-${part}-dialog`].filter(Boolean).join(' ')} role="dialog" aria-modal="true" aria-label={label} onKeyDown={onKey} onMouseDown={(e) => { if (!e.target.closest('input, textarea, select, button')) e.preventDefault(); }}>
-        <div className="fen-title">{label}</div>
+    <div className="dlg-scrim" onPointerDown={(e) => { if (e.target === e.currentTarget) onClose(); }}>
+      <div ref={box} className={['dlg-box', className, part && `part-${part}-dialog`].filter(Boolean).join(' ')} role="dialog" aria-modal="true" aria-label={label} onKeyDown={onKey} onMouseDown={(e) => { if (!e.target.closest('input, textarea, select, button')) e.preventDefault(); }}>
+        <div className="dlg-title">{label}</div>
         {children}
       </div>
     </div>
@@ -652,11 +650,11 @@ function PlayDialog({ mode = 'human', setUpFen, here, clock, side, initial, onSt
       <DialogChoice label="Start from" value={from} options={froms} onChange={setFrom} />
       {sfGame && <DialogChoice label="You play" value={you} options={[{ label: 'White', value: 'w' }, { label: 'Black', value: 'b' }, { label: 'Random', value: 'random' }]} onChange={setYou} />}
       <DialogChoice label="Time control" value={tc} options={[{ label: 'Off', value: null }].concat(window.PlayCore.TIME_CONTROLS.map((x) => ({ label: x, value: x })))} onChange={setTc} />
-      {from === 'here' && at && <div className="fen-note play-here-note">{n ? `The game goes on from the position on the board, keeping the ${n} move${n === 1 ? '' : 's'} before it; Take back stops there.` : 'The game starts from the position on the board.'}</div>}
-      <div className="fen-note">{sfGame
+      {from === 'here' && at && <div className="dlg-note play-here-note">{n ? `The game goes on from the position on the board, keeping the ${n} move${n === 1 ? '' : 's'} before it; Take back stops there.` : 'The game starts from the position on the board.'}</div>}
+      <div className="dlg-note">{sfGame
         ? `The computer, Stockfish 19 (a chess engine), plays at full strength and replies after a short pause; the board stays on your side. It says when one of your moves is an inaccuracy, a mistake or a blunder, and Hint shows its best move, ${window.PlayCore.HINTS} times a game. Take back is a button by Resign.`
         : 'Two players at this screen. The board turns after each move, so the side to move plays from the bottom; Take back is a button by Resign. Stockfish stays off until the game ends.'}</div>
-      <div className="fen-btns">
+      <div className="dlg-btns">
         <button type="button" className="twk-btn secondary" onClick={onClose}>Cancel</button>
         <button type="button" className="twk-btn" data-autofocus onClick={start}>{image ? 'Choose image…' : editFirst ? 'Set up position…' : 'Start game'}</button>
       </div>
@@ -668,8 +666,8 @@ function PlayDialog({ mode = 'human', setUpFen, here, clock, side, initial, onSt
 function LeaveDialog({ onLeave, onStay }) {
   return (
     <DialogBox label="Leave this game?" part="leave-game" onClose={onStay}>
-      <div className="fen-note">It stays in My games, its clocks stopped until you resume it there.</div>
-      <div className="fen-btns">
+      <div className="dlg-note">It stays in My games, its clocks stopped until you resume it there.</div>
+      <div className="dlg-btns">
         <button type="button" className="twk-btn secondary" data-autofocus onClick={onStay}>Keep playing</button>
         <button type="button" className="twk-btn" onClick={onLeave}>Leave the game</button>
       </div>
@@ -700,7 +698,7 @@ function MyGamesDialog({ games, current, onReplay, onResume, onDelete, onClose }
             const g = b.game, own = P.played(b), r = g.result && P.resultText(g.result), turn = gameTurn(b) === 'w' ? 'White' : 'Black';
             const head = r ? `${r.score} · ${r.why}` : `In progress · ${turn} to move`;
             const meta = [g.mode === 'stockfish' && `vs computer · you played ${sideName(g.you)}`, window.ChessCore.fmtDate(g.date), g.tc || 'no clock', `${own} move${own === 1 ? '' : 's'}`,
-              g.from ? `from after ${window.BoardCore.label(b, g.from - 1)}` : b.fen === window.ChessCore.START_FEN ? 'from the starting position' : 'from a set-up position'].filter(Boolean).join(' · ');
+              window.PlayCore.fromText(b)].filter(Boolean).join(' · ');
             return (
               <li key={e.id} className="games-row">
                 <div className="games-text"><span className="games-head">{head}</span><span className="games-meta">{meta}</span></div>
@@ -720,9 +718,9 @@ function MyGamesDialog({ games, current, onReplay, onResume, onDelete, onClose }
             );
           })}
         </ul>
-      ) : <div className="fen-note">No games yet. A game of Play vs human or Play vs computer is kept here from its first move.</div>}
-      <div className="fen-note">A finished game replays like a loaded one: analyse it with Stockfish, ask Queen, save it as a PGN or export a video. The 50 most recent games are kept, in this browser only.</div>
-      <div className="fen-btns">
+      ) : <div className="dlg-note">No games yet. A game of Play vs human or Play vs computer is kept here from its first move.</div>}
+      <div className="dlg-note">A finished game replays like a loaded one: analyse it with Stockfish, ask Queen, save it as a PGN or export a video. The 50 most recent games are kept, in this browser only.</div>
+      <div className="dlg-btns">
         <button ref={closeBtn} type="button" className="twk-btn secondary" data-autofocus onClick={onClose}>Close</button>
       </div>
     </DialogBox>
@@ -787,7 +785,7 @@ function ShortcutsDialog({ onClose }) {
           </section>
         ))}
       </div>
-      <div className="fen-btns">
+      <div className="dlg-btns">
         <button type="button" className="twk-btn secondary" data-autofocus onClick={onClose}>Close</button>
       </div>
     </DialogBox>

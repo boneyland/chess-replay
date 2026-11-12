@@ -237,7 +237,7 @@ function VisionDialog({ again, onRead, onClose }) {
   React.useLayoutEffect(() => {
     if (state !== 'crop' || !pic) return;
     const fit = () => {
-      const st = stage.current, bx = st && st.closest('.fen-box');
+      const st = stage.current, bx = st && st.closest('.dlg-box');
       if (!st || !bx) return;
       const roomW = st.clientWidth, roomH = Math.max(120, window.innerHeight - 32 - (bx.offsetHeight - st.offsetHeight));
       const k = Math.min(roomW / pic.bitmap.width, roomH / pic.bitmap.height);
@@ -301,25 +301,25 @@ function VisionDialog({ again, onRead, onClose }) {
   const canPaste = !!(navigator.clipboard && navigator.clipboard.read);
   const coarse = !!(window.matchMedia && window.matchMedia('(pointer: coarse)').matches); // a touch screen: nothing to drag from
   const cancelBtn = <button type="button" className="twk-btn secondary" onClick={onClose}>Cancel</button>;
-  const msg = (err || dl.err) && <div className="fen-msg" role="alert">{err || dl.err}</div>;
+  const msg = (err || dl.err) && <div className="dlg-msg" role="alert">{err || dl.err}</div>;
   let body;
-  if (state === 'checking') body = <div className="fen-btns"><button type="button" className="twk-btn secondary" data-autofocus onClick={onClose}>Cancel</button></div>;
+  if (state === 'checking') body = <div className="dlg-btns"><button type="button" className="twk-btn secondary" data-autofocus onClick={onClose}>Cancel</button></div>;
   else if (state === 'need') {
     body = <>
-      <div className="fen-note">{VISION_ABOUT}</div>
-      <div className="fen-note">The model is <a href="https://github.com/JSeytre/chessqueries" target="_blank" rel="noopener">ChessQ Lite by Joël Seytre (ChessQueries)</a>, under <a href="https://polyformproject.org/licenses/noncommercial/1.0.0/" target="_blank" rel="noopener">PolyForm Noncommercial 1.0.0</a>. Required Notice: Copyright (c) 2026 Joël Seytre. It is built on Meta AI’s <a href="https://github.com/facebookresearch/dinov2" target="_blank" rel="noopener">DINOv2</a> (Copyright (c) Meta Platforms, Inc. and affiliates), under the <a href="https://www.apache.org/licenses/LICENSE-2.0" target="_blank" rel="noopener">Apache License 2.0</a>.</div>
+      <div className="dlg-note">{VISION_ABOUT}</div>
+      <div className="dlg-note">The model is <a href="https://github.com/JSeytre/chessqueries" target="_blank" rel="noopener">ChessQ Lite by Joël Seytre (ChessQueries)</a>, under <a href="https://polyformproject.org/licenses/noncommercial/1.0.0/" target="_blank" rel="noopener">PolyForm Noncommercial 1.0.0</a>. Required Notice: Copyright (c) 2026 Joël Seytre. It is built on Meta AI’s <a href="https://github.com/facebookresearch/dinov2" target="_blank" rel="noopener">DINOv2</a> (Copyright (c) Meta Platforms, Inc. and affiliates), under the <a href="https://www.apache.org/licenses/LICENSE-2.0" target="_blank" rel="noopener">Apache License 2.0</a>.</div>
       {!supported ? <div className="twk-note twk-err">This browser can’t run the board reader.</div>
-        : !online && !dl.on && <div className="fen-note" role="status">The board reader downloads once; you’re offline.</div>}
+        : !online && !dl.on && <div className="dlg-note" role="status">The board reader downloads once; you’re offline.</div>}
       {dl.on && <KeptProgress what="board reader" got={dl.got} total={total} />}
       {msg}
-      <div className="fen-btns">
+      <div className="dlg-btns">
         {dl.on ? <button type="button" className="twk-btn secondary" data-autofocus onClick={dl.cancel}>Cancel the download</button> : cancelBtn}
         {!dl.on && <button type="button" className="twk-btn" data-autofocus disabled={!online || !supported} onClick={download}>Download board reader · {MB} MB</button>}
       </div>
     </>;
   } else if (state === 'pick') {
     body = <>
-      <div className="fen-note">{VISION_ABOUT}</div>
+      <div className="dlg-note">{VISION_ABOUT}</div>
       <input ref={file} type="file" accept="image/*" hidden onChange={(e) => { const el = e.target; take(el.files && el.files[0]).finally(() => { el.value = ''; }); }} />
       <div ref={zone} className="vision-zone">
         <div className="vision-tiles" style={dropHere ? { visibility: 'hidden' } : null}>
@@ -339,11 +339,11 @@ function VisionDialog({ again, onRead, onClose }) {
       {msg}
       {askRemove ? <>
         <KeptRemoveAsk what="board reader" total={total} />
-        <div className="fen-btns">
+        <div className="dlg-btns">
           <button type="button" className="twk-btn danger" onClick={remove}>Remove</button>
           <button type="button" className="twk-btn secondary" data-autofocus onClick={() => setAskRemove(false)}>Keep</button>
         </div>
-      </> : <div className="fen-btns" style={{ justifyContent: 'space-between', flexWrap: 'wrap' }}>
+      </> : <div className="dlg-btns" style={{ justifyContent: 'space-between', flexWrap: 'wrap' }}>
         <button type="button" className="twk-btn secondary vision-remove" onClick={() => setAskRemove(true)}>Remove the board reader · {MB} MB</button>
         {cancelBtn}
       </div>}
@@ -355,9 +355,9 @@ function VisionDialog({ again, onRead, onClose }) {
         {size.w > 0 && <CropBox bitmap={pic.bitmap} box={box} onBox={setBox} w={size.w} h={size.h} onKeyDown={onCropKey}
           label="The picture: drag the box’s edges or corners to the board’s squares, or drag inside it to move it. Enter reads the board." />}
       </div>
-      <div className="fen-note">{pic.found && ['x0', 'y0', 'x1', 'y1'].every((k) => box[k] === pic.found[k]) ? VISION_FOUND : VISION_HELP}</div>
+      <div className="dlg-note">{pic.found && ['x0', 'y0', 'x1', 'y1'].every((k) => box[k] === pic.found[k]) ? VISION_FOUND : VISION_HELP}</div>
       {msg}
-      <div className="fen-btns">
+      <div className="dlg-btns">
         {cancelBtn}
         <button type="button" className="twk-btn" disabled={reading} onClick={read}>{reading ? 'Reading…' : 'Read board'}</button>
       </div>

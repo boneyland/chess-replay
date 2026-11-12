@@ -625,3 +625,15 @@ test('a game stepped back to an earlier move: the clocks, flag, moves and resign
   assert.equal(m.upto, 3);
   assert.deepEqual(P.takeback(back, 4000).steps.map((s) => s.uci), ['e2e4', 'e7e5']);
 });
+test('the players\' names and where a game started, said one way everywhere', () => {
+  const g = P.start(B.fromFen(), null, '2026.11.12');
+  assert.equal(P.playerName(g.game, 'w'), 'White');
+  const sf = { ...g, game: { ...g.game, mode: 'stockfish', you: 'b' } };
+  assert.equal(P.playerName(sf.game, 'b'), 'You'); assert.equal(P.playerName(sf.game, 'w'), 'Stockfish 19');
+  assert.equal(P.fromText(B.fromFen()), 'from the starting position');
+  assert.equal(P.fromText(B.fromFen('4k3/8/8/8/8/8/4P3/4K3 w - - 0 1'), { long: true }), 'From a set-up position');
+  const later = P.start(playAll(B.fromFen(), ['e2e4', 'e7e5', 'g1f3']), null, '2026.11.12', { keep: true });
+  assert.equal(later.game.from, 3);
+  assert.equal(P.fromText(later), 'from after 2. Nf3');
+  assert.equal(P.fromText(later, { long: true }), 'From the position after 2. Nf3');
+});

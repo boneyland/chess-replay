@@ -87,7 +87,7 @@ function GameAnalysisDialog({ t, setTweak, ES, sfKind, threading, hash, analysis
       {running && <div className="twk-note an-status" role="status">Analysing {analysis.done} of {analysis.total} positions{analysis.etaSec != null ? ' · ' + fmtEta(analysis.etaSec) : ''}<span className="an-spin" aria-hidden="true" /></div>}
       {analysis.note && <div className="twk-note" role="status">{analysis.note}</div>}
       {analysis.err && <div className="twk-note twk-err">{analysis.err}</div>}
-      <div className="fen-btns">
+      <div className="dlg-btns">
         {files.analysis && !running && <button type="button" className="twk-btn secondary" onClick={onRemoveAnalysis}>Remove analysis</button>}
         <button type="button" className="twk-btn secondary" onClick={onClose}>{running ? 'Close' : 'Cancel'}</button>
         {running

@@ -640,7 +640,7 @@ function GameApp() {
 
   const gameName = (g) => (g.mode === 'stockfish' ? `Play vs computer · you play ${g.you === 'w' ? 'White' : 'Black'}` : 'Play vs human');
   const boardStatus = board && board.game ? `${gameName(board.game)} · ${board.game.tc || 'no clock'} · ${window.PlayCore.played(board)} move${window.PlayCore.played(board) === 1 ? '' : 's'}${board.game.result ? ' · ' + window.PlayCore.resultText(board.game.result).score : ''}`
-    : board && `Free board · ${board.fen === window.ChessCore.START_FEN ? 'from the starting position' : 'from a set-up position'} · ${board.steps.length} move${board.steps.length === 1 ? '' : 's'}`;
+    : board && `Free board · ${window.PlayCore.fromText(board)} · ${board.steps.length} move${board.steps.length === 1 ? '' : 's'}`;
   const status = boardStatus || `${M.white.short} – ${M.black.short} · ${M.plies.length} plies` + (M.evalSource === 'analysis' ? ' · analysis evals' : M.evalSource === 'pgn' ? ' · PGN evals' : '') + (M.hasNotes ? ' · notes' : '') + (files.sample ? ' (sample)' : '') + ' · ' + fmtLen(TM.total);
   const shownErr = err || built.error;
 
@@ -723,8 +723,8 @@ function GameApp() {
         <div className="signin-note" role="status">{hf.note}<button type="button" className="twk-x" aria-label="Dismiss" onClick={hf.clearNote}>✕</button></div>
       )}
       {fenNote && !hf.note && (
-        <div className="signin-note net-note fen-note" role="status">
-          <span>{fenNote.ok ? `${fenNote.what || 'FEN'} copied` : `Copy this ${fenNote.what || 'FEN'}`}{(!fenNote.ok || !fenNote.what) && <>: <textarea className="fen-note-fen" readOnly rows={2} value={fenNote.fen} aria-label={fenNote.what || 'FEN'} onFocus={(e) => e.target.select()} /></>}</span>
+        <div className="signin-note net-note copy-note" role="status">
+          <span>{fenNote.ok ? `${fenNote.what || 'FEN'} copied` : `Copy this ${fenNote.what || 'FEN'}`}{(!fenNote.ok || !fenNote.what) && <>: <textarea className="copy-note-fen" readOnly rows={2} value={fenNote.fen} aria-label={fenNote.what || 'FEN'} onFocus={(e) => e.target.select()} /></>}</span>
           <button type="button" className="twk-x" aria-label="Dismiss" onClick={() => setFenNote(null)}>✕</button>
         </div>
       )}
@@ -740,8 +740,8 @@ function GameApp() {
       {importOpen && <ImportDialog text={importOpen.text} auto={importOpen.auto} onChoose={chooseFiles} onPgn={pgnLoad} onFen={fenLoad} onImage={visionOk ? importImage : null} onClose={closeImport} />}
       {resetOpen && (
         <DialogBox label="Reset all settings" part="reset-settings" onClose={() => setResetOpen(false)}>
-          <div className="fen-note">Every setting goes back to its default. Your saved games and the downloaded engine are kept.</div>
-          <div className="fen-btns">
+          <div className="dlg-note">Every setting goes back to its default. Your saved games and the downloaded engine are kept.</div>
+          <div className="dlg-btns">
             <button type="button" className="twk-btn secondary" data-autofocus onClick={() => setResetOpen(false)}>Cancel</button>
             <button type="button" className="twk-btn danger" onClick={() => { setResetOpen(false); Object.keys(window.TWEAK_DEFAULTS).filter((k) => k !== 'sfEngine').forEach((k) => setTweak(k, window.TWEAK_DEFAULTS[k])); }}>Reset</button>
           </div>

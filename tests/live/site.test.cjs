@@ -2115,7 +2115,7 @@ for (const name of BROWSERS) for (const site of SITES) {
       await dialog.locator('.vision-drop').waitFor({ timeout: 2000 });
       await p.waitForTimeout(1000);
       assert.equal(await dialog.locator('.vision-drop').isVisible(), true, 'the drop area stays while held still');
-      await dialog.locator('.fen-title').dispatchEvent('dragover', { dataTransfer: dt });
+      await dialog.locator('.dlg-title').dispatchEvent('dragover', { dataTransfer: dt });
       await assert.doesNotReject(dialog.locator('.vision-drop').waitFor({ state: 'detached', timeout: 2000 }));
       assert.equal(await p.locator('.drop').count(), 0, 'no PGN overlay over the dialog');
       await tile.dispatchEvent('dragover', { dataTransfer: dt });
