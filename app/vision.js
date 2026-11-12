@@ -38,7 +38,7 @@
   async function start(g) {
     const files = await kept.blobUrls();
     if (g !== gen) { files.revoke(); throw new Error('The board reader was stopped'); }
-    worker = new Worker('vision-worker.js', { type: 'module' });
+    worker = new Worker(window.siteFile('vision-worker.js'), { type: 'module' });
     worker.onmessage = (e) => settle((w) => (e.data.type === w.want ? w.ok(e.data) : w.no(new Error(e.data.message || 'The board reader gave an unexpected answer'))));
     // a Worker whose script or module imports don't load says so only by an error event
     worker.onerror = (e) => { e.preventDefault(); settle((w) => w.no(new Error(e.message || 'The board reader did not start'))); stop(); };

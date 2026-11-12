@@ -5,10 +5,11 @@ const fs = require('fs'), path = require('path'), vm = require('vm');
 const ROOT = path.join(__dirname, '..');
 
 // Loads the built sw.js in a vm with a fake self, caches and fetch, and dispatches fetch events at it
-function load() {
+// status: what the network answers (200 unless given); fetched gets each URL, fetchOpts the options a URL was fetched with
+function load({ status = 200 } = {}) {
   execFileSync(process.execPath, [path.join(ROOT, 'build.cjs')], { cwd: ROOT });
   const src = fs.readFileSync(path.join(ROOT, 'out', 'site', 'sw.js'), 'utf8');
-  const stores = {}, puts = [], fetched = [], handlers = {};
+  const stores = {}, puts = [], fetched = [], fetchOpts = [], handlers = {};
   const store = (name) => stores[name] || (stores[name] = new Map());
   const caches = {
     open: async (name) => ({
@@ -21,7 +22,10 @@ function load() {
   };
   const self = { location: { origin: 'https://site.test', href: 'https://site.test/sw.js' }, addEventListener: (t, f) => { handlers[t] = f; }, skipWaiting: async () => {}, clients: { claim: async () => {} } };
   // a same-origin answer, as the browser's fetch gives one (Node's Response says 'default')
-  const fakeFetch = async (req) => { fetched.push(req.url); return Object.defineProperty(new Response('from network', { status: 200 }), 'type', { value: 'basic' }); };
+  const fakeFetch = async (req, opts) => {
+    fetched.push(typeof req === 'string' ? req : req.url); fetchOpts.push(opts);
+    return Object.defineProperty(new Response('from network', { status }), 'type', { value: typeof req === 'string' ? 'cors' : 'basic' });
+  };
   vm.runInNewContext(src, { self, caches, fetch: fakeFetch, Response, Headers, URL, Promise, setTimeout, console });
   // the event's waitUntil promises are kept in held (the cache writes the worker must stay alive for)
   const held = [];
@@ -32,7 +36,8 @@ function load() {
     return answer === undefined ? undefined : await answer;
   };
   const activate = async () => { let done; handlers.activate({ waitUntil: (p) => { done = p; } }); await done; };
-  return { stores, store, puts, fetched, held, fetchEvent, activate };
+  const VERSION = src.match(/^const VERSION = '([0-9a-f]+)';/m)[1];
+  return { stores, store, puts, fetched, fetchOpts, held, fetchEvent, activate, VERSION };
 }
 
 const WASM = 'https://site.test/vision/ort.wasm.min.mjs';
@@ -112,4 +117,50 @@ test('a navigation to another file next to the page is not kept as the page, nor
   assert.equal(await r.text(), 'from network');
   await Promise.all(sw.held);
   assert.deepEqual(sw.puts.map((p) => p[1]), [PAGE, u]);
+});
+
+// The page asks for its Workers and libraries with its deploy's version (window.siteFile)
+test('this deploy\'s file asked for with ?v= is answered from the copy kept under its plain URL', async () => {
+  const sw = load();
+  sw.store('chess-replay-' + sw.VERSION).set('https://site.test/dead-worker.js', new Response('kept', { status: 200 }));
+  const r = await sw.fetchEvent('https://site.test/dead-worker.js?v=' + sw.VERSION);
+  assert.equal(await r.text(), 'kept');
+  assert.deepEqual(sw.fetched, []);
+});
+
+test('this deploy\'s file not kept yet is fetched and kept under its plain URL', async () => {
+  const sw = load();
+  const u = 'https://site.test/dead-worker.js?v=' + sw.VERSION;
+  assert.equal(await (await sw.fetchEvent(u)).text(), 'from network');
+  await Promise.all(sw.held);
+  assert.deepEqual(sw.fetched, [u]);
+  assert.deepEqual(sw.puts.map((p) => p[1]), ['https://site.test/dead-worker.js']);
+});
+
+test('another deploy\'s file comes from the network, never from the copy, and is not kept', async () => {
+  const sw = load();
+  sw.store('chess-replay-' + sw.VERSION).set('https://site.test/dead-worker.js', new Response('kept', { status: 200 }));
+  const u = 'https://site.test/dead-worker.js?v=0123456789abcdef';
+  const r = await sw.fetchEvent(u);
+  assert.equal(await r.text(), 'from network');
+  assert.equal(r.headers.get('Cross-Origin-Embedder-Policy'), 'require-corp');
+  await Promise.all(sw.held);
+  assert.deepEqual(sw.fetched, [u]);
+  assert.deepEqual(sw.puts, []);
+});
+
+test('a failed answer is not kept, here or from a CDN', async () => {
+  const sw = load({ status: 503 });
+  for (const u of ['https://site.test/pieces/alpha/wK.svg', 'https://cdn.jsdelivr.net/npm/x@1/x.js']) assert.equal((await sw.fetchEvent(u)).status, 503, u);
+  await Promise.all(sw.held);
+  assert.deepEqual(sw.puts, []);
+});
+
+test('a CDN file is fetched with CORS, so its status can be read, and kept', async () => {
+  const sw = load();
+  const u = 'https://fonts.gstatic.com/s/x.woff2';
+  assert.equal(await (await sw.fetchEvent(u)).text(), 'from network');
+  await Promise.all(sw.held);
+  assert.equal(sw.fetchOpts[0].mode, 'cors');
+  assert.deepEqual(sw.puts.map((p) => p[1]), [u]);
 });

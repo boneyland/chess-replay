@@ -16,6 +16,9 @@ const KEEP_HOSTS = __KEEP_HOSTS__; // build.cjs's CDN_HOSTS, which the page's CS
 // The board reader's model and runtime (vision/, 56 MB) are kept only by viewers who ask for them, in a cache of their own
 // that no deploy replaces (kept-files.js fills it under these same URLs): VisionCore's CACHE, which a model update bumps
 const VISION_CACHE = '__VISION_CACHE__';
+// an install's fetch of a CDN file that hasn't arrived by then is given up (and tried again, up to three times): a
+// network that swallows a host's requests must not hold the install open
+const KEEP_TIMEOUT_MS = 20000;
 // a page that hasn't answered by then comes from the copy (a connection that is up but not getting through)
 const PAGE_TIMEOUT_MS = 6000;
 
@@ -27,10 +30,11 @@ self.addEventListener('install', (e) => {
     // wrong face), and otherwise when the page first uses them
     const keep = async (url) => {
       for (let i = 0; i < 3; i++) {
+        const ctl = new AbortController(), timer = setTimeout(() => ctl.abort(), KEEP_TIMEOUT_MS);
         try {
-          const r = await fetch(url, { mode: 'cors' });
+          const r = await fetch(url, { mode: 'cors', signal: ctl.signal });
           if (r.ok) { await cache.put(url, r.clone()); return r; }
-        } catch (err) {}
+        } catch (err) {} finally { clearTimeout(timer); }
       }
       return null;
     };
@@ -111,18 +115,26 @@ function isolated(r) {
 }
 
 // a kept GET answers a HEAD too (Stockfish checks its file with one), without its body (Firefox refuses one with a body)
-async function kept(req, name = CACHE) {
-  const hit = await (await caches.open(name)).match(req.url, { ignoreVary: true });
+async function kept(req, name = CACHE, key = req.url) {
+  const hit = await (await caches.open(name)).match(key, { ignoreVary: true });
   return hit && req.method === 'HEAD' ? new Response(null, { status: hit.status, statusText: hit.statusText, headers: hit.headers }) : hit;
 }
 
-// the write is held open with waitUntil, which the event still takes while its answer is pending
+// The page asks for its Workers and libraries with its deploy's VERSION (?v=, window.siteFile in build.cjs). This
+// deploy's is answered from the copy, kept under the file's plain URL; another deploy's (a page newer than this worker,
+// fetched while the new one installs) comes from the network and isn't kept, so the page never runs this deploy's file.
+// Only a whole answer is kept (a CDN's error would otherwise stick until the next deploy): a CDN file is fetched with
+// CORS, which the CDNs and font hosts allow, so its status can be read. The write is held open with waitUntil, which the
+// event still takes while its answer is pending
 async function cacheFirst(e) {
-  const req = e.request;
-  const cache = await caches.open(CACHE);
-  const hit = await kept(req);
+  const req = e.request, url = new URL(req.url);
+  const here = url.origin === self.location.origin, v = here ? url.searchParams.get('v') : null;
+  if (v !== null && v !== VERSION) return fetch(req);
+  if (v !== null) url.searchParams.delete('v');
+  const key = url.href, cache = await caches.open(CACHE);
+  const hit = await kept(req, CACHE, key);
   if (hit) return hit;
-  const r = await fetch(req);
-  if (req.method === 'GET' && (r.ok || r.type === 'opaque')) e.waitUntil(cache.put(req.url, r.clone()).catch(() => {}));
+  const r = await (here ? fetch(req) : fetch(req.url, { method: req.method, mode: 'cors', credentials: 'omit' }));
+  if (req.method === 'GET' && r.ok) e.waitUntil(cache.put(key, r.clone()).catch(() => {}));
   return r;
 }

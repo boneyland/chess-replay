@@ -61,10 +61,10 @@ const loadHtml2canvas = once(() => new Promise((ok, fail) => {
   s.onload = () => ok(window.html2canvas); s.onerror = () => fail(new Error('could not load html2canvas-pro'));
   document.head.appendChild(s);
 }));
-const loadMediabunny = once(() => import(new URL(EXPORT_LIBS.mediabunny, document.baseURI).href));
+const loadMediabunny = once(() => import(new URL(window.siteFile(EXPORT_LIBS.mediabunny), document.baseURI).href));
 // the codec's glue is an ES module; given the wasm's bytes, it doesn't fetch them itself
 const loadWebp = once(async () => {
-  const at = (f) => new URL(f, document.baseURI).href;
+  const at = (f) => new URL(window.siteFile(f), document.baseURI).href;
   const [glue, wasm] = await Promise.all([import(at(WEBP_LIB.js)), fetch(at(WEBP_LIB.wasm)).then((r) => {
     if (!r.ok) throw new Error('could not load the WebP encoder');
     return r.arrayBuffer();

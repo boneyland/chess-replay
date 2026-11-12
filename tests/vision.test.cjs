@@ -30,6 +30,7 @@ const made = [], revoked = [];
 URL.createObjectURL = (b) => { made.push(b); return 'blob:' + made.length; };
 URL.revokeObjectURL = (u) => revoked.push(u);
 window.SFEngine = { simdSupport: () => true };
+window.siteFile = (f) => f + '?v=deploy1'; // build.cjs's, in the page
 
 loadUnit('chess-core.js'); loadUnit('board-core.js'); loadUnit('edit-core.js'); loadUnit('vision-core.js');
 loadUnit('kept-files.js'); loadUnit('vision.js');
@@ -46,6 +47,7 @@ test('a read hands the Worker the kept copy as Blob URLs and SIZE, and lets them
   await settle(); await settle();
   assert.equal(workers.length, 1);
   const w = workers[0], load = w.sent[0];
+  assert.equal(w.url, 'vision-worker.js?v=deploy1', 'this deploy\'s Worker');
   assert.equal(load.type, 'load');
   assert.equal(load.size, VC.SIZE);
   assert.deepEqual(Object.keys(load.urls).sort(), VC.FILES.map((f) => f.name).sort());
