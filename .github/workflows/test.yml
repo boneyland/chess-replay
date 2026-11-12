@@ -3,14 +3,14 @@
 # Safari on an iOS Simulator, and desktop Safari on macOS.
 # The Python cross-check (tests/check_browser_json.py) is left out: it imports chess-animator, which needs Manim.
 name: test
-# pushes to main and pull requests: a push to a PR's branch runs once, as the PR (both triggers ran it twice); a tag
+# pushes to main and pull requests (LAYOUT.md is no doc here: the tests read its pins): a push to a PR's branch runs once, as the PR (both triggers ran it twice); a tag
 # push starts nothing
 on:
   push:
     branches: [main]
-    paths-ignore: ['docs/**', 'media/**', '*.md', 'LICENSE']
+    paths-ignore: ['docs/**', 'media/**', '*.md', '!LAYOUT.md', 'LICENSE']
   pull_request:
-    paths-ignore: ['docs/**', 'media/**', '*.md', 'LICENSE']
+    paths-ignore: ['docs/**', 'media/**', '*.md', '!LAYOUT.md', 'LICENSE']
 # the job only reads the repo
 permissions:
   contents: read
