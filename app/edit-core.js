@@ -8,8 +8,18 @@
   const empty = () => ({ b: new Array(64).fill(null), turn: 'w', castle: '', ep: -1, half: 0, full: 1 });
   const start = () => fromFen(CC().START_FEN).setup;
 
-  const canCastle = (s, r) => CC().canCastle(s.b, r);
+  // a right stands where its king is on its first rank with a rook of its colour on that side (any file: Chess960)
+  const canCastle = (s, r) => CC().castleRook(s.b, r, s.rooks) >= 0;
   const keepRights = (s, rights) => 'KQkq'.split('').filter((r) => rights.includes(r) && canCastle(s, r)).join('');
+  // the setup with its rights (castle) and their rooks recomputed: a kept right stays on its previous rook while that
+  // rook stands there, else takes the outermost; rooks goes entirely when every kept right is the standard home pair
+  function withRights(s, rights) {
+    const castle = keepRights(s, rights), rooks = {};
+    for (const r of castle) rooks[r] = CC().castleRook(s.b, r, s.rooks);
+    const std = castle.split('').every((r) => rooks[r] === (r < 'a' ? { K: 63, Q: 56 } : { k: 7, q: 0 })[r] && s.b[r < 'a' ? 60 : 4] === (r < 'a' ? 'K' : 'k'));
+    const { rooks: _, ...rest } = s;
+    return std ? { ...rest, castle } : { ...rest, castle, rooks };
+  }
   // the en passant squares the pieces allow for the side to move: behind a pawn of the other side's that could just
   // have moved two (ChessCore.epFits), in file order
   function epSquares(s) {
@@ -20,7 +30,7 @@
   const keepEp = (s) => (s.ep >= 0 && CC().epFits(s.b, s.turn, s.ep) ? s : { ...s, ep: -1 });
   // after any change to the pieces or the side to move: rights whose king or rook left home go, and so does an en
   // passant square the pieces no longer allow
-  const settle = (s) => keepEp({ ...s, castle: keepRights(s, s.castle) });
+  const settle = (s) => keepEp(withRights(s, s.castle));
 
   // Pasted text as a setup: a PGN tag [FEN "…"] unwrapped, the fields after the board optional. Only malformed text is
   // refused; castling rights or an en passant square the pieces don't support are dropped (ChessCore.readFen)
@@ -58,7 +68,7 @@
   const setFull = (s, v) => { const n = count(v, 1); return n == null ? s : { ...s, full: n }; };
   function setCastle(s, r, on) {
     if (on && !canCastle(s, r)) return s;
-    return { ...s, castle: 'KQkq'.split('').filter((c) => (c === r ? on : s.castle.includes(c))).join('') };
+    return withRights(s, 'KQkq'.split('').filter((c) => (c === r ? on : s.castle.includes(c))).join(''));
   }
   const isEmpty = (s) => s.b.every((p) => !p);
 
