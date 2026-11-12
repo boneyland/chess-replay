@@ -119,8 +119,8 @@ function Stage({ menu, top, onLayout, duration, background, playback, nav, still
   const short = cols === 2 && sh < 500;
   const narrow = w < 900, phone = cols === 1 || narrow || short;
   const dock = short ? LayoutCore.compute({ w, h, text, video, cols, dock: true, vw: area.vw, vh: area.vh }).dock : null;
-  // the export's pixel width: the area's size at the device's pixel ratio, held to 1920 on its longer side
-  const exportW = LayoutCore.exportPx(w, LayoutCore.exportScale(w, h, window.devicePixelRatio));
+  // the export's pixel width: the viewport's width at the device's pixel ratio, held to 1920 on its longer side (export.jsx)
+  const exportW = LayoutCore.exportPx(area.vw, LayoutCore.exportScale(area.vw, h, window.devicePixelRatio));
   // onLayout(true, w, short): a phone layout (one column, under 900 px wide, or the bar in the sidebar), where the page folds its buttons into a
   // menu; w is the export's width; short: the transport bar is in the sidebar
   React.useLayoutEffect(() => { if (onLayout) onLayout(phone, exportW, short); }, [phone, exportW, short]);

@@ -4114,11 +4114,12 @@ for (const name of BROWSERS) for (const site of SITES) {
       await fe.ctx.close();
     });
 
-    // Export at screen size: the saved WebP is the stage area's size at the screen's density (held to 1920 px on its
-    // longer side), whatever the page was scrolled to. Two moves, at the full width, to keep the canvas small
+    // Export at screen size: the saved WebP is the viewport's width by the stage area's height at the screen's density
+    // (held to 1920 px on its longer side), whatever the page was scrolled to. Two moves, at the full width, to keep the canvas small
     const exportSize = async (p, tag) => {
       const area = await p.locator('.stage-area').evaluate((el) => { const cs = getComputedStyle(el), q = (k) => parseFloat(cs[k]) || 0; return { w: el.clientWidth - q('paddingLeft') - q('paddingRight'), h: el.clientHeight - q('paddingTop') - q('paddingBottom') }; }); // inside its padding (one column's); client: a classic scrollbar's gutter (Firefox) is in neither the page's width nor the video's
-      const dpr = await p.evaluate(() => window.devicePixelRatio), s = Math.min(dpr, 1920 / Math.max(area.w, area.h));
+      const vw = await p.evaluate(() => document.documentElement.clientWidth);
+      const dpr = await p.evaluate(() => window.devicePixelRatio), s = Math.min(dpr, 1920 / Math.max(vw, area.h));
       const even = (v) => 2 * Math.floor(v / 2);
       await openShare(p);
       await p.getByRole('radio', { name: 'WebP' }).click();
@@ -4131,7 +4132,7 @@ for (const name of BROWSERS) for (const site of SITES) {
       const buf = fs.readFileSync(file), vp8x = buf.indexOf('VP8X', 12);
       assert.equal(buf.toString('ascii', 8, 12), 'WEBP');
       const got = { w: buf.readUIntLE(vp8x + 12, 3) + 1, h: buf.readUIntLE(vp8x + 15, 3) + 1 };
-      assert.deepEqual(got, { w: even(area.w * s), h: even(area.h * s) }, `canvas for a ${area.w}×${area.h} area at ${dpr}×`);
+      assert.deepEqual(got, { w: even(vw * s), h: even(area.h * s) }, `canvas for a ${vw} px viewport and a ${area.w}×${area.h} area at ${dpr}×`);
       // a frame holds the rectangle that changed; the first is the whole canvas and none reaches outside it
       const anmf = [];
       for (let at = 12; at < buf.length;) {
