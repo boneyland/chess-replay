@@ -77,7 +77,7 @@ function StartAnalysis({ board, ev, status, why, onLine, onHover }) {
       {/* a narrow panel puts the eval under Start, at the right */}
       <div style={{ display: 'flex', flexWrap: 'wrap', alignItems: 'flex-end', columnGap: tx(28) }}>
         <span style={{ font: `700 ${headline()}px ${MONO}`, color: C.last }}>Start</span>
-        <EvalWithStat>{down && !(after && !after.partial) ? '—' : fmtSf(after && after.cp)}</EvalWithStat>
+        <EvalWithStat>{down && !(after && !after.partial) ? '—' : fmtSf(after && after.cp, after && after.tb)}</EvalWithStat>
       </div>
       {/* under the move and the eval, spanning the panel, as in OwnMoveAnalysis */}
       <div style={{ marginTop: anGap(6), font: `600 ${tx(16)}px ${MONO}`, letterSpacing: '0.08em', textTransform: 'uppercase', color: C.last }}>
@@ -446,7 +446,7 @@ function FreeBoard({ board, onChange, tw, setTweak, onLichess, sf, nav, orient, 
   // MoveList draws a game at time T: one second a move, with T just short of the next, so the move shown is current and later ones dim
   const MV = React.useMemo(() => ({ ply0: board.start.ply0, plies: steps.map((s) => ({ san: s.san, cls: 'none', pos: s.pos })) }), [steps, board.start.ply0]);
   // the move after which the position is first dead, marked with a pill on the Moves list
-  const deadAt = useFirstDead(MV, (p) => p.pos);
+  const deadAt = useFirstDead(MV);
   // a dead position's block, else the fifty-move rule's for the position on the board
   const rule = deadWords(dead) || fifty;
   // the result after the last move: a game's, else the last position's own end (checkmate, stalemate, a dead position)

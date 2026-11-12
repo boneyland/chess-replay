@@ -324,7 +324,7 @@ for (const name of BROWSERS) for (const site of SITES) {
       const [m0, m1] = [await chips.nth(0).innerText(), await chips.nth(1).innerText()];
       const uci = await p.evaluate(({ c, m0, m1 }) => {
         const C = window.ChessCore, M = C.buildGame({ pgn: window.SAMPLE_PGN, analysis: window.SAMPLE_ANALYSIS, sampleNotes: window.SAMPLE_NOTES });
-        const q = M.plies[c], pos = { ...C.posFromFen(q.fen), castle: q.castle, ep: q.ep };
+        const pos = M.plies[c].pos;
         return C.applySan(C.applySan(pos, m0).pos, m1).uci;
       }, { c, m0: m0.trim(), m1: m1.trim() });
       await chips.nth(0).click();

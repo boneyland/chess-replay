@@ -14,8 +14,6 @@ const deadClient = () => {
 // a position's FEN for chasolver: castling rights only where the king and rook are still at home (it refuses a FEN whose
 // rights don't fit the pieces, as an edited start's might not; ChessCore.fullFen); the move counters don't matter to it
 const deadFen = (pos) => window.ChessCore.fullFen(pos, { counters: [0, 1] });
-// the position after a loaded game's ply (its FEN carries neither castling nor en passant: the ply has them)
-const plyPos = (p) => ({ ...window.ChessCore.posFromFen(p.fen), castle: p.castle, ep: p.ep });
 
 const DEAD_BOTH = { w: 'unwinnable', b: 'unwinnable' };
 // chasolver's answers for the position (null asks nothing): { w, b }, each 'unwinnable', 'winnable', 'undecided' or
@@ -41,14 +39,14 @@ function useDead(pos, known) {
 }
 
 // The ply after which a game's position is first dead (later ones are too), or null; asked once per list of plies.
-// posOf: a ply's position (a loaded game's plies carry FENs; the free board's carry its steps' positions)
+// Each ply carries its position (pos), a loaded game's as the free board's steps
 const FIRST_DEAD = new WeakMap();
-function useFirstDead(M, posOf = plyPos) {
+function useFirstDead(M) {
   const [, redraw] = React.useState(0);
   React.useEffect(() => {
     if (!M.plies.length || FIRST_DEAD.has(M.plies)) return;
     const ctl = new AbortController();
-    window.DeadCore.firstDead(M.plies.map((p) => deadFen(posOf(p))), deadClient(), { signal: ctl.signal })
+    window.DeadCore.firstDead(M.plies.map((p) => deadFen(p.pos)), deadClient(), { signal: ctl.signal })
       .then((i) => { if (!ctl.signal.aborted) { FIRST_DEAD.set(M.plies, i); redraw((x) => x + 1); } });
     return () => ctl.abort();
   }, [M.plies]);
