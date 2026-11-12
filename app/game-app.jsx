@@ -487,7 +487,8 @@ function GameApp() {
   // a pasted FEN: a legal position on the free board, else Edit position on it, saying what's wrong
   const fenLoad = (setup, text) => {
     setImportOpen(false);
-    if (window.EditCore.ok(setup)) { setQueenOpen(false); commitBoard(window.BoardCore.fromFen(window.EditCore.toFen(setup))); } else openEditor(null, { setup, image: null, back: text });
+    // a numbered Chess960 start keeps its number (Game info's "Chess960 #n", the PGN tag)
+    if (window.EditCore.ok(setup)) { setQueenOpen(false); commitBoard(window.BoardCore.fromFen(window.EditCore.toFen(setup), { chess960: window.EditCore.number960(setup) })); } else openEditor(null, { setup, image: null, back: text });
   };
   const closeImport = React.useCallback(() => setImportOpen(false), []);
   // the board's moves as a loaded game (replay, Analyse with Stockfish, PGN and video export); the board is kept with it, to go back to

@@ -157,3 +157,10 @@ test('vision reads no right for a king on f1, and the standard ones as before', 
   assert.equal(V.setupFrom(setup('4k3/8/8/8/8/8/8/5K1R w - - 0 1').b).castle, '');
   assert.equal(V.setupFrom(setup('r3k2r/8/8/8/8/8/8/R3K2R w - - 0 1').b).castle, 'KQkq');
 });
+test('number960: only an exact numbered 960 start', () => {
+  assert.equal(E.number960(setup(CC.chess960Fen(722))), 722);
+  assert.equal(E.number960(setup(CC.START_FEN)), undefined, '518');
+  assert.equal(E.number960(setup(CC.chess960Fen(414))), undefined, 'king e, rooks a/h');
+  assert.equal(E.number960(E.setCastle(setup(CC.chess960Fen(722)), 'K', false)), undefined, 'a right gone');
+  assert.equal(E.number960(E.move(setup(CC.chess960Fen(722)), sq('e2'), sq('e4'))), undefined);
+});

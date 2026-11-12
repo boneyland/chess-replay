@@ -88,10 +88,16 @@
     return withRights(s, 'KQkq'.split('').filter((c) => (c === r ? on : s.castle.includes(c))).join(''));
   }
   const isEmpty = (s) => s.b.every((p) => !p);
+  // the Chess960 number of a setup that is exactly a numbered 960 start (its placement, all four rights, 960 rooks:
+  // never 518 or another start with king e and rooks a/h, which play as standard), else undefined
+  function number960(s) {
+    const n = CC().chess960Number(toFen(s));
+    return n != null && s.rooks && s.castle === 'KQkq' ? n : undefined;
+  }
 
   // What stops the setup being a position, in plain words, each a sentence; [] when it is one
   const problems = (s) => CC().setupProblems(s);
   const ok = (s) => problems(s).length === 0;
 
-  window.EditCore = { empty, start, fromFen, toFen, put, move, setTurn, epSquares, setEp, setHalf, setFull, count, MAX_COUNT, canCastle, setCastle, isEmpty, problems, ok };
+  window.EditCore = { empty, start, fromFen, toFen, put, move, setTurn, epSquares, setEp, setHalf, setFull, count, MAX_COUNT, canCastle, setCastle, isEmpty, number960, problems, ok };
 })();
