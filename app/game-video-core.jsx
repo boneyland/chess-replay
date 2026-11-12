@@ -367,7 +367,10 @@ function Board({ M, T, S, a, arrows, pieces, queen, vline, hide, lines, sel, idl
     }
     if (marked || P.checkmate) {
       const kb = cl01((T - S.tp[c] - S.md[c]) / 0.35);
-      const [x, y] = sqXY(P.checkmate ? P.checkSq : P.uci.slice(2, 4));
+      // a 960 castle's uci ends on the rook's start square: the badge goes on the king's square after it
+      const rs = window.ChessCore.castleRookStep(c ? M.plies[c - 1].pos : M.start.pos, P.uci);
+      const to = rs && rs.from === P.uci.slice(2, 4) ? (rs.to[0] === 'f' ? 'g' : 'c') + rs.to[1] : P.uci.slice(2, 4);
+      const [x, y] = sqXY(P.checkmate ? P.checkSq : to);
       badge = (
         <div style={{ position: 'absolute', left: x * SQ + SQ - 30, top: y * SQ - 12, minWidth: 42, height: 42, padding: '0 7px', boxSizing: 'border-box', borderRadius: 21, background: P.checkmate ? BOARD.blunder : boardCls(P.cls), color: '#15100d', display: 'flex', alignItems: 'center', justifyContent: 'center', font: `700 20px ${MONO}`, zIndex: 8, boxShadow: '0 4px 14px rgba(0,0,0,0.45)', transform: `scale(${MOTION.pop(kb)})`, opacity: kb > 0 ? 1 : 0 }}>{P.checkmate ? '#' : P.mark}</div>
       );
@@ -1555,8 +1558,12 @@ function GameVideo({ M, tw, d, probe, queen, nav, scheme, sf, orient }) {
   const explore = () => { tl.setPlaying(false); if (!vline) setVline(line.newLine()); };
   const touchPos = line.pos;
   const input = useBoardInput({ pos: touchPos, onPick: explore, onMiss: line.leaveIfEmpty, onMove: (step) => playOwn(step) });
+  const posKey = touchPos.b.join() + touchPos.turn;
   // the viewer's circles and arrows, until the position on the board changes
-  const draw = useBoardDraw(touchPos.b.join() + touchPos.turn);
+  const draw = useBoardDraw(posKey);
+  // another position (an arrow step, a move in the list) drops a half-made move: a selected piece, the promotion
+  // picker, the castle question
+  React.useEffect(() => { input.clear(); }, [posKey]);
   const shownFen = () => window.ChessCore.fenAfter(M.start.fen, line.moves().map((p) => p.san), touchPos);
   // the move after which the game's position is first dead (a line branches from the position after ply at − 1); the
   // tablebase, chasolver and the fifty-move rule on the position on the board, while paused (never in the video or its export)
