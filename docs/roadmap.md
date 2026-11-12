@@ -38,10 +38,6 @@ Built so far (2026-10-28): a square-ish two-column layout (at least 0.77 times a
 
 In Play vs human set White's and Black's names; in Play vs computer the player's (Stockfish is "Stockfish 19"). Open: asked in the Play dialog or set later; whether the last names are remembered; where they show (player bars, My games rows, the PGN's `White`/`Black`, where `PlayCore.pgn` writes "White"/"Black" today in a vs-human game, and You / Stockfish 19 in a computer game).
 
-## Chess960
-
-From a FEN with X-FEN or Shredder-FEN castling, using Stockfish's `UCI_Chess960`; today `ChessCore.readFen` refuses letter-file (X-FEN or Shredder-FEN) rights itself ("Chess960 positions aren't supported yet"). The only variant: three-check, King of the Hill, crazyhouse, atomic, horde, antichess and racing kings are out of scope (another rules engine and a variant Stockfish). Must also read Lichess 960 exports (`[Variant "Chess960"]`, `KQkq` with the king off e1), which `ImportCore.pgn` refuses today as a variant game. Rights in any order (`kqKQ`) already read.
-
 ## Typed commentary (*needs design*)
 
 The user types their own comment on a move. Open: where (replay, free board, a game from My games, all); how it sits with PGN comments, the notes file and Queen in the Commentary box (each now a Settings toggle) and in the video; whether Save PGN writes it as `{ }`; where it is kept (with the loaded game, with a My games entry, which ties in with replayed games losing their analysis and commentary today).

@@ -11,12 +11,13 @@ The one spec for the app: what it does now, what is planned, and the decisions b
   - [Replay](spec/replay.md): replay and browser analysis, opening names, custom starts and flip, piece sets, boards, drawing on the board
   - [Import](spec/import.md): import game, Lichess game import
   - [Position from image](spec/position-from-image.md)
+  - [Chess960](spec/chess960.md): 960 positions and games, starting one, castling on the board, engine and Lichess features
   - [Free board and games](spec/free-board.md): free board and explorer, Edit position, Play vs human, My games, Play vs computer, dead positions with chasolver
   - [Engine](spec/engine.md): Full Stockfish download, lines (MultiPV), engine lines in analysis files, multi-threaded Stockfish, asm.js Stockfish (no WebAssembly SIMD)
   - [Lichess data](spec/lichess.md): endgame tablebase, Lichess cloud evaluation, Lichess opening explorer
   - [Share and export](spec/export.md): the dialog, video and WebP export
   - [Responsive layout](spec/layout.md)
-- [Roadmap](roadmap.md): background music; square layouts and breakpoints; player names; Chess960; typed commentary; Maia3; peer-to-peer online play; app walk-through
+- [Roadmap](roadmap.md): background music; square layouts and breakpoints; player names; typed commentary; Maia3; peer-to-peer online play; app walk-through
 - [Known gaps](known-gaps.md)
 - [Decisions log](decisions.md)
 
