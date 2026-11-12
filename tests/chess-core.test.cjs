@@ -769,3 +769,41 @@ test('posFromFen keeps a 960 position 960', () => {
   assert.equal(CC.is960(p), true); assert.ok(CC.applyUci(p, 'f1h1'));
   assert.equal(CC.fullFen(p), '4k3/8/8/8/8/8/8/5K1R w K -');
 });
+
+// ---------- Chess960 games from a PGN ----------
+const fs960 = require('node:fs'), path960 = require('node:path');
+const PGN960 = fs960.readFileSync(path960.join(__dirname, 'fixtures', 'lichess-960.pgn'), 'utf8');
+test('a Chess960 PGN builds: its number, castles as king takes rook', () => {
+  const M = CC.buildGame({ pgn: PGN960 });
+  assert.equal(M.chess960, 722);
+  assert.equal(M.start.fen, CC.chess960Fen(722));
+  assert.equal(CC.is960(M.start.pos), true);
+  const castles = M.plies.filter((p) => /^O-O/.test(p.san));
+  assert.deepEqual(castles.map((p) => [p.san, p.uci]), [['O-O-O', 'c1b1'], ['O-O', 'c8h8']]);
+  assert.equal(M.plies[2].pos.b[CC.sqIndex('c1')], 'K'); assert.equal(M.plies[2].pos.b[CC.sqIndex('d1')], 'R');
+  const last = M.plies[M.plies.length - 1].pos;
+  assert.equal(last.b[CC.sqIndex('g8')], 'k'); assert.equal(last.b[CC.sqIndex('f8')], 'r'); assert.equal(CC.is960(last), true);
+});
+test('a Chess960 PGN with no FEN is number 518; an untagged one has no chess960', () => {
+  assert.equal(CC.buildGame({ pgn: '[Variant "Chess960"]\n[Result "*"]\n\n1. e4 e5 *' }).chess960, 518);
+  assert.equal(CC.buildGame({ pgn: '[Variant "chess960"]\n\n1. e4 e5 *' }).chess960, 518, 'any case');
+  assert.equal(CC.buildGame({ pgn: PGN }).chess960, undefined);
+  assert.equal(CC.buildGame({ pgn: '[Variant "Standard"]\n\n1. e4 e5 *' }).chess960, undefined);
+  assert.equal(CC.buildGame({ pgn: '[FEN "' + CC.chess960Fen(612) + '"]\n\n1. e4 e5 *' }).chess960, undefined, 'a 960-looking FEN without the tag');
+});
+test('a Chess960 game from a start that is no numbered position: chess960 is true', () => {
+  const M = CC.buildGame({ pgn: '[Variant "Chess960"]\n[FEN "4k3/8/8/8/8/8/8/5K1R w K - 0 1"]\n\n1. O-O *' });
+  assert.equal(M.chess960, true);
+  assert.equal(M.plies[0].uci, 'f1h1');
+});
+test('castleRookStep: the rook\'s move for a castle, 960 or standard', () => {
+  const start = CC.buildGame({ pgn: PGN960 });
+  assert.deepEqual(CC.castleRookStep(start.plies[1].pos, 'c1b1'), { from: 'b1', to: 'd1' });
+  assert.deepEqual(CC.castleRookStep(start.plies[12].pos, 'c8h8'), { from: 'h8', to: 'f8' });
+  assert.deepEqual(CC.castleRookStep(pos960('4k3/8/8/8/8/8/8/5KR1 w K - 0 1'), 'f1g1'), { from: 'g1', to: 'f1' });
+  assert.deepEqual(CC.castleRookStep(CC.posFromFen('r3k2r/8/8/8/8/8/8/R3K2R w KQkq - 0 1'), 'e1g1'), { from: 'h1', to: 'f1' });
+  assert.deepEqual(CC.castleRookStep(CC.posFromFen('r3k2r/8/8/8/8/8/8/R3K2R b KQkq - 0 1'), 'e8c8'), { from: 'a8', to: 'd8' });
+  assert.equal(CC.castleRookStep(CC.posFromFen('4k3/8/8/8/8/8/8/4K3 w - - 0 1'), 'e1e2'), null);
+  assert.equal(CC.castleRookStep(CC.posFromFen('4k3/8/8/8/8/8/R7/4K3 w - - 0 1'), 'a2a4'), null, 'a rook move');
+  assert.equal(CC.castleRookStep(pos960('4k3/8/8/8/8/8/8/5KR1 w - - 0 1'), 'f1e1'), null, 'a king step off the rook');
+});

@@ -21,7 +21,7 @@ class by hand on anything else.
 
 | Class | Name | What and where | Code name |
 | --- | --- | --- | --- |
-| `part-game-info` | Game info | Event, round, teams, place, date and opening, in up to three lines (a web address in them, as Lichess and Chess.com put in Site, is a link that opens in a new tab): under White's player bar in one column (not on a phone held upright, which has none), top of the sidebar in two. None during a game, nor in a short two-column window, where the transport bar docks in the sidebar | `Header`, `L.header` |
+| `part-game-info` | Game info | Event, round, teams, place, date, the Chess960 start’s number (a Chess960 game) and opening, in up to three lines (a web address in them, as Lichess and Chess.com put in Site, is a link that opens in a new tab): under White's player bar in one column (not on a phone held upright, which has none), top of the sidebar in two. None during a game, nor in a short two-column window, where the transport bar docks in the sidebar | `Header`, `L.header` |
 | `part-moves` | Moves | The move list | `MoveList`, `L.moves` |
 | `part-commentary` | Commentary | The notes and the book name (replay) | `Commentary`, `L.comment` |
 | `part-opening-explorer` | Opening explorer | Book moves, or Lichess's explorer when it's on (free board, in Commentary's place) | `OpeningExplorer`, `LichessExplorer` |

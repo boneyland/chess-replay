@@ -665,6 +665,7 @@
       ...headersOf({ H, A, useA, pgnHasEval, plies, start }),
       intro: (NT && NT.intro) || pgnIntro, conclusion: ends(NT).conclusion,
       says: { pgn: { intro: pgnIntro, conclusion: '' }, notes: ends(NT) },
+      ...(/^chess960$/i.test((H.Variant || '').trim()) ? { chess960: chess960Number(start.fen) == null ? true : chess960Number(start.fen) } : {}),
       start: { fen: start.fen, pos: start.pos }, ply0, plies, evalStart, evalStartKnown, hasEval, hasClock, clockStart, gameCount, hasAnalysis: !!A, hasNotes: !!notes, headers: H, evalSource: useA ? 'analysis' : pgnHasEval ? 'pgn' : 'none', canChooseSource: !!A && pgnHasEval,
     };
   }
@@ -1010,6 +1011,17 @@
     return { san: sanOf(pos, mv), uci: idxSq(from) + idxSq(to) + (mv.promo || ''), board: mv.after.b.slice(), checkSq: check ? idxSq(kingIdx(mv.after.b, mv.after.turn)) : null, pos: mv.after };
   }
 
+  // The rook's move in the castle `uci` of the position before it: { from, to } as squares, or null when it isn't one. A
+  // king taking its own rook is a Chess960 castle (the king lands on c or g, the rook on d or f, by the rook's side); a
+  // king two squares along its rank is a standard one
+  function castleRookStep(pos, uci) {
+    const f = uci.slice(0, 2), t = uci.slice(2, 4), p = pos.b[sqIdx(f)], q = pos.b[sqIdx(t)], r = f[1];
+    if (p !== 'K' && p !== 'k') return null;
+    if (q === (p === 'K' ? 'R' : 'r') && t[1] === r) return { from: t, to: (t > f ? 'f' : 'd') + r };
+    if (!q && Math.abs(f.charCodeAt(0) - t.charCodeAt(0)) === 2) return t[0] === 'g' ? { from: 'h' + r, to: 'f' + r } : { from: 'a' + r, to: 'd' + r };
+    return null;
+  }
+
   // A SAN move → { pos after it, uci }; throws when it isn't legal
   function applySan(pos, san) {
     const mv = sanToMove(pos, san);
@@ -1061,5 +1073,5 @@
     if (at < text.length) out.push({ text: text.slice(at) });
     return out;
   };
-  window.ChessCore = { START_FEN, links, splitGames, fmtDate, fmtLen, hasLegal, inCheck, checkers, evalTicks, sqName: idxSq, CASTLE_HOME, canCastle, castleRook, castleMoves, castleTarget, is960, fenIs960, chess960Fen, chess960Random, chess960Number, readFen, epFits, setupProblems, setupFen, epCapturable, fullFen, parseFen, fenAfter, moveNo, sqIndex: sqIdx, applySan, applyUci, stepFromUci, toFen, playLine, posAt, posFromFen, legalTargets, isPromotion, userMove, buildGame, withCommentary, commentarySources, classifyFile, plan, timing, schedule, cues, settledAt, clipRange, MATE_CP, MATE_STEP, MATE_MIN, mateCp, isMateCp, mateIn, decodeEval, WIN_K, WIN_DROP, winChance, plyCp, MARK_CLASS, pgnClk, pgnMoveNo, pgnReopens, pgnText, annotatedPgn, withSearches, notesText };
+  window.ChessCore = { START_FEN, links, splitGames, fmtDate, fmtLen, hasLegal, inCheck, checkers, evalTicks, sqName: idxSq, CASTLE_HOME, canCastle, castleRook, castleMoves, castleTarget, castleRookStep, is960, fenIs960, chess960Fen, chess960Random, chess960Number, readFen, epFits, setupProblems, setupFen, epCapturable, fullFen, parseFen, fenAfter, moveNo, sqIndex: sqIdx, applySan, applyUci, stepFromUci, toFen, playLine, posAt, posFromFen, legalTargets, isPromotion, userMove, buildGame, withCommentary, commentarySources, classifyFile, plan, timing, schedule, cues, settledAt, clipRange, MATE_CP, MATE_STEP, MATE_MIN, mateCp, isMateCp, mateIn, decodeEval, WIN_K, WIN_DROP, winChance, plyCp, MARK_CLASS, pgnClk, pgnMoveNo, pgnReopens, pgnText, annotatedPgn, withSearches, notesText };
 })();

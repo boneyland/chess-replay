@@ -192,8 +192,10 @@ function simulate(M) {
   M.plies.forEach((pl, i) => {
     const f = pl.uci.slice(0, 2), t = pl.uci.slice(2, 4), p = board[f];
     if (p.type === 'p' && f[0] !== t[0] && !board[t]) { const epSq = t[0] + f[1]; if (board[epSq]) { board[epSq].captured = i; delete board[epSq]; } }
-    step(f, t, i);
-    if (p.type === 'k' && Math.abs(f.charCodeAt(0) - t.charCodeAt(0)) === 2) { const r = t[1]; if (t[0] === 'g') step('h' + r, 'f' + r, i); else step('a' + r, 'd' + r, i); }
+    // a 960 castle is the king taking its own rook: the rook is lifted first, so the king's step captures nothing
+    const rook = window.ChessCore.castleRookStep(i ? M.plies[i - 1].pos : M.start.pos, pl.uci);
+    if (rook) { const rp = board[rook.from]; delete board[rook.from]; const kt = (rook.to[0] === 'f' ? 'g' : 'c') + f[1]; if (kt === f) p.track.push({ ply: i, from: f, to: kt }); else step(f, kt, i); board[rook.to] = rp; rp.track.push({ ply: i, from: rook.from, to: rook.to }); }
+    else step(f, t, i);
     if (pl.uci.length === 5) p.promo = { ply: i, type: pl.uci[4] };
   });
   return pieces;
@@ -799,12 +801,13 @@ function SideBar({ side, a, name, rating, taken, pts, clock }) {
 }
 
 // ---------- right column ----------
-// Where the game was played, in three lines: event, round and teams, then place and date, then the opening; each
+// Where the game was played, in three lines: event, round and teams, then place and date, then the opening (a Chess960 game
+// has its own line, Chess960 and the start's number, before the opening); each
 // scrolls sideways when it's long; a web address (a Site of lichess.org/…) is a link that opens in a new tab. The players,
 // titles and ratings are the player bars'
 function Header({ M, a }) {
   const teams = M.white.team && M.black.team ? `${M.white.team} vs ${M.black.team}` : M.white.team || M.black.team;
-  const lines = [[M.event, M.round && 'Round ' + M.round, teams].filter(Boolean).join(' · '), [M.site, M.date].filter(Boolean).join(' · '), [M.eco, M.opening].filter(Boolean).join(' ')].filter(Boolean);
+  const lines = [[M.event, M.round && 'Round ' + M.round, teams].filter(Boolean).join(' · '), [M.site, M.date].filter(Boolean).join(' · '), M.chess960 && (M.chess960 === true ? 'Chess960' : `Chess960 #${M.chess960}`), [M.eco, M.opening].filter(Boolean).join(' ')].filter(Boolean);
   return (
     <Panel box={L.header} part="game-info" a={a} style={{ padding: `${tx(10)}px ${tx(L.pad[1])}px`, display: 'flex', flexDirection: 'column', justifyContent: 'center', gap: tx(4), font: `500 ${tx(16)}px/1.35 ${MONO}`, color: C.dim }}>
       {lines.map((t, i) => <SideScroll key={i} style={{ display: 'block', color: C.ink }}>{window.ChessCore.links(t).map((p, j) => p.url

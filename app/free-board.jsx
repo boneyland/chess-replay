@@ -520,10 +520,10 @@ function ImportDialog({ text: text0, auto, onChoose, onPgn, onFen, onImage, onCl
   const close = () => { if (ctl.current) ctl.current.abort(); onClose(); };
   const onKey = (e) => { if (e.key === 'Enter' && (e.ctrlKey || e.metaKey)) { e.preventDefault(); open(); } };
   const back = () => { setList(null); setMsg(''); };
-  // a listed game opens when it has ended and is standard chess; the others are greyed, saying why
+  // a listed game opens when it has ended and is standard chess or Chess960; the others are greyed, saying why
   const can = (g) => !!g.result && !g.variant;
   const done = list && list.games.filter(can).length, playing = list && list.games.some((g) => !g.result), odd = list && list.games.some((g) => g.result && g.variant);
-  const greyed = playing && odd ? 'are still being played or aren’t standard chess' : playing ? 'are still being played' : 'aren’t standard chess';
+  const greyed = playing && odd ? 'are still being played or aren’t standard chess or Chess960' : playing ? 'are still being played' : 'aren’t standard chess or Chess960';
   return (
     <DialogBox label="Import game" part="import-game" className="import-box" onClose={close}>
       {list ? <>

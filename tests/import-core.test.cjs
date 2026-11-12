@@ -39,11 +39,17 @@ test('a Lichess link is a link', () => {
 });
 
 test('a variant game is refused, naming it', () => {
-  assert.match(I.read('[Variant "Crazyhouse"]\n[Result "1-0"]\n\n1. e4 d5 2. exd5 1-0').error, /That’s a Crazyhouse game: only standard chess opens here/);
+  assert.match(I.read('[Variant "Crazyhouse"]\n[Result "1-0"]\n\n1. e4 d5 2. exd5 1-0').error, /That’s a Crazyhouse game: only standard chess and Chess960 open here/);
   assert.deepEqual(I.read('[Variant "Standard"]\n\n1. e4 *'), { pgn: '[Variant "Standard"]\n\n1. e4 *' });
 });
 test('pgn: a fetched PGN is checked as a pasted one, before anything opens', () => {
   assert.deepEqual(I.pgn('[Result "1-0"]\n\n1. e4 1-0'), { pgn: '[Result "1-0"]\n\n1. e4 1-0' });
   assert.ok(I.pgn('[Result "1-0"]\n\n1. e5 1-0').error, 'an illegal move');
   assert.match(I.pgn('[Variant "Atomic"]\n[Result "1-0"]\n\n1. e4 1-0').error, /Atomic game/, 'refused even when it would build');
+});
+test('a Lichess Chess960 game opens', () => {
+  const pgn = require('node:fs').readFileSync(require('node:path').join(__dirname, 'fixtures', 'lichess-960.pgn'), 'utf8').trim();
+  assert.deepEqual(I.read(pgn), { pgn });
+  assert.deepEqual(I.pgn(pgn), { pgn });
+  assert.equal(window.ChessCore.buildGame({ pgn }).chess960, 722);
 });

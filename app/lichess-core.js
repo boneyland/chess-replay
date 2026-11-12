@@ -230,9 +230,10 @@
   }
   // a PGN's tags (the first game's), as written
   const pgnTags = (pgn) => { const o = {}; String(pgn).replace(/^\s*\[(\w+)\s+"((?:[^"\\]|\\.)*)"\]\s*$/gm, (_, k, v) => { if (!(k in o)) o[k] = v.replace(/\\(.)/g, '$1'); return ''; }); return o; };
-  // the chess variant a PGN says it is (its Variant tag), or null for standard chess: no tag, Standard, or Lichess's
-  // From Position (a standard game from a set-up position). The page plays only standard chess
-  const variant = (pgn) => { const v = (pgnTags(pgn).Variant || '').trim(); return !v || /^(standard|from position)$/i.test(v) ? null : v; };
+  // the chess variant a PGN says it is (its Variant tag), or null for a game the page plays: no tag, Standard, Lichess's
+  // From Position (a standard game from a set-up position) or Chess960. The page plays only those
+  const variant = (pgn) => { const v = (pgnTags(pgn).Variant || '').trim(); return !v || /^(standard|from position|chess960)$/i.test(v) ? null : v; };
+  const is960Pgn = (pgn) => /^chess960$/i.test((pgnTags(pgn).Variant || '').trim());
   // a result tag the game has ended with
   const finished = (pgn) => /^(1-0|0-1|1\/2-1\/2)$/.test(pgnTags(pgn).Result || '');
   // A round's or study's PGN as its games: { pgn, white, black, result ('1–0', '0–1', '½–½' or null: not finished), board,
@@ -269,5 +270,5 @@
     return { pgn: text };
   }
 
-  window.LichessCore = { gameLink, pgnTags, variant, finished, listGames, fetchGame, EXPLORER_URL, explorerUrl, explorerKey, parseExplorer, TB_URL, CLOUD_URL, TB_MAX_PIECES, BACKOFF_MS, pieceCount, fenOf, tbKey, tablebaseUrl, parseTablebase, flip, outcome, verdict, bar, evalCp, groups, cloudKey, cloudUrl, cloudMoves, parseCloud, create };
+  window.LichessCore = { gameLink, pgnTags, variant, is960Pgn, finished, listGames, fetchGame, EXPLORER_URL, explorerUrl, explorerKey, parseExplorer, TB_URL, CLOUD_URL, TB_MAX_PIECES, BACKOFF_MS, pieceCount, fenOf, tbKey, tablebaseUrl, parseTablebase, flip, outcome, verdict, bar, evalCp, groups, cloudKey, cloudUrl, cloudMoves, parseCloud, create };
 })();

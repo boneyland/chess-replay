@@ -342,7 +342,19 @@ test('variant: null for standard chess, else the Variant tag', () => {
   assert.equal(LC.variant('[Variant "From Position"]\n[FEN "4k3/8/8/8/8/8/8/4K3 w - - 0 1"]\n\n1. Kd2'), null, "Lichess's standard game from a position");
   assert.equal(LC.variant('[Variant "standard"]\n\n1. e4'), null, 'any case');
   assert.equal(LC.variant('[Variant "Crazyhouse"]\n\n1. e4'), 'Crazyhouse');
-  assert.equal(LC.variant('[Variant "Chess960"]\n\n1. e4'), 'Chess960');
+  assert.equal(LC.variant('[Variant "Chess960"]\n\n1. e4'), null, 'Chess960 opens here');
+  assert.equal(LC.variant('[Variant "chess960"]\n\n1. e4'), null, 'any case');
+});
+test('is960Pgn: the Variant tag says Chess960', () => {
+  assert.equal(LC.is960Pgn('[Variant "Chess960"]\n\n1. e4'), true);
+  assert.equal(LC.is960Pgn('[Variant "chess960"]\n\n1. e4'), true);
+  assert.equal(LC.is960Pgn('[Variant "Crazyhouse"]\n\n1. e4'), false);
+  assert.equal(LC.is960Pgn('[Variant "Standard"]\n\n1. e4'), false);
+  assert.equal(LC.is960Pgn('1. e4 e5'), false);
+});
+test('listGames: a Chess960 game is loadable, a crazyhouse one not', () => {
+  const L = LC.listGames('[White "A"]\n[Black "B"]\n[Variant "Chess960"]\n[Result "1-0"]\n\n1. e4 1-0\n\n[White "C"]\n[Black "D"]\n[Variant "Crazyhouse"]\n[Result "1-0"]\n\n1. e4 1-0\n');
+  assert.deepEqual(L.map((g) => g.variant), [null, 'Crazyhouse']);
 });
 test('fetchGame: a finished game, an unfinished one, errors and a list', async () => {
   const reply = (status, body) => async () => ({ status, ok: status >= 200 && status < 300, text: async () => body });

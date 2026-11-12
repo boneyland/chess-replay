@@ -17,11 +17,11 @@
     return pgn(t);
   }
 
-  // A PGN, pasted or fetched from Lichess, as the page will open it: { pgn } when it is standard chess and builds, else
+  // A PGN, pasted or fetched from Lichess, as the page will open it: { pgn } when it is standard chess or Chess960 and builds, else
   // { error } saying why, so the dialog can say so before it closes or changes anything
   function pgn(text) {
     const v = window.LichessCore && window.LichessCore.variant(text);
-    if (v) return { error: `That’s a ${v} game: only standard chess opens here.` };
+    if (v) return { error: `That’s a ${v} game: only standard chess and Chess960 open here.` };
     try { window.ChessCore.buildGame({ pgn: text }); } catch (e) { return { error: (e && e.message) || 'That isn’t a PGN, FEN or Lichess link this page can read.' }; }
     return { pgn: text };
   }
