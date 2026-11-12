@@ -21,7 +21,7 @@ class by hand on anything else.
 
 | Class | Name | What and where | Code name |
 | --- | --- | --- | --- |
-| `part-game-info` | Game info | Event, round, teams, place, date and opening, in up to three lines (a web address in them, as Lichess and Chess.com put in Site, is a link that opens in a new tab): under White's player bar in one column (not on a phone held upright, which has none), top of the sidebar in two | `Header`, `L.header` |
+| `part-game-info` | Game info | Event, round, teams, place, date and opening, in up to three lines (a web address in them, as Lichess and Chess.com put in Site, is a link that opens in a new tab): under White's player bar in one column (not on a phone held upright, which has none), top of the sidebar in two. None during a game, nor in a short two-column window, where the transport bar docks in the sidebar | `Header`, `L.header` |
 | `part-moves` | Moves | The move list | `MoveList`, `L.moves` |
 | `part-commentary` | Commentary | The notes and the book name (replay) | `Commentary`, `L.comment` |
 | `part-opening-explorer` | Opening explorer | Book moves, or Lichess's explorer when it's on (free board, in Commentary's place) | `OpeningExplorer`, `LichessExplorer` |
@@ -37,7 +37,7 @@ class by hand on anything else.
 
 | Class | Name | What and where | Code name |
 | --- | --- | --- | --- |
-| `part-transport-bar` | Transport bar | Back to start, step, play/pause, the seek bar and times, the move label | `PlaybackBar`, `.pbar` |
+| `part-transport-bar` | Transport bar | Back to start, step, play/pause, the seek bar and times, the move label; under the page, or at the foot of the sidebar in a short two-column window | `PlaybackBar`, `.pbar` |
 | `part-dock` | Dock | The app's buttons: Import game, Menu, and the Share and export, Settings and Full screen icons (in the folded menu on a phone) | `.dock-items` |
 | `part-play-explore-menu` | Dock menu | The pop-up of the dock's Menu button, in three groups: Explore, Play, More (Keyboard shortcuts, Ask Queen) (desktop; on a phone its items are in the folded menu). The class keeps the button's old name, Play/Explore | `.dock-pop` |
 | `part-menu` | Menu | The phone's ☰ button and the folded menu it opens | `.pmenu` |
