@@ -4831,6 +4831,51 @@ for (const name of BROWSERS) for (const site of SITES) {
       await dk.ctx.close();
     });
 
+    // the page shows a picture board through a CSS filter (BoardThemes.css), an export through our own arithmetic
+    // (BoardThemes.filterPixels): the two must stay the same change. Drawn here side by side on canvases, the filter
+    // through the 2D context's filter (the CSS one, run by the browser), at 256 px. Measured 2026-11-12: a mean of at
+    // most 1.6 levels in 255 per channel (Firefox, Grey with Tint and Saturation high; Chromium 1.1) and 5 at worst
+    await t.test('desktop: a board picture through the sliders matches its CSS filter', async () => {
+      const dk = await open(browser, { width: 1440, height: 900 });
+      await dk.page.goto(base, { waitUntil: 'load' });
+      await loadedOn(dk.page);
+      const cases = [
+        ['wood4', { brightness: 80, contrast: 120, hue: 30 }],
+        ['blue-marble', { brightness: 130, contrast: 60, hue: 75 }],
+        ['grey', { tint: 100, saturation: 250 }],
+        ['pink', { brightness: 60, contrast: 180, tint: 40, saturation: 20, hue: 50 }],
+      ];
+      const got = await dk.page.evaluate(async (cases) => {
+        const B = window.BoardThemes, out = [];
+        for (const [id, a] of cases) {
+          await B.preload(id);
+          const im = new Image(); im.src = B.url(id); await im.decode();
+          const n = 256, draw = (f) => {
+            const cx = Object.assign(document.createElement('canvas'), { width: n, height: n }).getContext('2d', { willReadFrequently: true });
+            if (f) { if (!('filter' in cx)) return null; cx.filter = f; }
+            cx.drawImage(im, 0, 0, n, n);
+            return cx.getImageData(0, 0, n, n).data;
+          };
+          const css = draw(B.css(a)), ours = B.filterPixels(draw(null), a);
+          if (!css) return null;
+          let sum = 0, worst = 0;
+          for (let i = 0; i < css.length; i += 4) for (let c = 0; c < 3; c++) {
+            const d = Math.abs(css[i + c] - ours[i + c]);
+            sum += d; worst = Math.max(worst, d);
+          }
+          out.push({ id, mean: Math.round(sum / (n * n * 3) * 100) / 100, worst });
+        }
+        return out;
+      }, cases);
+      console.log(`  ${name}: picture vs CSS filter ${JSON.stringify(got)}`);
+      if (got) for (const g of got) {
+        assert.ok(g.mean < 2.5, `${g.id}: a mean difference of ${g.mean} levels`);
+        assert.ok(g.worst <= 8, `${g.id}: ${g.worst} levels apart at worst`);
+      }
+      assert.deepEqual(dk.errors, []);
+      await dk.ctx.close();
+    });
+
     // a pinch doesn't zoom the page (Chromium only: the pinch is a DevTools gesture, and Firefox has no phone emulation)
     if (name === 'chromium') await t.test('phone: a pinch doesn\'t zoom the page', async () => {
       const ph = await open(browser, { width: 390, height: 844 }, { isMobile: true, hasTouch: true });
