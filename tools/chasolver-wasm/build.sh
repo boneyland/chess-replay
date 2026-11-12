@@ -1,6 +1,7 @@
 #!/bin/sh
 # Builds vendor/chasolver.wasm from this crate (Cargo.lock pins every dependency) and prints its SHA-256 for LAYOUT.md.
-# Needs Rust with the wasm32-unknown-unknown target (rustup target add wasm32-unknown-unknown).
+# Needs rustup: rust-toolchain.toml here pins the Rust that built the pinned file (rustup fetches it, with the
+# wasm32-unknown-unknown target, on first use).
 set -e
 cd "$(dirname "$0")"
 cargo build --release --locked --target wasm32-unknown-unknown
