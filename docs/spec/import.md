@@ -4,7 +4,7 @@
 
 ## Import game
 
-Built 2026-11-04. The dock's primary button, **Import game** (it replaced Load game; Settings › Game has it too), opens one dialog (`ImportDialog` in `app/free-board.jsx`) with every way a game or position comes in from outside, so the Play/Explore menu keeps only starting points and tools. From a game in progress it asks first (`guard`), and what the dialog then opens doesn't ask again.
+Built 2026-11-04. The dock's primary button, **Import game** (it replaced Load game; Settings › Game has it too), opens one dialog (`ImportDialog` in `app/free-board.jsx`) with every way a game or position comes in from outside, so the Dock menu keeps only starting points and tools. From a game in progress it asks first (`guard`), and what the dialog then opens doesn't ask again.
 
 - **Drop a PGN or choose a file** (Choose a file on a touch screen): opens the file picker, as Load game did (a PGN, with this page's analysis, notes or Queen files too). Files dropped while the dialog is open load at once; the page's drop overlay shows over the dialog. The dialog closes once files come back from the picker or a drop.
 - **Position from image**: opens that dialog in its place (hidden where the reader can't run); its Cancel from picking or cropping comes back to Import game.

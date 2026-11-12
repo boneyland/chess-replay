@@ -38,8 +38,8 @@ class by hand on anything else.
 | Class | Name | What and where | Code name |
 | --- | --- | --- | --- |
 | `part-transport-bar` | Transport bar | Back to start, step, play/pause, the seek bar and times, the move label | `PlaybackBar`, `.pbar` |
-| `part-dock` | Dock | The app's buttons: Import game, Play/Explore, Share and export, Settings, Full screen (in the folded menu on a phone) | `.dock-items` |
-| `part-play-explore-menu` | Play/Explore menu | The pop-up of the dock's Play/Explore button (desktop; on a phone its items are in the menu) | `.dock-pop` |
+| `part-dock` | Dock | The app's buttons: Import game, Menu, and the Share and export, Settings and Full screen icons (in the folded menu on a phone) | `.dock-items` |
+| `part-play-explore-menu` | Dock menu | The pop-up of the dock's Menu button, in three groups: Explore, Play, More (Keyboard shortcuts, Ask Queen) (desktop; on a phone its items are in the folded menu). The class keeps the button's old name, Play/Explore | `.dock-pop` |
 | `part-menu` | Menu | The phone's ☰ button and the folded menu it opens | `.pmenu` |
 | `part-settings` | Settings | The Settings panel and its tabs | `TweaksPanel` |
 | `part-ask-queen` | Ask Queen | Queen's panel | `app/queen.jsx` |

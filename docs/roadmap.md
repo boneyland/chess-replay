@@ -56,4 +56,4 @@ Play vs human between two devices: one player makes a game and shares a link or 
 
 ## App walk-through (*needs design*)
 
-A short guided tour for a first visit: steps that point at the dock, the transport bar, Analyse, Play/Explore and Settings, each with a sentence and Next/Skip, on desktop and phone layouts. Open: shown once by itself (a flag in localStorage) or only from a menu item ("Take the tour"); whether it uses a demo game (e.g. `media/demo-game.pgn`) so there is something to point at; how it keeps up with the layout (steps keyed to elements, not coordinates); whether separate short tours cover the free board, Edit position and games.
+A short guided tour for a first visit: steps that point at the dock, the transport bar, Analyse, Menu and Settings, each with a sentence and Next/Skip, on desktop and phone layouts. Open: shown once by itself (a flag in localStorage) or only from a menu item ("Take the tour"); whether it uses a demo game (e.g. `media/demo-game.pgn`) so there is something to point at; how it keeps up with the layout (steps keyed to elements, not coordinates); whether separate short tours cover the free board, Edit position and games.

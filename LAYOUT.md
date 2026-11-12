@@ -13,7 +13,7 @@ What each part of the repo is, with the pinned SHA-256 of every vendored file. B
   - `sf-full.js`: the full engine the viewer can download (the Analysis panel's engine drop-down), checked and kept in the browser
   - `openings-core.js`: opening names and book continuations (the opening explorer)
   - `lichess-core.js`: Lichess's public data (URLs, parsers, a polite client); `explorer.jsx` the Lichess opening explorer (Settings › Online); `tablebase.jsx` the endgame tablebase; `import-core.js` what Import game's paste box holds (a Lichess link, a FEN, a PGN)
-  - `board-core.js`, `free-board.jsx`: the free board (Play/Explore); `play-core.js` its games (rules, clocks, takebacks, the end); `games-core.js` My games
+  - `board-core.js`, `free-board.jsx`: the free board (Menu › Explore); `play-core.js` its games (rules, clocks, takebacks, the end); `games-core.js` My games
   - `edit-core.js`, `edit-board.jsx`: Edit position (its rules and its board)
   - `draw-core.js`: the viewer's own circles and arrows on the board
   - `dead-core.js`, `dead.jsx`, `dead-worker.js`: dead positions, proven by chasolver in a Worker
