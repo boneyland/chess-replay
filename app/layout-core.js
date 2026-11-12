@@ -139,7 +139,7 @@
     return m;
   }
 
-  function twoColumns({ w, h, text, view, dock, vw, noComment }) {
+  function twoColumns({ w, h, text, view, dock, vw }) {
     if (dock) MARGIN = DOCK_MARGIN;
     const hasEval = view === 'replay' || view === 'free';
     const { square, plotBelow, plotH, hLimit } = under({ w, h, text, view, dock, cap: boardMax, vw });
@@ -172,25 +172,25 @@
     if (view === 'replay' && !plotBelow && !square && h >= PLOT_MIN_H && rest - GAP - PLOT_SIDE_H >= 190 * text) { plotSide = true; rest -= GAP + PLOT_SIDE_H; }
     // Moves (30% of the room, 40% where Analysis is under the board, between its title and one line and its five lines),
     // then Commentary and Analysis sharing what's left, 45:55 (Commentary all of it where Analysis is under the board)
-    const avail = Math.max(0, rest - (square || noComment ? GAP : 2 * GAP));
+    const avail = Math.max(0, rest - (square ? GAP : 2 * GAP));
     const movesShare = Math.min(avail, Math.max(moveChrome(text) + moveRow(text), Math.min(movesMax(text), avail * (square ? 0.4 : 0.3))));
     // rounded down to whole lines, so none shows cut off (Commentary takes the rest); a box too short for one line keeps its height
     const lines = Math.floor((movesShare - moveChrome(text)) / moveRow(text) + 1e-6);
     const movesH = lines >= 1 ? moveChrome(text) + lines * moveRow(text) : movesShare;
-    const commentH = noComment ? 0 : Math.max(0, square ? avail - movesH : Math.round((avail - movesH) * 0.45)), analysisH = Math.max(0, avail - movesH - commentH);
+    const commentH = Math.max(0, square ? avail - movesH : Math.round((avail - movesH) * 0.45)), analysisH = Math.max(0, avail - movesH - commentH);
     const rowY = L.header ? top + L.header.h + GAP : top;
     L.moves = withMoves(box(sx, rowY, sw, movesH), text);
-    L.comment = noComment ? null : box(sx, rowY + movesH + GAP, sw, commentH);
+    L.comment = box(sx, rowY + movesH + GAP, sw, commentH);
     // a square-ish window's eval graph: at the bottom, under Analysis, where Analysis keeps its minimum
     const underH = h - MARGIN - analysisY, plotUnder = square && view === 'replay' && underH - GAP - PLOT_SIDE_H >= ANALYSIS_PLOT_MIN * text;
-    L.analysis = square ? box(MARGIN, analysisY, w - 2 * MARGIN, plotUnder ? underH - GAP - PLOT_SIDE_H : underH) : box(sx, rowY + movesH + GAP + (noComment ? 0 : commentH + GAP), sw, analysisH);
+    L.analysis = square ? box(MARGIN, analysisY, w - 2 * MARGIN, plotUnder ? underH - GAP - PLOT_SIDE_H : underH) : box(sx, L.comment.y + commentH + GAP, sw, analysisH);
     if (plotBelow) L.plot = box(MARGIN, plotY, w - 2 * MARGIN, plotH);
     else if (plotUnder) L.plot = box(MARGIN, h - MARGIN - PLOT_SIDE_H, w - 2 * MARGIN, PLOT_SIDE_H);
     else if (plotSide) L.plot = box(sx, L.analysis.y + analysisH + GAP, sw, PLOT_SIDE_H);
     return L;
   }
 
-  function oneColumn({ w, h, text, view, video, phone, noComment }) {
+  function oneColumn({ w, h, text, view, video, phone }) {
     const hasEval = view === 'replay' || view === 'free';
     const ev = hasEval ? EVAL_TOTAL : 0;
     const bar = barH(text), bars = barsTotal(text);
@@ -205,7 +205,7 @@
     else {
       // Commentary last, at the bottom
       parts = [['moves', movesMax(text, MOVE_LINES_ONE), Math.min(movesMax(text, MOVE_LINES_ONE), Math.max(VIDEO_PREF[2] * text, movesMin)), movesMin],
-        ['analysis', ONE_COL.analysis * text, VIDEO_PREF[1] * text, PANEL_FLOOR * text], ...(noComment ? [] : [['comment', ONE_COL.comment * text, VIDEO_PREF[0] * text, PANEL_FLOOR * text]])];
+        ['analysis', ONE_COL.analysis * text, VIDEO_PREF[1] * text, PANEL_FLOOR * text], ['comment', ONE_COL.comment * text, VIDEO_PREF[0] * text, PANEL_FLOOR * text]];
       // no Game info in a game, nor on a phone held upright (a tablet's one column keeps it)
       if (!video && view !== 'game' && !phone) parts.unshift(['header', HEADER_H * text]);
     }
@@ -276,9 +276,8 @@
   // L.text is the text size the boxes were sized for (the viewer's, times the tier's scale); L.pad the panels' padding
   // at text 1 (the views scale it with their text); L.tight: the panels pack tighter (TIGHT).
   // vw, vh: the viewport's size (the stage area's when not given), which caps the board and sets the device tier.
-  // noComment: no Commentary box (the free board's explorer in a Chess960 position); the others take its room
   // dock: a short two-column window whose transport bar sits in the sidebar (L.dock is its box)
-  function compute({ w, h, text = 1, view = 'replay', video = false, prevCols = null, cols = null, vw = w, vh = h, dock = false, noComment = false }) {
+  function compute({ w, h, text = 1, view = 'replay', video = false, prevCols = null, cols = null, vw = w, vh = h, dock = false }) {
     const c = cols || columns({ w, h, text, prevCols, video, vw, vh });
     boardMax = Math.max(BOARD_MIN, Math.min(BOARD_MAX, 0.5 * Math.max(vw, vh)));
     const tier = useTier(vw, vh), t = text * tier.scale;
@@ -287,7 +286,7 @@
     if (c === 1 && tierOf(vw, vh) === 'phone') {
       TOP = PHONE_ONE.top; SIDE = PHONE_ONE.side; PAD = [PAD[0], PHONE_ONE.padX]; BAR_K = PHONE_ONE.barK; BAR_GAP = PHONE_ONE.barGap;
     }
-    return Object.assign((c === 1 ? oneColumn : twoColumns)({ w, h, text: t, view, video, dock: c === 2 && dock, vw, noComment, phone: tierOf(vw, vh) === 'phone' }), { text: t, tier: tierOf(vw, vh), pad: PAD, tight: TIGHT });
+    return Object.assign((c === 1 ? oneColumn : twoColumns)({ w, h, text: t, view, video, dock: c === 2 && dock, vw, phone: tierOf(vw, vh) === 'phone' }), { text: t, tier: tierOf(vw, vh), pad: PAD, tight: TIGHT });
   }
 
   // The export's pixel scale for a w × h page: the screen's density, held so the longer side stays within 1920 px

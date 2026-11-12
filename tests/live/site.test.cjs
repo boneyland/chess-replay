@@ -2272,9 +2272,9 @@ for (const name of BROWSERS) for (const site of SITES) {
       await ep.ctx.close();
     });
     // The Lichess explorer's panel, opening names and Ask Queen are standard chess only (design: Features in a 960 game):
-    // a Chess960 free board (its start, not the current rights) shows no Opening explorer and no gap where it was, a loaded
+    // a Chess960 free board (its start, not the current rights) lists no book moves or names (its Commentary slot stays, for the tablebase), a loaded
     // 960 game has no Ask Queen, and position 518, which plays as standard chess, keeps all of them
-    await t.test('desktop: a Chess960 board and game have no opening explorer or Ask Queen; position 518 keeps them', async () => {
+    await t.test('desktop: a Chess960 board and game have no opening book or Ask Queen; position 518 keeps them', async () => {
       const ep = await open(browser, { width: 1440, height: 900 });
       const p = ep.page;
       await p.goto(base, { waitUntil: 'load' });
@@ -2291,20 +2291,21 @@ for (const name of BROWSERS) for (const site of SITES) {
         await dlg.waitFor({ state: 'detached', timeout: 3000 });
         await assert.doesNotReject(p.locator('.plabel').filter({ hasText: /^Start$/ }).waitFor({ timeout: 5000 }));
       };
-      // position 0: no explorer, Analysis straight under Moves (no gap where it stood), no Ask Queen
+      // position 0: the Commentary slot stays (the tablebase's place) but lists no book moves or names
       await explore960(0);
-      assert.equal(await p.locator('.part-opening-explorer').count(), 0, 'no Opening explorer on a 960 board');
+      const slot = p.locator('.part-opening-explorer');
+      await assert.doesNotReject(slot.waitFor({ timeout: 5000 }));
+      assert.match(await slot.innerText(), /standard chess/);
+      assert.equal(await slot.locator('.expl-row').count(), 0, 'no book moves on a 960 board');
       assert.equal(await p.getByText('Loading the opening book').count(), 0);
-      const gap = await p.evaluate(() => { const m = document.querySelector('.part-moves').getBoundingClientRect(), a = document.querySelector('.part-analysis').getBoundingClientRect(); return { below: a.top - m.bottom, h: a.height, mh: m.height }; });
-      assert.ok(gap.below >= 0 && gap.below < 16, `Analysis under Moves without a gap (${JSON.stringify(gap)})`);
       await p.getByRole('button', { name: 'Menu', exact: true }).click();
       assert.equal(await p.getByRole('button', { name: 'Keyboard shortcuts' }).count(), 1, 'the menu is open');
       assert.equal(await p.getByRole('button', { name: 'Ask Queen' }).count(), 0);
       await p.keyboard.press('Escape');
       await p.screenshot({ path: path.join(ROOT, 'tests', 'out', 'chess960', 'no-explorer-desktop.png') });
-      // position 518 plays as standard chess: the explorer is there
+      // position 518 plays as standard chess: the book is there
       await explore960(518);
-      await assert.doesNotReject(p.locator('.part-opening-explorer').waitFor({ timeout: 5000 }));
+      await assert.doesNotReject(p.locator('.part-opening-explorer .expl-row').first().waitFor({ timeout: 5000 }));
       // a loaded Chess960 game: no Ask Queen
       await p.getByRole('button', { name: 'Import game' }).click();
       const box = p.getByRole('textbox', { name: 'PGN, FEN or Lichess link' });
