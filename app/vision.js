@@ -13,6 +13,11 @@
 
   // gen: bumped by stop(), so a load it overtook (still reading the kept copy) doesn't start a Worker after all
   let worker = null, loaded = null, waiting = null, busy = false, gen = 0;
+  // ONNX Runtime's threads can fail to start, and its load then waits for ever (Firefox on GitHub's runners, 2026-11-11):
+  // a threaded load not done in LOAD_MS is stopped and started again on one thread, which this page then keeps to
+  // (the second load waits as long as it takes: a slow device isn't stopped twice)
+  const LOAD_MS = 30000;
+  let oneThread = false;
 
   // the Worker's next answer of type `want`; its error, or the Worker failing, rejects
   function answer(want) {
@@ -25,7 +30,7 @@
   }
   // started and loaded once per page; a load that fails stops it, so the next read starts afresh
   function load() {
-    if (!loaded) { const g = gen; loaded = start(g).catch((e) => { if (g === gen) stop(); throw e; }); }
+    if (!loaded) { const g = gen; loaded = start(g).catch((e) => { if (g === gen) stop(); if (e.slow) return load(); throw e; }); }
     return loaded;
   }
   // the kept copy as Blob URLs (a missing or cut-short one is dropped and refused) to a new Worker, let go once it has
@@ -39,8 +44,10 @@
     worker.onerror = (e) => { e.preventDefault(); settle((w) => w.no(new Error(e.message || 'The board reader did not start'))); stop(); };
     const got = answer('ready');
     const urls = Object.fromEntries(VC.FILES.map((f) => [f.name, files.url(f.name)]));
-    worker.postMessage({ type: 'load', urls, size: VC.SIZE, threads: Math.min(4, navigator.hardwareConcurrency || 1) });
-    try { return await got; } finally { files.revoke(); }
+    const threads = oneThread ? 1 : Math.min(4, navigator.hardwareConcurrency || 1);
+    const timer = threads > 1 && setTimeout(() => { oneThread = true; settle((w) => w.no(Object.assign(new Error('The board reader’s threads didn’t start'), { slow: true }))); }, LOAD_MS);
+    worker.postMessage({ type: 'load', urls, size: VC.SIZE, threads });
+    try { return await got; } finally { clearTimeout(timer); files.revoke(); }
   }
 
   // The logits (Float32Array, 64 x 13) for the picture. One read at a time: a call while one runs rejects, leaving its

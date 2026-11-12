@@ -54,6 +54,16 @@ test('ready rejects at once when the engine died before it was asked', async () 
   assert.ok(Date.now() - t0 < 1000);
 });
 
+test('a worker\'s error event is handled, so the browser doesn\'t also report it as uncaught', async () => {
+  const ws = [];
+  const e = SF.create(() => { const w = fakeWorker({ silent: true }); ws.push(w); return w; }, { readyTimeoutMs: 60000 });
+  const ev = () => ({ type: 'error', prevented: false, preventDefault() { this.prevented = true; } });
+  const first = ev();
+  ws[0].onerror(first);
+  assert.ok(first.prevented);
+  await assert.rejects(e.ready());
+});
+
 test('ready sets the hash size', async () => {
   let w;
   const e = SF.create(() => (w = fakeWorker()), {});
