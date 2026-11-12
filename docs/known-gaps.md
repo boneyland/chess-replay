@@ -33,7 +33,6 @@ Deferred by the per-plan reviews; each was true when recorded and may since have
 
 **asm.js Stockfish** (2026-10-31)
 - **Verify** on the SM-T510 itself: checked only with SIMD faked off in desktop Chromium and Firefox. How slow it is on the tablet, and whether its 120 s start timeout (since 2026-11-01) is always enough there, is unknown.
-- The line under the Analysis panel hides where it doesn't fit (a narrow phone panel), as the tip did; the engine menu's note always shows.
 
 **Position from image** (2026-11-03)
 - `tests/fixtures/vision-diagram.png` (a book-style diagram drawn here) reads its c4 bishop as a pawn in both browsers, framed or cropped, though the 2026-11-03 tests found real diagrams exact once cropped; and its read rarely marks a square to check (only cropped, in Chromium at 1440×900). The live test asserts no read of it, and doesn't cover the outlines: an edit dropping one was checked by hand in Chromium, a typed FEN dropping one (the same rule, `sureOf` in `GameApp`) not in a browser.

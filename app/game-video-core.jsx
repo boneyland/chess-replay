@@ -1082,7 +1082,7 @@ function Analysis({ M, T, S, a, vline, onLine, onPreview, onReplyHover, paused, 
         )}
         {/* a running analysis's progress; Analyse with Stockfish itself only at the start */}
         {sf && !M.hasAnalysis && sf.run.state === 'running' && <EngineEmptyState M={M} sf={sf} paused={paused} compact />}
-        {!vline && paused && M.hasEval && sfAsm && <FitOrHide style={{ ...NO_SELECT, font: `500 ${tx(15)}px ${MONO}`, color: C.blunder }}>{SF_ASM_SHORT}</FitOrHide>}
+        {!vline && paused && M.hasEval && sfAsm && <span style={{ ...NO_SELECT, font: `500 ${tx(15)}px ${MONO}`, color: C.blunder }}>{SF_ASM_SHORT}</span>}
       </div>
     </AnalysisPanel>
   );
