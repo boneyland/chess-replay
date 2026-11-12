@@ -594,3 +594,11 @@ test('buildGame reads chess_game_analyzer.py\'s engine_lines (3 lines)', () => {
   assert.ok(ls.every((l) => l.depth > 0 && l.pv.length > 1 && typeof l.cp === 'number'));
   assert.equal(M.plies[5].nextLines, undefined); // after the last move: pv_line alone
 });
+
+test('links cuts web addresses out of a header line', () => {
+  assert.deepEqual(CC.links('https://lichess.org/abc123 · 12 Nov 2026'), [{ text: 'https://lichess.org/abc123', url: 'https://lichess.org/abc123' }, { text: ' · 12 Nov 2026' }]);
+  assert.deepEqual(CC.links('See (https://example.com/a_(b)).'), [{ text: 'See (' }, { text: 'https://example.com/a_(b)', url: 'https://example.com/a_(b)' }, { text: ').' }]);
+  assert.deepEqual(CC.links('Bengaluru, India'), [{ text: 'Bengaluru, India' }]);
+  assert.deepEqual(CC.links('javascript:alert(1) ftp://x https://'), [{ text: 'javascript:alert(1) ftp://x https://' }]);
+  assert.deepEqual(CC.links(''), []);
+});

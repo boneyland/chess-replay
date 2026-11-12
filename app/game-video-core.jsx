@@ -800,13 +800,16 @@ function SideBar({ side, a, name, rating, taken, pts, clock }) {
 
 // ---------- right column ----------
 // Where the game was played, in three lines: event, round and teams, then place and date, then the opening; each
-// scrolls sideways when it's long. The players, titles and ratings are the player bars'
+// scrolls sideways when it's long; a web address (a Site of lichess.org/…) is a link that opens in a new tab. The players,
+// titles and ratings are the player bars'
 function Header({ M, a }) {
   const teams = M.white.team && M.black.team ? `${M.white.team} vs ${M.black.team}` : M.white.team || M.black.team;
   const lines = [[M.event, M.round && 'Round ' + M.round, teams].filter(Boolean).join(' · '), [M.site, M.date].filter(Boolean).join(' · '), [M.eco, M.opening].filter(Boolean).join(' ')].filter(Boolean);
   return (
     <Panel box={L.header} part="game-info" a={a} style={{ padding: `${tx(10)}px ${tx(L.pad[1])}px`, display: 'flex', flexDirection: 'column', justifyContent: 'center', gap: tx(4), font: `500 ${tx(16)}px/1.35 ${MONO}`, color: C.dim }}>
-      {lines.map((t, i) => <SideScroll key={i} style={{ display: 'block', color: C.ink }}>{t}</SideScroll>)}
+      {lines.map((t, i) => <SideScroll key={i} style={{ display: 'block', color: C.ink }}>{window.ChessCore.links(t).map((p, j) => p.url
+        ? <a key={j} className="info-link" href={p.url} target="_blank" rel="noopener noreferrer">{p.text}</a>
+        : p.text)}</SideScroll>)}
     </Panel>
   );
 }
