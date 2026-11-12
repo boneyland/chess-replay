@@ -441,7 +441,7 @@ body:has(.stage.stage-short) .twk-panel { bottom: calc(44px + var(--safe-b)); ma
   .twk-toggle:not([data-on="1"]):hover { background: color-mix(in srgb, var(--ink) 32%, transparent); }
   .twk-slider:hover { filter: brightness(1.15); }
   select.twk-field:not(:disabled):hover { background: var(--btn-hover); border-color: var(--line-strong); }
-  .twk-note a:hover, .fen-note a:hover { color: color-mix(in srgb, var(--accent) 60%, var(--ink)); text-decoration-thickness: 2px; }
+  .twk-note a:hover, .fen-note a:hover, .info-link:hover { color: color-mix(in srgb, var(--accent) 60%, var(--ink)); text-decoration-thickness: 2px; }
   .expl-game:hover { color: var(--ink) !important; text-decoration: underline; }
   .q-stop:hover { background: var(--btn-hover); border-color: var(--line-strong); }
   .q-mini:hover { background: color-mix(in srgb, var(--queen) 18%, transparent); border-color: var(--queen); }
@@ -455,7 +455,7 @@ body:has(.stage.stage-short) .twk-panel { bottom: calc(44px + var(--safe-b)); ma
 .q-panel .twk-hd b { color: var(--queen); }
 .q-hd { display: flex; align-items: center; gap: 8px; }
 .q-exp { padding: 1px 6px; border-radius: 2px; border: 1px solid color-mix(in srgb, var(--queen) 55%, transparent); color: var(--queen); font: 600 0.625rem var(--mono); letter-spacing: 0.1em; text-transform: uppercase; }
-.twk-note a, .fen-note a { color: var(--accent); }
+.twk-note a, .fen-note a, .info-link { color: var(--accent); }
 .twk-info { flex: none; width: 15px; height: 15px; margin-left: 6px; padding: 0; vertical-align: 1px; border: 1px solid var(--dim); border-radius: 50%; background: var(--dim); color: var(--panel); font: italic 600 0.6875rem/13px Georgia, serif; cursor: help; }
 .twk-info:hover, .twk-info[aria-expanded="true"] { background: var(--ink); border-color: var(--ink); }
 .twk-btn-row { display: flex; align-items: center; gap: 4px; }

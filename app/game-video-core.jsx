@@ -808,7 +808,7 @@ function Header({ M, a }) {
   return (
     <Panel box={L.header} part="game-info" a={a} style={{ padding: `${tx(10)}px ${tx(L.pad[1])}px`, display: 'flex', flexDirection: 'column', justifyContent: 'center', gap: tx(4), font: `500 ${tx(16)}px/1.35 ${MONO}`, color: C.dim }}>
       {lines.map((t, i) => <SideScroll key={i} style={{ display: 'block', color: C.ink }}>{window.ChessCore.links(t).map((p, j) => p.url
-        ? <a key={j} href={p.url} target="_blank" rel="noopener noreferrer" style={{ color: 'inherit', textDecoration: 'underline', textDecorationColor: C.dim, textUnderlineOffset: '0.15em' }}>{p.text}</a>
+        ? <a key={j} className="info-link" href={p.url} target="_blank" rel="noopener noreferrer">{p.text}</a>
         : p.text)}</SideScroll>)}
     </Panel>
   );
