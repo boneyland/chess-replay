@@ -509,7 +509,7 @@ function ImportDialog({ text: text0, auto, onChoose, onPgn, onFen, onImage, onCl
     ctl.current = null; setBusy(false);
     if (r.error) setMsg(r.error); else if (r.list) setList({ games: r.list, link }); else pick(r.pgn, link);
   };
-  // a fetched game opens only once it is known to be standard chess and to build: else the message, the dialog kept
+  // a fetched game opens only once it is known to be standard chess or Chess960 and to build: else the message, the dialog kept
   const pick = (pgn, link) => { const c = window.ImportCore.pgn(pgn); if (c.error) setMsg(c.error); else onPgn(pgn, link); };
   const open = (t = text) => {
     if (busy) return;

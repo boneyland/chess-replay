@@ -2508,7 +2508,7 @@ for (const name of BROWSERS) for (const site of SITES) {
       const flip = () => p.evaluate(() => JSON.parse(localStorage.getItem('chess-video.tweaks.v1') || '{}').flip);
       const flip0 = await flip();
       await field.fill(''); await field.click(); await p.keyboard.type('https://lichess.org/Crazy123/black'); await p.keyboard.press('ControlOrMeta+Enter');
-      await assert.doesNotReject(dialog.getByRole('alert').filter({ hasText: /Crazyhouse game: only standard chess opens here/ }).waitFor({ timeout: 5000 }));
+      await assert.doesNotReject(dialog.getByRole('alert').filter({ hasText: /Crazyhouse game: only standard chess and Chess960 open here/ }).waitFor({ timeout: 5000 }));
       await field.fill(''); await field.click(); await p.keyboard.type('https://lichess.org/Br0ken12/black'); await p.keyboard.press('ControlOrMeta+Enter');
       await assert.doesNotReject(dialog.getByRole('alert').filter({ hasText: /Ke3/ }).waitFor({ timeout: 5000 }));
       assert.equal(await flip(), flip0, 'a game that failed left Flip alone');
@@ -2530,7 +2530,7 @@ for (const name of BROWSERS) for (const site of SITES) {
       const three = dialog.getByRole('button', { name: /Board Three W – Board Three B/ });
       assert.equal(await three.isDisabled(), true, 'a variant game greyed');
       assert.match(await three.innerText(), /Atomic/);
-      await assert.doesNotReject(dialog.getByText(/the greyed ones are still being played or aren’t standard chess/).waitFor({ timeout: 5000 }));
+      await assert.doesNotReject(dialog.getByText(/the greyed ones are still being played or aren’t standard chess or Chess960/).waitFor({ timeout: 5000 }));
       await p.screenshot({ path: path.join(OUT, host + '-lichess-import-round.png') });
       await dialog.getByRole('button', { name: 'Back' }).click();
       assert.equal(await field.inputValue(), 'https://lichess.org/broadcast/test-tour/round-3/R0und123', 'Back keeps the link');
