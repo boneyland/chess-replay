@@ -2316,6 +2316,11 @@ for (const name of BROWSERS) for (const site of SITES) {
       assert.equal(await p.getByRole('button', { name: 'Keyboard shortcuts' }).count(), 1, 'the menu is open');
       assert.equal(await p.getByRole('button', { name: 'Ask Queen' }).count(), 0, 'no Ask Queen in a 960 game');
       await p.keyboard.press('Escape');
+      // and back to a standard board: the book is built for it, whatever the loaded game was
+      await p.getByRole('button', { name: 'Menu', exact: true }).click();
+      await p.getByRole('button', { name: 'Starting position' }).click();
+      await assert.doesNotReject(p.locator('.part-opening-explorer .expl-row').first().waitFor({ timeout: 8000 }), 'book rows on a standard board after a 960 game');
+      assert.equal(await p.getByText('Loading the opening book').count(), 0);
       assert.deepEqual(ep.errors, []);
       await ep.ctx.close();
     });

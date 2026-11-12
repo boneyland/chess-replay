@@ -600,7 +600,9 @@ function GameApp() {
   React.useEffect(() => { if (kindSeen.current !== sfKind) { kindSeen.current = sfKind; analysisStop.current(); } }, [sfKind]);
   // Lichess's opening book per ply, built after the first paint (about 0.25 s the first time)
   const [book, setBook] = React.useState(null);
-  React.useEffect(() => { setBook(null); if (window.ChessCore.is960(M.start.pos)) return undefined; const id = setTimeout(() => { try { setBook(window.Openings.book().byPly(M.plies.map((p) => p.uci), M.start.fen)); } catch (e) {} }, 50); return () => clearTimeout(id); }, [M]);
+  // no book for the start on show when it is Chess960 (a free board's, else the replay's)
+  const noBook = window.ChessCore.is960(board ? board.start.pos : M.start.pos);
+  React.useEffect(() => { setBook(null); if (noBook) return undefined; const id = setTimeout(() => { try { setBook(window.Openings.book().byPly(M.plies.map((p) => p.uci), M.start.fen)); } catch (e) {} }, 50); return () => clearTimeout(id); }, [M, noBook]);
   const soundSet = window.Sfx.SETS.includes(t.soundSet) ? t.soundSet : window.Sfx.SETS[0];
   const soundVolume = Number.isFinite(+t.soundVolume) ? +t.soundVolume : 70;
   // the page's rem is 16 px × this, so the overlays (dock, bars, Settings, menus, dialogs) follow the Text size setting; the panels get it through Stage's text

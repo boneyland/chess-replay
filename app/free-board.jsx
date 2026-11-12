@@ -28,9 +28,9 @@ const hovArrows = (arrows, uci) => (uci ? [{ uci, k: 'hover', color: BOARD.last,
 // move as a drag would (so Stockfish rates it). Out of the book it says so, with the last book position on the way.
 function OpeningExplorer({ board, book, onPlay, onHover, std = true }) {
   const B = window.BoardCore, ucis = B.ucis(board), white = B.pos(board).turn === 'w';
-  const named = boardOpening(board, book), next = bookMoves(board, book);
+  const named = std ? boardOpening(board, book) : null, next = std ? bookMoves(board, book) : [];
   let inBook = false;
-  try { inBook = !!book && book.inBook(ucis, board.fen); } catch (e) {}
+  try { inBook = std && !!book && book.inBook(ucis, board.fen); } catch (e) {}
   const fromStart = board.fen === window.ChessCore.START_FEN;
   const heading = (txt, dim) => commentHead('book-head', txt, dim), note = commentNote;
   const play = (e, uci) => { e.preventDefault(); e.stopPropagation(); onPlay(uci); };
