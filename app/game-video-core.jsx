@@ -392,18 +392,18 @@ function Board({ M, T, S, a, arrows, pieces, queen, vline, hide, lines, sel, idl
 
 // ---------- exploring a best line on the board ----------
 const LINE_CACHE = new Map();
+const posKey = (pos) => window.ChessCore.toFen(pos) + ' ' + pos.castle + ' ' + pos.ep;
 function playLineCached(M, c, moves) {
-  const P = c === 0 ? M.start : M.plies[c - 1];
-  const fen = P.fen, castle = c === 0 ? M.start.pos.castle : P.castle, ep = c === 0 ? M.start.pos.ep : P.ep, key = fen + ' ' + castle + ' ' + ep + '|' + moves.join(' ');
-  if (!LINE_CACHE.has(key)) LINE_CACHE.set(key, window.ChessCore.playLine(fen, moves, castle, ep));
+  const pos = window.ChessCore.posAt(M, c), key = posKey(pos) + '|' + moves.join(' ');
+  if (!LINE_CACHE.has(key)) LINE_CACHE.set(key, window.ChessCore.playLine(pos, moves));
   return LINE_CACHE.get(key);
 }
 // Go deeper's best line from the position after a ply P, as steps: the last one kept (the panel re-renders while the
 // search streams in, and the line changes far less often)
 const DEEP_LINE = { key: '', steps: null };
 function deepLineSteps(P, pv) {
-  const key = P.fen + ' ' + P.castle + ' ' + P.ep + '|' + pv.slice(0, 8).join(' ');
-  if (DEEP_LINE.key !== key) Object.assign(DEEP_LINE, { key, steps: engineSteps({ ...window.ChessCore.posFromFen(P.fen), castle: P.castle, ep: P.ep }, pv) });
+  const key = posKey(P.pos) + '|' + pv.slice(0, 8).join(' ');
+  if (DEEP_LINE.key !== key) Object.assign(DEEP_LINE, { key, steps: engineSteps(P.pos, pv) });
   return DEEP_LINE.steps;
 }
 // The lines of the position after ply P on the loaded analysis (several searched lines: Go deeper's once it shows, else the
@@ -1048,7 +1048,7 @@ function Analysis({ M, T, S, a, vline, onLine, onPreview, onReplyHover, paused, 
       <div style={{ opacity: k, transform: `translateY(${(1 - k) * 8}px)` }}>
         <div style={{ display: 'flex', flexWrap: 'wrap', alignItems: 'flex-end', columnGap: tx(28) }}>
           <span style={{ font: `700 ${big}px ${MONO}`, color: col }}>{label(M, c)}</span>
-          {M.hasEval && <EvalWithStat>{deeper ? fmtSf(deeper.cp) : (P.mate != null || P.won) && k >= 1 ? fmtEval(P) : fmtEval({ cp })}</EvalWithStat>}
+          {M.hasEval && <EvalWithStat>{deeper ? fmtSf(deeper.cp, deeper.tb) : (P.mate != null || P.won) && k >= 1 ? fmtEval(P) : fmtEval({ cp })}</EvalWithStat>}
         </div>
         {/* the verdict spans the panel under the move and the eval; spaced parts rather than " · " separators, so a
             line too long for a narrow panel breaks between them */}
@@ -1065,7 +1065,7 @@ function Analysis({ M, T, S, a, vline, onLine, onPreview, onReplyHover, paused, 
             sel={vline && vline.src === 'sf' ? vline.upto : null} onPick={(j) => onLine('sf', betterLegal, j)} onHover={(j) => onPreview('sf', betterLegal, j)} />
         )}
         {manyLines ? (
-          <EngineLines lines={manyLines} pos={{ ...window.ChessCore.posFromFen(P.fen), castle: P.castle, ep: P.ep }} ply0={M.ply0} c={c + 1} cloud={!!deeper && deeper.source === 'cloud'}
+          <EngineLines lines={manyLines} pos={P.pos} ply0={M.ply0} c={c + 1} cloud={!!deeper && deeper.source === 'cloud'}
             onPick={(st) => onLine('next', st, st.length - 1, c + 1)} onHover={(st) => onPreview('next', st || [], st ? st.length - 1 : null, c + 1)} />
         ) : nextLegal.length ? (
           <LineChips name="Best line" tip={deepLine && deeper.source === 'cloud' ? 'Lichess cloud’s best line' : 'best line'} nameColor={C.ink} accent={C.best} moves={nextMoves} ply0={M.ply0} c={c + 1} legal={nextLegal.length}
@@ -1335,7 +1335,7 @@ function useShownLine(M, cNow, playing) {
     const u = v.upto + d, min = v.src === 'you' ? -1 : 0;
     return u < min ? null : { ...v, upto: Math.min(v.moves.length - 1, u) };
   });
-  const gamePos = (cc) => (cc < 0 ? M.start.pos : { ...window.ChessCore.posFromFen(M.plies[cc].fen), castle: M.plies[cc].castle, ep: M.plies[cc].ep });
+  const gamePos = (cc) => window.ChessCore.posAt(M, cc + 1);
   const newLine = () => ({ c: cNow, at: cNow + 1, src: 'you', moves: [], upto: -1, base: gamePos(cNow) });
   const leaveIfEmpty = () => setVline((v) => (v && v.src === 'you' && v.upto < 0 ? null : v));
   const playOwn = (step) => setVline((v) => { const b = v || newLine(); const prefix = b.moves.slice(0, b.upto + 1); return { ...b, src: 'you', moves: [...prefix, step], upto: prefix.length }; });

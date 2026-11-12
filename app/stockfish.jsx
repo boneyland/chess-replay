@@ -478,9 +478,12 @@ const lineArrows = (r) => {
   return ls.map((l, i) => ({ uci: l.pv[0], k: l.k, w: gaps[i] == null ? 0 : worst > 0 ? 1 - gaps[i] / worst : 1 }));
 };
 
-const fmtSf = (cp) => {
+// a search's eval (tb: its tablebase answer, if it came from one; ChessCore.decodeEval)
+const fmtSf = (cp, tb) => {
   if (cp == null) return '…';
-  if (window.ChessCore.isMateCp(cp)) { const n = window.ChessCore.mateIn(cp); return n === 0 ? (cp > 0 ? '1-0' : '0-1') : (cp > 0 ? 'M' : '−M') + n; }
+  const ev = window.ChessCore.decodeEval(cp, tb);
+  if (ev.won) return ev.won === 'w' ? '1-0' : '0-1';
+  if (ev.mate != null) return window.ChessCore.mateIn(cp) === 0 ? (cp > 0 ? '1-0' : '0-1') : (cp > 0 ? 'M' : '−M') + Math.abs(ev.mate);
   return (cp > 0 ? '+' : cp < 0 ? '−' : '') + Math.abs(cp / 100).toFixed(2);
 };
 
@@ -505,7 +508,7 @@ function OwnMoveAnalysis({ M, vline, own, status, why, onReply, onHover, top, wh
     <React.Fragment>
       <div style={{ display: 'flex', flexWrap: 'wrap', alignItems: 'flex-end', columnGap: tx(28) }}>
         <span style={{ font: `700 ${headline()}px ${MONO}`, color: col }}>{lineLabel(M, vline.at, vline.upto, step.san)}</span>
-        <EvalWithStat>{down && !(after && !after.partial) ? '—' : fmtSf(after && after.cp)}</EvalWithStat>
+        <EvalWithStat>{down && !(after && !after.partial) ? '—' : fmtSf(after && after.cp, after && after.tb)}</EvalWithStat>
       </div>
       {/* the verdict spans the panel, under the move and the eval, so it fits on one line in the phone layout */}
       <div style={{ marginTop: anGap(6), font: `600 ${tx(16)}px ${MONO}`, letterSpacing: '0.08em', textTransform: 'uppercase', color: col }}>{who && who + ' · '}{bad ? CLASS_LABEL[rated.classification] + ' · ' : ''}{verdict}</div>

@@ -303,6 +303,14 @@
   const mateCp = (n) => (n > 0 ? 1 : -1) * (MATE_CP - MATE_STEP * Math.abs(n)); // n > 0: White mates
   const isMateCp = (cp) => Math.abs(cp) >= MATE_MIN;
   const mateIn = (cp) => Math.round((MATE_CP - Math.abs(cp)) / MATE_STEP); // the N of a mate score (0 for a checkmate)
+  // The one decoder of a stored eval (cp as above; tb: the position's tablebase answer, if it has one): { cp }, { mate }
+  // (N moves, a checkmate's ±MATE_CP as 1), or { cp, won: 'w' | 'b' } for a tablebase win with no distance to mate (6 and
+  // 7 pieces), which the analysis JSON stores as a mate in 1 (±9990) and which is never shown or weighed as one
+  function decodeEval(cp, tb) {
+    if (!isMateCp(cp)) return { cp };
+    if (tb && !tb.dtm && Math.abs(cp) < MATE_CP) return { cp, won: cp > 0 ? 'w' : 'b' };
+    return { mate: Math.sign(cp) * Math.max(1, mateIn(cp)) };
+  }
   // Lichess's win chances (−1 to 1) and the drops in them, for the mover, that make a move ?!, ? or ??
   const WIN_K = 0.00368208, WIN_DROP = { inaccuracy: 0.10, mistake: 0.20, blunder: 0.30 };
   const winChance = (cp) => 2 / (1 + Math.exp(-WIN_K * cp)) - 1;
@@ -399,35 +407,15 @@
     return out;
   }
 
-  function buildGame(files) {
-    const { pgn, analysis, notes } = files;
-    const gameIndex = files.gameIndex || 0;
-    let P = null, gameCount = 1;
-    if (pgn) { const games = splitGames(pgn); if (!games.length) throw new Error('The PGN has no games'); gameCount = games.length; P = parsePGN(games[Math.min(gameIndex, games.length - 1)]); }
-    const A = analysis ? (typeof analysis === 'string' ? JSON.parse(analysis) : analysis) : null;
-    // commentary layers, lowest priority first: bundled sample notes, user's notes file; each source is
-    // kept apart too (ply.says, M.says), so withCommentary can show some of them
-    const merge = (ls) => (ls.length ? ls.reduce((acc, n) => ({ ...acc, ...n, plies: { ...acc.plies, ...n.plies } }), { plies: {} }) : null);
-    const NT = merge([files.sampleNotes, notes].filter(Boolean).map(parseNotes));
-    const pgnHasEval = !!P && P.plies.some((p) => p.cp != null || p.mate != null);
-    const useA = !!A && !(files.evalSource === 'pgn' && pgnHasEval);
-    const H = P ? P.headers : {};
-    // a PGN's [FEN] header, else the analysis file's start; both are normalised, so equal starts compare equal
-    const start = parseFen(H.FEN || (!P && A && A.start_fen) || START_FEN);
-    const ply0 = start.ply0, stdStart = start.fen === START_FEN;
-    const sans = P ? P.plies.map((p) => p.san) : A ? A.moves.map((m) => m.move_san) : [];
-    if (!sans.length) throw new Error('No moves found');
-    // moves are compared as written and as standard SAN (a PGN's 0-0 or e2-e4 is the analysis file's O-O or e4)
-    const bare = (x) => x.replace(/[+#]/g, '');
-    const canon = (p, mv) => sanOf(p, { ...mv, after: applyMove(p, mv.from, mv.to, mv.promo) });
-    const firstStd = () => { try { return canon(start.pos, sanToMove(start.pos, sans[0])); } catch (e) { return sans[0]; } };
-    if (A && P && A.moves.length && bare(A.moves[0].move_san) !== bare(sans[0]) && bare(A.moves[0].move_san) !== bare(firstStd())) throw new Error("The analysis file doesn't match this PGN");
-    // chess-animator's analysis JSON never has start_fen (its moves come from the PGN's [FEN] board): then the per-ply SAN match and the side to move decide
-    if (A && P && A.start_fen && parseFen(A.start_fen).fen !== start.fen) throw new Error("The analysis file doesn't match this PGN");
-    if (A && P && A.moves.length && typeof A.moves[0].is_white_move === 'boolean' && A.moves[0].is_white_move !== (start.pos.turn === 'w')) throw new Error("The analysis file doesn't match this PGN");
+  // moves are compared as written and as standard SAN (a PGN's 0-0 or e2-e4 is the analysis file's O-O or e4)
+  const bare = (x) => x.replace(/[+#]/g, '');
+  const canon = (p, mv) => sanOf(p, { ...mv, after: applyMove(p, mv.from, mv.to, mv.promo) });
 
+  // The game's plies: each of sans replayed from start (a move that isn't legal throws, with its number), with what the
+  // PGN (P), the analysis file (A, its evals where useA) and the notes (NT) say of it
+  function replay({ sans, start, P, A, useA, NT }) {
+    const ply0 = start.ply0, plies = [];
     let pos = start.pos;
-    const plies = [];
     sans.forEach((san, i) => {
       const am = useA && A.moves[i];
       let mv;
@@ -440,16 +428,13 @@
       const ply = { san: std, uci: idxSq(mv.from) + idxSq(mv.to) + (mv.promo || ''), side: (ply0 + i) % 2 ? 'b' : 'w' };
       ply.checkmate = ply.san.endsWith('#');
       if (check) ply.checkSq = idxSq(kingIdx(pos.b, pos.turn));
-      ply.fen = toFen(pos);
-      ply.castle = pos.castle;
-      ply.ep = pos.ep; // the FEN carries neither, so positions rebuilt from it need both
+      ply.fen = toFen(pos); // placement and side: a key, not a position (castling and en passant are in pos)
+      ply.pos = { b: pos.b, turn: pos.turn, castle: pos.castle, ep: pos.ep }; // the whole position after the move
       ply.capture = !!before.b[mv.to] || pos.epCap >= 0;
-      // analysis files encode mate in N as a mate score (mateCp), White's point of view
-      // the position after it from the tablebase: a win with no distance to mate (6 and 7 pieces) is won, not a mate count
+      // the position after it from the tablebase (decodeEval: a win with no distance to mate is won, not a mate count)
       if (am && am.tb_after) ply.tb = am.tb_after;
       if (am && am.tb_before) ply.tbBefore = am.tb_before; // its best move and line came from the tablebase
-      if (am && typeof am.eval_after === 'number' && ply.tb && !ply.tb.dtm && isMateCp(am.eval_after) && Math.abs(am.eval_after) < MATE_CP) { ply.cp = am.eval_after; ply.won = am.eval_after > 0 ? 'w' : 'b'; }
-      else if (am && typeof am.eval_after === 'number') { if (isMateCp(am.eval_after)) ply.mate = Math.sign(am.eval_after) * Math.max(1, mateIn(am.eval_after)); else ply.cp = am.eval_after; }
+      if (am && typeof am.eval_after === 'number') Object.assign(ply, decodeEval(am.eval_after, ply.tb));
       else if (pp.cp != null) ply.cp = pp.cp;
       else if (pp.mate != null) ply.mate = pp.mate;
       if (ply.checkmate) { ply.mate = ply.side === 'w' ? 0.5 : -0.5; delete ply.cp; }
@@ -487,34 +472,29 @@
       ply.says = { pgn: own, notes: note };
       plies.push(ply);
     });
-    // PGN-only evals: rate unmarked moves by win-chance drop (Lichess thresholds)
-    if (!useA) {
-      const known = (p) => p && (p.cp != null || (p.mate != null && !p.checkmate));
-      const cpv = (p) => (p.mate != null ? Math.sign(p.mate) * MATE_CP : p.cp);
-      plies.forEach((p, i) => {
-        const prev = i ? plies[i - 1] : stdStart ? { cp: 20 } : null; // no known eval before a custom start's first move
-        if (p.mark || !known(p) || !known(prev) || p.mate != null || prev.mate != null) return;
-        const sgn = p.side === 'w' ? 1 : -1;
-        const drop = sgn * (winChance(cpv(prev)) - winChance(cpv(p)));
-        const mk = drop >= WIN_DROP.blunder ? '??' : drop >= WIN_DROP.mistake ? '?' : drop >= WIN_DROP.inaccuracy ? '?!' : null;
-        if (mk) { p.mark = mk; p.cls = MARK_CLASS[mk]; }
-        const loss = Math.round(sgn * (cpv(prev) - cpv(p)));
-        if (loss > 0) p.loss = loss;
-      });
-    }
-    // carry evals forward so the plot has no gaps
-    const aStart = useA && A.moves[0] && typeof A.moves[0].eval_before === 'number';
-    const first = plies.find((p) => p.cp != null || (p.mate != null && !p.checkmate));
-    // the +0.20 first-move edge is the standard start's; a custom start has only its first known eval
-    let lastCp = aStart ? A.moves[0].eval_before : stdStart ? 20 : first ? (first.mate != null ? Math.sign(first.mate) * MATE_CP : first.cp) : 20;
-    const evalStart = lastCp, evalStartKnown = aStart || stdStart;
-    plies.forEach((p) => { if (p.cp == null && p.mate == null) p.cpFill = lastCp; else lastCp = p.mate != null ? Math.sign(p.mate) * MATE_CP : p.cp; });
-    // the checkmate on the last move is a fact of the game, not an engine eval
-    const hasEval = plies.some((p) => p.cp != null || (p.mate != null && !p.checkmate));
-    const hasClock = plies.some((p) => p.clk != null);
-    // the first period's seconds: 300+2, 40/7200:3600 (40 moves in 7200 s), not a sandclock (*60)
-    const tc = (H.TimeControl || '').match(/^(?:\d+\/)?(\d+)/);
-    const clockStart = tc ? +tc[1] : hasClock ? Math.ceil(Math.max(plies[0].clk || 0, (plies[1] && plies[1].clk) || 0) / 60) * 60 : 0;
+    return plies;
+  }
+
+  // A game with the PGN's evals and no analysis file: its unmarked moves rated by their drop in win chances (Lichess's
+  // thresholds), in place. stdStart: the game starts from the standard position (+0.20 before the first move)
+  function ratePgnOnly(plies, stdStart) {
+    const known = (p) => p && (p.cp != null || (p.mate != null && !p.checkmate)), cpv = plyCp;
+    plies.forEach((p, i) => {
+      const prev = i ? plies[i - 1] : stdStart ? { cp: 20 } : null; // no known eval before a custom start's first move
+      if (p.mark || !known(p) || !known(prev) || p.mate != null || prev.mate != null) return;
+      const sgn = p.side === 'w' ? 1 : -1;
+      const drop = sgn * (winChance(cpv(prev)) - winChance(cpv(p)));
+      const mk = drop >= WIN_DROP.blunder ? '??' : drop >= WIN_DROP.mistake ? '?' : drop >= WIN_DROP.inaccuracy ? '?!' : null;
+      if (mk) { p.mark = mk; p.cls = MARK_CLASS[mk]; }
+      const loss = Math.round(sgn * (cpv(prev) - cpv(p)));
+      if (loss > 0) p.loss = loss;
+    });
+  }
+
+  // What the PGN's headers (H), else the analysis file (A), say of the game: its players, event, opening, result and
+  // engine (useA: the evals are the analysis file's; pgnHasEval: the PGN has its own); plies and start find an opening
+  // neither names
+  function headersOf({ H, A, useA, pgnHasEval, plies, start }) {
     const eng = useA && A.engine;
     // search as Python's describe_search; one line and one thread (the browser engine) go unsaid
     const search = eng && (eng.depth && eng.time_limit ? `depth ${eng.depth}, max ${eng.time_limit}s per position` : eng.time_limit ? `${eng.time_limit}s per position` : eng.depth ? `depth ${eng.depth}` : '');
@@ -532,17 +512,63 @@
     if (!opening && window.Openings) { try { opening = window.Openings.book().identify(plies.map((p) => p.uci), start.fen); } catch (e) {} }
     if (!opening) opening = { eco: clean(H.ECO), name: '' };
     const round = clean(H.Round) || (A && clean(A.round_num)) || '';
-    const pgnIntro = unsaid((P && P.intro) || '', NT && NT.intro);
     return {
       white: player('w'), black: player('b'),
       event: clean(H.Event) || (A && A.event) || '', round, site: clean(H.Site) || (A && A.site) || '', date: fmtDate(clean(H.Date) || (A && A.date)), pgnDate: clean(H.Date) || (A && clean(A.date)) || '',
-      eco: opening.eco, opening: opening.name,
-      result, intro: (NT && NT.intro) || pgnIntro, conclusion: ends(NT).conclusion,
-      says: { pgn: { intro: pgnIntro, conclusion: '' }, notes: ends(NT) },
-      engine, engineName: eng ? eng.name || '' : '', start: { fen: start.fen, pos: start.pos }, ply0, plies, evalStart, evalStartKnown, hasEval, hasClock, clockStart, gameCount, hasAnalysis: !!A, hasNotes: !!notes, headers: H, evalSource: useA ? 'analysis' : pgnHasEval ? 'pgn' : 'none', canChooseSource: !!A && pgnHasEval,
+      eco: opening.eco, opening: opening.name, result, engine, engineName: eng ? eng.name || '' : '',
     };
   }
 
+  function buildGame(files) {
+    const { pgn, analysis, notes } = files;
+    const gameIndex = files.gameIndex || 0;
+    let P = null, gameCount = 1;
+    if (pgn) { const games = splitGames(pgn); if (!games.length) throw new Error('The PGN has no games'); gameCount = games.length; P = parsePGN(games[Math.min(gameIndex, games.length - 1)]); }
+    const A = analysis ? (typeof analysis === 'string' ? JSON.parse(analysis) : analysis) : null;
+    // commentary layers, lowest priority first: bundled sample notes, user's notes file; each source is
+    // kept apart too (ply.says, M.says), so withCommentary can show some of them
+    const merge = (ls) => (ls.length ? ls.reduce((acc, n) => ({ ...acc, ...n, plies: { ...acc.plies, ...n.plies } }), { plies: {} }) : null);
+    const NT = merge([files.sampleNotes, notes].filter(Boolean).map(parseNotes));
+    const pgnHasEval = !!P && P.plies.some((p) => p.cp != null || p.mate != null);
+    const useA = !!A && !(files.evalSource === 'pgn' && pgnHasEval);
+    const H = P ? P.headers : {};
+    // a PGN's [FEN] header, else the analysis file's start; both are normalised, so equal starts compare equal
+    const start = parseFen(H.FEN || (!P && A && A.start_fen) || START_FEN);
+    const ply0 = start.ply0, stdStart = start.fen === START_FEN;
+    const sans = P ? P.plies.map((p) => p.san) : A ? A.moves.map((m) => m.move_san) : [];
+    if (!sans.length) throw new Error('No moves found');
+    const firstStd = () => { try { return canon(start.pos, sanToMove(start.pos, sans[0])); } catch (e) { return sans[0]; } };
+    if (A && P && A.moves.length && bare(A.moves[0].move_san) !== bare(sans[0]) && bare(A.moves[0].move_san) !== bare(firstStd())) throw new Error("The analysis file doesn't match this PGN");
+    // chess-animator's analysis JSON never has start_fen (its moves come from the PGN's [FEN] board): then the per-ply SAN match and the side to move decide
+    if (A && P && A.start_fen && parseFen(A.start_fen).fen !== start.fen) throw new Error("The analysis file doesn't match this PGN");
+    if (A && P && A.moves.length && typeof A.moves[0].is_white_move === 'boolean' && A.moves[0].is_white_move !== (start.pos.turn === 'w')) throw new Error("The analysis file doesn't match this PGN");
+
+    const plies = replay({ sans, start, P, A, useA, NT });
+    if (!useA) ratePgnOnly(plies, stdStart);
+    // carry evals forward so the plot has no gaps
+    const aStart = useA && A.moves[0] && typeof A.moves[0].eval_before === 'number';
+    const first = plies.find((p) => p.cp != null || (p.mate != null && !p.checkmate));
+    // the +0.20 first-move edge is the standard start's; a custom start has only its first known eval
+    let lastCp = aStart ? A.moves[0].eval_before : stdStart ? 20 : first ? plyCp(first) : 20;
+    const evalStart = lastCp, evalStartKnown = aStart || stdStart;
+    plies.forEach((p) => { if (p.cp == null && p.mate == null) p.cpFill = lastCp; else lastCp = plyCp(p); });
+    // the checkmate on the last move is a fact of the game, not an engine eval
+    const hasEval = plies.some((p) => p.cp != null || (p.mate != null && !p.checkmate));
+    const hasClock = plies.some((p) => p.clk != null);
+    // the first period's seconds: 300+2, 40/7200:3600 (40 moves in 7200 s), not a sandclock (*60)
+    const tc = (H.TimeControl || '').match(/^(?:\d+\/)?(\d+)/);
+    const clockStart = tc ? +tc[1] : hasClock ? Math.ceil(Math.max(plies[0].clk || 0, (plies[1] && plies[1].clk) || 0) / 60) * 60 : 0;
+    const pgnIntro = unsaid((P && P.intro) || '', NT && NT.intro);
+    return {
+      ...headersOf({ H, A, useA, pgnHasEval, plies, start }),
+      intro: (NT && NT.intro) || pgnIntro, conclusion: ends(NT).conclusion,
+      says: { pgn: { intro: pgnIntro, conclusion: '' }, notes: ends(NT) },
+      start: { fen: start.fen, pos: start.pos }, ply0, plies, evalStart, evalStartKnown, hasEval, hasClock, clockStart, gameCount, hasAnalysis: !!A, hasNotes: !!notes, headers: H, evalSource: useA ? 'analysis' : pgnHasEval ? 'pgn' : 'none', canChooseSource: !!A && pgnHasEval,
+    };
+  }
+
+  // the position before ply i of a game (i = 0: its start), or after the last with i = M.plies.length
+  const posAt = (M, i) => (i ? M.plies[i - 1].pos : M.start.pos);
   const plyCp = (p) => (p.mate != null ? Math.sign(p.mate) * MATE_CP : p.cp != null ? p.cp : p.cpFill);
 
   // Split plies across the timeline sections: opening / middlegame / critical window around the biggest swing / endgame
@@ -712,14 +738,14 @@
       // PGN's first variation there (the PGN's better line), so a move never carries two
       let vars = p.pgnVars || [];
       if (M.evalSource === 'analysis' && p.best && p.best.line && p.best.line.length && p.cls !== 'best') {
-        const before = i ? M.plies[i - 1] : null;
-        const line = playLine(before ? before.fen : M.start.fen, p.best.line, before ? before.castle : M.start.pos.castle, before ? before.ep : M.start.pos.ep);
+        const before = posAt(M, i);
+        const line = playLine(before, p.best.line);
         const v = line.map((m, j) => pgnMoveNo(abs + j, j === 0) + m.san);
         if (v.length) {
           toks.push('(' + v.join(' ') + ')'); vars = vars.slice(1);
           // the search's other lines follow, by rank
           (p.best.more || []).forEach((sans) => {
-            const o = playLine(before ? before.fen : M.start.fen, sans, before ? before.castle : M.start.pos.castle, before ? before.ep : M.start.pos.ep);
+            const o = playLine(before, sans);
             if (o.length) toks.push('(' + o.map((m, j) => pgnMoveNo(abs + j, j === 0) + m.san).join(' ') + ')');
           });
         }
@@ -742,18 +768,19 @@
       const d = at(i);
       if (!d) return;
       any = true;
-      plies[i] = { ...plies[i], cp: d.cp, mate: isMateCp(d.cp) ? Math.sign(d.cp) * mateIn(d.cp) : null };
+      const ev = decodeEval(d.cp, d.tb);
+      if (!p.checkmate) plies[i] = { ...plies[i], cp: d.cp, mate: ev.mate == null ? null : ev.mate, won: ev.won || null };
       // several lines (Go deeper with Lines above one) replace the analysis's lines of this position
       if (d.lines && d.lines.length > 1) plies[i].nextLines = d.lines; else delete plies[i].nextLines;
       const next = M.plies[i + 1];
       if (!next || !d.pv || !d.pv.length) return;
       if (d.pv[0] === next.uci) { plies[i + 1] = { ...plies[i + 1], best: null }; return; }
-      let pos = { ...posFromFen(p.fen), castle: p.castle, ep: p.ep };
+      let pos = p.pos;
       const line = [];
       for (const u of d.pv.slice(0, 12)) { const s = stepFromUci(pos, u); if (!s) break; line.push(s.san); pos = s.pos; }
       if (!line.length) return;
       const best = { uci: d.pv[0], line };
-      const sansOfPv = (pv) => { let q = { ...posFromFen(p.fen), castle: p.castle, ep: p.ep }; const out = []; for (const u of pv.slice(0, 12)) { const s = stepFromUci(q, u); if (!s) break; out.push(s.san); q = s.pos; } return out; };
+      const sansOfPv = (pv) => { let q = p.pos; const out = []; for (const u of pv.slice(0, 12)) { const s = stepFromUci(q, u); if (!s) break; out.push(s.san); q = s.pos; } return out; };
       const more = (d.lines || []).slice(1).filter((l) => l.pv && l.pv[0] && l.pv[0] !== next.uci).map((l) => sansOfPv(l.pv)).filter((l) => l.length);
       if (more.length) best.more = more;
       plies[i + 1] = { ...plies[i + 1], best };
@@ -772,9 +799,8 @@
     return out.length ? out.join('\n\n') + '\n' : '';
   }
 
-  // castle: the castling rights before the line (the page's FENs don't carry them); omitted = all
-  function playLine(fen, sans, castle, ep) {
-    let pos = { b: fromFen(fen), ep: ep == null ? -1 : ep, turn: fen.split(' ')[1] || 'w', castle: castle == null ? 'KQkq' : castle };
+  // a line of SANs played from pos (a ply's pos, or posAt), as steps; it stops at the first move that isn't legal
+  function playLine(pos, sans) {
     const out = [];
     for (const raw of sans) {
       const san = String(raw).replace(/^\d+\.+/, '');
@@ -890,5 +916,5 @@
     if (at < text.length) out.push({ text: text.slice(at) });
     return out;
   };
-  window.ChessCore = { START_FEN, links, splitGames, fmtDate, fmtLen, hasLegal, inCheck, checkers, evalTicks, sqName: idxSq, CASTLE_HOME, canCastle, readFen, epFits, setupProblems, setupFen, epCapturable, fullFen, parseFen, fenAfter, moveNo, sqIndex: sqIdx, applySan, applyUci, stepFromUci, toFen, playLine, posFromFen, legalTargets, isPromotion, userMove, buildGame, withCommentary, commentarySources, classifyFile, plan, timing, schedule, cues, settledAt, clipRange, MATE_CP, MATE_STEP, MATE_MIN, mateCp, isMateCp, mateIn, WIN_K, WIN_DROP, winChance, plyCp, MARK_CLASS, pgnClk, pgnMoveNo, pgnReopens, pgnText, annotatedPgn, withSearches, notesText };
+  window.ChessCore = { START_FEN, links, splitGames, fmtDate, fmtLen, hasLegal, inCheck, checkers, evalTicks, sqName: idxSq, CASTLE_HOME, canCastle, readFen, epFits, setupProblems, setupFen, epCapturable, fullFen, parseFen, fenAfter, moveNo, sqIndex: sqIdx, applySan, applyUci, stepFromUci, toFen, playLine, posAt, posFromFen, legalTargets, isPromotion, userMove, buildGame, withCommentary, commentarySources, classifyFile, plan, timing, schedule, cues, settledAt, clipRange, MATE_CP, MATE_STEP, MATE_MIN, mateCp, isMateCp, mateIn, decodeEval, WIN_K, WIN_DROP, winChance, plyCp, MARK_CLASS, pgnClk, pgnMoveNo, pgnReopens, pgnText, annotatedPgn, withSearches, notesText };
 })();

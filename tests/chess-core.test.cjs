@@ -58,15 +58,17 @@ test('castling needs the right: lost after the rook or king has moved', () => {
 
 test('game positions carry castling rights from the moves played', () => {
   const M = CC.buildGame({ pgn: '1. Nf3 Nf6 2. Rg1 Rg8 3. Rh1 Rh8 *' });
-  assert.equal(M.plies[5].castle, 'Qq');
-  assert.equal(M.plies[0].castle, 'KQkq');
+  assert.equal(M.plies[5].pos.castle, 'Qq');
+  assert.equal(M.plies[0].pos.castle, 'KQkq');
+  assert.equal(CC.posAt(M, 0), M.start.pos);
+  assert.equal(CC.posAt(M, 6), M.plies[5].pos);
 });
 
 test('playLine keeps the castling rights it is given', () => {
-  const steps = CC.playLine('4k3/8/8/8/8/8/8/4K2R w', ['Rg1', 'Kd8', 'Rh1', 'Ke8'], 'K');
+  const steps = CC.playLine(CC.posFromFen('4k3/8/8/8/8/8/8/4K2R w K'), ['Rg1', 'Kd8', 'Rh1', 'Ke8']);
   assert.equal(steps[3].pos.castle, '');
   assert.equal(CC.applyUci(steps[3].pos, 'e1g1'), null);
-  assert.ok(CC.applyUci(CC.playLine('4k3/8/8/8/8/8/8/4K2R w', ['Kf1', 'Kd8'], 'K')[0].pos, 'e8d7')); // sanity: lines still play
+  assert.ok(CC.applyUci(CC.playLine(CC.posFromFen('4k3/8/8/8/8/8/8/4K2R w K'), ['Kf1', 'Kd8'])[0].pos, 'e8d7')); // sanity: lines still play
 });
 
 test('buildGame keeps the actual search stats of each move', () => {
@@ -180,13 +182,12 @@ test('an engine comment is not shown as commentary, the text after it is', () =>
   assert.equal(P.plies[1].cp, undefined);
 });
 
-// Positions rebuilt from a move's FEN (own moves, best lines, variations) keep the en passant square
+// A move's position (own moves, best lines, variations start from it) keeps the en passant square
 test('en passant is playable from a game position after a double pawn push', () => {
   const M = CC.buildGame({ pgn: '1. e4 Nf6 2. e5 d5 *' });
   const P = M.plies[3];
-  const pos = { ...CC.posFromFen(P.fen), castle: P.castle, ep: P.ep };
-  assert.equal(CC.userMove(pos, CC.sqIndex('e5'), CC.sqIndex('d6')).san, 'exd6');
-  assert.deepEqual(CC.playLine(P.fen, ['exd6', 'exd6'], P.castle, P.ep).map((s) => s.san), ['exd6', 'exd6']);
+  assert.equal(CC.userMove(P.pos, CC.sqIndex('e5'), CC.sqIndex('d6')).san, 'exd6');
+  assert.deepEqual(CC.playLine(P.pos, ['exd6', 'exd6']).map((s) => s.san), ['exd6', 'exd6']);
 });
 
 test('the viewer picks the promotion piece', () => {
@@ -601,4 +602,28 @@ test('links cuts web addresses out of a header line', () => {
   assert.deepEqual(CC.links('Bengaluru, India'), [{ text: 'Bengaluru, India' }]);
   assert.deepEqual(CC.links('javascript:alert(1) ftp://x https://'), [{ text: 'javascript:alert(1) ftp://x https://' }]);
   assert.deepEqual(CC.links(''), []);
+});
+
+// one decoder of a stored eval: a tablebase win with no distance to mate is stored as a mate in 1 (±9990) and is won, not M1
+test('decodeEval tells a mate from a tablebase win with no distance to mate', () => {
+  assert.deepEqual(CC.decodeEval(35), { cp: 35 });
+  assert.deepEqual(CC.decodeEval(CC.mateCp(3)), { mate: 3 });
+  assert.deepEqual(CC.decodeEval(CC.mateCp(-2)), { mate: -2 });
+  assert.deepEqual(CC.decodeEval(CC.MATE_CP), { mate: 1 }); // a checkmate's score
+  assert.deepEqual(CC.decodeEval(CC.mateCp(1), { category: 'win', dtz: 12, dtm: null }), { cp: CC.mateCp(1), won: 'w' });
+  assert.deepEqual(CC.decodeEval(CC.mateCp(-1), { category: 'win', dtz: 12, dtm: 0 }), { cp: CC.mateCp(-1), won: 'b' });
+  assert.deepEqual(CC.decodeEval(CC.mateCp(4), { category: 'win', dtz: 7, dtm: 7 }), { mate: 4 }); // with a distance: a mate
+  // a Go deeper search that came from the tablebase keeps the win in the game
+  const M = CC.buildGame({ pgn: '1. e4 e5 *' });
+  const W = CC.withSearches(M, (i) => (i === 1 ? { cp: CC.mateCp(-1), tb: { category: 'win', dtm: null } } : null));
+  assert.equal(W.plies[1].won, 'b'); assert.equal(W.plies[1].mate, null);
+});
+
+// buildGame's parts: the position after each ply is the whole position, as the game left it
+test('a ply carries the whole position after it', () => {
+  const M = CC.buildGame({ pgn: '1. e4 Nf6 2. e5 d5 3. Ke2 *' });
+  assert.equal(M.plies[3].pos.ep, CC.sqIndex('d6'));
+  assert.equal(M.plies[4].pos.castle, 'kq');
+  assert.equal(M.plies[4].pos.turn, 'b');
+  assert.equal(CC.fullFen(M.plies[4].pos), 'rnbqkb1r/ppp1pppp/5n2/3pP3/8/8/PPPPKPPP/RNBQ1BNR b kq -');
 });
