@@ -16,11 +16,11 @@ The one spec for the app: what it does now, what is planned, and the decisions b
   - [Lichess data](spec/lichess.md): endgame tablebase, Lichess cloud evaluation, Lichess opening explorer
   - [Share and export](spec/export.md): the dialog, video and WebP export
   - [Responsive layout](spec/layout.md)
-- [Roadmap](roadmap.md): square layouts and breakpoints; player names; Chess960; typed commentary; Maia3; background music; peer-to-peer online play; app walk-through
+- [Roadmap](roadmap.md): background music; square layouts and breakpoints; player names; Chess960; typed commentary; Maia3; peer-to-peer online play; app walk-through
 - [Known gaps](known-gaps.md)
 - [Decisions log](decisions.md)
 
-Implementation plans of built features, kept as written, are in [plans/](plans/); dated audit reports in [audits/](audits/).
+The page's parts by name (Game info, Transport bar, Dock…): [parts.md](parts.md). Implementation plans of built features, kept as written, are in [plans/](plans/); dated audit reports in [audits/](audits/).
 
 ## Principles
 

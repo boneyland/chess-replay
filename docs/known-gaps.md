@@ -32,7 +32,7 @@ Deferred by the per-plan reviews; each was true when recorded and may since have
 - In the replay's Tablebase block a cursed win's moves are all listed as draws; which keep the cursed win shows only in a move's tooltip (on the free board too, where the moves are buttons alone).
 
 **asm.js Stockfish** (2026-10-31)
-- **Verify** on the SM-T510 itself: checked only with SIMD faked off in desktop Chromium and Firefox. How slow it is on the tablet, and whether its 30 s start timeout is enough there, is unknown.
+- **Verify** on the SM-T510 itself: checked only with SIMD faked off in desktop Chromium and Firefox. How slow it is on the tablet, and whether its 120 s start timeout (since 2026-11-01) is always enough there, is unknown.
 - The line under the Analysis panel hides where it doesn't fit (a narrow phone panel), as the tip did; the engine menu's note always shows.
 
 **Position from image** (2026-11-03)
