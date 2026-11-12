@@ -1,8 +1,11 @@
 // Boards: Lichess's 2D ones (lila's public/images/board, AGPL-3.0-or-later, the lila authors and pirouetti), in
 // Lichess's order, with its coordinate colours (ui/lib/css/theme/board/_boards.scss), and its Brightness, Contrast and
-// Hue sliders, plus Tint and Saturation (ours: Hue can't colour a grey board, a tint first can). The flat boards are two colours, drawn as squares at once; the others are lila's pictures, unchanged,
-// that build.cjs serves next to the page as boards/<file> (vendor/boards), fetched only when chosen, and redrawn here
-// through the sliders into one picture (render) that sits under the squares, so an export paints it like any <img>.
+// Hue sliders, plus Tint and Saturation (ours: Hue can't colour a grey board, a tint first can). The flat boards are
+// two colours, drawn as squares at once; the others are lila's pictures, unchanged,
+// that build.cjs serves next to the page as boards/<file> (vendor/boards), fetched only when chosen. The page shows the
+// picture through a CSS filter (css), so it follows the sliders at once; a video export can't paint a filter, so for it
+// the picture is redrawn here through the sliders in our own arithmetic into one picture (render) that sits under the
+// squares and is painted like any <img>. The flat boards' two colours go through the same arithmetic (colours).
 (function () {
   // [id, name, file (null: flat), light, dark (the flat boards' squares), on light, on dark (the coordinates' colours)]
   const THEMES = [
