@@ -1,6 +1,6 @@
 # Chess960
 
-[Spec](../spec.md) › what is built. Chess960 (Fischer random): reading 960 positions and games, starting one, castling on the board, and what the engine and the Lichess features do with it. Built 2026-11-13 (branch `claude/chess960`); the design is `docs/plans/2026-11-13-chess960-design.md`. It is the only variant the page supports (decisions log, 2026-10-19).
+[Spec](../spec.md) › what is built. Chess960 (Fischer random): reading 960 positions and games, starting one, castling on the board, and what the engine and the Lichess features do with it. Built 2026-11-13; the design is `docs/plans/2026-11-13-chess960-design.md`. It is the only variant the page supports (decisions log, 2026-10-19).
 
 ## What a 960 position is
 
@@ -34,7 +34,7 @@ Standard positions keep today's drag (two squares) and have no buttons. In a 960
 
 ## Engine and Lichess features
 
-- **Stockfish** (lite, Full, asm.js): `setoption name UCI_Chess960 value true|false` is sent before a search only when it changes (`SFEngine`, tracked like Hash and MultiPV). Stockfish's castles are king-takes-rook in 960 mode; the page converts at the engine boundary and a castle's best-move arrow points king to destination.
+- **Stockfish** (lite, Full, asm.js): `setoption name UCI_Chess960 value true|false` is sent before a search only when it changes (`SFEngine`, tracked like Hash and MultiPV). Stockfish's castles are king-takes-rook in 960 mode, as is the page's own 960 UCI (and Lichess's), so nothing is converted at the engine boundary; a castle's best-move arrow points from the king to its rook, as on Lichess.
 - **Lichess cloud evaluation**: used for 960 positions, with `variant=chess960` (checked 2026-11-13); its castles stay king-takes-rook rather than converted to e1g1.
 - **Tablebase** stays (it never has castling rights). **Dead positions**: chasolver gets the position with castling rights removed (`DeadCore.fenFor`).
 - **Off in 960 positions**: the Lichess opening explorer, the opening book and names, and Ask Queen (its Space reads standard chess only). A 960 free board keeps its Commentary slot, which shows "The opening book is for standard chess." in place of the explorer. The book is built for the start on show, so a standard board opened after a 960 game has it again.

@@ -49,3 +49,5 @@ Deferred by the per-plan reviews; each was true when recorded and may since have
 - A sloppy standard FEN with stale rights (e.g. `R3K1R1 w KQkq`, the h-rook moved to g1) now reads as a 960 position, allowing a castle standard chess wouldn't.
 - In the replay the Castle buttons appear only under the viewer's own line, not at a paused game move (a drag or tap still castles there).
 - The castle-or-move question's buttons are small on a phone (about 28 px tall: sized in board pixels like the promotion picker).
+- The 17 starts with the king on e and the rooks on a and h (414, 430, 446, 454, 460, 461, 502, 508, 509, 524, 525, 532, 533, 548, 549, 692, 693) play as standard chess, like 518: no Castle buttons, the opening explorer on, Stockfish without `UCI_Chess960` (castling ends the same either way). A FEN pasted for one of them gets no "Chess960 #n" label.
+- Game info can need four lines for a "Chess960 #518" game with an opening name, and then clips.
