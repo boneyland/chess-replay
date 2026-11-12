@@ -54,20 +54,56 @@
   const CASTLE_HOME = { K: [60, 63], Q: [60, 56], k: [4, 7], q: [4, 0] };
   const CASTLE_LOSS = {};
   for (const [r, sqs] of Object.entries(CASTLE_HOME)) for (const sq of sqs) CASTLE_LOSS[sq] = (CASTLE_LOSS[sq] || '') + r;
+  // Chess960. A position whose castling rights aren't all the standard homes carries rooks: { K?, Q?, k?, q? }, each
+  // right's rook square, kept (the same object) for the whole game, so it stays 960 once its rights are gone. There a
+  // castle is the king taken onto its own rook (uci king square + rook square); after it the king and rook stand as in
+  // standard chess (a-side: king c, rook d; h-side: king g, rook f)
+  const rightSide = (r) => (r === 'K' || r === 'k' ? 'h' : 'a');
+  const rightOf = (color, side) => (color === 'w' ? (side === 'h' ? 'K' : 'Q') : (side === 'h' ? 'k' : 'q'));
+  // The rook of right r: the right's king stands on its first rank and rooks[r] (if given and holding that side's rook
+  // on that side of the king), else the outermost rook of that colour on that side of the king on that rank; -1 if none
+  function castleRook(b, r, rooks) {
+    const w = r < 'a', y = w ? 7 : 0, k = b.indexOf(w ? 'K' : 'k'), R = w ? 'R' : 'r', h = rightSide(r) === 'h';
+    if (k < 0 || fy(k) !== y) return -1;
+    const ok = (sq) => sq >= 0 && fy(sq) === y && b[sq] === R && (h ? fx(sq) > fx(k) : fx(sq) < fx(k));
+    if (rooks && rooks[r] != null && ok(rooks[r])) return rooks[r];
+    for (let x = h ? 7 : 0; h ? x > fx(k) : x < fx(k); x += h ? -1 : 1) if (ok(at(x, y))) return at(x, y);
+    return -1;
+  }
+  // the right a castle from → to would use in a 960 position (the king onto its own rook), whether legal or not; null
+  // for any other move
+  function castleRight(pos, from, to) {
+    const p = pos.b[from];
+    if (!pos.rooks || !p || tOf(p) !== 'k' || pos.b[to] !== (p === 'K' ? 'R' : 'r') || fy(from) !== fy(to)) return null;
+    return rightOf(colorOf(p), fx(to) > fx(from) ? 'h' : 'a');
+  }
   function applyMove(pos, from, to, promo) {
     const b = pos.b.slice(), p = b[from], t = p.toLowerCase(), color = colorOf(p);
     let ep = -1, epCap = -1;
     if (t === 'p' && to === pos.ep && !b[to]) { epCap = at(fx(to), fy(from)); b[epCap] = null; }
     if (t === 'p' && Math.abs(fy(to) - fy(from)) === 2) ep = at(fx(from), (fy(from) + fy(to)) / 2);
-    if (t === 'k' && Math.abs(fx(to) - fx(from)) === 2) {
-      const y = fy(from);
-      if (fx(to) === 6) { b[at(5, y)] = b[at(7, y)]; b[at(7, y)] = null; } else { b[at(3, y)] = b[at(0, y)]; b[at(0, y)] = null; }
+    const c960 = castleRight(pos, from, to);
+    if (c960) {
+      const y = fy(from), h = rightSide(c960) === 'h', R = b[to];
+      b[from] = null; b[to] = null; b[at(h ? 5 : 3, y)] = R; b[at(h ? 6 : 2, y)] = p;
+    } else {
+      if (!pos.rooks && t === 'k' && Math.abs(fx(to) - fx(from)) === 2) {
+        const y = fy(from);
+        if (fx(to) === 6) { b[at(5, y)] = b[at(7, y)]; b[at(7, y)] = null; } else { b[at(3, y)] = b[at(0, y)]; b[at(0, y)] = null; }
+      }
+      b[to] = promo ? (color === 'w' ? promo.toUpperCase() : promo.toLowerCase()) : p; b[from] = null;
     }
-    b[to] = promo ? (color === 'w' ? promo.toUpperCase() : promo.toLowerCase()) : p; b[from] = null;
     // castling rights go when the king or a rook leaves its square, or a rook is taken there
     let castle = pos.castle == null ? 'KQkq' : pos.castle;
-    for (const sq of [from, to]) if (CASTLE_LOSS[sq]) castle = castle.replace(new RegExp(`[${CASTLE_LOSS[sq]}]`, 'g'), '');
-    return { b, ep, epCap, turn: color === 'w' ? 'b' : 'w', castle };
+    if (pos.rooks) {
+      castle = [...castle].filter((r) => {
+        const rk = castleRook(pos.b, r, pos.rooks);
+        return !(t === 'k' && (r < 'a') === (color === 'w')) && rk !== from && rk !== to;
+      }).join('');
+    } else for (const sq of [from, to]) if (CASTLE_LOSS[sq]) castle = castle.replace(new RegExp(`[${CASTLE_LOSS[sq]}]`, 'g'), '');
+    const out = { b, ep, epCap, turn: color === 'w' ? 'b' : 'w', castle };
+    if (pos.rooks) out.rooks = pos.rooks;
+    return out;
   }
   function toFen(pos) {
     const rows = [];
@@ -108,6 +144,11 @@
     if (/^0-0/.test(s)) s = s.replace(/0/g, 'O');
     const color = pos.turn;
     // castling is checked in full (rights, rook, empty squares, no check on the king's path): a PGN's O-O isn't trusted
+    if (/^O-O(-O)?$/.test(s) && pos.rooks) {
+      const from = kingIdx(pos.b, color), to = castleRook(pos.b, rightOf(color, s.length > 3 ? 'a' : 'h'), pos.rooks);
+      if (from < 0 || to < 0 || !legalMove(pos, from, to)) throw new Error(`"${san}" is not a legal move here`);
+      return { from, to, promo: null };
+    }
     if (/^O-O(-O)?$/.test(s)) {
       const y = color === 'w' ? 7 : 0, from = at(4, y), to = at(s.length > 3 ? 2 : 6, y);
       if (pos.b[from] !== (color === 'w' ? 'K' : 'k') || !legalMove(pos, from, to)) throw new Error(`"${san}" is not a legal move here`);
@@ -253,8 +294,44 @@
     return Math.floor(ep / 8) === (turn === 'w' ? 2 : 5) && !b[ep] && !b[ep - 8 * dir] && b[ep + 8 * dir] === (turn === 'w' ? 'p' : 'P');
   }
 
-  // A FEN's text as a setup: the fields after the board optional, rights in any order. Only malformed text is an error
-  // ({ error }); castling rights or an en passant square the pieces don't support are left out of the setup and named in
+  // A FEN's castling field (X-FEN or Shredder-FEN: K/Q the outermost rook on that side of the king, a file letter the
+  // rook on that file, in any order) read against board b: { castle: the rights the pieces support in KQkq order, rooks
+  // (only when some right isn't the standard king e1/e8 with rook a/h), dropped: the letters left out }
+  function readRights(b, field) {
+    const rooks = {}, dropped = [];
+    for (const ch of field === '-' ? '' : field) {
+      const w = ch < 'a', y = w ? 7 : 0, k = b.indexOf(w ? 'K' : 'k');
+      let r, rk;
+      if (/[KQkq]/.test(ch)) { r = ch; rk = castleRook(b, r); }
+      else {
+        rk = at(ch.toLowerCase().charCodeAt(0) - 97, y);
+        r = k >= 0 && fy(k) === y && fx(rk) !== fx(k) ? rightOf(w ? 'w' : 'b', fx(rk) > fx(k) ? 'h' : 'a') : null;
+        if (r && castleRook(b, r, { [r]: rk }) !== rk) r = null;
+      }
+      if (r && rk >= 0 && rooks[r] === rk) continue; // the same right twice
+      if (!r || rk < 0 || r in rooks) { dropped.push(ch); continue; }
+      rooks[r] = rk;
+    }
+    const order = (c) => ('KQkq'.includes(c) ? 'KQkq'.indexOf(c) : 4);
+    dropped.sort((a, c) => order(a) - order(c));
+    const castle = 'KQkq'.split('').filter((r) => r in rooks).join('');
+    const std = [...castle].every((r) => rooks[r] === CASTLE_HOME[r][1] && b[CASTLE_HOME[r][0]] === (r < 'a' ? 'K' : 'k'));
+    return std ? { castle, dropped: dropped.join('') } : { castle, rooks, dropped: dropped.join('') };
+  }
+  // A position's or setup's castling field: standard rights in KQkq order where the king and rook are at home; with
+  // rooks (960), X-FEN, K/Q where the right's rook is the outermost, else its file letter
+  function castleField(b, asked, rooks) {
+    if (!rooks) return 'KQkq'.split('').filter((r) => asked.includes(r) && canCastle(b, r)).join('') || '-';
+    return 'KQkq'.split('').map((r) => {
+      const rk = castleRook(b, r, rooks);
+      if (!asked.includes(r) || rk < 0 || (rooks[r] != null && rk !== rooks[r])) return '';
+      return rk === castleRook(b, r) ? r : r < 'a' ? FILES[fx(rk)].toUpperCase() : FILES[fx(rk)];
+    }).join('') || '-';
+  }
+
+  // A FEN's text as a setup: the fields after the board optional, rights in any order (X-FEN or Shredder-FEN, so a
+  // Chess960 position's setup carries rooks, as a position does). Only malformed text is an error ({ error }); castling
+  // rights or an en passant square the pieces don't support are left out of the setup and named in
   // dropped: { castle: the rights left out, ep: whether the square was }
   function readFen(text) {
     const t = String(text == null ? '' : text).trim(), f = t.split(/\s+/), bad = { error: `That isn't a FEN: ${t.replace(/\s+/g, ' ').slice(0, 80)}` };
@@ -262,15 +339,37 @@
     if (f.length > 6 || ranks.length !== 8 || !ranks.every((r) => /^[pnbrqkPNBRQK1-8]+$/.test(r) && width(r) === 8)) return bad;
     const turn = f[1] || 'w', castle = f[2] || '-', ep = f[3] || '-', half = f[4] || '0', full = f[5] || '1';
     if (!/^[wb]$/.test(turn) || !/^\d+$/.test(half) || !/^\d+$/.test(full) || !/^(-|[a-h][1-8])$/.test(ep)) return bad;
-    if (/[A-Ha-h]/.test(castle)) return { error: "Chess960 positions aren't supported yet" };
-    if (castle !== '-' && !/^[KQkq]{1,4}$/.test(castle)) return bad;
-    const b = fromFen(f[0]), asked = castle === '-' ? '' : castle, epIdx = ep === '-' ? -1 : sqIdx(ep);
-    const rights = 'KQkq'.split('').filter((r) => asked.includes(r));
-    const kept = rights.filter((r) => canCastle(b, r)).join(''), epOk = epIdx >= 0 && epFits(b, turn, epIdx);
-    return {
-      setup: { b, turn, castle: kept, ep: epOk ? epIdx : -1, half: +half, full: Math.max(1, +full) },
-      dropped: { castle: rights.filter((r) => !kept.includes(r)).join(''), ep: epIdx >= 0 && !epOk },
-    };
+    if (castle !== '-' && !/^[KQkqA-Ha-h]{1,4}$/.test(castle)) return bad;
+    const b = fromFen(f[0]), epIdx = ep === '-' ? -1 : sqIdx(ep), rr = readRights(b, castle);
+    const epOk = epIdx >= 0 && epFits(b, turn, epIdx);
+    const setup = { b, turn, castle: rr.castle, ep: epOk ? epIdx : -1, half: +half, full: Math.max(1, +full) };
+    if (rr.rooks) setup.rooks = rr.rooks;
+    return { setup, dropped: { castle: rr.dropped, ep: epIdx >= 0 && !epOk } };
+  }
+  const is960 = (pos) => !!(pos && pos.rooks);
+  const fenIs960 = (fen) => { const r = readFen(fen); return !r.error && is960(r.setup); };
+
+  // Chess960 starts by Scharnagl's numbering (as Lichess and Wikipedia use; 518 is the standard start): the six-field FEN
+  // with X-FEN rights KQkq
+  const KNIGHTS960 = [[0, 1], [0, 2], [0, 3], [0, 4], [1, 2], [1, 3], [1, 4], [2, 3], [2, 4], [3, 4]];
+  function backRank960(n) {
+    const r = new Array(8).fill(null), empty = () => r.map((p, i) => (p ? -1 : i)).filter((i) => i >= 0);
+    r[2 * (n % 4) + 1] = 'B'; n = Math.floor(n / 4);
+    r[2 * (n % 4)] = 'B'; n = Math.floor(n / 4);
+    r[empty()[n % 6]] = 'Q'; n = Math.floor(n / 6);
+    const e = empty(); for (const j of KNIGHTS960[n]) r[e[j]] = 'N';
+    empty().forEach((i, j) => { r[i] = 'RKR'[j]; });
+    return r.join('');
+  }
+  const chess960Fen = (n) => { const r = backRank960(n); return `${r.toLowerCase()}/pppppppp/8/8/8/8/PPPPPPPP/${r} w KQkq - 0 1`; };
+  // a number from 0 to 959 but 518, uniformly
+  const chess960Random = (rand = Math.random) => { const k = Math.min(958, Math.max(0, Math.floor(rand() * 959))); return k >= 518 ? k + 1 : k; };
+  let RANKS960 = null;
+  // the number of the Chess960 start this FEN's placement is (both back ranks mirrored, pawns on 2 and 7, nothing else), else null
+  function chess960Number(fen) {
+    if (!RANKS960) { RANKS960 = new Map(); for (let n = 0; n < 960; n++) RANKS960.set(backRank960(n), n); }
+    const m = /^([a-z]{8})\/pppppppp\/8\/8\/8\/8\/PPPPPPPP\/([A-Z]{8})$/.exec(String(fen || '').trim().split(/\s+/)[0]);
+    return m && m[1] === m[2].toLowerCase() && RANKS960.has(m[2]) ? RANKS960.get(m[2]) : null;
   }
 
   // two pieces on one rank, file or diagonal with the king: no single move gives both checks
@@ -328,16 +427,18 @@
     return false;
   }
   // A position's FEN: castling rights only where the king and rook are still at home ('KQkq' asked where pos records
-  // none), the en passant square pos records (ep: 'legal', only where a capture there is legal), then `counters`
-  // ([half, full]; none gives the four-field form a position's key uses)
+  // none; a 960 position's in X-FEN, castleField), the en passant square pos records (ep: 'legal', only where a capture
+  // there is legal), then `counters` ([half, full]; none gives the four-field form a position's key uses)
   function fullFen(pos, { ep = 'any', counters = [] } = {}) {
-    const asked = pos.castle == null ? 'KQkq' : pos.castle;
-    const castle = 'KQkq'.split('').filter((r) => asked.includes(r) && canCastle(pos.b, r)).join('') || '-';
+    const castle = castleField(pos.b, pos.castle == null ? 'KQkq' : pos.castle, pos.rooks);
     const e = pos.ep >= 0 && (ep !== 'legal' || epCapturable(pos)) ? idxSq(pos.ep) : '-';
     return [toFen(pos), castle, e, ...counters].join(' ');
   }
-  // a setup's six-field FEN
-  const setupFen = (s) => [toFen({ b: s.b, turn: s.turn }), s.castle || '-', s.ep >= 0 ? idxSq(s.ep) : '-', s.half, s.full].join(' ');
+  // a setup's six-field FEN (a 960 setup's rights in X-FEN)
+  const setupFen = (s) => {
+    const castle = s.rooks ? castleField(s.b, s.castle, s.rooks) : s.castle || '-';
+    return [toFen({ b: s.b, turn: s.turn }), castle, s.ep >= 0 ? idxSq(s.ep) : '-', s.half, s.full].join(' ');
+  };
 
   // A FEN → { pos, ply0, fen }: fen is the six-field form, ply0 the half-moves before the position (so the move
   // number of the next move is moveNo(ply0)). Throws an Error a reader can act on: unlike readFen, rights or an en
@@ -350,7 +451,7 @@
     if (r.dropped.castle) throw new Error("Castling rights don't match the pieces");
     if (r.dropped.ep) throw new Error("The en passant square doesn't match the pieces");
     return {
-      pos: { b: s.b, ep: s.ep, turn: s.turn, castle: s.castle },
+      pos: s.rooks ? { b: s.b, ep: s.ep, turn: s.turn, castle: s.castle, rooks: s.rooks } : { b: s.b, ep: s.ep, turn: s.turn, castle: s.castle },
       ply0: (s.full - 1) * 2 + (s.turn === 'b' ? 1 : 0),
       fen: setupFen(s),
     };
@@ -430,6 +531,7 @@
       if (check) ply.checkSq = idxSq(kingIdx(pos.b, pos.turn));
       ply.fen = toFen(pos); // placement and side: a key, not a position (castling and en passant are in pos)
       ply.pos = { b: pos.b, turn: pos.turn, castle: pos.castle, ep: pos.ep }; // the whole position after the move
+      if (pos.rooks) ply.pos.rooks = pos.rooks;
       ply.capture = !!before.b[mv.to] || pos.epCap >= 0;
       // the position after it from the tablebase (decodeEval: a win with no distance to mate is won, not a mate count)
       if (am && am.tb_after) ply.tb = am.tb_after;
@@ -817,9 +919,12 @@
   // ---------- moves the viewer plays on the board ----------
   // castling rights from the FEN's third field; a FEN without one (the page's own) allows every castle. The en passant
   // field is kept only where a pawn just moved two squares past it (epFits)
+  // (a 960 position's rights read as readFen reads them, with its rooks)
   const posFromFen = (fen) => {
     const f = fen.split(' '), b = fromFen(fen), turn = f[1] || 'w', ep = /^[a-h][1-8]$/.test(f[3] || '') ? sqIdx(f[3]) : -1;
-    return { b, ep: ep >= 0 && epFits(b, turn, ep) ? ep : -1, turn, castle: f[2] == null ? 'KQkq' : f[2].replace('-', '') };
+    const pos = { b, ep: ep >= 0 && epFits(b, turn, ep) ? ep : -1, turn, castle: f[2] == null ? 'KQkq' : f[2].replace('-', '') };
+    const rr = f[2] != null && /^[KQkqA-Ha-h]{1,4}$/.test(f[2]) ? readRights(b, f[2]) : null;
+    return rr && rr.rooks ? { ...pos, castle: rr.castle, rooks: rr.rooks } : pos;
   };
   // A legal move from `from` to `to` (square indices, 0 = a8), or null. A pawn reaching the last rank becomes `promo`
   // (q, r, b or n; a queen by default).
@@ -827,7 +932,9 @@
     const p = pos.b[from];
     if (!p || colorOf(p) !== pos.turn || from === to) return null;
     const t = tOf(p), color = pos.turn, opp = color === 'w' ? 'b' : 'w';
-    if (t === 'k' && fy(from) === fy(to) && Math.abs(fx(to) - fx(from)) === 2) {
+    if (pos.rooks && castleRight(pos, from, to)) {
+      if (!castleOk(pos, from, to)) return null;
+    } else if (!pos.rooks && t === 'k' && fy(from) === fy(to) && Math.abs(fx(to) - fx(from)) === 2) {
       const y = color === 'w' ? 7 : 0, king = fx(to) === 6;
       if (fy(from) !== y || fx(from) !== 4 || pos.b[at(king ? 7 : 0, y)] !== (color === 'w' ? 'R' : 'r')) return null;
       const right = color === 'w' ? (king ? 'K' : 'Q') : (king ? 'k' : 'q');
@@ -840,11 +947,49 @@
     const after = applyMove(pos, from, to, pr);
     return inCheck(after.b, color) ? null : { from, to, promo: pr, after };
   }
+  // Whether the king on `from` taking its own rook on `to` is a legal castle in a 960 position (Chess960's rules): the
+  // right held and `to` its rook; every square between the king and its destination and between the rook and its
+  // destination empty but for the two; the king's square, path and destination not attacked, looked at with the king
+  // and rook lifted (as Stockfish and Lichess do, so a rook shielding the king hides no attack). The check after the
+  // move is legalMove's
+  function castleOk(pos, from, to) {
+    const r = castleRight(pos, from, to);
+    if (!r || colorOf(pos.b[from]) !== pos.turn || !(pos.castle == null ? 'KQkq' : pos.castle).includes(r)) return false;
+    if (castleRook(pos.b, r, pos.rooks) !== to) return false;
+    const y = fy(from), h = rightSide(r) === 'h', kTo = h ? 6 : 2, rTo = h ? 5 : 3, b = pos.b.slice(), opp = pos.turn === 'w' ? 'b' : 'w';
+    b[from] = null; b[to] = null;
+    const span = (a, z) => { const out = []; for (let x = Math.min(a, z); x <= Math.max(a, z); x++) out.push(at(x, y)); return out; };
+    if (span(fx(from), kTo).concat(span(fx(to), rTo)).some((sq) => b[sq])) return false;
+    return !span(fx(from), kTo).some((sq) => attacked(b, sq, opp));
+  }
+  // the legal castles of the side to move in a 960 position, a-side first: [{ side: 'a' | 'h', step }] (step as userMove's); [] in a standard one
+  function castleMoves(pos) {
+    if (!pos.rooks) return [];
+    const k = kingIdx(pos.b, pos.turn), out = [];
+    if (k < 0) return out;
+    for (const side of ['a', 'h']) {
+      const rk = castleRook(pos.b, rightOf(pos.turn, side), pos.rooks), step = rk >= 0 ? userMove(pos, k, rk) : null;
+      if (step) out.push({ side, step });
+    }
+    return out;
+  }
+  // In a 960 position, whether the king dropped from `from` on `to` is a legal castle: { side, ask } or null. On its own
+  // castling rook it castles at once (ask: false, as on Lichess); on c or g of its first rank too when the king stands two
+  // or more squares away (no king move goes that far), and ask: true from one square away, where a king step could be meant
+  function castleTarget(pos, from, to) {
+    if (!pos.rooks || from === to || pos.b[from] !== (pos.turn === 'w' ? 'K' : 'k')) return null;
+    const ms = castleMoves(pos), onRook = ms.find((m) => sqIdx(m.step.uci.slice(2, 4)) === to);
+    if (onRook) return { side: onRook.side, ask: false };
+    const onDest = ms.find((m) => at(m.side === 'h' ? 6 : 2, fy(from)) === to);
+    return onDest ? { side: onDest.side, ask: Math.abs(fx(from) - fx(to)) === 1 } : null;
+  }
   const legalTargets = (pos, from) => { const out = []; for (let to = 0; to < 64; to++) if (legalMove(pos, from, to)) out.push(to); return out; };
   function sanOf(pos, mv) {
     const p = pos.b[mv.from], t = tOf(p), cap = !!pos.b[mv.to] || (t === 'p' && mv.to === pos.ep);
     let san;
-    if (t === 'k' && Math.abs(fx(mv.to) - fx(mv.from)) === 2) san = fx(mv.to) === 6 ? 'O-O' : 'O-O-O';
+    const c960 = castleRight(pos, mv.from, mv.to);
+    if (c960) san = rightSide(c960) === 'h' ? 'O-O' : 'O-O-O';
+    else if (!pos.rooks && t === 'k' && Math.abs(fx(mv.to) - fx(mv.from)) === 2) san = fx(mv.to) === 6 ? 'O-O' : 'O-O-O';
     else if (t === 'p') san = (cap ? FILES[fx(mv.from)] + 'x' : '') + idxSq(mv.to) + (mv.promo ? '=' + mv.promo.toUpperCase() : '');
     else {
       const others = [];
@@ -916,5 +1061,5 @@
     if (at < text.length) out.push({ text: text.slice(at) });
     return out;
   };
-  window.ChessCore = { START_FEN, links, splitGames, fmtDate, fmtLen, hasLegal, inCheck, checkers, evalTicks, sqName: idxSq, CASTLE_HOME, canCastle, readFen, epFits, setupProblems, setupFen, epCapturable, fullFen, parseFen, fenAfter, moveNo, sqIndex: sqIdx, applySan, applyUci, stepFromUci, toFen, playLine, posAt, posFromFen, legalTargets, isPromotion, userMove, buildGame, withCommentary, commentarySources, classifyFile, plan, timing, schedule, cues, settledAt, clipRange, MATE_CP, MATE_STEP, MATE_MIN, mateCp, isMateCp, mateIn, decodeEval, WIN_K, WIN_DROP, winChance, plyCp, MARK_CLASS, pgnClk, pgnMoveNo, pgnReopens, pgnText, annotatedPgn, withSearches, notesText };
+  window.ChessCore = { START_FEN, links, splitGames, fmtDate, fmtLen, hasLegal, inCheck, checkers, evalTicks, sqName: idxSq, CASTLE_HOME, canCastle, castleRook, castleMoves, castleTarget, is960, fenIs960, chess960Fen, chess960Random, chess960Number, readFen, epFits, setupProblems, setupFen, epCapturable, fullFen, parseFen, fenAfter, moveNo, sqIndex: sqIdx, applySan, applyUci, stepFromUci, toFen, playLine, posAt, posFromFen, legalTargets, isPromotion, userMove, buildGame, withCommentary, commentarySources, classifyFile, plan, timing, schedule, cues, settledAt, clipRange, MATE_CP, MATE_STEP, MATE_MIN, mateCp, isMateCp, mateIn, decodeEval, WIN_K, WIN_DROP, winChance, plyCp, MARK_CLASS, pgnClk, pgnMoveNo, pgnReopens, pgnText, annotatedPgn, withSearches, notesText };
 })();

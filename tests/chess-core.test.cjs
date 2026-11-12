@@ -401,11 +401,11 @@ test('parseFen rejects what is not a legal position', () => {
     ['4k3/8/8/8/8/8/8/4K2R w QK - 0 1', /castling/i],   // rights in any order, but still checked against the pieces
     ['P3k3/8/8/8/8/8/8/4K3 w - - 0 1', /pawn/i],        // a pawn on the back rank
     ['4k3/8/8/8/8/8/8/4K3 w KQ - 0 1', /castling/i],    // rights without the rooks
-    ['4k3/8/8/8/8/8/8/1R2K1R1 w BG - 0 1', /Chess960/], // Shredder-FEN rights by file: Chess960
     ['4k3/8/8/8/8/8/8/4K3 w - e3 0 1', /en passant/i],  // no pawn behind e3
     ['not a fen', /FEN/],
   ]) assert.throws(() => CC.parseFen(fen), msg, fen);
   assert.doesNotThrow(() => CC.parseFen('4k3/8/8/8/8/8/8/R3K2r w Q - 0 1')); // White to move in check is legal
+  assert.deepEqual(CC.parseFen('4k3/8/8/8/8/8/8/1R2K1R1 w BG - 0 1').pos.rooks, { K: CC.sqIndex('g1'), Q: CC.sqIndex('b1') }); // Shredder-FEN rights by file: Chess960
 });
 test('parseFen takes castling rights in any order, as Edit position does, and writes them in KQkq order', () => {
   const fen = 'r3k2r/8/8/8/8/8/8/R3K2R w QKqk - 0 1';
@@ -626,4 +626,146 @@ test('a ply carries the whole position after it', () => {
   assert.equal(M.plies[4].pos.castle, 'kq');
   assert.equal(M.plies[4].pos.turn, 'b');
   assert.equal(CC.fullFen(M.plies[4].pos), 'rnbqkb1r/ppp1pppp/5n2/3pP3/8/8/PPPPKPPP/RNBQ1BNR b kq -');
+});
+
+// ---------- Chess960 ----------
+const back = (fen) => fen.split(' ')[0].split('/');
+const pos960 = (fen) => CC.parseFen(fen).pos;
+const at960 = (pos, s) => pos.b[CC.sqIndex(s)];
+test('chess960Fen numbers positions as Scharnagl does', () => {
+  assert.deepEqual([back(CC.chess960Fen(0))[0], back(CC.chess960Fen(0))[7]], ['bbqnnrkr', 'BBQNNRKR']);
+  assert.equal(CC.chess960Fen(518), CC.START_FEN);
+  assert.equal(back(CC.chess960Fen(959))[7], 'RKRNNQBB');
+  const seen = new Set();
+  for (let n = 0; n < 960; n++) {
+    const f = CC.chess960Fen(n), r = back(f)[7];
+    seen.add(r);
+    assert.equal(back(f)[0], r.toLowerCase(), `${n}: black mirrors white`);
+    assert.equal(f.split(' ').slice(1).join(' '), 'w KQkq - 0 1', `${n}`);
+    const bs = [...r].map((c, i) => (c === 'B' ? i % 2 : -1)).filter((x) => x >= 0);
+    assert.notEqual(bs[0], bs[1], `${n}: bishops on opposite colours`);
+    const k = r.indexOf('K');
+    assert.ok(r.indexOf('R') < k && r.lastIndexOf('R') > k, `${n}: king between the rooks`);
+  }
+  assert.equal(seen.size, 960);
+});
+test('chess960Random never gives 518', () => {
+  for (const x of [518 / 960, 517.5 / 960, 518.5 / 960, 517 / 959, 518 / 959, 0, 0.999999]) {
+    const n = CC.chess960Random(() => x);
+    assert.notEqual(n, 518, String(x)); assert.ok(Number.isInteger(n) && n >= 0 && n <= 959, `${x}: ${n}`);
+  }
+  assert.equal(CC.chess960Random(() => 0), 0);
+  assert.equal(CC.chess960Random(() => 0.999999), 959);
+});
+test('chess960Number reads a start back', () => {
+  for (const n of [0, 518, 959, 612]) assert.equal(CC.chess960Number(CC.chess960Fen(n)), n);
+  assert.equal(CC.chess960Number('rnbqkbnr/pppppppp/8/8/4P3/8/PPPP1PPP/RNBQKBNR b KQkq e3 0 1'), null);
+  assert.equal(CC.chess960Number('rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBKQBNR w - - 0 1'), null, 'black not mirrored');
+  assert.equal(typeof CC.chess960Number('rnbkqbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBKQBNR b - - 3 9'), 'number', 'placement only');
+  assert.equal(CC.chess960Number('4k3/8/8/8/8/8/8/4K3 w - - 0 1'), null);
+});
+test('readFen reads Shredder and X-FEN rights', () => {
+  const x = CC.readFen(CC.chess960Fen(0)), s = CC.readFen(CC.chess960Fen(0).replace('KQkq', 'HFhf'));
+  assert.deepEqual(x.setup, s.setup);
+  assert.equal(x.setup.castle, 'KQkq');
+  assert.deepEqual(x.setup.rooks, { K: CC.sqIndex('h1'), Q: CC.sqIndex('f1'), k: CC.sqIndex('h8'), q: CC.sqIndex('f8') });
+  assert.deepEqual(x.dropped, { castle: '', ep: false });
+  assert.equal(CC.setupFen(s.setup), CC.chess960Fen(0));
+  assert.equal(CC.fenIs960(CC.chess960Fen(0)), true);
+  assert.equal(CC.is960(pos960(CC.chess960Fen(0))), true);
+});
+test('readFen: KQkq means the outermost rook', () => {
+  const fen = '1r2k1rr/8/8/8/8/8/8/1R2K1RR w KQkq - 0 1';
+  const r = CC.readFen(fen).setup;
+  assert.equal(r.rooks.K, CC.sqIndex('h1')); assert.equal(r.rooks.Q, CC.sqIndex('b1'));
+  const g = CC.readFen(fen.replace('KQkq', 'GQkq')).setup;
+  assert.equal(g.rooks.K, CC.sqIndex('g1'));
+  assert.equal(CC.setupFen(g), '1r2k1rr/8/8/8/8/8/8/1R2K1RR w GQkq - 0 1');
+  assert.equal(CC.setupFen(r), fen);
+  assert.equal(CC.fullFen(pos960(fen.replace('KQkq', 'GQkq')), { counters: [0, 1] }), '1r2k1rr/8/8/8/8/8/8/1R2K1RR w GQkq - 0 1');
+  assert.equal(CC.fullFen(pos960(fen), { counters: [0, 1] }), fen);
+});
+test('a standard FEN stays standard', () => {
+  for (const f of [CC.START_FEN, 'r3k2r/8/8/8/8/8/8/R3K2R w KQkq - 0 1', CC.START_FEN.replace('KQkq', 'HAha')]) {
+    const r = CC.readFen(f);
+    assert.equal(r.setup.rooks, undefined, f); assert.equal(r.setup.castle, 'KQkq', f);
+    assert.equal(CC.fenIs960(f), false);
+  }
+  const n = CC.readFen('5k2/8/8/8/8/8/8/5K1R w - - 0 1').setup;
+  assert.equal(n.rooks, undefined); assert.equal(n.castle, '');
+  assert.equal(CC.is960(CC.posFromFen(CC.START_FEN)), false);
+  assert.deepEqual(CC.castleMoves(CC.posFromFen('r3k2r/8/8/8/8/8/8/R3K2R w KQkq - 0 1')), []);
+});
+test('960 castles land on c/d and g/f', () => {
+  const cases = [
+    ['r3k2r/8/8/8/8/8/8/RK6 w Qkq - 0 1', 'b1a1', 'O-O-O', { c1: 'K', d1: 'R', a1: null, b1: null }],
+    ['r3k2r/8/8/8/8/8/8/6KR w Kkq - 0 1', 'g1h1', 'O-O', { g1: 'K', f1: 'R', h1: null }],
+    ['r3k2r/8/8/8/8/8/8/5KR1 w Kkq - 0 1', 'f1g1', 'O-O', { g1: 'K', f1: 'R' }],
+    ['r3k2r/8/8/8/8/8/8/3K3R w Kkq - 0 1', 'd1h1', 'O-O', { g1: 'K', f1: 'R', d1: null, h1: null }],
+  ];
+  for (const [fen, uci, san, want] of cases) {
+    const pos = pos960(fen);
+    assert.equal(CC.is960(pos), true, fen);
+    const r = CC.applyUci(pos, uci);
+    assert.ok(r, fen);
+    assert.equal(r.san, san, fen);
+    for (const [s, p] of Object.entries(want)) assert.equal(at960(r.pos, s), p, `${fen}: ${s}`);
+    assert.equal(r.pos.castle, 'kq', fen);
+    assert.equal(r.pos.rooks, pos.rooks, 'the same rooks object');
+    const ms = CC.castleMoves(pos);
+    assert.equal(ms.length, 1, fen); assert.equal(ms[0].step.uci, uci); assert.equal(ms[0].side, san === 'O-O' ? 'h' : 'a');
+  }
+  // a game from a Chess960 start
+  const p0 = pos960('1r2k1r1/pppppppp/8/8/8/8/PPPPPPPP/1R2K1R1 w KQkq - 0 1');
+  assert.deepEqual(CC.castleMoves(p0).map((m) => [m.side, m.step.uci, m.step.san]), [['a', 'e1b1', 'O-O-O'], ['h', 'e1g1', 'O-O']]);
+});
+test('960 castling is refused through check, attacked squares or blockers', () => {
+  for (const [fen, uci] of [
+    ['4kr2/8/8/8/8/8/8/5KR1 w K - 0 1', 'f1g1'],   // the king in check
+    ['4kr2/8/8/8/8/8/8/3K3R w K - 0 1', 'd1h1'],   // f1 crossed under attack
+    ['4k1r1/8/8/8/8/8/8/3K3R w K - 0 1', 'd1h1'],  // g1, the king's square, under attack
+    ['4k3/8/8/8/8/8/8/RK1N4 w Q - 0 1', 'b1a1'],   // a piece on the rook's square d1
+    ['4k3/8/8/8/8/8/8/3K1B1R w K - 0 1', 'd1h1'],  // a piece on the king's path
+  ]) {
+    const pos = pos960(fen);
+    assert.equal(CC.applyUci(pos, uci), null, fen);
+    assert.deepEqual(CC.castleMoves(pos), [], fen);
+  }
+  // no right, and a king move of two squares is never a castle
+  assert.equal(CC.applyUci(pos960('4k3/8/8/8/8/8/8/3K3R w K - 0 1'), 'd1f1'), null);
+  const lost = CC.applyUci(CC.applyUci(pos960('4k3/8/8/8/8/8/8/3K3R w K - 0 1'), 'h1h2').pos, 'e8e7').pos;
+  assert.equal(lost.castle, ''); assert.ok(lost.rooks, 'stays 960');
+  assert.equal(CC.applyUci(CC.applyUci(CC.applyUci(lost, 'h2h1').pos, 'e7e8').pos, 'd1h1'), null, 'the rook back home has no right');
+});
+test('sanToMove reads O-O in a 960 position', () => {
+  const M = CC.buildGame({ pgn: '[SetUp "1"]\n[FEN "r3k2r/8/8/8/8/8/8/RK6 w Qkq - 0 1"]\n\n1. O-O-O O-O 2. Kb1 *' });
+  assert.deepEqual(M.plies.map((p) => [p.san, p.uci]), [['O-O-O', 'b1a1'], ['O-O', 'e8h8'], ['Kb1', 'c1b1']]);
+  assert.ok(M.plies[2].pos.rooks, 'the game stays 960');
+  const z = CC.buildGame({ pgn: '[SetUp "1"]\n[FEN "4k3/8/8/8/8/8/8/RK6 w Q - 0 1"]\n\n1. 0-0-0 *' });
+  assert.equal(z.plies[0].uci, 'b1a1');
+  assert.throws(() => CC.buildGame({ pgn: '[SetUp "1"]\n[FEN "4k3/8/8/8/8/8/8/RK6 w Q - 0 1"]\n\n1. O-O *' }), /not a legal move/);
+});
+test('castleTarget', () => {
+  const p = pos960('4k3/8/8/8/8/8/8/5K1R w K - 0 1'), sq = CC.sqIndex;
+  assert.deepEqual(CC.castleTarget(p, sq('f1'), sq('g1')), { side: 'h', ask: true });
+  assert.deepEqual(CC.castleTarget(p, sq('f1'), sq('h1')), { side: 'h', ask: false });
+  assert.equal(CC.castleTarget(p, sq('f1'), sq('e1')), null);
+  assert.deepEqual(CC.castleTarget(pos960('4k3/8/8/8/8/8/8/3K3R w K - 0 1'), sq('d1'), sq('g1')), { side: 'h', ask: false });
+  assert.deepEqual(CC.castleTarget(pos960('4k3/8/8/8/8/8/8/5KR1 w K - 0 1'), sq('f1'), sq('g1')), { side: 'h', ask: false });
+  const g = pos960('4k3/8/8/8/8/8/8/6KR w K - 0 1');
+  assert.deepEqual(CC.castleTarget(g, sq('g1'), sq('h1')), { side: 'h', ask: false });
+  assert.equal(CC.castleTarget(g, sq('g1'), sq('g1')), null, 'no drop');
+  assert.deepEqual(CC.castleTarget(pos960('4k3/8/8/8/8/8/8/RK6 w Q - 0 1'), sq('b1'), sq('c1')), { side: 'a', ask: true });
+  assert.equal(CC.castleTarget(pos960('4kr2/8/8/8/8/8/8/3K3R w K - 0 1'), sq('d1'), sq('g1')), null, 'not legal');
+  assert.equal(CC.castleTarget(CC.posFromFen('r3k2r/8/8/8/8/8/8/R3K2R w KQkq'), sq('e1'), sq('g1')), null, 'standard');
+});
+test('a king step to g1 is still a king move', () => {
+  const p = pos960('4k3/8/8/8/8/8/8/5K1R w K - 0 1'), s = CC.userMove(p, CC.sqIndex('f1'), CC.sqIndex('g1'));
+  assert.equal(s.uci, 'f1g1'); assert.equal(s.san, 'Kg1');
+  assert.equal(at960(s.pos, 'h1'), 'R'); assert.equal(at960(s.pos, 'g1'), 'K'); assert.equal(s.pos.castle, '');
+});
+test('posFromFen keeps a 960 position 960', () => {
+  const p = CC.posFromFen('4k3/8/8/8/8/8/8/5K1R w K - 0 1');
+  assert.equal(CC.is960(p), true); assert.ok(CC.applyUci(p, 'f1h1'));
+  assert.equal(CC.fullFen(p), '4k3/8/8/8/8/8/8/5K1R w K -');
 });

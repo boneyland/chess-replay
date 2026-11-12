@@ -14,10 +14,10 @@ test('a FEN is a setup, legal or not', () => {
   assert.ok(bad.setup); assert.equal(E.ok(bad.setup), false);
   assert.ok(I.read('4k3/8/8/8/8/8/8/4K3').setup, 'placement alone');
   assert.ok(I.read('[FEN "4k3/8/8/8/8/8/8/4K3 b - - 0 40"]').setup, 'a lone FEN tag');
+  assert.equal(E.toFen(I.read('rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w HAha - 0 1').setup), window.ChessCore.START_FEN, 'Shredder-FEN rights');
 });
 test('a malformed FEN says so', () => {
   assert.match(I.read('rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBN w').error, /isn't a FEN/);
-  assert.match(I.read('rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w HAha - 0 1').error, /Chess960/);
 });
 test('a PGN is kept as pasted', () => {
   const pgn = '[White "A"]\n[Black "B"]\n\n1. e4 e5 2. Nf3 *';
