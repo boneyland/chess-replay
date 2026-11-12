@@ -30,8 +30,14 @@ const SF_ASM_LOAD_MS = 120000;
 // ...so where it is the engine, it starts this soon after the page, not on the first search, which would otherwise wait
 // for all of that (the page has drawn by then, and the engine compiles in its own worker)
 const SF_ASM_EARLY_MS = 1500;
-// url: the engine file to check (its .wasm, or the asm.js build's one .js)
-const sfFilesPresent = (url) => fetch(window.siteFile(url), { method: 'HEAD', cache: 'no-store' }).then((r) => r.ok, () => false);
+// url: the engine file to check (its .wasm, or the asm.js build's one .js). A check with no answer in SF_CHECK_MS counts
+// as there, so a request that hangs can't stop the engine starting (Firefox on GitHub, 2026-11-12: after its own engine
+// hung, no second try started in 50 s, the panel still "thinking"); a file that is missing then fails the start's timeout
+const SF_CHECK_MS = 10000;
+const sfFilesPresent = (url, ms = SF_CHECK_MS) => new Promise((done) => {
+  const ctl = new AbortController(), t = setTimeout(() => { ctl.abort(); done(true); }, ms);
+  fetch(window.siteFile(url), { method: 'HEAD', cache: 'no-store', signal: ctl.signal }).then((r) => r.ok, () => false).then((ok) => { clearTimeout(t); done(ok); });
+});
 
 // Whether Stockfish may search with threads on this page ({ on, cores, reason }, SFEngine.threadSupport); a threaded
 // engine that won't start or dies turns them off for the rest of the page, with the reason the engine menu shows
