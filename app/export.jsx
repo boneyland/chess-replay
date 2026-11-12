@@ -213,10 +213,15 @@ function useVideoExport({ fps, format, webp, mp4Quality, mp4Vfr = false, save, s
       const el = document.querySelector('.stage-frame > div');
       // its pictures decoded (a picture board's own, drawn through the sliders, has just taken the page's place)
       await Promise.all([...el.querySelectorAll('img')].map((im) => im.decode().catch(() => {})));
-      el.closest('.stage-area').scrollTop = 0;
-      // the page is drawn at the screen's density (LayoutCore.exportScale, as Settings' widths assume), up to 1920 px on its longer side
-      const cssW = el.offsetWidth, cssH = el.offsetHeight, scale = LayoutCore.exportScale(cssW, cssH, window.devicePixelRatio);
-      const W = LayoutCore.exportPx(cssW, scale), H = LayoutCore.exportPx(cssH, scale);
+      const area = el.closest('.stage-area');
+      area.scrollTop = 0;
+      // the export is the page as it looks without the transport bar: as wide as the viewport (as Settings' widths assume),
+      // the frame where it sits across it, and the page's margins above and below it (stageMargins), all in the page's
+      // background (the stage's side padding, and one column's and its scrollbar's room). It is drawn at the screen's
+      // density (LayoutCore.exportScale), up to 1920 px on its longer side; the frame has no transform, the page may (onclone)
+      const vw = document.documentElement.clientWidth, left = el.closest('.stage-frame').getBoundingClientRect().left, m = stageMargins(area);
+      const cssW = el.offsetWidth, cssH = el.offsetHeight, fullH = cssH + m.top + m.bottom, scale = LayoutCore.exportScale(vw, fullH, window.devicePixelRatio);
+      const W = LayoutCore.exportPx(vw, scale), H = LayoutCore.exportPx(fullH, scale), k = W / vw;
       const cv = document.createElement('canvas'); cv.width = W; cv.height = H;
       const cx = cv.getContext('2d', { willReadFrequently: format === 'WebP' }); // the WebP encoder reads every frame back
       // Full (0) and Half are taken against the canvas drawn now, whatever Settings' widths were worked out from
@@ -228,7 +233,7 @@ function useVideoExport({ fps, format, webp, mp4Quality, mp4Vfr = false, save, s
       const keep = (n) => n.tagName === 'STYLE' || n.tagName === 'LINK' || n.tagName === 'HEAD' || n.closest('head');
       const skip = (target) => (n) => n.tagName === 'SCRIPT' || (!keep(n) && n !== target && !n.contains(target) && !target.contains(n));
       // the stage drawn layer by layer, each redrawn only when its markup changes (export-draw.js)
-      stage = window.ExportDraw.compositor(el, { W, H, scale: W / cssW, html2canvas, skip });
+      stage = window.ExportDraw.compositor(el, { W, H, scale: k, html2canvas, skip, frame: { x: Math.round(left * k), y: Math.round(m.top * k), w: Math.round(cssW * k), h: Math.round(cssH * k) } });
       // loading is over: the first frame, which draws every layer, is the slowest and counts as drawing
       setState({ phase: 'render', done: 0, N });
       const t0 = performance.now();
