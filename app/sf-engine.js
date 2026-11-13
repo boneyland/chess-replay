@@ -78,6 +78,7 @@
     let cur = null, readyP = null, rejectReady = null, isReady = false, failed = null;
     let hashWant = hashMB, hashSet = null; // a new hash size waits for the engine to be between searches
     let threadsWant = threaded ? threads : 1, threadsSet = 1; // Stockfish starts with one
+    let c960Set = false; // UCI_Chess960, off at a new worker
     let linesSet = 1; // MultiPV, Stockfish's default until a search asks for more
 
     const pump = () => {
@@ -92,6 +93,8 @@
       const n = !threaded ? 1 : q.threads || threadsWant;
       if (n !== threadsSet) { worker.postMessage(`setoption name Threads value ${n}`); threadsSet = n; }
       if (q.lines !== linesSet) { worker.postMessage(`setoption name MultiPV value ${q.lines}`); linesSet = q.lines; }
+      const c960 = !!q.fen && window.ChessCore.fenIs960(q.fen);
+      if (c960 !== c960Set) { worker.postMessage(`setoption name UCI_Chess960 value ${c960}`); c960Set = c960; }
       worker.postMessage(positionCommand(q.moves, q.fen));
       worker.postMessage(`go ${q.depth == null ? '' : `depth ${q.depth} `}movetime ${q.movetimeMs}`);
       q.watch = setTimeout(() => hung(q), q.movetimeMs + hangMs);
@@ -159,7 +162,7 @@
       waiting.length = 0;
       bootTimers.forEach(clearTimeout);
       try { worker.terminate(); } catch (err) {}
-      hashSet = null; threadsSet = 1; linesSet = 1;
+      hashSet = null; threadsSet = 1; linesSet = 1; c960Set = false;
       try { spawn(); } catch (err) { return fail(err); }
       if (bootDone) runBoot(); else boot().then(() => { isReady = true; pump(); });
     };

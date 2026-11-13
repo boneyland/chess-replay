@@ -1907,6 +1907,336 @@ for (const name of BROWSERS) for (const site of SITES) {
     });
     // Play's Start from shows with no position set up; Set-up position then opens the editor with the dialog's settings,
     // whose Done (Start game) starts the game there, and whose Cancel brings the dialog back as it was
+    // Chess960 castling on the board (docs/plans/2026-11-13-chess960-design.md, goal 5): the Castle buttons, the king
+    // dropped one square from g1 asks castle or king move, from further away or on its own rook it castles at once;
+    // standard castling unchanged. Screenshots go to tests/out/chess960/
+    await t.test('desktop: Chess960 castles by its buttons, by the castle-or-move question, or at once', async () => {
+      const SHOTS = path.join(ROOT, 'tests', 'out', 'chess960');
+      fs.mkdirSync(SHOTS, { recursive: true });
+      const cs = await open(browser, { width: 1440, height: 900 });
+      const p = cs.page, label = p.locator('.plabel'), buttons = p.locator('.part-castle-buttons').getByRole('button');
+      const ask = p.getByRole('dialog', { name: 'Castle or move the king' });
+      const drag = async (b, from, to) => {
+        const f = square(b, from), tt = square(b, to);
+        await p.mouse.move(f.x, f.y);
+        await p.mouse.down();
+        await p.mouse.move(tt.x, tt.y, { steps: 8 });
+        await p.mouse.up();
+      };
+      const tap = async (b, sq) => { const s = square(b, sq); await p.mouse.click(s.x, s.y); };
+      const shown = (re) => assert.doesNotReject(label.filter({ hasText: re }).waitFor({ timeout: 5000 }));
+      await p.goto(base, { waitUntil: 'load' });
+      await loadedOn(p);
+      // king f1, rook h1, g1 empty: only the h-side castle is legal
+      const F1 = 'rnbqnkbr/pppppppp/8/8/8/8/PPPPPPPP/RNBQNK1R w KQkq - 0 1';
+      await setUpFen(p, F1);
+      await shown(/^Start$/);
+      await settled(p);
+      let b = await boardBox(p);
+      assert.deepEqual(await buttons.allInnerTexts().then((x) => x.map((s) => s.toLowerCase())), ['castle h-side']);
+      await buttons.filter({ hasText: /h-side/i }).click();
+      await shown(/1\. O-O$/);
+      assert.match(await shareFen(p), /\/RNBQNRK1 b kq - 1 1$/, 'king g1, rook f1');
+      assert.equal(await buttons.count(), 0, 'no castle for Black');
+      // one square from g1: the question, with the square named
+      await p.keyboard.press('Home');
+      await shown(/^Start$/);
+      await drag(b, 'f1', 'g1');
+      await assert.doesNotReject(ask.waitFor({ timeout: 5000 }));
+      assert.deepEqual(await ask.getByRole('button').allInnerTexts(), ['Castle h-side', 'Move the king to g1']);
+      await p.screenshot({ path: path.join(SHOTS, `${name}-desktop-confirm.png`) });
+      await ask.getByRole('button', { name: 'Move the king to g1' }).click();
+      await shown(/1\. Kg1$/);
+      assert.equal(await ask.count(), 0);
+      await p.keyboard.press('Home');
+      await shown(/^Start$/);
+      await drag(b, 'f1', 'g1');
+      await ask.getByRole('button', { name: 'Castle h-side' }).click();
+      await shown(/1\. O-O$/);
+      // a press anywhere else on the board plays nothing, the king back on f1; so does Esc
+      await p.keyboard.press('Home');
+      await shown(/^Start$/);
+      await drag(b, 'f1', 'g1');
+      await assert.doesNotReject(ask.waitFor({ timeout: 5000 }));
+      await tap(b, 'a4');
+      await assert.doesNotReject(ask.waitFor({ state: 'detached', timeout: 5000 }));
+      assert.match(await label.innerText(), /^Start$/);
+      assert.match(await shareFen(p), /\/RNBQNK1R w KQkq - 0 1$/);
+      // tap-tap asks the same; Esc lets it go
+      await tap(b, 'f1');
+      await tap(b, 'g1');
+      await assert.doesNotReject(ask.waitFor({ timeout: 5000 }));
+      await p.keyboard.press('Escape');
+      await assert.doesNotReject(ask.waitFor({ state: 'detached', timeout: 5000 }));
+      assert.match(await label.innerText(), /^Start$/);
+      // the king dropped (or tapped) on its own rook castles at once
+      await drag(b, 'f1', 'h1');
+      await shown(/1\. O-O$/);
+      assert.equal(await ask.count(), 0, 'no question');
+      await p.keyboard.press('Home');
+      await shown(/^Start$/);
+      await tap(b, 'f1');
+      await tap(b, 'h1');
+      await shown(/1\. O-O$/);
+      // both castles legal: a-side first; the king three squares from c1 castles at once
+      await setUpFen(p, 'rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/R4K1R w KQkq - 0 1');
+      await shown(/^Start$/);
+      await settled(p);
+      b = await boardBox(p);
+      assert.deepEqual(await buttons.allInnerTexts().then((x) => x.map((s) => s.toLowerCase())), ['castle a-side', 'castle h-side']);
+      await p.locator('.part-castle-buttons').scrollIntoViewIfNeeded();
+      await p.screenshot({ path: path.join(SHOTS, `${name}-desktop-buttons.png`) });
+      await drag(b, 'f1', 'c1');
+      await shown(/1\. O-O-O$/);
+      assert.equal(await ask.count(), 0);
+      assert.match(await shareFen(p), /\/2KR3R b kq - 1 1$/);
+      // king d1, h-side rook h1: g1 is three squares off, so the drop castles at once
+      await setUpFen(p, 'rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/R2K3R w KQkq - 0 1');
+      await shown(/^Start$/);
+      await settled(p);
+      b = await boardBox(p);
+      await drag(b, 'd1', 'g1');
+      await shown(/1\. O-O$/);
+      assert.equal(await ask.count(), 0);
+      assert.match(await shareFen(p), /\/R4RK1 b kq - 1 1$/);
+      // a game: the buttons in the Game panel on the side to move's turn, not after
+      await p.getByRole('button', { name: 'Menu', exact: true }).click();
+      await p.getByRole('button', { name: 'Play vs human' }).click();
+      const dialog = p.getByRole('dialog', { name: 'Play vs human' });
+      await dialog.getByRole('radiogroup', { name: 'Start from' }).getByRole('radio', { name: 'Set-up position' }).click();
+      await dialog.getByRole('radiogroup', { name: 'Time control' }).getByRole('radio', { name: 'Off' }).click();
+      const editFirst = dialog.getByRole('button', { name: 'Set up position…' });
+      if (await editFirst.count()) {
+        await editFirst.click();
+        await typeFen(p.getByRole('textbox', { name: 'FEN' }), F1);
+        await p.getByRole('button', { name: 'Start game' }).click();
+      } else await dialog.getByRole('button', { name: 'Start game' }).click();
+      await assert.doesNotReject(p.locator('.part-game').waitFor({ timeout: 5000 }));
+      const gameButtons = p.locator('.part-game .part-castle-buttons').getByRole('button');
+      await assert.doesNotReject(gameButtons.first().waitFor({ timeout: 5000 }));
+      await p.screenshot({ path: path.join(SHOTS, `${name}-desktop-game.png`) });
+      await gameButtons.filter({ hasText: /h-side/i }).click();
+      await shown(/1\. O-O$/);
+      assert.equal(await gameButtons.count(), 0, 'Black to move');
+      await p.getByRole('button', { name: 'Take back' }).click();
+      await assert.doesNotReject(gameButtons.first().waitFor({ timeout: 5000 }));
+      // a standard position: the two-square drag castles at once, no buttons, no question
+      await p.getByRole('button', { name: 'Resign as White' }).click();
+      await p.getByRole('button', { name: 'Resign', exact: true }).click();
+      await setUpFen(p, 'r3k2r/pppppppp/8/8/8/8/PPPPPPPP/R3K2R w KQkq - 0 1');
+      await shown(/^Start$/);
+      await settled(p);
+      b = await boardBox(p);
+      assert.equal(await p.locator('.part-castle-buttons').count(), 0);
+      await drag(b, 'e1', 'g1');
+      await shown(/1\. O-O$/);
+      assert.equal(await ask.count(), 0);
+      assert.deepEqual(cs.errors, []);
+      await cs.ctx.close();
+      // the phone: the buttons and the question
+      const ph = await open(browser, { width: 390, height: 844 }, phone({}));
+      const pp = ph.page;
+      await pp.goto(base, { waitUntil: 'load' });
+      await loadedOn(pp);
+      await pp.getByRole('button', { name: 'Menu' }).click();
+      await pp.getByRole('button', { name: 'Edit position' }).click();
+      const pfield = pp.getByRole('textbox', { name: 'FEN' });
+      await typeFen(pfield, 'rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/R4K1R w KQkq - 0 1');
+      await pp.getByRole('button', { name: 'Done' }).click();
+      await pfield.waitFor({ state: 'detached', timeout: 5000 });
+      await assert.doesNotReject(pp.locator('.plabel').filter({ hasText: /^Start$/ }).waitFor({ timeout: 5000 }));
+      await settled(pp);
+      const pbtn = pp.locator('.part-castle-buttons');
+      await assert.doesNotReject(pbtn.waitFor({ timeout: 5000 }));
+      await pbtn.scrollIntoViewIfNeeded();
+      await pp.screenshot({ path: path.join(SHOTS, `${name}-phone-buttons.png`) });
+      assert.deepEqual(await wider(pp), [], 'no sideways scroll');
+      await pp.evaluate(() => { const s = document.querySelector('.stage-area'); if (s) s.scrollTop = 0; window.scrollTo(0, 0); });
+      await settled(pp);
+      const pb = await boardBox(pp), pf = square(pb, 'f1'), pt = square(pb, 'g1');
+      await pp.mouse.move(pf.x, pf.y);
+      await pp.mouse.down();
+      await pp.mouse.move(pt.x, pt.y, { steps: 8 });
+      await pp.mouse.up();
+      const pask = pp.getByRole('dialog', { name: 'Castle or move the king' });
+      await assert.doesNotReject(pask.waitFor({ timeout: 5000 }));
+      await pp.screenshot({ path: path.join(SHOTS, `${name}-phone-confirm.png`) });
+      await pask.getByRole('button', { name: 'Castle h-side' }).click();
+      await assert.doesNotReject(pp.locator('.plabel').filter({ hasText: /1\. O-O$/ }).waitFor({ timeout: 5000 }));
+      assert.deepEqual(ph.errors, []);
+      await ph.ctx.close();
+    });
+    // Starting from a Chess960 position (design goals 2 and 3): Play's Start from › Chess960 and Menu › Explore › Chess960
+    // position, Random (drawn on Start, never 518) or by number, the choice remembered; a number out of 0–959 keeps Start
+    // disabled and says so. Screenshots of the choice go to tests/out/chess960/start-*
+    await t.test('desktop and phone: a game or free board starts from a Chess960 position, random or by number', async () => {
+      const SHOTS = path.join(ROOT, 'tests', 'out', 'chess960');
+      fs.mkdirSync(SHOTS, { recursive: true });
+      const cs = await open(browser, { width: 1440, height: 900 });
+      const p = cs.page, stored = () => p.evaluate(() => JSON.parse(localStorage.getItem('chess-video.files.v1')).board);
+      const rank1 = (fen) => fen.split(' ')[0].split('/')[7];
+      const numberOf = (fen) => p.evaluate((f) => window.ChessCore.chess960Number(f), fen);
+      await p.goto(base, { waitUntil: 'load' });
+      await loadedOn(p);
+      // Play vs computer › Chess960: Random ticked, the number field disabled
+      await p.getByRole('button', { name: 'Menu', exact: true }).click();
+      await p.getByRole('button', { name: 'Play vs computer' }).click();
+      let dialog = p.getByRole('dialog', { name: 'Play vs computer' });
+      await dialog.waitFor({ timeout: 3000 });
+      await dialog.getByRole('radiogroup', { name: 'Start from' }).getByRole('radio', { name: 'Chess960' }).click();
+      // (the page's: the dialog changes name below)
+      const random = p.getByRole('dialog').getByRole('checkbox', { name: 'Random' }), field = p.getByRole('dialog').getByRole('textbox', { name: 'Position number' });
+      assert.equal(await random.isChecked(), true);
+      assert.equal(await field.isDisabled(), true);
+      await p.waitForTimeout(300);
+      await p.screenshot({ path: path.join(SHOTS, `start-${name}-desktop-random.png`) });
+      await dialog.getByRole('radiogroup', { name: 'You play' }).getByRole('radio', { name: 'White' }).click();
+      await dialog.getByRole('radiogroup', { name: 'Time control' }).getByRole('radio', { name: 'Off' }).click();
+      await dialog.getByRole('button', { name: 'Start game' }).click();
+      await dialog.waitFor({ state: 'detached', timeout: 3000 });
+      await assert.doesNotReject(p.locator('.part-game').waitFor({ timeout: 5000 }));
+      let st = await stored();
+      const n = await numberOf(st.fen);
+      assert.ok(Number.isInteger(n) && n !== 518, `a Chess960 position other than the standard one (${st.fen})`);
+      assert.notEqual(rank1(st.fen), 'RNBQKBNR');
+      assert.equal(st.chess960, n, 'the board keeps the number');
+      assert.equal(st.game.mode, 'stockfish');
+      assert.match(await p.locator('.part-game-details').innerText(), new RegExp(`Chess960 #${n}\\b`, 'i'));
+      const pgn = await p.evaluate(() => window.PlayCore.pgn(window.BoardCore.restore(JSON.parse(localStorage.getItem('chess-video.files.v1')).board)));
+      assert.match(pgn, /\[Variant "Chess960"\]/);
+      assert.ok(pgn.includes(`[FEN "${st.fen}"]`), pgn);
+      await p.getByRole('button', { name: 'Resign', exact: true }).click();
+      await p.getByText('Resign this game?').waitFor({ timeout: 3000 });
+      await p.getByRole('button', { name: 'Resign', exact: true }).click();
+      await assert.doesNotReject(p.getByRole('button', { name: 'Play again' }).waitFor({ timeout: 5000 }));
+      // Play vs human › Chess960 remembers Random; unticked, 959 is RKRNNQBB, and 960 keeps Start disabled with a note
+      await p.getByRole('button', { name: 'Menu', exact: true }).click();
+      await p.getByRole('button', { name: 'Play vs human' }).click();
+      dialog = p.getByRole('dialog', { name: 'Play vs human' });
+      await dialog.waitFor({ timeout: 3000 });
+      await dialog.getByRole('radiogroup', { name: 'Start from' }).getByRole('radio', { name: 'Chess960' }).click();
+      assert.equal(await random.isChecked(), true);
+      await random.click();
+      assert.equal(await field.isDisabled(), false);
+      await typeFen(field, '959');
+      await p.waitForTimeout(300);
+      await p.screenshot({ path: path.join(SHOTS, `start-${name}-desktop-number.png`) });
+      const startBtn = dialog.getByRole('button', { name: 'Start game' });
+      assert.equal(await startBtn.isDisabled(), false);
+      await typeFen(field, '960');
+      assert.equal(await startBtn.isDisabled(), true);
+      assert.match(await dialog.getByRole('alert').innerText(), /Enter a number from 0 to 959/);
+      assert.equal(await field.getAttribute('aria-invalid'), 'true');
+      await p.waitForTimeout(300);
+      await p.screenshot({ path: path.join(SHOTS, `start-${name}-desktop-invalid.png`) });
+      await typeFen(field, '959');
+      await dialog.getByRole('radiogroup', { name: 'Time control' }).getByRole('radio', { name: 'Off' }).click();
+      await startBtn.click();
+      await dialog.waitFor({ state: 'detached', timeout: 3000 });
+      await assert.doesNotReject(p.locator('.part-game').waitFor({ timeout: 5000 }));
+      st = await stored();
+      assert.equal(rank1(st.fen), 'RKRNNQBB');
+      assert.equal(st.chess960, 959);
+      assert.match(await p.locator('.part-game-details').innerText(), /Chess960 #959\b/i);
+      await p.getByRole('button', { name: 'Resign as White' }).click();
+      await p.getByRole('button', { name: 'Resign', exact: true }).click();
+      // Menu › Explore › Chess960 position: the same choice, remembered (Random off, 959); 0 opens BBQNNRKR on the free board
+      await p.getByRole('button', { name: 'Menu', exact: true }).click();
+      await p.getByRole('button', { name: 'Chess960 position' }).click();
+      const explore = p.getByRole('dialog', { name: 'Chess960 position' });
+      await explore.waitFor({ timeout: 3000 });
+      const eRandom = explore.getByRole('checkbox', { name: 'Random' }), eField = explore.getByRole('textbox', { name: 'Position number' });
+      assert.equal(await eRandom.isChecked(), false);
+      assert.equal(await eField.inputValue(), '959');
+      await typeFen(eField, '0');
+      await explore.getByRole('button', { name: 'Open' }).click();
+      await explore.waitFor({ state: 'detached', timeout: 3000 });
+      await assert.doesNotReject(p.locator('.plabel').filter({ hasText: /^Start$/ }).waitFor({ timeout: 5000 }));
+      st = await stored();
+      assert.equal(rank1(st.fen), 'BBQNNRKR');
+      assert.equal(st.chess960, 0);
+      assert.equal(st.game, undefined, 'a free board, not a game');
+      assert.match(await p.locator('.part-game-info').innerText(), /Chess960 #0\b/i);
+      // Play vs computer from that board (Set-up position, as it has no moves): the game keeps its number
+      await p.getByRole('button', { name: 'Menu', exact: true }).click();
+      await p.getByRole('button', { name: 'Play vs computer' }).click();
+      dialog = p.getByRole('dialog', { name: 'Play vs computer' });
+      await dialog.waitFor({ timeout: 3000 });
+      assert.equal(await dialog.getByRole('radiogroup', { name: 'Start from' }).getByRole('radio', { name: 'Set-up position' }).getAttribute('aria-checked'), 'true');
+      await dialog.getByRole('radiogroup', { name: 'Time control' }).getByRole('radio', { name: 'Off' }).click();
+      await dialog.getByRole('button', { name: 'Start game' }).click();
+      await dialog.waitFor({ state: 'detached', timeout: 3000 });
+      await assert.doesNotReject(p.locator('.part-game').waitFor({ timeout: 5000 }));
+      st = await stored();
+      assert.equal(st.chess960, 0, 'the set-up board\'s label carries into the game');
+      assert.equal(rank1(st.fen), 'BBQNNRKR');
+      assert.match(await p.locator('.part-game-details').innerText(), /Chess960 #0\b/i);
+      assert.match(await p.evaluate(() => window.PlayCore.pgn(window.BoardCore.restore(JSON.parse(localStorage.getItem('chess-video.files.v1')).board))), /\[Variant "Chess960"\]/);
+      await p.getByRole('button', { name: 'Resign', exact: true }).click();
+      await p.getByText('Resign this game?').waitFor({ timeout: 3000 });
+      await p.getByRole('button', { name: 'Resign', exact: true }).click();
+      await assert.doesNotReject(p.getByRole('button', { name: 'Play again' }).waitFor({ timeout: 5000 }));
+      // Random again: a fresh position each time, never the standard one
+      await p.getByRole('button', { name: 'Menu', exact: true }).click();
+      await p.getByRole('button', { name: 'Chess960 position' }).click();
+      await explore.waitFor({ timeout: 3000 });
+      await eRandom.click();
+      assert.equal(await eField.isDisabled(), true);
+      await explore.getByRole('button', { name: 'Open' }).click();
+      await explore.waitFor({ state: 'detached', timeout: 3000 });
+      await settled(p);
+      st = await stored();
+      assert.ok(Number.isInteger(st.chess960) && st.chess960 !== 518 && (await numberOf(st.fen)) === st.chess960, JSON.stringify(st));
+      // Set-up position, From image and This position stay where they were in Start from
+      await p.getByRole('button', { name: 'Menu', exact: true }).click();
+      await p.getByRole('button', { name: 'Play vs human' }).click();
+      dialog = p.getByRole('dialog', { name: 'Play vs human' });
+      await dialog.waitFor({ timeout: 3000 });
+      const froms = await dialog.getByRole('radiogroup', { name: 'Start from' }).getByRole('radio').allInnerTexts();
+      assert.deepEqual(froms.filter((x) => x !== 'From image'), ['Starting position', 'Set-up position', 'Chess960']);
+      await dialog.getByRole('radiogroup', { name: 'Start from' }).getByRole('radio', { name: 'Starting position' }).click();
+      assert.equal(await random.count(), 0, 'no Chess960 choice under another start');
+      assert.equal(await dialog.getByRole('button', { name: 'Start game' }).isDisabled(), false);
+      await p.keyboard.press('Escape');
+      assert.deepEqual(cs.errors, []);
+      await cs.ctx.close();
+      // the phone: the dialog's three states
+      const ph = await open(browser, { width: 390, height: 844 }, phone({}));
+      const pp = ph.page;
+      await pp.goto(base, { waitUntil: 'load' });
+      await loadedOn(pp);
+      await pp.getByRole('button', { name: 'Menu' }).click();
+      await assert.doesNotReject(pp.getByRole('button', { name: 'Chess960 position' }).waitFor({ timeout: 3000 }));
+      await pp.waitForTimeout(300);
+      await pp.screenshot({ path: path.join(SHOTS, `start-${name}-phone-menu.png`) });
+      await pp.getByRole('button', { name: 'Play vs human' }).click();
+      const pd = pp.getByRole('dialog', { name: 'Play vs human' });
+      await pd.waitFor({ timeout: 3000 });
+      await pd.getByRole('radiogroup', { name: 'Start from' }).getByRole('radio', { name: 'Chess960' }).click();
+      const pr = pd.getByRole('checkbox', { name: 'Random' }), pf = pd.getByRole('textbox', { name: 'Position number' });
+      assert.equal(await pr.isChecked(), true);
+      await pp.waitForTimeout(300);
+      await pp.screenshot({ path: path.join(SHOTS, `start-${name}-phone-random.png`) });
+      assert.deepEqual(await wider(pp), [], 'no sideways scroll');
+      await pr.click();
+      await typeFen(pf, '612');
+      await pp.waitForTimeout(300);
+      await pp.screenshot({ path: path.join(SHOTS, `start-${name}-phone-number.png`) });
+      await typeFen(pf, 'x');
+      assert.equal(await pd.getByRole('button', { name: 'Start game' }).isDisabled(), true);
+      await pp.waitForTimeout(300);
+      await pp.screenshot({ path: path.join(SHOTS, `start-${name}-phone-invalid.png`) });
+      assert.deepEqual(await wider(pp), [], 'no sideways scroll');
+      await typeFen(pf, '612');
+      await pd.getByRole('button', { name: 'Start game' }).click();
+      await pd.waitFor({ state: 'detached', timeout: 3000 });
+      await assert.doesNotReject(pp.locator('.part-game').waitFor({ timeout: 5000 }));
+      const pst = await pp.evaluate(() => JSON.parse(localStorage.getItem('chess-video.files.v1')).board);
+      assert.equal(pst.chess960, 612);
+      assert.equal(rank1(pst.fen), 'RBBNQKRN');
+      assert.deepEqual(ph.errors, []);
+      await ph.ctx.close();
+    });
     await t.test('desktop: Play vs human from a position set up in the editor', async () => {
       const ep = await open(browser, { width: 1440, height: 900 });
       const p = ep.page, dialog = p.getByRole('dialog', { name: 'Play vs human' });
@@ -1938,6 +2268,59 @@ for (const name of BROWSERS) for (const site of SITES) {
       // the Game details panel's title (upper case on the page); a game shows no Game info
       assert.match(await p.locator('.part-game-details').innerText(), /play vs human/i);
       assert.equal(await p.locator('.part-game-info').count(), 0, 'no Game info in a game');
+      assert.deepEqual(ep.errors, []);
+      await ep.ctx.close();
+    });
+    // The Lichess explorer's panel, opening names and Ask Queen are standard chess only (design: Features in a 960 game):
+    // a Chess960 free board (its start, not the current rights) lists no book moves or names (its Commentary slot stays, for the tablebase), a loaded
+    // 960 game has no Ask Queen, and position 518, which plays as standard chess, keeps all of them
+    await t.test('desktop: a Chess960 board and game have no opening book or Ask Queen; position 518 keeps them', async () => {
+      const ep = await open(browser, { width: 1440, height: 900 });
+      const p = ep.page;
+      await p.goto(base, { waitUntil: 'load' });
+      await loadedOn(p);
+      const explore960 = async (no) => {
+        await p.getByRole('button', { name: 'Menu', exact: true }).click();
+        await p.getByRole('button', { name: 'Chess960 position' }).click();
+        const dlg = p.getByRole('dialog', { name: 'Chess960 position' });
+        await dlg.waitFor({ timeout: 3000 });
+        const random = dlg.getByRole('checkbox', { name: 'Random' });
+        if (await random.isChecked()) await random.click();
+        await typeFen(dlg.getByRole('textbox', { name: 'Position number' }), String(no));
+        await dlg.getByRole('button', { name: 'Open' }).click();
+        await dlg.waitFor({ state: 'detached', timeout: 3000 });
+        await assert.doesNotReject(p.locator('.plabel').filter({ hasText: /^Start$/ }).waitFor({ timeout: 5000 }));
+      };
+      // position 0: the Commentary slot stays (the tablebase's place) but lists no book moves or names
+      await explore960(0);
+      const slot = p.locator('.part-opening-explorer');
+      await assert.doesNotReject(slot.waitFor({ timeout: 5000 }));
+      assert.match(await slot.innerText(), /standard chess/);
+      assert.equal(await slot.locator('.expl-row').count(), 0, 'no book moves on a 960 board');
+      assert.equal(await p.getByText('Loading the opening book').count(), 0);
+      await p.getByRole('button', { name: 'Menu', exact: true }).click();
+      assert.equal(await p.getByRole('button', { name: 'Keyboard shortcuts' }).count(), 1, 'the menu is open');
+      assert.equal(await p.getByRole('button', { name: 'Ask Queen' }).count(), 0);
+      await p.keyboard.press('Escape');
+      await p.screenshot({ path: path.join(ROOT, 'tests', 'out', 'chess960', 'no-explorer-desktop.png') });
+      // position 518 plays as standard chess: the book is there
+      await explore960(518);
+      await assert.doesNotReject(p.locator('.part-opening-explorer .expl-row').first().waitFor({ timeout: 5000 }));
+      // a loaded Chess960 game: no Ask Queen
+      await p.getByRole('button', { name: 'Import game' }).click();
+      const box = p.getByRole('textbox', { name: 'PGN, FEN or Lichess link' });
+      await typeFen(box, '[Variant "Chess960"]\n[SetUp "1"]\n[FEN "brknqbnr/pppppppp/8/8/8/8/PPPPPPPP/BRKNQBNR w KQkq - 0 1"]\n\n1. Nc3 e6 2. O-O-O Nf6 *');
+      await p.getByRole('button', { name: 'Open', exact: true }).click();
+      await assert.doesNotReject(p.getByRole('button', { name: 'Play (space)' }).waitFor({ timeout: 5000 }));
+      await p.getByRole('button', { name: 'Menu', exact: true }).click();
+      assert.equal(await p.getByRole('button', { name: 'Keyboard shortcuts' }).count(), 1, 'the menu is open');
+      assert.equal(await p.getByRole('button', { name: 'Ask Queen' }).count(), 0, 'no Ask Queen in a 960 game');
+      await p.keyboard.press('Escape');
+      // and back to a standard board: the book is built for it, whatever the loaded game was
+      await p.getByRole('button', { name: 'Menu', exact: true }).click();
+      await p.getByRole('button', { name: 'Starting position' }).click();
+      await assert.doesNotReject(p.locator('.part-opening-explorer .expl-row').first().waitFor({ timeout: 8000 }), 'book rows on a standard board after a 960 game');
+      assert.equal(await p.getByText('Loading the opening book').count(), 0);
       assert.deepEqual(ep.errors, []);
       await ep.ctx.close();
     });
@@ -2508,7 +2891,7 @@ for (const name of BROWSERS) for (const site of SITES) {
       const flip = () => p.evaluate(() => JSON.parse(localStorage.getItem('chess-video.tweaks.v1') || '{}').flip);
       const flip0 = await flip();
       await field.fill(''); await field.click(); await p.keyboard.type('https://lichess.org/Crazy123/black'); await p.keyboard.press('ControlOrMeta+Enter');
-      await assert.doesNotReject(dialog.getByRole('alert').filter({ hasText: /Crazyhouse game: only standard chess opens here/ }).waitFor({ timeout: 5000 }));
+      await assert.doesNotReject(dialog.getByRole('alert').filter({ hasText: /Crazyhouse game: only standard chess and Chess960 open here/ }).waitFor({ timeout: 5000 }));
       await field.fill(''); await field.click(); await p.keyboard.type('https://lichess.org/Br0ken12/black'); await p.keyboard.press('ControlOrMeta+Enter');
       await assert.doesNotReject(dialog.getByRole('alert').filter({ hasText: /Ke3/ }).waitFor({ timeout: 5000 }));
       assert.equal(await flip(), flip0, 'a game that failed left Flip alone');
@@ -2530,7 +2913,7 @@ for (const name of BROWSERS) for (const site of SITES) {
       const three = dialog.getByRole('button', { name: /Board Three W – Board Three B/ });
       assert.equal(await three.isDisabled(), true, 'a variant game greyed');
       assert.match(await three.innerText(), /Atomic/);
-      await assert.doesNotReject(dialog.getByText(/the greyed ones are still being played or aren’t standard chess/).waitFor({ timeout: 5000 }));
+      await assert.doesNotReject(dialog.getByText(/the greyed ones are still being played or aren’t standard chess or Chess960/).waitFor({ timeout: 5000 }));
       await p.screenshot({ path: path.join(OUT, host + '-lichess-import-round.png') });
       await dialog.getByRole('button', { name: 'Back' }).click();
       assert.equal(await field.inputValue(), 'https://lichess.org/broadcast/test-tour/round-3/R0und123', 'Back keeps the link');

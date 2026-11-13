@@ -104,3 +104,12 @@ test('an unreadable stored list reads as empty but says so, so a write can set i
     assert.deepEqual(G.read(raw), []);
   }
 });
+
+test('read keeps a Chess960 entry with its number', () => {
+  const g = playAll(P.start(B.fromFen(CC.chess960Fen(612), { chess960: 612 }), null), ['e2e4']);
+  const list = G.keep([], g, 5);
+  assert.equal(list[0].board.chess960, 612);
+  const back = G.read(JSON.stringify(list));
+  assert.equal(back[0].board.chess960, 612);
+  assert.equal(G.playable(back[0]).chess960, 612);
+});

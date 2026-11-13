@@ -1,7 +1,7 @@
 const test = require('node:test');
 const assert = require('node:assert/strict');
 const { loadUnit } = require('./load.cjs');
-loadUnit('chess-core.js'); loadUnit('board-core.js'); loadUnit('analysis-core.js'); loadUnit('play-core.js');
+loadUnit('chess-core.js'); loadUnit('board-core.js'); loadUnit('analysis-core.js'); loadUnit('play-core.js'); loadUnit('lichess-core.js'); loadUnit('import-core.js');
 const B = window.BoardCore, P = window.PlayCore, CC = window.ChessCore;
 const playAll = (b, ucis) => ucis.reduce((x, u) => B.play(x, CC.stepFromUci(B.pos(x), u)), b);
 
@@ -635,5 +635,38 @@ test('the players\' names and where a game started, said one way everywhere', ()
   const later = P.start(playAll(B.fromFen(), ['e2e4', 'e7e5', 'g1f3']), null, '2026.11.12', { keep: true });
   assert.equal(later.game.from, 3);
   assert.equal(P.fromText(later), 'from after 2. Nf3');
+  // a Chess960 board names its number (0 and 518 too), or says Chess960 when it isn't known
+  assert.equal(P.fromText(B.fromFen(window.ChessCore.chess960Fen(0), { chess960: 0 })), 'from Chess960 #0');
+  assert.equal(P.fromText(B.fromFen(undefined, { chess960: 518 }), { long: true }), 'From Chess960 #518');
+  assert.equal(P.fromText(B.fromFen(window.ChessCore.chess960Fen(612), { chess960: true })), 'from a Chess960 position');
   assert.equal(P.fromText(later, { long: true }), 'From the position after 2. Nf3');
+});
+
+test('a Chess960 game keeps its label and writes Variant and the X-FEN in its PGN', () => {
+  const fen = CC.chess960Fen(612);
+  let g = P.start(B.fromFen(fen, { chess960: 612 }), null, '2026.11.13');
+  assert.equal(g.chess960, 612);
+  g = playAll(g, ['e2e4', 'e7e5', 'f1g1']);
+  const text = P.pgn(g);
+  assert.match(text, /\[Variant "Chess960"\]/);
+  assert.ok(text.includes(`[FEN "${fen}"]`));
+  assert.ok(text.indexOf('Variant') < text.indexOf('SetUp') && text.indexOf('SetUp') < text.indexOf('[FEN'));
+  const M = CC.buildGame({ pgn: text });
+  assert.deepEqual(window.ImportCore.pgn(text), { pgn: text }, 'imports back');
+  assert.equal(M.plies.length, 3);
+  assert.equal(M.plies[2].san, 'O-O');
+  assert.equal(M.chess960, 612);
+});
+test('a Chess960 game with the standard setup (518) still writes Variant and the FEN', () => {
+  const text = P.pgn(P.start(B.fromFen(CC.START_FEN, { chess960: 518 }), null, '2026.11.13'));
+  assert.match(text, /\[Variant "Chess960"\]/);
+  assert.ok(text.includes(`[FEN "${CC.START_FEN}"]`));
+});
+test('a 960 position whose only legal move is a castle is not stalemate', () => {
+  const fen = '4k3/8/8/8/2b5/7p/r6P/6KR w K - 0 1', s = CC.parseFen(fen);
+  assert.equal(CC.hasLegal(s.pos), true);
+  assert.equal(P.outcome(B.fromFen(fen)), null);
+  assert.deepEqual(CC.castleMoves(s.pos).map((m) => m.step.uci), ['g1h1']);
+  // the same squares in a standard position (no rooks) with no castle are stalemate
+  assert.equal(CC.hasLegal(CC.parseFen('4k3/8/8/8/2b5/7p/r6P/6KR w - - 0 1').pos), false);
 });

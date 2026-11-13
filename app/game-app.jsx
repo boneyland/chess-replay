@@ -257,6 +257,8 @@ function GameApp() {
 
   // the Play dialog's mode while it is open: 'human' or 'stockfish'
   const [playOpen, setPlayOpen] = React.useState(null);
+  // Explore › Chess960 position's dialog
+  const [open960, setOpen960] = React.useState(false);
   // My games' list while its dialog is open
   const [gamesOpen, setGamesOpen] = React.useState(null);
   // the Keyboard shortcuts dialog
@@ -285,6 +287,8 @@ function GameApp() {
   guardRef.current = guard;
   const hf = useHfAuth();
   const Q = useQueen(M, hf);
+  // Ask Queen reads standard chess only: not on a free board, nor in a Chess960 game (its start, never position 518)
+  const askable = !board && !window.ChessCore.is960(M.start.pos);
   // the engine drop-down: Full runs once its download is kept; until then Lite does
   const full = useFullEngine();
   const sfKind = !SF_SIMD ? 'asm' : t.sfEngine === 'Full' && full.state === 'ready' ? 'full' : 'lite';
@@ -336,6 +340,11 @@ function GameApp() {
   React.useEffect(() => () => { queenStop.current(); }, [gameKey]);
 
   const newBoard = () => { closeOverlays(); guard(() => { commitBoard(window.BoardCore.fromFen()); }); };
+  // Chess960's Random / number choice is remembered as last started, in both Play dialogs and Explore's
+  const remember960 = (pick) => { setTweak('play960Random', pick.random); setTweak('play960No', pick.no); };
+  const explore960 = () => { closeOverlays(); guard(() => setOpen960(true)); };
+  const open960Board = ({ fen, chess960, pick }) => { setOpen960(false); remember960(pick); setQueenOpen(false); commitBoard(window.BoardCore.fromFen(fen, { chess960 })); };
+  const close960 = React.useCallback(() => setOpen960(false), []);
   // the editor opens on the position on the board (empty when there is none); a game in progress is paused for it (and
   // kept, when it has moves, by guard's Leave). play: the Play dialog's { mode, tc, you } when its Set-up position opened
   // the editor, whose Done starts that game
@@ -401,9 +410,9 @@ function GameApp() {
     if (v && !v.again && v.play) { setPlayInit({ from: 'image', tc: v.play.tc, you: v.play.you }); setPlayOpen(v.play.mode); }
   };
   const editDone = () => {
-    const fen = window.EditCore.toFen(editing.setup), play = editing.play;
-    if (play) startGame(play.mode, { fen, tc: play.tc, you: play.you });
-    else { setQueenOpen(false); commitBoard(window.BoardCore.fromFen(fen)); }
+    const fen = window.EditCore.toFen(editing.setup), play = editing.play, chess960 = window.EditCore.number960(editing.setup);
+    if (play) startGame(play.mode, { fen, chess960, tc: play.tc, you: play.you });
+    else { setQueenOpen(false); commitBoard(window.BoardCore.fromFen(fen, { chess960 })); }
   };
   // Cancel goes back to what showed before: a game left for the editor resumes, its clock running from now, and the Play
   // dialog or Import game that opened it comes back as it was
@@ -428,13 +437,19 @@ function GameApp() {
   };
   const playHuman = playIn('human'), playSf = playIn('stockfish');
   // against Stockfish the side is remembered as picked, and Random resolved here, for this game
-  // This position (here): a game played on after the moves to it, which it keeps
-  const startGame = (mode, { fen, here, tc, you }) => {
+  // This position (here): a game played on after the moves to it, which it keeps. chess960: the Chess960 start's number
+  // (pick960 the choice that gave it); a game from the open board's position (Set-up position, This position) keeps that
+  // board's Chess960 label, and one from a loaded Chess960 game's moves that game's
+  const startGame = (mode, { fen, here, chess960, pick960, tc, you }) => {
     setQueenOpen(false); setTweak('playClock', tc || 'Off');
     if (mode === 'stockfish') setTweak('playSide', you);
+    if (pick960) remember960(pick960);
     const side = you === 'random' ? (Math.random() < 0.5 ? 'w' : 'b') : you;
-    const from = here && window.BoardCore.restore({ fen: here.fen, moves: here.moves });
-    commitBoard(window.PlayCore.start(from || window.BoardCore.fromFen(fen), tc, null, { ...(mode === 'stockfish' ? { mode, you: side } : {}), keep: !!from }));
+    const startFen = here ? here.fen : fen;
+    // (Starting position from a board labelled 518 is a standard game: only here, or a set-up FEN, inherits)
+    const label = chess960 != null ? chess960 : board ? (board.fen === startFen && (here || fen !== window.ChessCore.START_FEN) ? board.chess960 : undefined) : here && M.chess960 != null && M.chess960 !== false ? M.chess960 : undefined;
+    const from = here && window.BoardCore.restore({ fen: here.fen, moves: here.moves, chess960: label });
+    commitBoard(window.PlayCore.start(from || window.BoardCore.fromFen(fen, { chess960: label }), tc, null, { ...(mode === 'stockfish' ? { mode, you: side } : {}), keep: !!from }));
   };
   const playStart = (choice) => { const mode = playOpen; setPlayOpen(null); startGame(mode, choice); };
   // Set-up position with no position set up: the editor first, keeping the dialog's choices
@@ -457,7 +472,7 @@ function GameApp() {
   // Import game's tiles and paste box (guard asked before the dialog opened): the picker's files close the dialog as they load
   const chooseFiles = () => inputRef.current.click();
   const importImage = () => { setImportOpen(false); setVision({ play: null, again: null, back: true }); };
-  // a pasted PGN is a loaded game, as a picked file; the dialog has checked it is standard chess and builds
+  // a pasted PGN is a loaded game, as a picked file; the dialog has checked it is standard chess or Chess960 and builds
   // (ImportCore.pgn, a fetched one too), so closing it first loses nothing. link: the Lichess link it was fetched from
   // (LichessCore.gameLink), which sets Flip as Lichess shows it (from Black's side for /black, else White's), and whose
   // #ply opens the replay paused after that ply
@@ -472,7 +487,8 @@ function GameApp() {
   // a pasted FEN: a legal position on the free board, else Edit position on it, saying what's wrong
   const fenLoad = (setup, text) => {
     setImportOpen(false);
-    if (window.EditCore.ok(setup)) { setQueenOpen(false); commitBoard(window.BoardCore.fromFen(window.EditCore.toFen(setup))); } else openEditor(null, { setup, image: null, back: text });
+    // a numbered Chess960 start keeps its number (Game info's "Chess960 #n", the PGN tag)
+    if (window.EditCore.ok(setup)) { setQueenOpen(false); commitBoard(window.BoardCore.fromFen(window.EditCore.toFen(setup), { chess960: window.EditCore.number960(setup) })); } else openEditor(null, { setup, image: null, back: text });
   };
   const closeImport = React.useCallback(() => setImportOpen(false), []);
   // the board's moves as a loaded game (replay, Analyse with Stockfish, PGN and video export); the board is kept with it, to go back to
@@ -585,7 +601,9 @@ function GameApp() {
   React.useEffect(() => { if (kindSeen.current !== sfKind) { kindSeen.current = sfKind; analysisStop.current(); } }, [sfKind]);
   // Lichess's opening book per ply, built after the first paint (about 0.25 s the first time)
   const [book, setBook] = React.useState(null);
-  React.useEffect(() => { setBook(null); const id = setTimeout(() => { try { setBook(window.Openings.book().byPly(M.plies.map((p) => p.uci), M.start.fen)); } catch (e) {} }, 50); return () => clearTimeout(id); }, [M]);
+  // no book for the start on show when it is Chess960 (a free board's, else the replay's)
+  const noBook = window.ChessCore.is960(board ? board.start.pos : M.start.pos);
+  React.useEffect(() => { setBook(null); if (noBook) return undefined; const id = setTimeout(() => { try { setBook(window.Openings.book().byPly(M.plies.map((p) => p.uci), M.start.fen)); } catch (e) {} }, 50); return () => clearTimeout(id); }, [M, noBook]);
   const soundSet = window.Sfx.SETS.includes(t.soundSet) ? t.soundSet : window.Sfx.SETS[0];
   const soundVolume = Number.isFinite(+t.soundVolume) ? +t.soundVolume : 70;
   // the page's rem is 16 px × this, so the overlays (dock, bars, Settings, menus, dialogs) follow the Text size setting; the panels get it through Stage's text
@@ -644,10 +662,10 @@ function GameApp() {
   const status = boardStatus || `${M.white.short} – ${M.black.short} · ${M.plies.length} plies` + (M.evalSource === 'analysis' ? ' · analysis evals' : M.evalSource === 'pgn' ? ' · PGN evals' : '') + (M.hasNotes ? ' · notes' : '') + (files.sample ? ' (sample)' : '') + ' · ' + fmtLen(TM.total);
   const shownErr = err || built.error;
 
-  const newGroups = [{ label: 'Explore', items: [{ label: 'Starting position', run: newBoard }, { label: 'Edit position', run: editPosition }] },
+  const newGroups = [{ label: 'Explore', items: [{ label: 'Starting position', run: newBoard }, { label: 'Edit position', run: editPosition }, { label: 'Chess960 position', run: explore960 }] },
     { label: 'Play', items: [{ label: 'Play vs human', run: playHuman }, { label: 'Play vs computer', run: playSf }, { label: 'My games', run: myGames }] },
     // Ask Queen sits here on the wide layouts; the folded menu keeps it in its last row. The folded menu's shortcuts item is hidden on a touch screen
-    { label: 'More', items: [{ label: 'Keyboard shortcuts', run: openKeys }, ...(!phone && !board ? [{ label: 'Ask Queen', cls: 'dock-queen', run: () => { setNewMenu(false); askQueen(); } }] : [])] }];
+    { label: 'More', items: [{ label: 'Keyboard shortcuts', run: openKeys }, ...(!phone && askable ? [{ label: 'Ask Queen', cls: 'dock-queen', run: () => { setNewMenu(false); askQueen(); } }] : [])] }];
   const newItems = newGroups.map((g) => <div key={g.label} className={`dock-group dock-group-${g.label.toLowerCase()}`}>
     <span className="dock-menu-label">{g.label}</span>
     {g.items.map((it) => <button key={it.label} type="button" className={it.cls ? 'dock-btn ' + it.cls : 'dock-btn'} onClick={it.run}>{it.label}</button>)}
@@ -670,7 +688,7 @@ function GameApp() {
       )}
       {/* Share and export, Settings and Full screen are icons in every layout; on the phone they share the menu's last row with Ask Queen */}
       <div className="dock-icons">
-      {phone && !board && <button type="button" className="dock-btn dock-queen" aria-expanded={queenOpen} onClick={() => { setMenu(false); askQueen(); }}>Ask Queen</button>}
+      {phone && askable && <button type="button" className="dock-btn dock-queen" aria-expanded={queenOpen} onClick={() => { setMenu(false); askQueen(); }}>Ask Queen</button>}
       <button type="button" className="dock-btn dock-iconic" aria-label="Share and export" title="Share and export" aria-haspopup="dialog" onClick={openShare}>
         <svg className="dock-icon" width="16" height="16" viewBox="0 0 16 16" fill="none" aria-hidden="true"><path d={SHARE} stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round" /></svg>
       </button>
@@ -747,7 +765,7 @@ function GameApp() {
           </div>
         </DialogBox>
       )}
-      {playOpen && <PlayDialog key={playOpen} mode={playOpen} setUpFen={board && board.fen !== window.ChessCore.START_FEN ? board.fen : null} here={playHere} clock={t.playClock} side={t.playSide} initial={playInit} onStart={playStart} onSetUp={playSetUp} onFromImage={visionOk ? playFromImage : null} onClose={closePlay} />}
+      {playOpen && <PlayDialog key={playOpen} mode={playOpen} setUpFen={board && board.fen !== window.ChessCore.START_FEN ? board.fen : null} here={playHere} clock={t.playClock} side={t.playSide} initial={playInit} pick960={pick960Of(t)} onStart={playStart} onSetUp={playSetUp} onFromImage={visionOk ? playFromImage : null} onClose={closePlay} />}
       {vision && <VisionDialog again={vision.again} onRead={visionRead} onClose={visionClose} />}
       {keysOpen && <ShortcutsDialog onClose={closeKeys} />}
       {shareOpen && <ShareDialog fen={shareOpen.fen} board={board} x={X} setTweak={setTweak} onFail={copyFailed} onClose={closeShare} onExport={exportVideo}
@@ -756,8 +774,9 @@ function GameApp() {
       {analyseOpen && !board && <GameAnalysisDialog t={t} setTweak={setTweak} ES={ES} sfKind={sfKind} threading={threading} hash={hashProp} analysis={analysis} engine={engine} files={files} M={MV}
         onRemoveAnalysis={() => { setAnalyseOpen(false); commit({ ...files, analysis: null, analysisName: null, evalSource: null }); }} onClose={() => setAnalyseOpen(false)} />}
       {gamesOpen && <MyGamesDialog games={gamesOpen} current={board && window.PlayCore.inProgress(board) ? board.game.id : null} onReplay={replayGame} onResume={resumeGame} onDelete={deleteGame} onClose={closeGames} />}
+      {open960 && <Chess960Dialog pick={pick960Of(t)} onOpen={open960Board} onClose={close960} />}
       {leave && <LeaveDialog onStay={() => setLeave(null)} onLeave={() => { const run = leave.run; setLeave(null); keepLeft(board); run(); }} />}
-      {queenOpen && !board && <QueenPanel key={gameKey} M={M} Q={Q} hf={hf} probe={probe} live={queenLive} onClose={closeQueen} onOverlay={setQueenArrow} onSave={saveQueen} left={queenLeft} />}
+      {queenOpen && askable && <QueenPanel key={gameKey} M={M} Q={Q} hf={hf} probe={probe} live={queenLive} onClose={closeQueen} onOverlay={setQueenArrow} onSave={saveQueen} left={queenLeft} />}
       <TweaksPanel open={panel} onClose={closePanel} tab={panelTab} onTab={setPanelTab} tabs={[
         { id: 'game', label: 'Game', body: <GameSettings M={M} files={files} board={board} status={status} err={shownErr} commit={commit}
           commentary={!board && <CommentarySettings t={t} setTweak={setTweak} files={files} sources={sources} queenSays={queenSays} />}

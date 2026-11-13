@@ -33,7 +33,7 @@
   // the read pieces as a position: White to move, every castling right whose king and rook stand at home
   function setupFrom(b) {
     const s = { ...EC().empty(), b: b.slice() };
-    return { ...s, castle: 'KQkq'.split('').filter((r) => EC().canCastle(s, r)).join('') };
+    return { ...s, castle: 'KQkq'.split('').filter((r) => window.ChessCore.canCastle(s.b, r)).join('') };
   }
   // the board turned half way round, for a picture read from Black's side; the rights are worked out again
   // (a king now off its home square loses them), the side to move and the move counts stay

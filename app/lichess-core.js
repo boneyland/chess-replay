@@ -83,15 +83,16 @@
 
   // the cloud's key: the board, side, castling and en passant square (the clocks don't change its answer), and the lines
   const cloudKey = (fen, lines = 1) => String(fen).trim().split(/\s+/).slice(0, 4).join(' ') + '|' + lines;
-  const cloudUrl = (fen, lines = 1) => CLOUD_URL + '?fen=' + encodeURIComponent(fen) + '&multiPv=' + lines;
+  const cloudUrl = (fen, lines = 1) => CLOUD_URL + '?fen=' + encodeURIComponent(fen) + '&multiPv=' + lines + (window.ChessCore.fenIs960(fen) ? '&variant=chess960' : '');
   // A cloud line's moves as the page's UCI: Lichess writes castling as the king taking its rook (e1h1), the engine and
   // the board as the king's two steps (e1g1); walked from fen, stopping at the first move that isn't legal
   function cloudMoves(fen, moves) {
     const CC = window.ChessCore, out = [];
     let pos = CC.posFromFen(fen);
+    const std = !CC.is960(pos); // in Chess960 the cloud's king-takes-rook is the page's castle too
     for (let u of String(moves || '').trim().split(/\s+/).filter(Boolean)) {
       const from = CC.sqIndex(u.slice(0, 2)), to = CC.sqIndex(u.slice(2, 4)), k = pos.b[from], r = pos.b[to];
-      if (k && r && k.toLowerCase() === 'k' && r === (k === 'K' ? 'R' : 'r')) u = u.slice(0, 2) + (to % 8 > from % 8 ? 'g' : 'c') + u[3];
+      if (std && k && r && k.toLowerCase() === 'k' && r === (k === 'K' ? 'R' : 'r')) u = u.slice(0, 2) + (to % 8 > from % 8 ? 'g' : 'c') + u[3];
       const a = CC.applyUci(pos, u);
       if (!a) break;
       out.push(u); pos = a.pos;
@@ -230,9 +231,10 @@
   }
   // a PGN's tags (the first game's), as written
   const pgnTags = (pgn) => { const o = {}; String(pgn).replace(/^\s*\[(\w+)\s+"((?:[^"\\]|\\.)*)"\]\s*$/gm, (_, k, v) => { if (!(k in o)) o[k] = v.replace(/\\(.)/g, '$1'); return ''; }); return o; };
-  // the chess variant a PGN says it is (its Variant tag), or null for standard chess: no tag, Standard, or Lichess's
-  // From Position (a standard game from a set-up position). The page plays only standard chess
-  const variant = (pgn) => { const v = (pgnTags(pgn).Variant || '').trim(); return !v || /^(standard|from position)$/i.test(v) ? null : v; };
+  // the chess variant a PGN says it is (its Variant tag), or null for a game the page plays: no tag, Standard, Lichess's
+  // From Position (a standard game from a set-up position) or Chess960. The page plays only those
+  const variant = (pgn) => { const v = (pgnTags(pgn).Variant || '').trim(); return !v || /^(standard|from position|chess960)$/i.test(v) ? null : v; };
+  const is960Pgn = (pgn) => window.ChessCore.isVariant960(pgnTags(pgn).Variant);
   // a result tag the game has ended with
   const finished = (pgn) => /^(1-0|0-1|1\/2-1\/2)$/.test(pgnTags(pgn).Result || '');
   // A round's or study's PGN as its games: { pgn, white, black, result ('1–0', '0–1', '½–½' or null: not finished), board,
@@ -269,5 +271,5 @@
     return { pgn: text };
   }
 
-  window.LichessCore = { gameLink, pgnTags, variant, finished, listGames, fetchGame, EXPLORER_URL, explorerUrl, explorerKey, parseExplorer, TB_URL, CLOUD_URL, TB_MAX_PIECES, BACKOFF_MS, pieceCount, fenOf, tbKey, tablebaseUrl, parseTablebase, flip, outcome, verdict, bar, evalCp, groups, cloudKey, cloudUrl, cloudMoves, parseCloud, create };
+  window.LichessCore = { gameLink, pgnTags, variant, is960Pgn, finished, listGames, fetchGame, EXPLORER_URL, explorerUrl, explorerKey, parseExplorer, TB_URL, CLOUD_URL, TB_MAX_PIECES, BACKOFF_MS, pieceCount, fenOf, tbKey, tablebaseUrl, parseTablebase, flip, outcome, verdict, bar, evalCp, groups, cloudKey, cloudUrl, cloudMoves, parseCloud, create };
 })();

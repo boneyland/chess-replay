@@ -5,9 +5,12 @@
   const CC = () => window.ChessCore;
   const clamp = (b, upto) => Math.max(-1, Math.min(b.steps.length - 1, Math.floor(Number(upto)) || 0));
 
-  function fromFen(fen) {
-    const s = CC().parseFen(fen == null ? CC().START_FEN : fen);
-    return { fen: s.fen, start: { pos: s.pos, ply0: s.ply0 }, steps: [], upto: -1 };
+  // chess960 is the Chess960 label (the position's number 0-959, or true when it isn't known) of a board that is one; it
+  // only names the position, how it plays comes from pos.rooks
+  const label960 = (v) => (v === true || (Number.isInteger(v) && v >= 0 && v <= 959) ? v : undefined);
+  function fromFen(fen, { chess960 } = {}) {
+    const s = CC().parseFen(fen == null ? CC().START_FEN : fen), c = label960(chess960);
+    return { fen: s.fen, start: { pos: s.pos, ply0: s.ply0 }, steps: [], upto: -1, ...(c !== undefined ? { chess960: c } : {}) };
   }
 
   const pos = (b) => (b.upto >= 0 ? b.steps[b.upto].pos : b.start.pos);
@@ -19,17 +22,19 @@
   // so they are still labelled as its replies after a reload
   const save = (b) => {
     const engine = b.steps.map((s, j) => (s.byEngine ? j : -1)).filter((j) => j >= 0);
-    return { fen: b.fen, moves: b.steps.map((s) => s.uci), upto: b.upto, ...(engine.length ? { engine } : {}), ...(b.game ? { game: b.game } : {}) };
+    return { fen: b.fen, moves: b.steps.map((s) => s.uci), upto: b.upto, ...(label960(b.chess960) !== undefined ? { chess960: b.chess960 } : {}), ...(engine.length ? { engine } : {}), ...(b.game ? { game: b.game } : {}) };
   };
 
   // today as PGN's YYYY.MM.DD
   const today = () => { const d = new Date(); return `${d.getFullYear()}.${String(d.getMonth() + 1).padStart(2, '0')}.${String(d.getDate()).padStart(2, '0')}`; };
 
   // The board's whole line (not only up to the move shown) as a PGN ending in res (ChessCore.pgnText): the tags, SetUp and
-  // FEN after them when the start isn't the standard one, then `more`; after(j) is the comment written after step j's move
+  // Variant for a Chess960 board, FEN after them when the start isn't the standard one (or the board is a Chess960 one), then `more`; after(j) is the comment written after step j's move
   // ('' for none)
+  // A board with no label whose start has Chess960 rights (pos.rooks: a pasted or edited 960 setup) is tagged too
   function pgnOf(b, tags, res, { more = [], after = () => '' } = {}) {
-    const all = tags.concat(b.fen !== CC().START_FEN ? [['SetUp', '1'], ['FEN', b.fen]] : [], more), toks = [];
+    const c = label960(b.chess960) !== undefined || CC().is960(b.start.pos);
+    const all = tags.concat(c ? [['Variant', 'Chess960']] : [], c || b.fen !== CC().START_FEN ? [['SetUp', '1'], ['FEN', b.fen]] : [], more), toks = [];
     b.steps.forEach((s, j) => {
       toks.push(CC().pgnMoveNo(b.start.ply0 + j, j === 0 || CC().pgnReopens(toks[toks.length - 1])) + s.san);
       const c = after(j);
@@ -46,7 +51,7 @@
   function restore(saved, now) {
     try {
       if (!saved || typeof saved !== 'object' || typeof saved.fen !== 'string') return null;
-      let b = fromFen(saved.fen);
+      let b = fromFen(saved.fen, { chess960: saved.chess960 });
       const engine = new Set(Array.isArray(saved.engine) ? saved.engine : []);
       for (const u of Array.isArray(saved.moves) ? saved.moves : []) {
         let step = null;

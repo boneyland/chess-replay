@@ -333,7 +333,7 @@
       return m;
     });
     const engineBlock = { ...settings, ...(R.some((r) => r.tb) ? { tablebase: true } : {}) };
-    return buildAnalysisJson({ headers, moves, opening: window.Openings ? window.Openings.book().identify(ucis, startFen) : null, engine: engineBlock, startFen });
+    return buildAnalysisJson({ headers, moves, opening: window.Openings && !(startFen && CC.fenIs960(startFen)) ? window.Openings.book().identify(ucis, startFen) : null, engine: engineBlock, startFen });
   }
 
   // The full FEN of each position of a game (castling, en passant and the fifty-move count, which the tablebase needs)

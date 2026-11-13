@@ -102,3 +102,65 @@ test('ChessCore.checkers lists the checking pieces', () => {
   assert.deepEqual(CC.checkers(s.b, 'w').sort((a, b) => a - b), [sq('e8'), sq('f3')].sort((a, b) => a - b));
   assert.deepEqual(CC.checkers(E.empty().b, 'w'), []);
 });
+
+test('960 castling rights: a king off e1 with a rook on h1', () => {
+  let s = setup('4k3/8/8/8/8/8/8/5K1R w - - 0 1');
+  assert.equal(E.canCastle(s, 'K'), true); assert.equal(E.canCastle(s, 'Q'), false);
+  s = E.setCastle(s, 'K', true);
+  assert.equal(s.castle, 'K');
+  assert.equal(E.toFen(s), '4k3/8/8/8/8/8/8/5K1R w K - 0 1');
+  assert.equal(CC.fenIs960(E.toFen(s)), true);
+  assert.equal(E.ok(s), true);
+  assert.equal(E.toFen(E.fromFen(E.toFen(s)).setup), E.toFen(s));
+  assert.equal(E.setCastle(s, 'Q', true).castle, 'K');
+});
+test('standard setups carry no rooks', () => {
+  const s = setup('r3k2r/8/8/8/8/8/8/R3K2R w KQkq - 0 1');
+  assert.equal(s.castle, 'KQkq'); assert.equal(s.rooks, undefined);
+  const t = E.setCastle(E.setCastle(s, 'K', false), 'K', true);
+  assert.equal(t.rooks, undefined); assert.equal(CC.fenIs960(E.toFen(t)), false);
+});
+test('an inner-rook right stays on its rook until that rook goes, then is dropped', () => {
+  let s = setup('4k3/8/8/8/8/8/8/4K1RR w G - 0 1');
+  assert.equal(s.castle, 'K'); assert.equal(s.rooks.K, sq('g1'));
+  s = E.put(s, sq('e5'), 'n');
+  assert.equal(s.castle, 'K'); assert.equal(s.rooks.K, sq('g1'));
+  assert.match(E.toFen(s), / G /);
+  s = E.put(s, sq('g1'), null);
+  assert.equal(s.castle, ''); assert.equal(s.rooks, undefined);
+  assert.equal(E.toFen(s), '4k3/8/8/4n3/8/8/8/4K2R w - - 0 1');
+});
+test('a king leaving e1 drops K and Q, and makes no 960 setup', () => {
+  let s = E.put(E.put(E.start(), sq('f1'), null), sq('g1'), null);
+  assert.equal(s.castle, 'KQkq');
+  s = E.move(s, sq('e1'), sq('f1'));
+  assert.equal(s.castle, 'kq'); assert.equal(s.rooks, undefined); assert.equal(CC.fenIs960(E.toFen(s)), false);
+  // the "castled" king and rook by hand
+  s = E.move(E.move(E.put(E.put(E.start(), sq('f1'), null), sq('g1'), null), sq('e1'), sq('g1')), sq('h1'), sq('f1'));
+  assert.equal(E.toFen(s), 'rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQ1RK1 w kq - 0 1'); assert.equal(s.rooks, undefined);
+});
+test('a rook leaving h1 drops K', () => {
+  const s = E.move(setup('r3k2r/8/8/8/8/8/8/R3K2R w KQkq - 0 1'), sq('h1'), sq('g1'));
+  assert.equal(s.castle, 'Qkq'); assert.equal(s.rooks, undefined);
+});
+test('a 960 right stays while other pieces change and goes when its king moves', () => {
+  let s = E.setCastle(setup('4k3/8/8/8/8/8/8/5K1R w - - 0 1'), 'K', true);
+  assert.equal(s.castle, 'K');
+  s = E.put(s, sq('c3'), 'N');
+  assert.equal(s.castle, 'K'); assert.equal(s.rooks.K, sq('h1'));
+  s = E.move(s, sq('f1'), sq('e1'));
+  assert.equal(s.castle, ''); assert.equal(E.toFen(s), '4k3/8/8/8/8/2N5/8/4K2R w - - 0 1');
+});
+test('vision reads no right for a king on f1, and the standard ones as before', () => {
+  loadUnit('vision-core.js');
+  const V = window.VisionCore;
+  assert.equal(V.setupFrom(setup('4k3/8/8/8/8/8/8/5K1R w - - 0 1').b).castle, '');
+  assert.equal(V.setupFrom(setup('r3k2r/8/8/8/8/8/8/R3K2R w - - 0 1').b).castle, 'KQkq');
+});
+test('number960: only an exact numbered 960 start', () => {
+  assert.equal(E.number960(setup(CC.chess960Fen(722))), 722);
+  assert.equal(E.number960(setup(CC.START_FEN)), undefined, '518');
+  assert.equal(E.number960(setup(CC.chess960Fen(414))), undefined, 'king e, rooks a/h');
+  assert.equal(E.number960(E.setCastle(setup(CC.chess960Fen(722)), 'K', false)), undefined, 'a right gone');
+  assert.equal(E.number960(E.move(setup(CC.chess960Fen(722)), sq('e2'), sq('e4'))), undefined);
+});

@@ -702,3 +702,20 @@ test('the real engine: a Hash past its 2 GB cap falls back to 64 MB and searches
     assert.ok(r && r.best, JSON.stringify(r));
   } finally { e.quit(); }
 });
+
+test('UCI_Chess960 is set before a 960 search, back after it, and never for standard searches', async () => {
+  let w;
+  const e = SF.create(() => (w = fakeWorker()), {});
+  await e.ready();
+  const opt = () => w.posted.filter((s) => s.startsWith('setoption name UCI_Chess960'));
+  const F960 = '4k3/8/8/8/8/8/8/R4K1R w HA - 0 1';
+  const run = async (fen) => { const h = e.search({ moves: [], fen, depth: 5, movetimeMs: 100 }); await tick(); w.finish('e1e2'); return h.promise; };
+  await run(window.ChessCore.START_FEN); await run(window.ChessCore.START_FEN);
+  assert.deepEqual(opt(), [], 'standard searches send none');
+  await run(F960); await run(F960);
+  assert.deepEqual(opt(), ['setoption name UCI_Chess960 value true']);
+  const i = w.posted.indexOf('setoption name UCI_Chess960 value true');
+  assert.ok(w.posted[i + 1].startsWith('position'), 'before the position');
+  await run(window.ChessCore.START_FEN);
+  assert.deepEqual(opt(), ['setoption name UCI_Chess960 value true', 'setoption name UCI_Chess960 value false']);
+});
