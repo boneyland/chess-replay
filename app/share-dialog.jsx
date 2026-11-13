@@ -22,6 +22,7 @@ function CopyButton({ label, text, onFail }) {
 // the game to export (clip: plies from -1, the title card, to N, after the end card), and run() to export it: the
 // picture board drawn through the sliders first, as an export paints that picture rather than the page's CSS filter.
 // M: the game (a new one starts the clip over); MV, TM: the game as the video shows it and its timing; frameW the page's width, for the WebP widths; stem the files' name
+// held.current: { MV, TM } as the last export started, which the stage shows while the export runs
 function useExportSettings({ t, setTweak, M, MV, TM, frameW, stem, saveFile, pieceSet, boardTheme, boardAdj, soundSet, soundVolume }) {
   const fmtLen = window.ChessCore.fmtLen;
   const exportFps = EXPORT_FPS_OPTIONS.includes(+t.exportFps) ? +t.exportFps : 8;
@@ -59,9 +60,13 @@ function useExportSettings({ t, setTweak, M, MV, TM, frameW, stem, saveFile, pie
   const clipT = clipOpts.at(clipFrom, clipTo), clipFromOpts = clipOpts.from, clipToOpts = clipOpts.to.filter((o) => o.i >= clipFrom);
   const plyTag = (i) => `${Math.floor((MV.ply0 + i) / 2) + 1}${(MV.ply0 + i) % 2 ? 'b' : 'w'}`;
   const clipSuffix = clipFrom < 0 && clipTo >= NP ? '' : `_${clipFrom < 0 ? 'start' : plyTag(clipFrom)}-${clipTo >= NP ? 'end' : plyTag(clipTo)}`;
-  const run = () => window.BoardThemes.render(boardTheme.id, boardAdj).catch(() => null).then(() => video.run({ start: clipT.start, end: clipT.end, suffix: clipSuffix, audio: t.sound === false || webp ? null
-    : () => window.Sfx.renderTrack(window.Sfx.fetchSound, soundSet, window.Sfx.track(MV, clipOpts.S, clipT.start, clipT.end), soundVolume, clipT.end - clipT.start) }));
-  return { video, exportFps, formats, exportFormat, webp, webpWidths, webpWidth, webpPx, webpQuality, mp4Quality, mp4Vfr, ncNote,
+  // the game and timing the export started from: the stage keeps showing them until it ends (GameApp), as its stretch,
+  // frame count and soundtrack were worked out from them, though an analysis or a Queen answer that lands meanwhile
+  // changes MV and TM (new marks and reading times move every later move)
+  const held = React.useRef(null);
+  const run = () => { held.current = { MV, TM }; return window.BoardThemes.render(boardTheme.id, boardAdj).catch(() => null).then(() => video.run({ start: clipT.start, end: clipT.end, suffix: clipSuffix, audio: t.sound === false || webp ? null
+    : () => window.Sfx.renderTrack(window.Sfx.fetchSound, soundSet, window.Sfx.track(MV, clipOpts.S, clipT.start, clipT.end), soundVolume, clipT.end - clipT.start) })); };
+  return { video, held, exportFps, formats, exportFormat, webp, webpWidths, webpWidth, webpPx, webpQuality, mp4Quality, mp4Vfr, ncNote,
     clipFrom, clipTo, clipFromOpts, clipToOpts, setClip, clipT, clipSuffix, run };
 }
 

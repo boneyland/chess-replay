@@ -323,7 +323,6 @@ function GameApp() {
   const gameKey = gameSeq.current.n;
   const queenSays = queenInVideo &&M.plies.some((p, i) => { const r = Q.resultAt(i + 1); return r && r.evalText; });
   const TM = React.useMemo(() => window.ChessCore.timing(MV, { secondsPerMove: t.secondsPerMove, keyHold: t.keyHold, fastOpening: t.fastOpening }), [MV, t.secondsPerMove, t.keyHold, t.fastOpening]);
-  const scenes = JSON.stringify(TM.scenes);
   const fmtLen = window.ChessCore.fmtLen;
   const closePanel = React.useCallback(() => setPanel(false), []);
   const closeQueen = React.useCallback(() => setQueenOpen(false), []);
@@ -613,6 +612,10 @@ function GameApp() {
   const boardTheme = window.BoardThemes.byId(t.boardTheme);
   const boardAdj = window.BoardThemes.adjust({ brightness: t.boardBrightness, contrast: t.boardContrast, tint: t.boardTint, saturation: t.boardSaturation, hue: t.boardHue });
   const X = useExportSettings({ t, setTweak, M, MV, TM, frameW, stem: fileStem, saveFile, pieceSet, boardTheme, boardAdj, soundSet, soundVolume }), video = X.video;
+  // while exporting, the stage shows the game and timing the export started from (useExportSettings' held), not what
+  // an analysis or a Queen answer landing meanwhile makes of them, which would shift every later frame
+  const shown = (video.busy && X.held.current) || { MV, TM };
+  const scenes = JSON.stringify(shown.TM.scenes);
   // Settings' Reset colours to default, while the mouse is on it, shows the board as the reset would leave it (never in an export)
   const [resetPreview, setResetPreview] = React.useState(false);
   const boardLook = useBoardLook(boardTheme.id, resetPreview && !video.busy ? window.BoardThemes.adjust() : boardAdj, video.busy);
@@ -733,7 +736,7 @@ function GameApp() {
             image={editing.image} onTurn={editTurn} onBackToCrop={backToCrop} />
           : board
           ? <FreeBoard board={board} onChange={commitBoard} tw={t} setTweak={setTweak} onLichess={openLichess} sf={sf} nav={nav} orient={t.flip ? 'b' : 'w'} book={book && !board.game ? window.Openings.book() : null} />
-          : <GameVideo key={gameKey} M={MV} tw={video.busy ? { ...t, exporting: true } : t} d={TM.d} probe={probe} queen={queenArrow} nav={nav} scheme={scheme} sf={sf} orient={t.flip ? 'b' : 'w'} />}
+          : <GameVideo key={gameKey} M={shown.MV} tw={video.busy ? { ...t, exporting: true } : t} d={shown.TM.d} probe={probe} queen={queenArrow} nav={nav} scheme={scheme} sf={sf} orient={t.flip ? 'b' : 'w'} />}
       </CompositionStage>
       </EngineMenuContext.Provider>
       <input ref={inputRef} id="game-files" type="file" multiple accept=".pgn,.txt,.json,application/json,text/plain" hidden onChange={(e) => { if (e.target.files.length) setImportOpen(false); loadFiles(e.target.files); e.target.value = ''; }} />
