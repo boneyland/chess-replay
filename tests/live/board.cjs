@@ -38,7 +38,10 @@ function namePending(page) {
       try { return await f(...args); } catch (e) {
         if (e.name === 'TimeoutError') {
           const now = Date.now(), list = [...loading].map(([r, t]) => `${r.url().slice(0, 140)} (${r.resourceType()}, ${Math.round((now - t) / 1000)} s)`);
-          e.message += `\nstill loading: ${list.join(', ') || 'nothing'}`;
+          // Playwright has already written e.stack, which is what the test runner prints: the note goes in both
+          const note = `\nstill loading: ${list.join(', ') || 'nothing'}`, was = e.message;
+          e.message += note;
+          if (typeof e.stack === 'string') e.stack = e.stack.includes(was) ? e.stack.replace(was, e.message) : e.message + '\n' + e.stack;
         }
         throw e;
       }
