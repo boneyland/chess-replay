@@ -5019,6 +5019,9 @@ for (const name of BROWSERS) for (const site of SITES) {
     // a piece set whose SVGs have only a viewBox (Firi) at about 40% of its size on the last frames
     await t.test('desktop: a faded stage keeps its layers, faded as one', { timeout: 120000 }, async () => {
       const dk = await open(browser, { width: 1440, height: 900 });
+      // Stockfish off: a search landing between the frames (its eval bar, arrow and Analysis panel) changed layers that
+      // then went to html2canvas again, failing the reuse check (Chromium, CI 2026-11-11 and 11-13; 2 of 5 runs here)
+      await dk.page.addInitScript(() => { try { localStorage.setItem('chess-video.tweaks.v1', JSON.stringify({ sfOn: false })); } catch (e) {} });
       await dk.page.goto(base, { waitUntil: 'load' });
       await loadedOn(dk.page);
       await dk.page.addScriptTag({ url: 'https://cdn.jsdelivr.net/npm/html2canvas-pro@2.5.0/dist/html2canvas-pro.min.js' });
