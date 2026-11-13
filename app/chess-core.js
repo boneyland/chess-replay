@@ -320,9 +320,11 @@
     const order = (c) => ('KQkq'.includes(c) ? 'KQkq'.indexOf(c) : 4);
     dropped.sort((a, c) => order(a) - order(c));
     const castle = 'KQkq'.split('').filter((r) => r in rooks).join('');
-    const std = [...castle].every((r) => rooks[r] === CASTLE_HOME[r][1] && b[CASTLE_HOME[r][0]] === (r < 'a' ? 'K' : 'k'));
-    return std ? { castle, dropped: dropped.join('') } : { castle, rooks, dropped: dropped.join('') };
+    return stdRights(b, castle, rooks) ? { castle, dropped: dropped.join('') } : { castle, rooks, dropped: dropped.join('') };
   }
+  // whether every right in castle is the standard king e1/e8 with rook a/h (rooks: each right's rook square), so the
+  // position plays as standard chess and carries no rooks
+  const stdRights = (b, castle, rooks) => [...castle].every((r) => rooks[r] === CASTLE_HOME[r][1] && b[CASTLE_HOME[r][0]] === (r < 'a' ? 'K' : 'k'));
   // A position's or setup's castling field: standard rights in KQkq order where the king and rook are at home; with
   // rooks (960), X-FEN, K/Q where the right's rook is the outermost, else its file letter
   function castleField(b, asked, rooks) {
@@ -352,6 +354,8 @@
     return { setup, dropped: { castle: rr.dropped, ep: epIdx >= 0 && !epOk } };
   }
   const is960 = (pos) => !!(pos && pos.rooks);
+  // a PGN's Variant tag says Chess960
+  const isVariant960 = (v) => /^chess960$/i.test(String(v || '').trim());
   const fenIs960 = (fen) => { const r = readFen(fen); return !r.error && is960(r.setup); };
 
   // Chess960 starts by Scharnagl's numbering (as Lichess and Wikipedia use; 518 is the standard start): the six-field FEN
@@ -537,7 +541,7 @@
       ply.fen = toFen(pos); // placement and side: a key, not a position (castling and en passant are in pos)
       ply.pos = { b: pos.b, turn: pos.turn, castle: pos.castle, ep: pos.ep }; // the whole position after the move
       if (pos.rooks) ply.pos.rooks = pos.rooks;
-      ply.capture = !!before.b[mv.to] || pos.epCap >= 0;
+      ply.capture = (!!before.b[mv.to] && !castleRight(before, mv.from, mv.to)) || pos.epCap >= 0;
       // the position after it from the tablebase (decodeEval: a win with no distance to mate is won, not a mate count)
       if (am && am.tb_after) ply.tb = am.tb_after;
       if (am && am.tb_before) ply.tbBefore = am.tb_before; // its best move and line came from the tablebase
@@ -665,12 +669,12 @@
     // the first period's seconds: 300+2, 40/7200:3600 (40 moves in 7200 s), not a sandclock (*60)
     const tc = (H.TimeControl || '').match(/^(?:\d+\/)?(\d+)/);
     const clockStart = tc ? +tc[1] : hasClock ? Math.ceil(Math.max(plies[0].clk || 0, (plies[1] && plies[1].clk) || 0) / 60) * 60 : 0;
-    const pgnIntro = unsaid((P && P.intro) || '', NT && NT.intro);
+    const pgnIntro = unsaid((P && P.intro) || '', NT && NT.intro), n960 = chess960Number(start.fen);
     return {
       ...headersOf({ H, A, useA, pgnHasEval, plies, start }),
       intro: (NT && NT.intro) || pgnIntro, conclusion: ends(NT).conclusion,
       says: { pgn: { intro: pgnIntro, conclusion: '' }, notes: ends(NT) },
-      ...(/^chess960$/i.test((H.Variant || '').trim()) ? { chess960: chess960Number(start.fen) == null ? true : chess960Number(start.fen) } : {}),
+      ...(isVariant960(H.Variant) ? { chess960: n960 == null ? true : n960 } : {}),
       start: { fen: start.fen, pos: start.pos }, ply0, plies, evalStart, evalStartKnown, hasEval, hasClock, clockStart, gameCount, hasAnalysis: !!A, hasNotes: !!notes, headers: H, evalSource: useA ? 'analysis' : pgnHasEval ? 'pgn' : 'none', canChooseSource: !!A && pgnHasEval,
     };
   }
@@ -930,7 +934,8 @@
     const f = fen.split(' '), b = fromFen(fen), turn = f[1] || 'w', ep = /^[a-h][1-8]$/.test(f[3] || '') ? sqIdx(f[3]) : -1;
     const pos = { b, ep: ep >= 0 && epFits(b, turn, ep) ? ep : -1, turn, castle: f[2] == null ? 'KQkq' : f[2].replace('-', '') };
     const rr = f[2] != null && /^[KQkqA-Ha-h]{1,4}$/.test(f[2]) ? readRights(b, f[2]) : null;
-    return rr && rr.rooks ? { ...pos, castle: rr.castle, rooks: rr.rooks } : pos;
+    if (!rr) return pos;
+    return rr.rooks ? { ...pos, castle: rr.castle, rooks: rr.rooks } : { ...pos, castle: rr.castle };
   };
   // A legal move from `from` to `to` (square indices, 0 = a8), or null. A pawn reaching the last rank becomes `promo`
   // (q, r, b or n; a queen by default).
@@ -938,6 +943,8 @@
     const p = pos.b[from];
     if (!p || colorOf(p) !== pos.turn || from === to) return null;
     const t = tOf(p), color = pos.turn, opp = color === 'w' ? 'b' : 'w';
+    const alias = castleAlias(pos, from, to);
+    if (alias >= 0) { const mv = legalMove(pos, from, alias); return mv && { ...mv, to: alias }; }
     if (pos.rooks && castleRight(pos, from, to)) {
       if (!castleOk(pos, from, to)) return null;
     } else if (!pos.rooks && t === 'k' && fy(from) === fy(to) && Math.abs(fx(to) - fx(from)) === 2) {
@@ -952,6 +959,15 @@
     if (pr && !'qrbn'.includes(pr)) return null;
     const after = applyMove(pos, from, to, pr);
     return inCheck(after.b, color) ? null : { from, to, promo: pr, after };
+  }
+  // In a 960 position whose castle looks standard (king on e of its first rank, the right's rook in the a/h corner), the
+  // king's two steps to c or g as a standard engine or FEN writes it: the rook's square (the page's castle, the king
+  // taking it), else -1. A 960 position can look standard once a rook has moved, and its FEN then reads as one
+  function castleAlias(pos, from, to) {
+    const p = pos.b[from];
+    if (!pos.rooks || !p || tOf(p) !== 'k' || pos.b[to] || fy(from) !== fy(to) || fx(from) !== 4 || Math.abs(fx(to) - fx(from)) !== 2) return -1;
+    const h = fx(to) === 6, rk = castleRook(pos.b, rightOf(colorOf(p), h ? 'h' : 'a'), pos.rooks);
+    return rk >= 0 && fx(rk) === (h ? 7 : 0) ? rk : -1;
   }
   // Whether the king on `from` taking its own rook on `to` is a legal castle in a 960 position (Chess960's rules): the
   // right held and `to` its rook; every square between the king and its destination and between the rook and its
@@ -1013,7 +1029,7 @@
     const mv = legalMove(pos, from, to, promo);
     if (!mv) return null;
     const check = inCheck(mv.after.b, mv.after.turn);
-    return { san: sanOf(pos, mv), uci: idxSq(from) + idxSq(to) + (mv.promo || ''), board: mv.after.b.slice(), checkSq: check ? idxSq(kingIdx(mv.after.b, mv.after.turn)) : null, pos: mv.after };
+    return { san: sanOf(pos, mv), uci: idxSq(from) + idxSq(mv.to) + (mv.promo || ''), board: mv.after.b.slice(), checkSq: check ? idxSq(kingIdx(mv.after.b, mv.after.turn)) : null, pos: mv.after };
   }
 
   // The rook's move in the castle `uci` of the position before it: { from, to } as squares, or null when it isn't one. A
@@ -1039,8 +1055,8 @@
     const from = sqIdx(m[1]), to = sqIdx(m[2]), mv = legalMove(pos, from, to);
     if (!mv) return null;
     const promo = mv.promo ? m[3] || 'q' : null;
-    const full = promo === mv.promo ? mv : { from, to, promo, after: applyMove(pos, from, to, promo) };
-    return { pos: full.after, san: sanOf(pos, full) };
+    const full = promo === mv.promo ? mv : { from, to: mv.to, promo, after: applyMove(pos, from, mv.to, promo) };
+    return { pos: full.after, san: sanOf(pos, full), uci: idxSq(from) + idxSq(mv.to) + (promo || '') };
   }
 
   // A UCI move as a line step (same shape as userMove's), or null when it isn't legal
@@ -1048,7 +1064,7 @@
     const r = applyUci(pos, uci);
     if (!r) return null;
     const check = inCheck(r.pos.b, r.pos.turn);
-    return { san: r.san, uci, board: r.pos.b.slice(), checkSq: check ? idxSq(kingIdx(r.pos.b, r.pos.turn)) : null, pos: r.pos };
+    return { san: r.san, uci: r.uci, board: r.pos.b.slice(), checkSq: check ? idxSq(kingIdx(r.pos.b, r.pos.turn)) : null, pos: r.pos };
   }
 
   // move-number gridlines for the eval plot: multiples of `step` among the absolute move numbers, at their offset in plies from the first move
@@ -1078,5 +1094,5 @@
     if (at < text.length) out.push({ text: text.slice(at) });
     return out;
   };
-  window.ChessCore = { START_FEN, links, splitGames, fmtDate, fmtLen, hasLegal, inCheck, checkers, evalTicks, sqName: idxSq, CASTLE_HOME, canCastle, castleRook, castleMoves, castleTarget, castleRookStep, is960, fenIs960, chess960Fen, chess960Random, chess960Number, readFen, epFits, setupProblems, setupFen, epCapturable, fullFen, parseFen, fenAfter, moveNo, sqIndex: sqIdx, applySan, applyUci, stepFromUci, toFen, playLine, posAt, posFromFen, legalTargets, isPromotion, userMove, buildGame, withCommentary, commentarySources, classifyFile, plan, timing, schedule, cues, settledAt, clipRange, MATE_CP, MATE_STEP, MATE_MIN, mateCp, isMateCp, mateIn, decodeEval, WIN_K, WIN_DROP, winChance, plyCp, MARK_CLASS, pgnClk, pgnMoveNo, pgnReopens, pgnText, annotatedPgn, withSearches, notesText };
+  window.ChessCore = { START_FEN, links, splitGames, fmtDate, fmtLen, hasLegal, inCheck, checkers, evalTicks, sqName: idxSq, CASTLE_HOME, canCastle, castleRook, castleMoves, castleTarget, castleRookStep, is960, isVariant960, stdRights, fenIs960, chess960Fen, chess960Random, chess960Number, readFen, epFits, setupProblems, setupFen, epCapturable, fullFen, parseFen, fenAfter, moveNo, sqIndex: sqIdx, applySan, applyUci, stepFromUci, toFen, playLine, posAt, posFromFen, legalTargets, isPromotion, userMove, buildGame, withCommentary, commentarySources, classifyFile, plan, timing, schedule, cues, settledAt, clipRange, MATE_CP, MATE_STEP, MATE_MIN, mateCp, isMateCp, mateIn, decodeEval, WIN_K, WIN_DROP, winChance, plyCp, MARK_CLASS, pgnClk, pgnMoveNo, pgnReopens, pgnText, annotatedPgn, withSearches, notesText };
 })();

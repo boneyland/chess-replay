@@ -410,9 +410,9 @@ function GameApp() {
     if (v && !v.again && v.play) { setPlayInit({ from: 'image', tc: v.play.tc, you: v.play.you }); setPlayOpen(v.play.mode); }
   };
   const editDone = () => {
-    const fen = window.EditCore.toFen(editing.setup), play = editing.play;
-    if (play) startGame(play.mode, { fen, tc: play.tc, you: play.you });
-    else { setQueenOpen(false); commitBoard(window.BoardCore.fromFen(fen)); }
+    const fen = window.EditCore.toFen(editing.setup), play = editing.play, chess960 = window.EditCore.number960(editing.setup);
+    if (play) startGame(play.mode, { fen, chess960, tc: play.tc, you: play.you });
+    else { setQueenOpen(false); commitBoard(window.BoardCore.fromFen(fen, { chess960 })); }
   };
   // Cancel goes back to what showed before: a game left for the editor resumes, its clock running from now, and the Play
   // dialog or Import game that opened it comes back as it was

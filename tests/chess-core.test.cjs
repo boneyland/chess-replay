@@ -807,3 +807,24 @@ test('castleRookStep: the rook\'s move for a castle, 960 or standard', () => {
   assert.equal(CC.castleRookStep(CC.posFromFen('4k3/8/8/8/8/8/R7/4K3 w - - 0 1'), 'a2a4'), null, 'a rook move');
   assert.equal(CC.castleRookStep(pos960('4k3/8/8/8/8/8/8/5KR1 w - - 0 1'), 'f1e1'), null, 'a king step off the rook');
 });
+test('a 960 position that looks standard takes the king\'s two steps as its castle (a standard FEN\'s engine line)', () => {
+  // a 960 start with king e1 and rooks b1, h1, the b-rook moved: the FEN left reads as standard
+  const p = { ...pos960('4k3/8/8/8/8/8/8/2R1K2R w K - 0 1'), rooks: { K: CC.sqIndex('h1') } };
+  const s = CC.stepFromUci(p, 'e1g1');
+  assert.ok(s, 'e1g1 castles'); assert.equal(s.uci, 'e1h1'); assert.equal(s.san, 'O-O');
+  assert.equal(at960(s.pos, 'g1'), 'K'); assert.equal(at960(s.pos, 'f1'), 'R'); assert.equal(at960(s.pos, 'h1'), null);
+  assert.deepEqual(CC.playLine(p, ['O-O']).map((x) => x.uci), ['e1h1']);
+  assert.equal(CC.userMove(p, CC.sqIndex('e1'), CC.sqIndex('g1')).uci, 'e1h1');
+  // not where the right's rook isn't in the corner: two steps are no king move
+  assert.equal(CC.applyUci(pos960('4k3/8/8/8/8/8/8/4KR2 w K - 0 1'), 'e1g1'), null);
+});
+test('posFromFen reads Shredder rights on the standard homes as standard', () => {
+  const p = CC.posFromFen('rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w HAha - 0 1');
+  assert.equal(p.castle, 'KQkq'); assert.equal(CC.is960(p), false);
+  assert.equal(CC.fullFen(p).split(' ')[2], 'KQkq');
+});
+test('a 960 castle is no capture', () => {
+  const M = CC.buildGame({ pgn: '[Variant "Chess960"]\n[SetUp "1"]\n[FEN "4k3/8/8/8/8/8/8/RK6 w Q - 0 1"]\n\n1. O-O-O *' });
+  assert.equal(M.plies[0].uci, 'b1a1'); assert.equal(M.plies[0].capture, false);
+  assert.equal(M.chess960, true);
+});

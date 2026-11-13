@@ -234,7 +234,7 @@
   // the chess variant a PGN says it is (its Variant tag), or null for a game the page plays: no tag, Standard, Lichess's
   // From Position (a standard game from a set-up position) or Chess960. The page plays only those
   const variant = (pgn) => { const v = (pgnTags(pgn).Variant || '').trim(); return !v || /^(standard|from position|chess960)$/i.test(v) ? null : v; };
-  const is960Pgn = (pgn) => /^chess960$/i.test((pgnTags(pgn).Variant || '').trim());
+  const is960Pgn = (pgn) => window.ChessCore.isVariant960(pgnTags(pgn).Variant);
   // a result tag the game has ended with
   const finished = (pgn) => /^(1-0|0-1|1\/2-1\/2)$/.test(pgnTags(pgn).Result || '');
   // A round's or study's PGN as its games: { pgn, white, black, result ('1–0', '0–1', '½–½' or null: not finished), board,

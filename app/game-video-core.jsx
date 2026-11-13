@@ -397,7 +397,8 @@ function Board({ M, T, S, a, arrows, pieces, queen, vline, hide, lines, sel, idl
 
 // ---------- exploring a best line on the board ----------
 const LINE_CACHE = new Map();
-const posKey = (pos) => window.ChessCore.toFen(pos) + ' ' + pos.castle + ' ' + pos.ep;
+// the whole position: a 960 right's rook (pos.rooks) too, as the same placement and rights can castle with another rook
+const posKey = (pos) => window.ChessCore.toFen(pos) + ' ' + pos.castle + ' ' + pos.ep + (pos.rooks ? ' ' + JSON.stringify(pos.rooks) : '');
 function playLineCached(M, c, moves) {
   const pos = window.ChessCore.posAt(M, c), key = posKey(pos) + '|' + moves.join(' ');
   if (!LINE_CACHE.has(key)) LINE_CACHE.set(key, window.ChessCore.playLine(pos, moves));

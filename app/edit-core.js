@@ -16,10 +16,8 @@
   // the setup with these rights and rook squares; rooks goes entirely when every right is the standard home pair
   // (ChessCore.CASTLE_HOME)
   function withRooks(s, castle, rooks) {
-    const H = CC().CASTLE_HOME;
-    const std = castle.split('').every((r) => rooks[r] === H[r][1] && s.b[H[r][0]] === (r < 'a' ? 'K' : 'k'));
     const { rooks: _, ...rest } = s;
-    return std ? { ...rest, castle } : { ...rest, castle, rooks };
+    return CC().stdRights(s.b, castle, rooks) ? { ...rest, castle } : { ...rest, castle, rooks };
   }
   // an explicit choice of rights (a box ticked or cleared): each kept right stays on its previous rook while that rook
   // stands there, else takes the outermost
