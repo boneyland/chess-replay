@@ -942,6 +942,48 @@ for (const name of BROWSERS) for (const site of SITES) {
     });
     // the export draws the page as it stands: a flipped board, from a set-up position (White's army alone, Black a
     // king), comes out with White's pieces along the top of the video's board
+    // an analysis that lands while a video exports (a game analysis finishing, here its file loaded) changes the game's
+    // marks and timing, from which the export had already worked out its stretch, frame count and soundtrack: the stage
+    // keeps the game it started from until the export ends, then shows the analysis
+    await t.test('desktop: an analysis landing during an export changes nothing in it', { timeout: 180000 }, async () => {
+      const fx = await open(browser, { width: 1440, height: 900 });
+      const p = fx.page;
+      await p.goto(base, { waitUntil: 'load' });
+      await loadedOn(p);
+      const fix = (n) => ({ name: n, mimeType: n.endsWith('.json') ? 'application/json' : 'text/plain', buffer: fs.readFileSync(path.join(__dirname, '..', 'fixtures', n)) });
+      await p.setInputFiles('#game-files', fix('lines.pgn'));
+      await p.waitForFunction(() => /Bb5/.test(document.body.innerText), null, { timeout: 10000 });
+      await settled(p);
+      // the analysis shows as the eval bar's number (the PGN has no evals)
+      const evalShown = /[+\u2212-]\d+\.\d\d/;
+      assert.doesNotMatch(await p.locator('.stage-frame').innerText(), evalShown);
+      await openShare(p);
+      await p.getByRole('radio', { name: 'WebP' }).click();
+      await p.locator('#tw-webp-width').selectOption(await p.locator('#tw-webp-width option', { hasText: 'half' }).getAttribute('value'));
+      const download = p.waitForEvent('download', { timeout: 150000 });
+      await p.getByRole('button', { name: /^Export animated WebP/ }).click();
+      const line = p.getByRole('dialog', { name: 'Exporting' }).locator('.export-line');
+      await p.waitForFunction(() => { const m = /Frame (\d+) of (\d+)/.exec(document.querySelector('.part-exporting-dialog .export-line')?.textContent || ''); return m && +m[1] >= 8; }, null, { timeout: 60000, polling: 50 });
+      const at = await line.textContent();
+      // from here to the export's end, what the stage shows, sampled as it draws
+      await p.evaluate((re) => {
+        window.__during = [];
+        const id = setInterval(() => {
+          if (!document.querySelector('.part-exporting-dialog')) { clearInterval(id); return; }
+          window.__during.push(new RegExp(re).test(document.querySelector('.stage-frame').innerText));
+        }, 40);
+      }, evalShown.source);
+      await p.setInputFiles('#game-files', fix('lines_analysis.json'));
+      const dl = await download;
+      await dl.saveAs(path.join(OUT, `${host}-export-analysis-landing.webp`));
+      const during = await p.evaluate(() => window.__during);
+      assert.ok(during.length >= 5, `the stage was sampled during the export (${during.length} times, from ${at})`);
+      assert.equal(during.filter(Boolean).length, 0, `the stage showed the analysis in ${during.filter(Boolean).length} of ${during.length} samples after it landed (from ${at})`);
+      // the export over, the page shows the analysis
+      await p.waitForFunction((re) => new RegExp(re).test(document.querySelector('.stage-frame').innerText), evalShown.source, { timeout: 10000 });
+      assert.deepEqual(fx.errors, []);
+      await fx.ctx.close();
+    });
     await t.test('desktop: a flipped game from a set-up position exports flipped', { timeout: 180000 }, async () => {
       const fx = await open(browser, { width: 1440, height: 900 });
       const p = fx.page;
