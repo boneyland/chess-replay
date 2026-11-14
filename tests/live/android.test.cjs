@@ -108,8 +108,11 @@ test('android · chrome · local build', async (t) => {
       const px = (v) => { probe.style.cssText = `position:fixed;top:0;left:0;width:${v}`; return probe.getBoundingClientRect().width; };
       const r = { height: px('env(safe-area-inset-top,0px)'), l: px('env(safe-area-inset-left,0px)'), r: px('env(safe-area-inset-right,0px)') };
       probe.remove();
-      const stage = document.querySelector('.stage'), cs = getComputedStyle(stage);
-      return { top: r.height, l: r.l, r: r.r, padding: getComputedStyle(document.documentElement).paddingTop, stageTop: stage.getBoundingClientRect().top, left: cs.paddingLeft, right: cs.paddingRight };
+      const stage = document.querySelector('.stage');
+      // the board, its eval bar, the player bars and the transport bar: how far each comes to the screen's sides
+      const parts = [...document.querySelectorAll('.part-board, .part-eval-bar, .part-player-bar, .part-transport-bar')].map((e) => e.getBoundingClientRect()).filter((b) => b.width > 0);
+      const edge = { l: Math.min(...parts.map((b) => b.left)), r: innerWidth - Math.max(...parts.map((b) => b.right)) };
+      return { top: r.height, l: r.l, r: r.r, edge, padding: getComputedStyle(document.documentElement).paddingTop, stageTop: stage.getBoundingClientRect().top };
     });
     await page.getByRole('button', { name: 'Full screen', exact: true }).tap();
     await page.waitForFunction(() => !!document.fullscreenElement, null, { timeout: 5000 });
@@ -132,10 +135,10 @@ test('android · chrome · local build', async (t) => {
         await page.waitForFunction(() => innerWidth > innerHeight, null, { timeout: 10000 });
         await page.waitForTimeout(500); // the layout's resize
         const side = await insets();
-        t.diagnostic(`full screen, sideways: side insets ${side.l} / ${side.r} px, stage padding ${side.left} / ${side.right}`);
+        t.diagnostic(`full screen, sideways: side insets ${side.l} / ${side.r} px, board and bars ${side.edge.l} / ${side.edge.r} px from the sides`);
         assert.ok(side.l + side.r > 0, 'the emulated cut-out reports no side inset');
-        assert.ok(parseFloat(side.left) >= side.l - 0.5, `left padding ${side.left} under the inset ${side.l} px`);
-        assert.ok(parseFloat(side.right) >= side.r - 0.5, `right padding ${side.right} under the inset ${side.r} px`);
+        assert.ok(side.edge.l >= side.l - 0.5, `the board or a bar comes ${side.edge.l} px from the left, the inset is ${side.l} px`);
+        assert.ok(side.edge.r >= side.r - 0.5, `the board or a bar comes ${side.edge.r} px from the right, the inset is ${side.r} px`);
         await page.screenshot({ path: path.join(OUT, 'android-full-screen-sideways.png') });
       } finally {
         await sh('settings put system user_rotation 0');
