@@ -59,6 +59,10 @@ button:focus-visible, select:focus-visible, input:focus-visible, [role="slider"]
 }
 .pbtn:hover:not(:disabled), .dock-btn:hover:not(:disabled) { background: var(--btn-hover); border-color: var(--line-strong); }
 .pbtn:disabled { opacity: 0.35; cursor: default; }
+/* the transport bar's own buttons have no border (the fill alone marks them); the Menu popups' items keep theirs. The
+   border stays, transparent, so the buttons keep their size */
+.pbar .pbtn, .pbar .dock-btn:not(.pmenu .dock-btn):not(.dock-pop .dock-btn),
+.pbar .pbtn:hover:not(:disabled), .pbar .dock-btn:hover:not(:disabled):not(.pmenu .dock-btn):not(.dock-pop .dock-btn) { border-color: transparent; }
 /* no double-tap zoom anywhere (pinch is the viewport's to allow); the board and the seek bar set their own */
 * { touch-action: manipulation; }
 .pnav { touch-action: manipulation; -webkit-touch-callout: none; }
