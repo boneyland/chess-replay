@@ -197,7 +197,7 @@ function Stage({ menu, top, onLayout, duration, background, playback, nav, still
   const fh = scrolls ? Math.max(h, contentH) : h;
 
   return (
-    <div className={'stage' + (cols === 1 ? ' stage-one' : '') + (short ? ' stage-short' : '')}>
+    <div className={'stage' + (cols === 1 ? ' stage-one' : '') + (short ? ' stage-short' : '') + (scrolls ? ' stage-under' : '')}>
       {top}
       <div ref={areaRef} className="stage-area" style={{ overflowY: scrolls ? 'auto' : 'hidden', scrollbarGutter: cols === 1 ? 'stable' : undefined }}>
         <div className="stage-frame" style={{ width: w, height: fh, background, position: 'relative' }}>
