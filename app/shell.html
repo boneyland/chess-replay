@@ -63,10 +63,6 @@ button:focus-visible, select:focus-visible, input:focus-visible, [role="slider"]
    keep theirs. The border stays, transparent, so the buttons keep their size */
 .pbar .pbtn, .pbar .dock-btn:not(.pmenu .dock-btn):not(.dock-pop .dock-btn) { border-color: transparent; background: transparent; color: var(--ink); }
 .pbar .pbtn:hover:not(:disabled), .pbar .dock-btn:hover:not(:disabled):not(.pmenu .dock-btn):not(.dock-pop .dock-btn) { border-color: transparent; background: var(--btn-hover); filter: none; }
-/* Play/Pause: the one filled button, a disc in the ink colour with the icon in the bar's */
-.pbar .pbtn-play, .pbar .pbtn-play:hover:not(:disabled) { border-radius: 50%; background: var(--ink); color: var(--panel); }
-.pbar .pbtn-play:hover:not(:disabled) { filter: brightness(1.25); }
-.stage-short .pbar .pbtn-play { width: 28px; }
 .pbar .pmenu-err .dock-menu { color: var(--danger); }
 /* Import game and Menu: an icon on the bar (the name kept for screen readers), the name in the folded menu */
 .dock-glyph { display: none; }
@@ -148,6 +144,23 @@ body:has(.stage-one) .twk-panel { bottom: calc(51px + var(--safe-b)); max-height
   .pbtn, .dock-iconic { width: 30px; height: 30px; }
   .dock-btn { height: 30px; padding: 0 8px; }
 }
+/* the bar's buttons run its full height and sit side by side with no gap, so a hover's tint is a block from edge to edge
+   of the bar, touching its neighbours'. The bar keeps its height per tier (--pbar-h, as it was with its padding: L.dock's
+   DOCK_H in a short window), and what a gap gave is in the buttons' width (--pbtn-w) and the other items' margins
+   (--pgap); Play/Pause's disc (--disc) is drawn under its icon, the size the button was */
+.pbar { --pbar-h: 48px; --pbtn-w: 44px; --pgap: 10px; --disc: 34px; gap: 0; padding-block: 0; align-items: stretch; min-height: var(--pbar-h); }
+@media (max-width: 1180px) { .pbar { --pbar-h: 44px; --pbtn-w: 42px; --pgap: 8px; } }
+@media (max-width: 599px), (max-height: 499px) { .pbar { --pbar-h: 40px; --pbtn-w: 38px; --disc: 30px; } }
+.stage-one .pbar { --pbar-h: 36px; --pbtn-w: 34px; --pgap: 4px; --disc: 30px; padding-block: 0; gap: 0; }
+.stage-short .pbar { --pbar-h: 34px; --pbtn-w: 40px; --pgap: 6px; --disc: 28px; padding-block: 0; gap: 0; }
+.pbar .pbtn, .pbar .pdock .dock-btn:not(.dock-pop .dock-btn) { width: var(--pbtn-w); height: auto; align-self: stretch; border-radius: 0; }
+.pbar .ptime, .pbar .ptrack, .pbar .pspacer { align-self: center; margin-inline: calc(var(--pgap) / 2); }
+.pbar .pdock { align-items: stretch; gap: 0; padding-left: 0; margin-left: calc(var(--pgap) / 2); }
+.pbar .dock-new, .pbar .pmenu { display: flex; align-items: stretch; }
+.pbar .pbtn-play, .pbar .pbtn-play:hover:not(:disabled) { position: relative; border-radius: 0; background: transparent; color: var(--panel); filter: none; }
+.pbar .pbtn-play:hover:not(:disabled) { background: var(--btn-hover); }
+.pbar .pbtn-play::before { content: ''; position: absolute; left: 50%; top: 50%; width: var(--disc); height: var(--disc); margin: calc(var(--disc) / -2) 0 0 calc(var(--disc) / -2); border-radius: 50%; background: var(--ink); }
+.pbar .pbtn-play svg { position: relative; }
 .pmenu { position: relative; flex: none; }
 .pmenu-err .dock-menu { border-color: var(--danger); color: var(--danger); }
 .pmenu .dock-items {

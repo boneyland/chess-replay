@@ -270,7 +270,7 @@ function PlaybackBar({ time, duration, playing, nav, menu, still, dock, onPlayPa
         <button type="button" className="pbtn pbtn-play" onClick={onPlayPause} aria-label={playing ? 'Pause (space)' : 'Play (space)'} title={playing ? 'Pause (space)' : 'Play (space)'}>
           {playing
             ? <svg width="24" height="24" viewBox="0 0 14 14"><rect x="3" y="2" width="3" height="10" fill="currentColor" /><rect x="8" y="2" width="3" height="10" fill="currentColor" /></svg>
-            : <svg width="24" height="24" viewBox="0 0 14 14"><path d="M3 2l9 5-9 5V2z" fill="currentColor" /></svg>}
+            : <svg width="24" height="24" viewBox="0 0 14 14"><path d="M3.7 2l9 5-9 5V2z" fill="currentColor" /></svg>}
         </button>
       )}
       {nav && nav.current && (
