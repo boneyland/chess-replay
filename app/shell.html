@@ -180,7 +180,7 @@ body:has(.stage-one) .twk-panel { bottom: calc(51px + var(--safe-b)); max-height
 .stage:not(.stage-short) .pbar { max-width: none; border: none; border-radius: 0; padding: 0 var(--pbar-sr) 0 var(--pbar-sl); min-height: calc(var(--pbar-h) + var(--pbar-pb)); }
 /* a short window: the bar stays at the foot of the sidebar, square and borderless */
 .stage-short .pbar { border: none; border-radius: 0; }
-/* the bar's surface is tinted glass: the panel with a little accent, 60% opaque over a blur of what's behind, a light
+/* the bar's surface is tinted glass: the panel with a little accent, 50% opaque over a blur of what's behind, a light
    sheen from the top, a hairline along the top edge and a faint accent glow. It's a layer under the items (::before;
    they're positioned, so they paint over it), not the bar's own background: a backdrop-filter on the bar would make it
    the containing block of the fixed dialogs and menus inside it */
@@ -190,7 +190,7 @@ body:has(.stage-one) .twk-panel { bottom: calc(51px + var(--safe-b)); max-height
   content: ''; position: absolute; inset: 0; pointer-events: none; border-radius: inherit;
   background: linear-gradient(to bottom, rgba(255, 255, 255, 0.1), rgba(255, 255, 255, 0) 55%),
     color-mix(in srgb, color-mix(in srgb, var(--accent) 12%, var(--panel)) 50%, transparent);
-  -webkit-backdrop-filter: blur(4px); backdrop-filter: blur(4px);
+  -webkit-backdrop-filter: blur(1px); backdrop-filter: blur(1px);
   box-shadow: inset 0 1px 0 var(--line-strong), 0 0 4px 1px color-mix(in srgb, var(--accent) 25%, transparent);
 }
 /* a page that scrolls (Stage's stage-under: paused, one column) runs on under the glass: the area reaches down behind
