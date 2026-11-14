@@ -59,10 +59,20 @@ button:focus-visible, select:focus-visible, input:focus-visible, [role="slider"]
 }
 .pbtn:hover:not(:disabled), .dock-btn:hover:not(:disabled) { background: var(--btn-hover); border-color: var(--line-strong); }
 .pbtn:disabled { opacity: 0.35; cursor: default; }
-/* the transport bar's own buttons have no border (the fill alone marks them); the Menu popups' items keep theirs. The
-   border stays, transparent, so the buttons keep their size */
-.pbar .pbtn, .pbar .dock-btn:not(.pmenu .dock-btn):not(.dock-pop .dock-btn),
-.pbar .pbtn:hover:not(:disabled), .pbar .dock-btn:hover:not(:disabled):not(.pmenu .dock-btn):not(.dock-pop .dock-btn) { border-color: transparent; }
+/* the transport bar's own buttons are bare icons: no border or fill (a hover still tints them); the Menu popups' items
+   keep theirs. The border stays, transparent, so the buttons keep their size */
+.pbar .pbtn, .pbar .dock-btn:not(.pmenu .dock-btn):not(.dock-pop .dock-btn) { border-color: transparent; background: transparent; color: var(--ink); }
+.pbar .pbtn:hover:not(:disabled), .pbar .dock-btn:hover:not(:disabled):not(.pmenu .dock-btn):not(.dock-pop .dock-btn) { border-color: transparent; background: var(--btn-hover); filter: none; }
+/* Play/Pause: the one filled button, a disc in the ink colour with the icon in the bar's */
+.pbar .pbtn-play, .pbar .pbtn-play:hover:not(:disabled) { border-radius: 50%; background: var(--ink); color: var(--panel); }
+.pbar .pbtn-play:hover:not(:disabled) { filter: brightness(1.25); }
+.stage-short .pbar .pbtn-play { width: 28px; }
+.pbar .pmenu-err .dock-menu { color: var(--danger); }
+/* Import game and Menu: an icon on the bar (the name kept for screen readers), the name in the folded menu */
+.dock-glyph { display: none; }
+.pbar .dock-glyphed:not(.pmenu .dock-btn) { display: inline-flex; align-items: center; justify-content: center; width: 34px; padding: 0; }
+.pbar .dock-glyphed:not(.pmenu .dock-btn) .dock-glyph { display: block; flex: none; }
+.pbar .dock-glyphed:not(.pmenu .dock-btn) .dock-label { position: absolute; width: 1px; height: 1px; overflow: hidden; clip-path: inset(50%); white-space: nowrap; }
 /* no double-tap zoom anywhere (pinch is the viewport's to allow); the board and the seek bar set their own */
 * { touch-action: manipulation; }
 .pnav { touch-action: manipulation; -webkit-touch-callout: none; }

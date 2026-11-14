@@ -259,28 +259,28 @@ function PlaybackBar({ time, duration, playing, nav, menu, still, dock, onPlayPa
   return (
     <div className={'pbar part-transport-bar' + (dock ? ' pbar-dock' + (dock.width < 340 ? ' pbar-narrow' : '') : '')} style={dock || undefined}>
       <button type="button" className="pbtn pbtn-end" disabled={nav && nav.current ? !(nav.current.hasFirst != null ? nav.current.hasFirst : nav.current.hasPrev) : still || time <= 0} onClick={still ? () => nav.current.first() : onReset} aria-label="Back to start (Home)" title="Back to start (Home)">
-        <svg width="20" height="20" viewBox="0 0 14 14" fill="none"><path d="M3 2v10M12 2L5 7l7 5V2z" stroke="currentColor" strokeWidth="1.5" strokeLinejoin="round" strokeLinecap="round" /></svg>
+        <svg width="24" height="24" viewBox="0 0 14 14" fill="none"><path d="M3 2v10M12 2L5 7l7 5V2z" stroke="currentColor" strokeWidth="1.5" strokeLinejoin="round" strokeLinecap="round" /></svg>
       </button>
       {nav && nav.current && (
         <NavButton nav={nav} dir="prev" label="Previous move (←)">
-          <svg width="22" height="22" viewBox="0 0 16 16" fill="none"><path d="M10 3L5 8l5 5" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" /></svg>
+          <svg width="28" height="28" viewBox="0 0 16 16" fill="none"><path d="M10 3L5 8l5 5" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" /></svg>
         </NavButton>
       )}
       {!still && (
-        <button type="button" className="pbtn" onClick={onPlayPause} aria-label={playing ? 'Pause (space)' : 'Play (space)'} title={playing ? 'Pause (space)' : 'Play (space)'}>
+        <button type="button" className="pbtn pbtn-play" onClick={onPlayPause} aria-label={playing ? 'Pause (space)' : 'Play (space)'} title={playing ? 'Pause (space)' : 'Play (space)'}>
           {playing
-            ? <svg width="20" height="20" viewBox="0 0 14 14"><rect x="3" y="2" width="3" height="10" fill="currentColor" /><rect x="8" y="2" width="3" height="10" fill="currentColor" /></svg>
-            : <svg width="20" height="20" viewBox="0 0 14 14"><path d="M3 2l9 5-9 5V2z" fill="currentColor" /></svg>}
+            ? <svg width="24" height="24" viewBox="0 0 14 14"><rect x="3" y="2" width="3" height="10" fill="currentColor" /><rect x="8" y="2" width="3" height="10" fill="currentColor" /></svg>
+            : <svg width="24" height="24" viewBox="0 0 14 14"><path d="M3 2l9 5-9 5V2z" fill="currentColor" /></svg>}
         </button>
       )}
       {nav && nav.current && (
         <NavButton nav={nav} dir="next" label="Next move (→)">
-          <svg width="22" height="22" viewBox="0 0 16 16" fill="none"><path d="M6 3l5 5-5 5" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" /></svg>
+          <svg width="28" height="28" viewBox="0 0 16 16" fill="none"><path d="M6 3l5 5-5 5" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" /></svg>
         </NavButton>
       )}
       {nav && nav.current && (
         <button type="button" className="pbtn pbtn-end" disabled={!nav.current.hasLast} onClick={() => nav.current.last()} aria-label="Last move (End)" title="Last move (End)">
-          <svg width="20" height="20" viewBox="0 0 14 14" fill="none"><path d="M11 2v10M2 2l7 5-7 5V2z" stroke="currentColor" strokeWidth="1.5" strokeLinejoin="round" strokeLinecap="round" /></svg>
+          <svg width="24" height="24" viewBox="0 0 14 14" fill="none"><path d="M11 2v10M2 2l7 5-7 5V2z" stroke="currentColor" strokeWidth="1.5" strokeLinejoin="round" strokeLinecap="round" /></svg>
         </button>
       )}
       {nav && nav.current && <span className="plabel" style={{ color: nav.current.color }} aria-live="polite">{nav.current.label}</span>}
