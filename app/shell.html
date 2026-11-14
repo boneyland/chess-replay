@@ -168,13 +168,14 @@ body:has(.stage-one) .twk-panel { bottom: calc(51px + var(--safe-b)); max-height
 .pbar .pbtn-play svg { position: relative; }
 .pbar .pdock { border-left: none; }
 /* every layout but a short window's: a bottom bar rather than a box, the page's full width, square and borderless, in
-   the panel colour down to the page's foot (it takes the stage's bottom padding, --pbar-pb, so the page keeps its
-   height); its items keep the stage's side padding (--pbar-pi), in line with the page above */
+   the panel colour down to the page's foot (it takes the stage's bottom padding, --pbar-pb, into its height, its items
+   centred in the whole of it and its buttons running all of it, so the page keeps its height); its items keep the
+   stage's side padding (--pbar-sl, --pbar-sr), in line with the page above */
 .stage:not(.stage-one):not(.stage-short) .pbar { --pbar-pb: 12px; --pbar-sl: max(16px, var(--safe-l)); --pbar-sr: max(16px, var(--safe-r)); }
 @media (max-width: 1180px) { .stage:not(.stage-one):not(.stage-short) .pbar { --pbar-pb: 8px; --pbar-sl: max(10px, var(--safe-l)); --pbar-sr: max(10px, var(--safe-r)); } }
 .stage:not(.stage-one):not(.stage-short) .pbar { margin: 0 calc(-1 * var(--pbar-sr)) calc(-1 * var(--pbar-pb)) calc(-1 * var(--pbar-sl)); width: calc(100% + var(--pbar-sl) + var(--pbar-sr)); }
 .stage-one .pbar { --pbar-pb: 5px; --pbar-sl: max(4px, var(--safe-l)); --pbar-sr: max(4px, var(--safe-r)); margin: 0 0 -5px; width: 100%; }
-.stage:not(.stage-short) .pbar { max-width: none; border: none; border-radius: 0; padding: 0 var(--pbar-sr) var(--pbar-pb) var(--pbar-sl); min-height: calc(var(--pbar-h) + var(--pbar-pb)); }
+.stage:not(.stage-short) .pbar { max-width: none; border: none; border-radius: 0; padding: 0 var(--pbar-sr) 0 var(--pbar-sl); min-height: calc(var(--pbar-h) + var(--pbar-pb)); }
 /* a short window: the bar stays at the foot of the sidebar, square and borderless */
 .stage-short .pbar { border: none; border-radius: 0; }
 .pmenu { position: relative; flex: none; }
