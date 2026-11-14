@@ -197,6 +197,10 @@ body:has(.stage-one) .twk-panel { bottom: calc(51px + var(--safe-b)); max-height
 .stage:not(.stage-short) .pbar { max-width: none; border: none; border-radius: 0; padding: 0 var(--pbar-sr) 0 var(--pbar-sl); min-height: calc(var(--pbar-h) + var(--pbar-pb)); }
 /* a short window: the bar stays at the foot of the sidebar, square and borderless */
 .stage-short .pbar { border: none; border-radius: 0; }
+/* its box runs on to the screen's right and bottom edges (Stage's dockBox); the items are padded in by the extra width
+   (the stage's right padding or cut-out inset) and centred in the whole height, its buttons running all of it, as the
+   bottom bar's do */
+.stage-short .pbar-dock { padding: 0 calc(6px + var(--dock-er, 0px)) 0 6px; }
 /* the bar's surface is tinted glass: the panel with a little accent, 60% opaque over a blur of what's behind, a light
    sheen from the top, a hairline along the top edge and a faint accent glow. It's a layer under the items (::before;
    they're positioned, so they paint over it), not the bar's own background: a backdrop-filter on the bar would make it
