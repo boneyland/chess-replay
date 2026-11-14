@@ -240,6 +240,8 @@ function NavButton({ nav, dir, label, children }) {
   );
 }
 
+const markPointer = (e) => { const d = e.currentTarget.dataset; if (e.pointerType === 'mouse') d.mouse = '1'; else delete d.mouse; };
+
 // dock: where the bar sits in the stage when it is in the sidebar (else it runs under the page)
 function PlaybackBar({ time, duration, playing, nav, menu, still, dock, onPlayPause, onReset, onSeek }) {
   const trackRef = React.useRef(null);
@@ -257,7 +259,10 @@ function PlaybackBar({ time, duration, playing, nav, menu, still, dock, onPlayPa
   const say = (t) => { const m = Math.floor(Math.max(0, t) / 60), x = Math.floor(Math.max(0, t) % 60); return (m ? `${m} minute${m === 1 ? '' : 's'} ` : '') + `${x} second${x === 1 ? '' : 's'}`; };
   const fmt = (t) => { const x = Math.max(0, t); return `${Math.floor(x / 60)}:${String(Math.floor(x % 60)).padStart(2, '0')}.${String(Math.floor((x * 100) % 100)).padStart(2, '0')}`; };
   return (
-    <div className={'pbar part-transport-bar' + (dock ? ' pbar-dock' + (dock.width < 340 ? ' pbar-narrow' : '') : '')} style={dock || undefined}>
+    // data-mouse while the last pointer over the bar is a mouse: the buttons' hover tint keys on it, not on CSS's hover media,
+    // as a tapped button keeps :hover and some touch browsers (and touch laptops) report a hover-capable pointer
+    <div className={'pbar part-transport-bar' + (dock ? ' pbar-dock' + (dock.width < 340 ? ' pbar-narrow' : '') : '')} style={dock || undefined}
+      onPointerOver={markPointer} onPointerDown={markPointer}>
       <button type="button" className="pbtn pbtn-end" disabled={nav && nav.current ? !(nav.current.hasFirst != null ? nav.current.hasFirst : nav.current.hasPrev) : still || time <= 0} onClick={still ? () => nav.current.first() : onReset} aria-label="Back to start (Home)" title="Back to start (Home)">
         <svg width="24" height="24" viewBox="0 0 14 14" fill="none"><path d="M3 2v10M12 2L5 7l7 5V2z" stroke="currentColor" strokeWidth="1.5" strokeLinejoin="round" strokeLinecap="round" /></svg>
       </button>
