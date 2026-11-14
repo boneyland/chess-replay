@@ -107,12 +107,12 @@ function Stage({ menu, top, onLayout, duration, background, playback, nav, still
       // the area's own padding (one column's, shell.html) is outside the page
       const cs = getComputedStyle(el), px = (k) => parseFloat(cs[k]) || 0;
       const w = el.clientWidth - px('paddingLeft') - px('paddingRight'), h = el.clientHeight - px('paddingTop') - px('paddingBottom');
-      const sh = el.parentElement.clientHeight, ox = el.offsetLeft, oy = el.offsetTop, m = stageMargins(el), my = m.top + m.bottom;
+      const sh = el.parentElement.clientHeight, sw = el.parentElement.clientWidth, ox = el.offsetLeft, oy = el.offsetTop, m = stageMargins(el), my = m.top + m.bottom;
       // the viewport, which caps the board's size (LayoutCore)
       const vw = document.documentElement.clientWidth, vh = document.documentElement.clientHeight;
       const cols = LayoutCore.pickColumns({ w, h, vw, vh, text, video, was: colsRef.current, off });
       colsRef.current = cols;
-      setArea((a) => (a.w === w && a.h === h && a.cols === cols && a.sh === sh && a.vw === vw && a.vh === vh && a.ox === ox && a.oy === oy && a.my === my ? a : { w, h, cols, sh, vw, vh, ox, oy, my }));
+      setArea((a) => (a.w === w && a.h === h && a.cols === cols && a.sh === sh && a.sw === sw && a.vw === vw && a.vh === vh && a.ox === ox && a.oy === oy && a.my === my ? a : { w, h, cols, sh, sw, vw, vh, ox, oy, my }));
     };
     measure();
     const ro = new ResizeObserver(measure);
@@ -207,7 +207,7 @@ function Stage({ menu, top, onLayout, duration, background, playback, nav, still
         </div>
       </div>
       <PlaybackBar time={time} duration={duration} playing={playing} nav={nav} menu={menu} still={still}
-        dock={dock && { left: (area.ox || 0) + dock.x, top: (area.oy || 0) + dock.y, width: dock.w, height: dock.h }}
+        dock={dock && dockBox(dock, area)}
         onPlayPause={togglePlay} onReset={() => setTime(0)}
         onSeek={(t) => setTime(t)} />
     </div>
@@ -252,6 +252,14 @@ const markPointer = (e) => {
   window.addEventListener('pointerup', end); window.addEventListener('pointercancel', end);
 };
 
+// the bar's box in the sidebar (the stage's coordinates): from the layout's L.dock out to the stage's right and bottom
+// edges, the screen's, its glass running under the stage's padding and the safe area there; --dock-er and --dock-eb
+// (shell.html) pad its items back to where L.dock puts them, clear of a cut-out. narrow: L.dock's own width
+function dockBox(dock, area) {
+  const left = (area.ox || 0) + dock.x, top = (area.oy || 0) + dock.y;
+  const width = Math.max(dock.w, (area.sw || 0) - left), height = Math.max(dock.h, (area.sh || 0) - top);
+  return { left, top, width, height, '--dock-er': `${width - dock.w}px`, '--dock-eb': `${height - dock.h}px`, narrow: dock.w < 340 };
+}
 // dock: where the bar sits in the stage when it is in the sidebar (else it runs under the page)
 function PlaybackBar({ time, duration, playing, nav, menu, still, dock, onPlayPause, onReset, onSeek }) {
   const trackRef = React.useRef(null);
@@ -271,7 +279,7 @@ function PlaybackBar({ time, duration, playing, nav, menu, still, dock, onPlayPa
   return (
     // data-mouse while the last pointer over the bar is a mouse: the buttons' hover tint keys on it, not on CSS's hover media,
     // as a tapped button keeps :hover and some touch browsers (and touch laptops) report a hover-capable pointer
-    <div className={'pbar part-transport-bar' + (dock ? ' pbar-dock' + (dock.width < 340 ? ' pbar-narrow' : '') : '')} style={dock || undefined}
+    <div className={'pbar part-transport-bar' + (dock ? ' pbar-dock' + (dock.narrow ? ' pbar-narrow' : '') : '')} style={dock ? { ...dock, narrow: undefined } : undefined}
       onPointerOver={markPointer} onPointerDown={markPointer}>
       <button type="button" className="pbtn pbtn-end" disabled={nav && nav.current ? !(nav.current.hasFirst != null ? nav.current.hasFirst : nav.current.hasPrev) : still || time <= 0} onClick={still ? () => nav.current.first() : onReset} aria-label="Back to start (Home)" title="Back to start (Home)">
         <svg width="24" height="24" viewBox="0 0 14 14" fill="none"><path d="M3 2v10M12 2L5 7l7 5V2z" stroke="currentColor" strokeWidth="1.5" strokeLinejoin="round" strokeLinecap="round" /></svg>
