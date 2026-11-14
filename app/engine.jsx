@@ -240,7 +240,17 @@ function NavButton({ nav, dir, label, children }) {
   );
 }
 
-const markPointer = (e) => { const d = e.currentTarget.dataset; if (e.pointerType === 'mouse') d.mouse = '1'; else delete d.mouse; };
+const markPointer = (e) => {
+  const d = e.currentTarget.dataset;
+  if (e.pointerType === 'mouse') d.mouse = '1'; else delete d.mouse;
+  // data-press while a pointer holds a button down (its press tint): not CSS :active, which Firefox for Android leaves on
+  // a button tapped twice quickly. On the window, as a button turned disabled under the pointer gets no pointerup
+  const btn = e.type === 'pointerdown' && e.target.closest('button');
+  if (!btn || btn.disabled) return;
+  btn.dataset.press = '1';
+  const end = () => { delete btn.dataset.press; window.removeEventListener('pointerup', end); window.removeEventListener('pointercancel', end); };
+  window.addEventListener('pointerup', end); window.addEventListener('pointercancel', end);
+};
 
 // dock: where the bar sits in the stage when it is in the sidebar (else it runs under the page)
 function PlaybackBar({ time, duration, playing, nav, menu, still, dock, onPlayPause, onReset, onSeek }) {

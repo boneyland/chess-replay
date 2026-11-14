@@ -64,9 +64,10 @@ button:focus-visible, select:focus-visible, input:focus-visible, [role="slider"]
 .pbar .pbtn, .pbar .dock-btn:not(.pmenu .dock-btn):not(.dock-pop .dock-btn) { border-color: transparent; background: transparent; color: var(--ink); }
 .pbar .pbtn:hover:not(:disabled), .pbar .dock-btn:hover:not(:disabled):not(.pmenu .dock-btn):not(.dock-pop .dock-btn) { border-color: transparent; background: transparent; filter: none; }
 /* the tint shows on hover only under a mouse (the bar's data-mouse, set by PlaybackBar from the pointer's type: a
-   touch screen's browser keeps :hover on the last button tapped), and while any pointer presses the button */
+   touch screen's browser keeps :hover on the last button tapped), and while any pointer presses the button (data-press,
+   also set by PlaybackBar: Firefox for Android can leave :active on a tapped button) */
 .pbar[data-mouse] .pbtn:hover:not(:disabled), .pbar[data-mouse] .dock-btn:hover:not(:disabled):not(.pmenu .dock-btn):not(.dock-pop .dock-btn),
-.pbar .pbtn:active:not(:disabled), .pbar .dock-btn:active:not(:disabled):not(.pmenu .dock-btn):not(.dock-pop .dock-btn) { background: var(--btn-hover); }
+.pbar .pbtn[data-press]:not(:disabled), .pbar .dock-btn[data-press]:not(:disabled):not(.pmenu .dock-btn):not(.dock-pop .dock-btn) { background: var(--btn-hover); }
 .pbar .pmenu-err .dock-menu { color: var(--danger); }
 /* Import game and Menu: an icon on the bar (the name kept for screen readers), the name in the folded menu */
 .dock-glyph { display: none; }
@@ -162,7 +163,7 @@ body:has(.stage-one) .twk-panel { bottom: calc(51px + var(--safe-b)); max-height
 .pbar .pdock { align-items: stretch; gap: 0; padding-left: 0; margin-left: calc(var(--pgap) / 2); }
 .pbar .dock-new, .pbar .pmenu { display: flex; align-items: stretch; }
 .pbar .pbtn-play, .pbar .pbtn-play:hover:not(:disabled) { position: relative; border-radius: 0; background: transparent; color: var(--panel); filter: none; }
-.pbar[data-mouse] .pbtn-play:hover:not(:disabled), .pbar .pbtn-play:active:not(:disabled) { background: var(--btn-hover); }
+.pbar[data-mouse] .pbtn-play:hover:not(:disabled), .pbar .pbtn-play[data-press]:not(:disabled) { background: var(--btn-hover); }
 .pbar .pbtn-play::before { content: ''; position: absolute; left: 50%; top: 50%; width: var(--disc); height: var(--disc); margin: calc(var(--disc) / -2) 0 0 calc(var(--disc) / -2); border-radius: 50%; background: var(--ink); }
 .pbar .pbtn-play svg { position: relative; }
 .pbar .pdock { border-left: none; }
