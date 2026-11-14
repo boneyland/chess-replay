@@ -111,35 +111,11 @@ test('android · chrome · local build', async (t) => {
       const stage = document.querySelector('.stage'), cs = getComputedStyle(stage);
       return { top: r.height, sides: r.width, padding: getComputedStyle(document.documentElement).paddingTop, stageTop: stage.getBoundingClientRect().top, left: cs.paddingLeft, right: cs.paddingRight };
     });
-    const enter = async () => {
-      await page.getByRole('button', { name: 'Full screen', exact: true }).tap();
-      await page.waitForFunction(() => !!document.fullscreenElement, null, { timeout: 5000 });
-    };
-    // a screen without a cut-out keeps no gap at the top in full screen: the emulator, with its punch hole turned off
-    if (emulator) {
-      await sh(`cmd overlay disable ${CUTOUT}`);
-      try {
-        await page.waitForTimeout(1500); // the display's change reaching Chrome
-        await enter();
-        const none = await insets();
-        t.diagnostic(`full screen, no cut-out: top inset ${none.top} px`);
-        assert.equal(none.top, 0);
-        assert.equal(none.padding, '0px');
-        assert.equal(none.stageTop, 0);
-        await page.screenshot({ path: path.join(OUT, 'android-full-screen-no-cutout.png') });
-        await menu.tap();
-        await page.getByRole('button', { name: 'Exit full screen' }).tap();
-        await page.waitForFunction(() => !document.fullscreenElement, null, { timeout: 5000 });
-      } finally {
-        await sh(`cmd overlay enable ${CUTOUT}`);
-      }
-      await page.waitForTimeout(1500);
-      await menu.tap();
-      await page.getByRole('button', { name: 'Full screen', exact: true }).waitFor({ state: 'visible', timeout: 3000 });
-    }
-    await enter();
+    await page.getByRole('button', { name: 'Full screen', exact: true }).tap();
+    await page.waitForFunction(() => !!document.fullscreenElement, null, { timeout: 5000 });
     // upright in full screen the page starts under the camera's cut-out strip (the inset the browser reports), and
-    // at the very top on a screen without one (an inset of 0)
+    // at the very top on a screen without one (an inset of 0). The emulator can't be checked both ways in one run:
+    // turning its cut-out off or on restarts Chrome
     const up = await insets();
     t.diagnostic(`full screen: top inset ${up.top} px`);
     if (emulator) assert.ok(up.top > 0, 'the emulated cut-out reports no top inset');
