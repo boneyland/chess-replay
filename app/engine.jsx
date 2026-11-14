@@ -240,6 +240,18 @@ function NavButton({ nav, dir, label, children }) {
   );
 }
 
+const markPointer = (e) => {
+  const d = e.currentTarget.dataset;
+  if (e.pointerType === 'mouse') d.mouse = '1'; else delete d.mouse;
+  // data-press while a pointer holds a button down (its press tint): not CSS :active, which Firefox for Android leaves on
+  // a button tapped twice quickly. On the window, as a button turned disabled under the pointer gets no pointerup
+  const btn = e.type === 'pointerdown' && e.target.closest('button');
+  if (!btn || btn.disabled) return;
+  btn.dataset.press = '1';
+  const end = () => { delete btn.dataset.press; window.removeEventListener('pointerup', end); window.removeEventListener('pointercancel', end); };
+  window.addEventListener('pointerup', end); window.addEventListener('pointercancel', end);
+};
+
 // dock: where the bar sits in the stage when it is in the sidebar (else it runs under the page)
 function PlaybackBar({ time, duration, playing, nav, menu, still, dock, onPlayPause, onReset, onSeek }) {
   const trackRef = React.useRef(null);
@@ -257,30 +269,33 @@ function PlaybackBar({ time, duration, playing, nav, menu, still, dock, onPlayPa
   const say = (t) => { const m = Math.floor(Math.max(0, t) / 60), x = Math.floor(Math.max(0, t) % 60); return (m ? `${m} minute${m === 1 ? '' : 's'} ` : '') + `${x} second${x === 1 ? '' : 's'}`; };
   const fmt = (t) => { const x = Math.max(0, t); return `${Math.floor(x / 60)}:${String(Math.floor(x % 60)).padStart(2, '0')}.${String(Math.floor((x * 100) % 100)).padStart(2, '0')}`; };
   return (
-    <div className={'pbar part-transport-bar' + (dock ? ' pbar-dock' + (dock.width < 340 ? ' pbar-narrow' : '') : '')} style={dock || undefined}>
+    // data-mouse while the last pointer over the bar is a mouse: the buttons' hover tint keys on it, not on CSS's hover media,
+    // as a tapped button keeps :hover and some touch browsers (and touch laptops) report a hover-capable pointer
+    <div className={'pbar part-transport-bar' + (dock ? ' pbar-dock' + (dock.width < 340 ? ' pbar-narrow' : '') : '')} style={dock || undefined}
+      onPointerOver={markPointer} onPointerDown={markPointer}>
       <button type="button" className="pbtn pbtn-end" disabled={nav && nav.current ? !(nav.current.hasFirst != null ? nav.current.hasFirst : nav.current.hasPrev) : still || time <= 0} onClick={still ? () => nav.current.first() : onReset} aria-label="Back to start (Home)" title="Back to start (Home)">
-        <svg width="14" height="14" viewBox="0 0 14 14" fill="none"><path d="M3 2v10M12 2L5 7l7 5V2z" stroke="currentColor" strokeWidth="1.5" strokeLinejoin="round" strokeLinecap="round" /></svg>
+        <svg width="24" height="24" viewBox="0 0 14 14" fill="none"><path d="M3 2v10M12 2L5 7l7 5V2z" stroke="currentColor" strokeWidth="1.5" strokeLinejoin="round" strokeLinecap="round" /></svg>
       </button>
       {nav && nav.current && (
         <NavButton nav={nav} dir="prev" label="Previous move (←)">
-          <svg width="16" height="16" viewBox="0 0 16 16" fill="none"><path d="M10 3L5 8l5 5" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" /></svg>
+          <svg width="28" height="28" viewBox="0 0 16 16" fill="none"><path d="M10 3L5 8l5 5" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" /></svg>
         </NavButton>
       )}
       {!still && (
-        <button type="button" className="pbtn" onClick={onPlayPause} aria-label={playing ? 'Pause (space)' : 'Play (space)'} title={playing ? 'Pause (space)' : 'Play (space)'}>
+        <button type="button" className="pbtn pbtn-play" onClick={onPlayPause} aria-label={playing ? 'Pause (space)' : 'Play (space)'} title={playing ? 'Pause (space)' : 'Play (space)'}>
           {playing
-            ? <svg width="14" height="14" viewBox="0 0 14 14"><rect x="3" y="2" width="3" height="10" fill="currentColor" /><rect x="8" y="2" width="3" height="10" fill="currentColor" /></svg>
-            : <svg width="14" height="14" viewBox="0 0 14 14"><path d="M3 2l9 5-9 5V2z" fill="currentColor" /></svg>}
+            ? <svg width="24" height="24" viewBox="0 0 14 14"><rect x="3" y="2" width="3" height="10" fill="currentColor" /><rect x="8" y="2" width="3" height="10" fill="currentColor" /></svg>
+            : <svg width="24" height="24" viewBox="0 0 14 14"><path d="M3.7 2l9 5-9 5V2z" fill="currentColor" /></svg>}
         </button>
       )}
       {nav && nav.current && (
         <NavButton nav={nav} dir="next" label="Next move (→)">
-          <svg width="16" height="16" viewBox="0 0 16 16" fill="none"><path d="M6 3l5 5-5 5" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" /></svg>
+          <svg width="28" height="28" viewBox="0 0 16 16" fill="none"><path d="M6 3l5 5-5 5" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" /></svg>
         </NavButton>
       )}
       {nav && nav.current && (
         <button type="button" className="pbtn pbtn-end" disabled={!nav.current.hasLast} onClick={() => nav.current.last()} aria-label="Last move (End)" title="Last move (End)">
-          <svg width="14" height="14" viewBox="0 0 14 14" fill="none"><path d="M11 2v10M2 2l7 5-7 5V2z" stroke="currentColor" strokeWidth="1.5" strokeLinejoin="round" strokeLinecap="round" /></svg>
+          <svg width="24" height="24" viewBox="0 0 14 14" fill="none"><path d="M11 2v10M2 2l7 5-7 5V2z" stroke="currentColor" strokeWidth="1.5" strokeLinejoin="round" strokeLinecap="round" /></svg>
         </button>
       )}
       {nav && nav.current && <span className="plabel" style={{ color: nav.current.color }} aria-live="polite">{nav.current.label}</span>}

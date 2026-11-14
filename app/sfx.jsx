@@ -25,7 +25,7 @@ function SoundButton({ on, onChange, className = 'pbtn' }) {
   const label = on ? 'Mute move sounds' : 'Turn move sounds on';
   return (
     <button type="button" className={className} onClick={() => onChange(!on)} aria-label={label} title={label} aria-pressed={!on}>
-      <svg width="16" height="16" viewBox="0 0 16 16" fill="none" aria-hidden="true">
+      <svg width="28" height="28" viewBox="0 0 16 16" fill="none" aria-hidden="true">
         <path d="M2 6h3l4-3v10l-4-3H2V6z" fill="currentColor" />
         {on
           ? <path d="M11 5.5a3.5 3.5 0 0 1 0 5M12.5 3.5a6 6 0 0 1 0 9" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" />
