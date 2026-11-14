@@ -30,6 +30,16 @@ html { height: 100%; box-sizing: border-box; font-size: calc(16px * var(--text, 
 *, *::before, *::after { box-sizing: inherit; }
 body { height: 100%; margin: 0; background: var(--bg); color: var(--ink); font: 0.875rem/1.4 var(--sans); overflow: hidden; }
 #root { position: relative; height: 100%; }
+/* Firefox for Android hides its address bar when a pinch-zoomed page is panned (Zoom on all websites ignores the
+   viewport's user-scalable=no), but never paints the strip that uncovers on a page whose root can't scroll: 100% stays
+   the height with the bar shown, and even fixed content below it went undrawn, a blank band under the transport bar.
+   So in Firefox the root scrolls as far as the bar's height (the body runs to 100lvh, the height with the bar hidden),
+   which makes Firefox paint that strip, and the page is fixed to the screen, its height following the bar. A scroll
+   past the end of the page now hides the bar too, as on any site. Found 2026-11-14 on Firefox Beta for Android */
+@supports (-moz-appearance: none) {
+  body { height: auto; min-height: calc(100lvh - env(safe-area-inset-top, 0px) - var(--safe-b)); overflow: visible; }
+  #root { position: fixed; top: env(safe-area-inset-top, 0px); bottom: var(--safe-b); left: 0; right: 0; height: auto; }
+}
 button { font: inherit; color: inherit; }
 /* nothing on the page selects but what's typed in a field (a mouse drag scrolls instead: drag-scroll.js) */
 body { user-select: none; -webkit-user-select: none; -webkit-touch-callout: none; }
