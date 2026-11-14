@@ -109,8 +109,9 @@ test('android · chrome · local build', async (t) => {
       const r = { height: px('env(safe-area-inset-top,0px)'), l: px('env(safe-area-inset-left,0px)'), r: px('env(safe-area-inset-right,0px)') };
       probe.remove();
       const stage = document.querySelector('.stage');
-      // the board, its eval bar, the player bars and the transport bar: how far each comes to the screen's sides
-      const parts = [...document.querySelectorAll('.part-board, .part-eval-bar, .part-player-bar, .part-transport-bar')].map((e) => e.getBoundingClientRect()).filter((b) => b.width > 0);
+      // the board, its eval bar, the player bars and the transport bar's contents: how far each comes to the screen's sides
+      // (the transport bar's own box is a bottom bar that runs to the screen's edges, its contents padded clear of the inset)
+      const parts = [...document.querySelectorAll('.part-board, .part-eval-bar, .part-player-bar, .part-transport-bar > *')].map((e) => e.getBoundingClientRect()).filter((b) => b.width > 0);
       const edge = { l: Math.min(...parts.map((b) => b.left)), r: innerWidth - Math.max(...parts.map((b) => b.right)) };
       return { top: r.height, l: r.l, r: r.r, edge, padding: getComputedStyle(document.documentElement).paddingTop, stageTop: stage.getBoundingClientRect().top };
     });
