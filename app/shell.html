@@ -193,6 +193,10 @@ body:has(.stage-one) .twk-panel { bottom: calc(51px + var(--safe-b)); max-height
   -webkit-backdrop-filter: blur(8px); backdrop-filter: blur(8px);
   box-shadow: inset 0 1px 0 var(--line-strong), 0 0 4px 1px color-mix(in srgb, var(--accent) 25%, transparent);
 }
+/* a page that scrolls (Stage's stage-under: paused, one column) runs on under the glass: the area reaches down behind
+   the bar (41 px: the one-column bar's --pbar-h 36 px and --pbar-pb 5 px) and as much padding at its foot lets the end of
+   the page scroll clear of it. The page's height (Stage's h, the area's height less its padding) doesn't change */
+.stage-under .stage-area { padding-bottom: calc(6px + 41px); margin-bottom: -41px; }
 .pmenu { position: relative; flex: none; }
 .pmenu-err .dock-menu { border-color: var(--danger); color: var(--danger); }
 .pmenu .dock-items {
