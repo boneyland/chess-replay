@@ -102,8 +102,6 @@ test('android · chrome · local build', async (t) => {
     const menu = page.getByRole('button', { name: 'Menu' });
     await menu.tap();
     await page.getByRole('button', { name: 'Ask Queen' }).waitFor({ state: 'visible', timeout: 3000 });
-    await page.getByRole('button', { name: 'Full screen', exact: true }).tap();
-    await page.waitForFunction(() => !!document.fullscreenElement, null, { timeout: 5000 });
     // the browser's safe-area insets (the cut-out's strip, on a phone) beside the root's and the stage's padding
     const insets = () => page.evaluate(() => {
       const probe = document.body.appendChild(document.createElement('div'));
@@ -113,13 +111,40 @@ test('android · chrome · local build', async (t) => {
       const stage = document.querySelector('.stage'), cs = getComputedStyle(stage);
       return { top: r.height, sides: r.width, padding: getComputedStyle(document.documentElement).paddingTop, stageTop: stage.getBoundingClientRect().top, left: cs.paddingLeft, right: cs.paddingRight };
     });
-    // upright in full screen the page runs under the camera's cut-out, with no gap kept for it, though the browser
-    // reports one (the whole status-bar strip, on a phone)
+    const enter = async () => {
+      await page.getByRole('button', { name: 'Full screen', exact: true }).tap();
+      await page.waitForFunction(() => !!document.fullscreenElement, null, { timeout: 5000 });
+    };
+    // a screen without a cut-out keeps no gap at the top in full screen: the emulator, with its punch hole turned off
+    if (emulator) {
+      await sh(`cmd overlay disable ${CUTOUT}`);
+      try {
+        await page.waitForTimeout(1500); // the display's change reaching Chrome
+        await enter();
+        const none = await insets();
+        t.diagnostic(`full screen, no cut-out: top inset ${none.top} px`);
+        assert.equal(none.top, 0);
+        assert.equal(none.padding, '0px');
+        assert.equal(none.stageTop, 0);
+        await page.screenshot({ path: path.join(OUT, 'android-full-screen-no-cutout.png') });
+        await menu.tap();
+        await page.getByRole('button', { name: 'Exit full screen' }).tap();
+        await page.waitForFunction(() => !document.fullscreenElement, null, { timeout: 5000 });
+      } finally {
+        await sh(`cmd overlay enable ${CUTOUT}`);
+      }
+      await page.waitForTimeout(1500);
+      await menu.tap();
+      await page.getByRole('button', { name: 'Full screen', exact: true }).waitFor({ state: 'visible', timeout: 3000 });
+    }
+    await enter();
+    // upright in full screen the page starts under the camera's cut-out strip (the inset the browser reports), and
+    // at the very top on a screen without one (an inset of 0)
     const up = await insets();
     t.diagnostic(`full screen: top inset ${up.top} px`);
     if (emulator) assert.ok(up.top > 0, 'the emulated cut-out reports no top inset');
-    assert.equal(up.padding, '0px');
-    assert.equal(up.stageTop, 0);
+    assert.equal(parseFloat(up.padding), up.top);
+    assert.ok(Math.abs(up.stageTop - up.top) < 1, `the stage starts at ${up.stageTop} px, the inset is ${up.top} px`);
     await page.screenshot({ path: path.join(OUT, 'android-full-screen.png') });
     // held sideways the cut-out is a side's inset, and the stage keeps no wider margin on that side. Only an emulator
     // is turned (a real phone's rotation is its owner's setting)

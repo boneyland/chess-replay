@@ -22,13 +22,13 @@
   color-scheme: dark;
 }
 html { height: 100%; box-sizing: border-box; font-size: calc(16px * var(--text, 1)); }
-/* a phone in full screen: the page runs under the camera's cut-out (viewport-fit=cover), with no gap kept for it; the
-   cut-out sits over the top player bar's middle, between the name and the clock. The page's own top padding (the
-   safe-area inset, in build.cjs) goes: phones report the whole status-bar strip as the cut-out, 37–41 px of gap. Held
-   sideways the cut-out is a side's inset, which the stage's side padding (--safe-l, --safe-r) keeps clear out of full screen */
+/* a phone in full screen keeps the page's own top padding (the safe-area inset, in build.cjs) clear of the camera: a
+   screen with a cut-out reports its strip (the status bar's height, 37–41 px; a big or low camera needs all of it),
+   one without reports 0 and gets no gap. Held sideways the cut-out is a side's inset, which the stage's side padding
+   (--safe-l, --safe-r) keeps clear out of full screen */
 :root { --safe-l: env(safe-area-inset-left, 0px); --safe-r: env(safe-area-inset-right, 0px); }
-:root:fullscreen { padding-top: 0; --safe-l: 0px; --safe-r: 0px; }
-@media (display-mode: fullscreen) { :root { padding-top: 0; --safe-l: 0px; --safe-r: 0px; } }
+:root:fullscreen { --safe-l: 0px; --safe-r: 0px; }
+@media (display-mode: fullscreen) { :root { --safe-l: 0px; --safe-r: 0px; } }
 *, *::before, *::after { box-sizing: inherit; }
 body { height: 100%; margin: 0; background: var(--bg); color: var(--ink); font: 0.875rem/1.4 var(--sans); overflow: hidden; }
 #root { position: relative; height: 100%; }
