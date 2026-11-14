@@ -102,26 +102,30 @@ test('android · chrome · local build', async (t) => {
     const menu = page.getByRole('button', { name: 'Menu' });
     await menu.tap();
     await page.getByRole('button', { name: 'Ask Queen' }).waitFor({ state: 'visible', timeout: 3000 });
-    await page.getByRole('button', { name: 'Full screen', exact: true }).tap();
-    await page.waitForFunction(() => !!document.fullscreenElement, null, { timeout: 5000 });
     // the browser's safe-area insets (the cut-out's strip, on a phone) beside the root's and the stage's padding
     const insets = () => page.evaluate(() => {
       const probe = document.body.appendChild(document.createElement('div'));
-      probe.style.cssText = 'position:fixed;top:0;left:0;width:calc(env(safe-area-inset-left,0px) + env(safe-area-inset-right,0px));height:env(safe-area-inset-top,0px)';
-      const r = probe.getBoundingClientRect();
+      const px = (v) => { probe.style.cssText = `position:fixed;top:0;left:0;width:${v}`; return probe.getBoundingClientRect().width; };
+      const r = { height: px('env(safe-area-inset-top,0px)'), l: px('env(safe-area-inset-left,0px)'), r: px('env(safe-area-inset-right,0px)') };
       probe.remove();
-      const stage = document.querySelector('.stage'), cs = getComputedStyle(stage);
-      return { top: r.height, sides: r.width, padding: getComputedStyle(document.documentElement).paddingTop, stageTop: stage.getBoundingClientRect().top, left: cs.paddingLeft, right: cs.paddingRight };
+      const stage = document.querySelector('.stage');
+      // the board, its eval bar, the player bars and the transport bar: how far each comes to the screen's sides
+      const parts = [...document.querySelectorAll('.part-board, .part-eval-bar, .part-player-bar, .part-transport-bar')].map((e) => e.getBoundingClientRect()).filter((b) => b.width > 0);
+      const edge = { l: Math.min(...parts.map((b) => b.left)), r: innerWidth - Math.max(...parts.map((b) => b.right)) };
+      return { top: r.height, l: r.l, r: r.r, edge, padding: getComputedStyle(document.documentElement).paddingTop, stageTop: stage.getBoundingClientRect().top };
     });
-    // upright in full screen the page runs under the camera's cut-out, with no gap kept for it, though the browser
-    // reports one (the whole status-bar strip, on a phone)
+    await page.getByRole('button', { name: 'Full screen', exact: true }).tap();
+    await page.waitForFunction(() => !!document.fullscreenElement, null, { timeout: 5000 });
+    // upright in full screen the page starts under the camera's cut-out strip (the inset the browser reports), and
+    // at the very top on a screen without one (an inset of 0). The emulator can't be checked both ways in one run:
+    // turning its cut-out off or on restarts Chrome
     const up = await insets();
     t.diagnostic(`full screen: top inset ${up.top} px`);
     if (emulator) assert.ok(up.top > 0, 'the emulated cut-out reports no top inset');
-    assert.equal(up.padding, '0px');
-    assert.equal(up.stageTop, 0);
+    assert.equal(parseFloat(up.padding), up.top);
+    assert.ok(Math.abs(up.stageTop - up.top) < 1, `the stage starts at ${up.stageTop} px, the inset is ${up.top} px`);
     await page.screenshot({ path: path.join(OUT, 'android-full-screen.png') });
-    // held sideways the cut-out is a side's inset, and the stage keeps no wider margin on that side. Only an emulator
+    // held sideways the cut-out is a side's inset, and the stage's padding on that side keeps clear of it. Only an emulator
     // is turned (a real phone's rotation is its owner's setting)
     if (emulator) {
       const auto = await sh('settings get system accelerometer_rotation');
@@ -131,9 +135,10 @@ test('android · chrome · local build', async (t) => {
         await page.waitForFunction(() => innerWidth > innerHeight, null, { timeout: 10000 });
         await page.waitForTimeout(500); // the layout's resize
         const side = await insets();
-        t.diagnostic(`full screen, sideways: side insets ${side.sides} px, stage padding ${side.left} / ${side.right}`);
-        assert.ok(side.sides > 0, 'the emulated cut-out reports no side inset');
-        assert.equal(side.left, side.right);
+        t.diagnostic(`full screen, sideways: side insets ${side.l} / ${side.r} px, board and bars ${side.edge.l} / ${side.edge.r} px from the sides`);
+        assert.ok(side.l + side.r > 0, 'the emulated cut-out reports no side inset');
+        assert.ok(side.edge.l >= side.l - 0.5, `the board or a bar comes ${side.edge.l} px from the left, the inset is ${side.l} px`);
+        assert.ok(side.edge.r >= side.r - 0.5, `the board or a bar comes ${side.edge.r} px from the right, the inset is ${side.r} px`);
         await page.screenshot({ path: path.join(OUT, 'android-full-screen-sideways.png') });
       } finally {
         await sh('settings put system user_rotation 0');
