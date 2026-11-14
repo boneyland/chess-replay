@@ -51,3 +51,6 @@ Deferred by the per-plan reviews; each was true when recorded and may since have
 - The castle-or-move question's buttons are small on a phone (about 28 px tall: sized in board pixels like the promotion picker).
 - The 17 starts with the king on e and the rooks on a and h (414, 430, 446, 454, 460, 461, 502, 508, 509, 524, 525, 532, 533, 548, 549, 692, 693) play as standard chess, like 518: no Castle buttons, the opening explorer on, Stockfish without `UCI_Chess960` (castling ends the same either way). A FEN pasted for one of them gets no "Chess960 #n" label.
 - Game info can need four lines for a "Chess960 #518" game with an opening name, and then clips.
+
+**Firefox for Android's address bar** (2026-11-14, Firefox Beta, with Settings › Accessibility › Zoom on all websites on)
+- Once the address bar is hidden by panning a pinch-zoomed page, a swipe doesn't bring it back after zooming out: the page sits at the top of its scroll with no room to scroll up, which is what shows the bar. Reloading or switching tabs does. Not new with the fix for the blank strip under the transport bar (PR 244, `@supports (-moz-appearance: none)` in `app/shell.html`): the build before it does the same.
