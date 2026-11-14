@@ -116,12 +116,14 @@ body:has(.stage-one) .twk-panel { bottom: calc(51px + var(--safe-b)); max-height
 /* one column: a slimmer transport bar and less padding around it, so the page gets the room; smaller buttons (the same
    icons) and gaps, so the seek bar keeps a usable width; below 360 px the first and last move buttons go, rather than
    the seek bar */
-.stage-one { padding-block: 0 5px; gap: 6px; padding-inline: 0; }
+.stage-one { padding-block: 0 5px; gap: 0; padding-inline: 0; }
 .stage-one .pbar { padding: 3px 6px; gap: 4px; padding-block: 2px; margin-inline: max(4px, var(--safe-l)) max(4px, var(--safe-r)); width: calc(100% - max(4px, var(--safe-l)) - max(4px, var(--safe-r))); }
 /* one column's padding round the page is the area's own, not the stage's, so the area (which clips, as it scrolls) runs to
    the screen's edges and the panels' halos (the dark theme's glow) fade out there rather than stop at a line 4 px in; the
    frame and the view's root (.stage-view) let them out as far. Stage measures the area inside its padding */
-.stage-one .stage-area { box-sizing: border-box; padding: 2px max(4px, var(--safe-r)) 0 max(4px, var(--safe-l)); }
+/* no gap over the bottom bar: the scrolling page runs up to its top edge, the 6 px a gap gave being the area's bottom
+   padding, which the page scrolls through */
+.stage-one .stage-area { box-sizing: border-box; padding: 2px max(4px, var(--safe-r)) 6px max(4px, var(--safe-l)); }
 .stage-one .stage-frame { overflow-clip-margin: 48px; }
 .stage-one .pbtn { width: 30px; height: 30px; }
 .stage-one .ptrack { min-width: 96px; }
