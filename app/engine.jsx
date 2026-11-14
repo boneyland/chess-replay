@@ -253,12 +253,12 @@ const markPointer = (e) => {
 };
 
 // the bar's box in the sidebar (the stage's coordinates): from the layout's L.dock out to the stage's right and bottom
-// edges, the screen's, its glass running under the stage's padding and the safe area there; --dock-er and --dock-eb
-// (shell.html) pad its items back to where L.dock puts them, clear of a cut-out. narrow: L.dock's own width
+// edges, the screen's, its glass running under the stage's padding and the safe area there; --dock-er (shell.html) pads
+// its items in from the right, clear of a cut-out. narrow: L.dock's own width
 function dockBox(dock, area) {
   const left = (area.ox || 0) + dock.x, top = (area.oy || 0) + dock.y;
   const width = Math.max(dock.w, (area.sw || 0) - left), height = Math.max(dock.h, (area.sh || 0) - top);
-  return { left, top, width, height, '--dock-er': `${width - dock.w}px`, '--dock-eb': `${height - dock.h}px`, narrow: dock.w < 340 };
+  return { left, top, width, height, '--dock-er': `${width - dock.w}px`, narrow: dock.w < 340 };
 }
 // dock: where the bar sits in the stage when it is in the sidebar (else it runs under the page)
 function PlaybackBar({ time, duration, playing, nav, menu, still, dock, onPlayPause, onReset, onSeek }) {
