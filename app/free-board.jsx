@@ -360,6 +360,7 @@ function useEngineOpponent(board, onChange, sf) {
       clearTimeout(timer);
       if (handle) handle.cancel();
     };
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- only a new game or move list (key) or Try again searches again; later reads go through latest
   }, [key, tries]);
   // hint(): Stockfish's best move in the position the player is to move in, from that "before" search (it ends within
   // BEFORE_SEARCH's 5 s), or null when there is none (not the player's turn, Stockfish down)
@@ -771,12 +772,14 @@ function FreeBoard({ board, onChange, tw, setTweak, onLichess, sf, nav, orient, 
     input.clear();
     setHov(null);
     setPv(null);
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- only another position drops a half-made move; input is a new object every render
   }, [boardKey]);
   // a board that stops taking moves (a flag fall, a late dead-position answer, Stockfish's turn) drops one half made:
   // its handlers no longer answer, so a drag ghost, a hidden piece or the promotion picker would stay
   const isStill = !!still;
   React.useEffect(() => {
     if (isStill) input.clear();
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- only the board ceasing to take moves drops a half-made move; input is a new object every render
   }, [isStill]);
   // Stockfish rates the move on the board: the positions before and after it (before the first move, both the start); never in a game
   const ev = useMoveEval({
@@ -857,6 +860,7 @@ function FreeBoard({ board, onChange, tw, setTweak, onLichess, sf, nav, orient, 
     prevStep.current = stepKey;
     if (stepKey && stepKey !== p && tw.sound !== false)
       sfxPlayer.play(tw.soundSet, window.Sfx.kinds(steps[upto].san), tw.soundVolume);
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- a sound only when the step shown changes; the sound settings are read as they are then
   }, [stepKey]);
   // the transport bar's buttons and label, and the keys: ← → step, Home the start, End the last move, in a game in
   // progress too (Take back is a button by Resign), where only the last move takes a move
@@ -1110,6 +1114,7 @@ function ImportDialog({ text: text0, auto, onChoose, onPgn, onFen, onImage, onCl
   };
   React.useEffect(() => {
     if (auto) open(text0);
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- opens what the dialog was given once, when it opens
   }, []);
   const close = () => {
     if (ctl.current) ctl.current.abort();

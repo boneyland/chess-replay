@@ -28,6 +28,7 @@ function useTablebase(boardFen, on) {
       clearTimeout(id);
       ctl.abort();
     };
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- tbKey stands for fen; a cached answer that lands later needs no new request
   }, [tbKey]);
   if (!fen) return null;
   const tb = hit || (st.fen === fen ? st.tb : undefined);

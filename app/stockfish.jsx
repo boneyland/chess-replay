@@ -312,6 +312,7 @@ function useFullEngine() {
   React.useEffect(() => {
     if (state === 'absent' && wasReady.current)
       dl.setErr('Full’s threaded build didn’t run here, so Lite is running. Download Full again to use it.');
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- on a build change only, before wasReady follows the new state; dl.setErr only calls a state setter
   }, [build]);
   React.useEffect(() => {
     if (state !== 'checking') wasReady.current = state === 'ready';
@@ -332,6 +333,7 @@ function useFullEngine() {
   const broken = React.useCallback(() => {
     setKept((k) => ({ ...k, [build]: false }));
     dl.setErr('The downloaded engine was missing, so Lite is running. Download it again to use Full.');
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- dl.setErr only calls a state setter, so any render's works
   }, [build]);
   return {
     offered: SF_FULL_OFFERED,
@@ -462,8 +464,10 @@ function useGameAnalysis(M, files, getFiles, commit, engine, settings, tbOn) {
         ).length - 1,
       ),
     );
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- ucisKey and setKey (sfRunKey of settings and tb) stand for M.plies, settings and tb
   }, [ucisKey, setKey, M.start.fen]);
   // the positions the tablebase will answer, near-free in the estimate (an uncertain answer is searched after all)
+  // eslint-disable-next-line react-hooks/exhaustive-deps -- ucisKey and M.start.fen stand for M
   const tbAt = React.useMemo(() => (tb ? sfTbPositions(M) : []), [ucisKey, M.start.fen, tb]);
   // seconds for positions from..N: Stockfish's at perSec, the tablebase's at tbSec
   const secondsFrom = (from, perSec, tbSec = SF_TB_SECONDS) => {
@@ -786,6 +790,7 @@ function useMoveEval(req) {
     const w = MOVE_EVAL.watch(req, read);
     read();
     return w.stop;
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- key is MOVE_EVAL.keyOf(req), which changes when the request needs a new watch; base follows req
   }, [key]);
   // a new key's first render, before its layout effect: pending only where it will search (off, as while a game analysis
   // runs, never does, so the Analysis panel's progress line keeps showing the run's rather than starting over at each move)

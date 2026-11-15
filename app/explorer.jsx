@@ -141,6 +141,7 @@ function useExplorer(fen, on, filters) {
       clearTimeout(id);
       ctl.abort();
     };
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- key stands for fen and filters; a cached answer that lands later needs no new request
   }, [key, token]);
   if (!key) return null;
   const x = hit || (st.key === key ? st.x : undefined);

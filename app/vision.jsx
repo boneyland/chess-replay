@@ -311,6 +311,7 @@ function VisionDialog({ again, onRead, onClose }) {
     };
     document.addEventListener('paste', onPaste);
     return () => document.removeEventListener('paste', onPaste);
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- of what changes, take reads only reading; the rest are refs and setters
   }, [canTake, reading]);
   // Files held over the window are this dialog's while it is open (GameApp leaves them): over the tiles or the picture
   // (zone) they light it up as one drop area, and dropped there the first image is taken; elsewhere they can't drop

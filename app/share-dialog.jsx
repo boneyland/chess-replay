@@ -100,6 +100,7 @@ function useExportSettings({
       setTweak('webpWidth', t.webpSize === 'Full' ? 0 : 'Half');
       setTweak('webpSize', undefined);
     }
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- carries the old setting over once, when the dialog opens
   }, []);
   const webpQuality = Math.min(WEBP_QUALITY.max, Math.max(WEBP_QUALITY.min, +t.webpQuality || 75));
   const mp4Quality = MP4_QUALITIES.includes(t.mp4Quality) ? t.mp4Quality : 'High';

@@ -42,6 +42,7 @@ function useDead(pos, known) {
       if (!ctl.signal.aborted) setSt({ k, v });
     });
     return () => ctl.abort();
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- k is fen's first four fields (all chasolver reads) and c the one shared client: new move counters ask nothing new
   }, [k, done]);
   if (ended) return ended === 'stalemate' ? { ...DEAD_BOTH, stalemate: pos.turn } : null;
   if (!fen) return pos && known ? DEAD_BOTH : null;

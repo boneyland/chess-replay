@@ -176,6 +176,7 @@ function useHfAuth() {
       setNote('Hugging Face sign-in was cancelled.');
     }
     return () => window.removeEventListener('storage', onStorage);
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- once, on load: Hugging Face's sign-in returns in the page's URL
   }, []);
   return { auth, enabled, preview: HF_PREVIEW, start, signOut, note, clearNote: () => setNote('') };
 }

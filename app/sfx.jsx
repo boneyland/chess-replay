@@ -22,6 +22,7 @@ function useMoveSounds(M, T, S, tw, playing, vline) {
     }
     const c = window.Sfx.cue(M, p.ply, ply, playing);
     if (c) sfxPlayer.play(tw.soundSet, c.kinds, tw.soundVolume, c.end);
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- a sound only when a piece lands (a new ply or line move); the settings and playing are read as they are then
   }, [M, ply, lineKey]);
 }
 

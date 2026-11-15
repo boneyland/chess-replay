@@ -324,6 +324,7 @@ function useBoardLook(theme, adj, exporting) {
     return () => {
       live = false;
     };
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- want is BT.key(id, a), so id and a (a new object every render) are in it
   }, [BT, want, need, exporting]);
   if (!pic) last.current = { ...BT.colours(id, a), src: null, css: 'none' };
   else if (exporting && BT.rendered(id, a))
@@ -3239,6 +3240,7 @@ function useHeldSchedule(T0, S) {
   const sh = shift.current && shift.current.S === S && shift.current.from === T0 ? shift.current : null;
   React.useLayoutEffect(() => {
     if (sh && tl.setTime) tl.setTime(sh.to);
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- only a new shift moves the playhead: tl changes every frame, and setting the time again would hold it there
   }, [sh]);
   return sh ? sh.to : T0;
 }
@@ -3252,6 +3254,7 @@ function useShownLine(M, cNow, playing) {
   const [vline, setVline] = React.useState(null);
   React.useEffect(() => {
     if (vline && (playing || cNow !== vline.c)) setVline(null);
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- a shown line drops when play starts or the game's move changes, not when the line itself changes
   }, [playing, cNow]);
   const [pv, setPv] = React.useState(null);
   React.useEffect(() => {
@@ -3402,6 +3405,7 @@ function useGoDeeper(M, c, on, sf, tw) {
         pv: r.pv || [],
         lines: r.lines && r.lines.length > 1 ? r.lines : null,
       });
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- r is a new object for each new result; M, c, p and ev.level are the ones it was found for
   }, [r]);
   return ev;
 }
@@ -3556,6 +3560,7 @@ function GameVideo({ M, tw, d, probe, queen, nav, scheme, sf, orient }) {
   // picker, the castle question
   React.useEffect(() => {
     input.clear();
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- only another position drops a half-made move; input is a new object every render
   }, [posKey]);
   const shownFen = () =>
     window.ChessCore.fenAfter(
@@ -3592,6 +3597,7 @@ function GameVideo({ M, tw, d, probe, queen, nav, scheme, sf, orient }) {
   };
   React.useEffect(() => {
     if (!vline) input.clear();
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- only a line closing drops a half-made move; input is a new object every render
   }, [vline]);
   const own = useOwnLineEval(M, line, sf, tw);
   const gameEval = useGoDeeper(
@@ -3667,6 +3673,7 @@ function GameVideo({ M, tw, d, probe, queen, nav, scheme, sf, orient }) {
   React.useLayoutEffect(() => {
     if (tl.setPlaying) tl.setPlaying(false);
     if (tl.setStart) tl.setStart(settled(-1));
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- once, on opening: GameApp keys this view on the game
   }, []);
   const stepBy = useReplayNav({ nav, M, S, c: cNow, line, input, goTo, fen: shownFen, keys: !tw.exporting });
   const pieces = React.useMemo(() => simulate(M), [M]);
