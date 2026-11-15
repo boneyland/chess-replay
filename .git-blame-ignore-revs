@@ -1,5 +1,7 @@
 # Commits that only reformat code: git blame skips them (GitHub reads this file by itself; locally run
-# `git config blame.ignoreRevsFile .git-blame-ignore-revs` once)
+# `git config blame.ignoreRevsFile .git-blame-ignore-revs` once). A PR whose reformatting commit is listed here was
+# squash-merged: the listed hash is the squash commit on main, so blame also skips that PR's few other lines
 
-# Prettier: format the project's JavaScript (2026-11-16)
-e40250512702f8b53008c389dc17d87454f0bbd1
+# Prettier formatting and ESLint, with a lint job in CI (#246), 2026-11-16; on its branch the formatting alone was
+# e40250512702f8b53008c389dc17d87454f0bbd1
+b28ab1b7a266aef3227e27e014dfbbd0d7626c4a
