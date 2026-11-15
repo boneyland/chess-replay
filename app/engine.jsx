@@ -81,7 +81,7 @@ function useDismiss(open, ref, close) {
     };
     document.addEventListener('pointerdown', away);
     return () => document.removeEventListener('pointerdown', away);
-  }, [open]);
+  }, [open, ref]);
 }
 
 // still: a board without a timeline (the free board): no playing, no seeking keys, and a transport bar of moves only
@@ -212,7 +212,7 @@ function Stage({
   // menu; w is the export's width; short: the transport bar is in the sidebar
   React.useLayoutEffect(() => {
     if (onLayout) onLayout(phone, exportW, short);
-  }, [phone, exportW, short]);
+  }, [onLayout, phone, exportW, short]);
 
   React.useEffect(() => {
     if (!playing) {
@@ -304,7 +304,7 @@ function Stage({
   );
   const ctx = React.useMemo(
     () => ({ time, duration, playing, setTime, setPlaying, setStart }),
-    [time, duration, playing],
+    [time, duration, playing, setStart],
   );
   // a video fills the area; so does a two-column page; a paused one-column page is as tall as its content (the area scrolls)
   const scrolls = !video && cols === 1;

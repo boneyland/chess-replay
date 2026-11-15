@@ -197,7 +197,7 @@ function VisionDialog({ again, onRead, onClose }) {
       if (l.reading) V.stop(); // Cancel while reading stops the read, so the next one isn't refused as Already reading
       if (l.own) l.own.close();
     },
-    [],
+    [V],
   );
 
   React.useEffect(() => {
@@ -205,7 +205,7 @@ function VisionDialog({ again, onRead, onClose }) {
     V.kept.present().then((has) => {
       if (live.current.alive) setState(has ? 'pick' : 'need');
     });
-  }, [state]);
+  }, [state, V.kept]);
   React.useEffect(() => {
     const on = () => setOnline(navigator.onLine !== false);
     window.addEventListener('online', on);
@@ -224,7 +224,8 @@ function VisionDialog({ again, onRead, onClose }) {
     const el = [...w.querySelectorAll('[data-autofocus]')].find(ok) || [...w.querySelectorAll('button')].find(ok);
     if (el) el.focus();
   };
-  React.useEffect(focusFirst, [state, askRemove, size.w > 0, dl.on, online]);
+  const sized = size.w > 0;
+  React.useEffect(focusFirst, [state, askRemove, sized, dl.on, online]);
 
   // (a failed download's message is dl.err, shown with the dialog's own)
   const download = async () => {
@@ -310,6 +311,7 @@ function VisionDialog({ again, onRead, onClose }) {
     };
     document.addEventListener('paste', onPaste);
     return () => document.removeEventListener('paste', onPaste);
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- of what changes, take reads only reading; the rest are refs and setters
   }, [canTake, reading]);
   // Files held over the window are this dialog's while it is open (GameApp leaves them): over the tiles or the picture
   // (zone) they light it up as one drop area, and dropped there the first image is taken; elsewhere they can't drop

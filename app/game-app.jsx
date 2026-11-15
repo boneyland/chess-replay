@@ -244,6 +244,7 @@ function useStoredFiles({ stored, setErr, onCommit, clockRef }) {
     const hide = () => keepLeft(boardRef.current);
     window.addEventListener('pagehide', hide);
     return () => window.removeEventListener('pagehide', hide);
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- added once: keepLeft only reads storage and calls state setters, so the first render's works
   }, []);
   return { files, filesRef, built, board, boardRef, M, commit, commitBoard, updateGames, keepLeft };
 }
@@ -362,6 +363,7 @@ function useScheme(pref) {
         if (mq) mq.removeEventListener('change', update);
       } catch (e) {}
     };
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- read depends on pref alone
   }, [pref]);
   return mode;
 }
@@ -439,9 +441,10 @@ function GameApp() {
   // the Keyboard shortcuts dialog
   const [keysOpen, setKeysOpen] = React.useState(false);
   const [analyseOpen, setAnalyseOpen] = React.useState(false); // the Analyse the game dialog (GameAnalysisDialog)
+  const onBoard = !!board;
   React.useEffect(() => {
-    if (board) setAnalyseOpen(false);
-  }, [!!board]); // a loaded game's only
+    if (onBoard) setAnalyseOpen(false);
+  }, [onBoard]); // a loaded game's only
   const [shareOpen, setShareOpen] = React.useState(null); // the Share and export dialog: { fen } of the position it opened on
   // leaving a game in progress asks first: { run } is what waits on the answer
   const [leave, setLeave] = React.useState(null);
@@ -485,6 +488,7 @@ function GameApp() {
   const hashChoices = React.useMemo(() => SF_HASH_CHOICES.filter((mb) => mb < hashCap), [hashCap]);
   const ES = React.useMemo(
     () => window.AnalysisCore.engineSettings(t, sfKind, threading, hashChoices),
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- lists the settings engineSettings reads, not every setting in t
     [
       t.sfDepth,
       t.sfTime,
@@ -524,6 +528,7 @@ function GameApp() {
         ? C
         : { ...C, plies: C.plies.map((p) => (p.queenText ? { ...p, queenText: '' } : p)) };
     return hidden ? { ...D, commentaryHidden: true } : D;
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- Q.resultAt reads Q.cache, listed; sayFrom (a new object every render) is listed by its fields
   }, [M, Q.cache, queenInVideo, showCommentary, sources, sayFrom.pgn, sayFrom.notes, sayFrom.queen]);
   // the replay's key: a new number for each game loaded (another PGN or game in it), not for an analysis, notes or a
   // setting added to the same game, which keep the playhead on its move
@@ -912,6 +917,7 @@ function GameApp() {
     };
     id = requestAnimationFrame(go);
     return () => cancelAnimationFrame(id);
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- MV.plies.length follows files, which a new game changes in the same render
   }, [files]);
   React.useEffect(() => {
     if (seekAfter.current == null || files.board) return;
@@ -933,6 +939,7 @@ function GameApp() {
     }
     focusBack.current = null;
     fenWasOpen.current = dialogOpen;
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- focus goes back only when a dialog closes; phone is read as it is then
   }, [dialogOpen]);
   const loadFiles = async (list) => {
     const batch = {};

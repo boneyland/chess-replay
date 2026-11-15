@@ -100,6 +100,7 @@ function useExportSettings({
       setTweak('webpWidth', t.webpSize === 'Full' ? 0 : 'Half');
       setTweak('webpSize', undefined);
     }
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- carries the old setting over once, when the dialog opens
   }, []);
   const webpQuality = Math.min(WEBP_QUALITY.max, Math.max(WEBP_QUALITY.min, +t.webpQuality || 75));
   const mp4Quality = MP4_QUALITIES.includes(t.mp4Quality) ? t.mp4Quality : 'High';
@@ -145,7 +146,7 @@ function useExportSettings({
         .map((o) => ({ i: o.i, s: `${o.l} · ${fmtLen(o.t.end)}` }))
         .concat([{ i: NP, s: `End card · ${fmtLen(TM.total)}` }]),
     };
-  }, [MV, TM]);
+  }, [MV, TM, NP, fmtLen]);
   const clipT = clipOpts.at(clipFrom, clipTo),
     clipFromOpts = clipOpts.from,
     clipToOpts = clipOpts.to.filter((o) => o.i >= clipFrom);

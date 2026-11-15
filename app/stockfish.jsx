@@ -177,7 +177,7 @@ function useEngine(hashMB, threads, kind = 'lite', onBroken, onHashFail) {
   // a change no panel asks for at once still frees the old engine (the full one holds about 100 MB)
   React.useEffect(() => {
     if (drop()) setStatus('idle');
-  }, [kind]);
+  }, [drop, setStatus, kind]);
   const get = React.useCallback(() => {
     drop();
     if (!ref.current) {
@@ -271,12 +271,12 @@ function useEngine(hashMB, threads, kind = 'lite', onBroken, onHashFail) {
       mine.catch(() => {});
     }
     return ref.current;
-  }, []);
+  }, [drop, setStatus]);
   React.useEffect(() => {
     if (kind !== 'asm') return;
     const id = setTimeout(() => get().catch(() => {}), SF_ASM_EARLY_MS);
     return () => clearTimeout(id);
-  }, [kind]);
+  }, [get, kind]);
   return { get, status, statusNow, why, holdHash };
 }
 
@@ -312,6 +312,7 @@ function useFullEngine() {
   React.useEffect(() => {
     if (state === 'absent' && wasReady.current)
       dl.setErr('Full’s threaded build didn’t run here, so Lite is running. Download Full again to use it.');
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- on a build change only, before wasReady follows the new state; dl.setErr only calls a state setter
   }, [build]);
   React.useEffect(() => {
     if (state !== 'checking') wasReady.current = state === 'ready';
@@ -332,6 +333,7 @@ function useFullEngine() {
   const broken = React.useCallback(() => {
     setKept((k) => ({ ...k, [build]: false }));
     dl.setErr('The downloaded engine was missing, so Lite is running. Download it again to use Full.');
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- dl.setErr only calls a state setter, so any render's works
   }, [build]);
   return {
     offered: SF_FULL_OFFERED,
@@ -427,6 +429,7 @@ function writeSfPace(name, threads, f) {
 // getFiles: the loaded files as they are now (notes or commentary may have changed during the run)
 // settings: the engine settings for a game (AnalysisCore.engineSettings().game); a run keeps those it started with
 // tbOn: Settings › Online data › Endgame tablebase: positions of 7 pieces or fewer ask it first (runAnalysis)
+const SF_RUN_IDLE = { state: 'idle', done: 0, total: 0, etaSec: null, err: '', note: '' };
 function useGameAnalysis(M, files, getFiles, commit, engine, settings, tbOn) {
   const A = window.AnalysisCore,
     tb = !!(tbOn && TB),
@@ -438,7 +441,7 @@ function useGameAnalysis(M, files, getFiles, commit, engine, settings, tbOn) {
   const perPos = A.secondsPerPosition(settings, pace);
   // note: what the viewer should know about the run that isn't a failure (Lichess's tablebase lost part-way), kept after it
   // ends until the next run starts
-  const idle = { state: 'idle', done: 0, total: 0, etaSec: null, err: '', note: '' };
+  const idle = SF_RUN_IDLE;
   const [st, setSt] = React.useState(idle);
   const run = React.useRef(null);
   const ucisKey = M.plies.map((p) => p.uci).join(' ');
@@ -461,8 +464,10 @@ function useGameAnalysis(M, files, getFiles, commit, engine, settings, tbOn) {
         ).length - 1,
       ),
     );
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- ucisKey and setKey (sfRunKey of settings and tb) stand for M.plies, settings and tb
   }, [ucisKey, setKey, M.start.fen]);
   // the positions the tablebase will answer, near-free in the estimate (an uncertain answer is searched after all)
+  // eslint-disable-next-line react-hooks/exhaustive-deps -- ucisKey and M.start.fen stand for M
   const tbAt = React.useMemo(() => (tb ? sfTbPositions(M) : []), [ucisKey, M.start.fen, tb]);
   // seconds for positions from..N: Stockfish's at perSec, the tablebase's at tbSec
   const secondsFrom = (from, perSec, tbSec = SF_TB_SECONDS) => {
@@ -470,15 +475,17 @@ function useGameAnalysis(M, files, getFiles, commit, engine, settings, tbOn) {
     for (let k = from; k <= M.plies.length; k++) t += tbAt[k] ? tbSec : perSec;
     return t;
   };
+  const gameIndex = files.gameIndex || 0,
+    isSample = !!files.sample;
   React.useEffect(
     () => () => {
       if (run.current) {
         run.current.ctl.abort();
         run.current = null;
       }
-      setSt(idle);
+      setSt(SF_RUN_IDLE);
     },
-    [files.pgn, files.gameIndex || 0, !!files.sample, files.analysis],
+    [files.pgn, gameIndex, isSample, files.analysis],
   );
   const start = async () => {
     if (run.current) return;
@@ -586,9 +593,10 @@ function useGameAnalysis(M, files, getFiles, commit, engine, settings, tbOn) {
     }
   };
   // the run's hash table goes back to the live searches' once it ends, however it ends
+  const holdHash = engine.holdHash;
   React.useEffect(() => {
-    if (st.state !== 'running' && engine.holdHash) engine.holdHash(null);
-  }, [st.state]);
+    if (st.state !== 'running' && holdHash) holdHash(null);
+  }, [holdHash, st.state]);
   // between positions the estimate counts down by the second
   React.useEffect(() => {
     if (st.state !== 'running') return;
@@ -782,6 +790,7 @@ function useMoveEval(req) {
     const w = MOVE_EVAL.watch(req, read);
     read();
     return w.stop;
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- key is MOVE_EVAL.keyOf(req), which changes when the request needs a new watch; base follows req
   }, [key]);
   // a new key's first render, before its layout effect: pending only where it will search (off, as while a game analysis
   // runs, never does, so the Analysis panel's progress line keeps showing the run's rather than starting over at each move)

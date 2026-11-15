@@ -391,7 +391,7 @@ function ViewSettings({
   resetPreview,
   setResetPreview,
 }) {
-  React.useEffect(() => () => setResetPreview(false), []);
+  React.useEffect(() => () => setResetPreview(false), [setResetPreview]);
   const plain = window.BoardThemes.isDefault(boardAdj);
   const queenInVideo = t.queenInVideo !== false,
     fmtLen = window.ChessCore.fmtLen;

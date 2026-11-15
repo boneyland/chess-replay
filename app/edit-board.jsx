@@ -260,7 +260,7 @@ function HoldButton({ onHold }) {
   const on = () => onHold(true),
     off = () => onHold(false);
   // unmounted while held (the layout going to two columns), it lets go, or the picture would cover the board when it's back
-  React.useEffect(() => () => onHold(false), []);
+  React.useEffect(() => () => onHold(false), [onHold]);
   return (
     <button
       type="button"
@@ -350,7 +350,7 @@ function EditBoard({
     };
   React.useEffect(() => {
     if (nav && nav.listen) nav.listen();
-  }, []);
+  }, [nav]);
   const input = useEditInput({ setup, onChange }),
     { held, drag } = input;
   // Esc lets a held tray piece go, else cancels (from the FEN field too); not while something is open over the editor
@@ -390,11 +390,11 @@ function EditBoard({
   const typedFor = (k) => (t) => setTyped((d) => ({ ...d, [k]: t }));
   React.useEffect(() => {
     setTyped((d) => {
-      const keep = (k, min) => (d[k] != null && E.count(d[k], min) !== setup[k] ? null : d[k]);
-      const n = { half: keep('half', 0), full: keep('full', 1) };
+      const keep = (k, min, v) => (d[k] != null && E.count(d[k], min) !== v ? null : d[k]);
+      const n = { half: keep('half', 0, setup.half), full: keep('full', 1, setup.full) };
       return n.half === d.half && n.full === d.full ? d : n;
     });
-  }, [setup.half, setup.full]);
+  }, [E, setup.half, setup.full]);
   const badCount = [
     ['half', 0, 'the clock'],
     ['full', 1, 'the move'],
