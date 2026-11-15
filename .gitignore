@@ -19,3 +19,6 @@ games/
 
 # chasolver-wasm build output (tools/chasolver-wasm/build.sh)
 tools/chasolver-wasm/target/
+
+# lint and format tools (npm install --no-save, see CLAUDE.md)
+node_modules/

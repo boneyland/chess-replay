@@ -190,7 +190,7 @@ test('the page has a description, a preview title and an icon', () => {
 test('the page has a large link-preview image', () => {
   const site = path.join(ROOT, 'out', 'site');
   const head = fs.readFileSync(path.join(site, 'chess-game-video.html'), 'utf8').split('</head>')[0];
-  assert.match(head, /<meta property="og:image" content="https:\/\/[^"\/]+\/og-image\.png">/);
+  assert.match(head, /<meta property="og:image" content="https:\/\/[^"/]+\/og-image\.png">/);
   assert.match(head, /<meta name="twitter:card" content="summary_large_image">/);
   const b = fs.readFileSync(path.join(site, 'og-image.png'));
   assert.equal(b.subarray(1, 4).toString(), 'PNG');

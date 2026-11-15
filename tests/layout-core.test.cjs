@@ -340,8 +340,7 @@ test('eval graph height floor, square-ish and portrait layouts', () => {
       // Moves takes 40% of the sidebar's room under the header there (30% elsewhere), up to its five lines
       const room = L.moves.h + L.comment.h,
         cap = chromeOf(L) + 5 * 38 * 0.8 * L.text;
-      const line = 38 * 0.8 * L.text,
-        chrome = cap - 5 * line;
+      const line = 38 * 0.8 * L.text;
       assert.ok(
         L.moves.h <= Math.min(cap, 0.4 * room) + 0.5 && L.moves.h > Math.min(cap, 0.4 * room) - line,
         `${at}: moves ${L.moves.h} of ${room}`,

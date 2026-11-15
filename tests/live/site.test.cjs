@@ -1233,7 +1233,6 @@ for (const name of BROWSERS)
       // Flip board turns every square→pixel conversion: pieces, the eval bar, the player bars, and the pointer input
       await t.test('desktop: Flip board turns the board and keeps moves under the pointer', async () => {
         const fl = await open(browser, { width: 1440, height: 900 });
-        const top = (sel) => fl.page.evaluate((s) => document.querySelector(s).getBoundingClientRect().top, sel);
         // the white king's image above the black king's: the kings are the only pieces on e1/e8 at the start
         const kings = () =>
           fl.page.evaluate(() =>

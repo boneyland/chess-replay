@@ -44,7 +44,7 @@
   const PLOT_WIDE = 1181;
   const plotMax = (vw) => (vw >= PLOT_WIDE ? 110 : 80);
   // the tier's spacing, for the layout being worked out (compute and columns are called one at a time)
-  const useTier = (vw, vh) => {
+  const tierFor = (vw, vh) => {
     const t = TIERS[tierOf(vw, vh)];
     MARGIN = t.margin;
     GAP = t.gap;
@@ -147,7 +147,7 @@
   // fit a 200 px board beside the sidebar (a phone held sideways at Larger text), and always for a video, which must
   // fit; a paused page in a narrow short window (a phone with its keyboard up) takes one column, which scrolls.
   function columns({ w, h, text = 1, prevCols = null, video = false, vw = w, vh = h }) {
-    const tier = useTier(vw, vh);
+    const tier = tierFor(vw, vh);
     text *= tier.scale;
     const boardW = w - 2 * MARGIN - GAP - SIDEBAR_MIN * text - EVAL_TOTAL;
     const aspect = 1.25 + (prevCols === 2 ? 0.05 : prevCols === 1 ? -0.05 : 0);
@@ -398,7 +398,7 @@
   }) {
     const c = cols || columns({ w, h, text, prevCols, video, vw, vh });
     boardMax = Math.max(BOARD_MIN, Math.min(BOARD_MAX, 0.5 * Math.max(vw, vh)));
-    const tier = useTier(vw, vh),
+    const tier = tierFor(vw, vh),
       t = text * tier.scale;
     TIGHT = tierOf(vw, vh) !== 'desktop' && (c === 1 || tierOf(vw, vh) === 'phone');
     TOP = MARGIN;

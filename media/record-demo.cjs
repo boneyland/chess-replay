@@ -15,7 +15,6 @@ const pw = (() => {
 })();
 
 const BASE = process.argv[2] || 'http://127.0.0.1:8765/';
-const ROOT = path.join(__dirname, '..');
 const PGN = fs.readFileSync(path.join(__dirname, 'demo-game.pgn'));
 const W = 1440,
   H = 900,
