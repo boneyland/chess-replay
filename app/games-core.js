@@ -12,11 +12,15 @@
   function read(raw) {
     const list = parse(raw);
     if (!list) return [];
-    const seen = new Set(), out = [];
+    const seen = new Set(),
+      out = [];
     for (const e of list) {
-      if (!e || typeof e !== 'object' || typeof e.id !== 'string' || seen.has(e.id) || !Number.isFinite(e.updated)) continue;
-      const b = e.board, g = b && typeof b === 'object' && b.game;
-      if (!g || typeof g !== 'object' || g.id !== e.id || typeof b.fen !== 'string' || !Array.isArray(b.moves)) continue;
+      if (!e || typeof e !== 'object' || typeof e.id !== 'string' || seen.has(e.id) || !Number.isFinite(e.updated))
+        continue;
+      const b = e.board,
+        g = b && typeof b === 'object' && b.game;
+      if (!g || typeof g !== 'object' || g.id !== e.id || typeof b.fen !== 'string' || !Array.isArray(b.moves))
+        continue;
       seen.add(e.id);
       out.push({ id: e.id, updated: e.updated, board: b });
     }
@@ -26,7 +30,12 @@
   // The stored text as an array, or null when there is text that isn't one (a write would replace every game in it)
   function parse(raw) {
     if (raw == null || raw === '') return [];
-    try { const list = JSON.parse(raw); return Array.isArray(list) ? list : null; } catch (e) { return null; }
+    try {
+      const list = JSON.parse(raw);
+      return Array.isArray(list) ? list : null;
+    } catch (e) {
+      return null;
+    }
   }
   const readable = (raw) => parse(raw) != null;
 

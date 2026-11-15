@@ -1,11 +1,16 @@
 const test = require('node:test');
 const assert = require('node:assert/strict');
-const fs = require('fs'), path = require('path');
+const fs = require('fs'),
+  path = require('path');
 const { loadUnit } = require('./load.cjs');
 loadUnit('board-themes.js');
 const B = window.BoardThemes;
 const DIR = path.join(__dirname, '..', 'vendor', 'boards');
-const listed = () => fs.readdirSync(DIR).filter((f) => !f.startsWith('.')).sort();
+const listed = () =>
+  fs
+    .readdirSync(DIR)
+    .filter((f) => !f.startsWith('.'))
+    .sort();
 
 test('THEMES: brown first (the default, the board as it was), then Lichess’s other 24 2D boards', () => {
   assert.equal(B.DEFAULT, 'brown');
@@ -33,7 +38,9 @@ test('valid, url and thumb: a board that is gone falls back to brown; pictures a
 });
 
 test('every picture and tile named is vendored, and nothing else', () => {
-  const named = B.THEMES.flatMap((t) => [B.url(t.id), B.thumb(t.id)]).filter(Boolean).map((u) => u.slice('boards/'.length));
+  const named = B.THEMES.flatMap((t) => [B.url(t.id), B.thumb(t.id)])
+    .filter(Boolean)
+    .map((u) => u.slice('boards/'.length));
   assert.deepEqual(listed(), named.sort());
 });
 
@@ -43,14 +50,22 @@ test('the vendored boards are the files pinned in LAYOUT.md', () => {
   // as `cd vendor/boards && sha256sum * | LC_ALL=C sort -k2` lists them
   const files = listed();
   const list = files.map((f) => `${sha(fs.readFileSync(path.join(DIR, f)))}  ${f}\n`).join('');
-  const pinned = fs.readFileSync(path.join(__dirname, '..', 'LAYOUT.md'), 'utf8').match(/all 44 board files: sha256 `([0-9a-f]{64})`/)[1];
+  const pinned = fs
+    .readFileSync(path.join(__dirname, '..', 'LAYOUT.md'), 'utf8')
+    .match(/all 44 board files: sha256 `([0-9a-f]{64})`/)[1];
   assert.equal(files.length, 44);
   assert.equal(sha(list), pinned);
 });
 
 test('adjust: the sliders’ values within Lichess’s ranges, the defaults for anything else', () => {
   assert.deepEqual(B.adjust(), { brightness: 100, contrast: 100, tint: 0, saturation: 100, hue: 0 });
-  assert.deepEqual(B.adjust({ brightness: 5, contrast: 900, tint: 101, saturation: -1, hue: 'x' }), { brightness: 20, contrast: 200, tint: 100, saturation: 0, hue: 0 });
+  assert.deepEqual(B.adjust({ brightness: 5, contrast: 900, tint: 101, saturation: -1, hue: 'x' }), {
+    brightness: 20,
+    contrast: 200,
+    tint: 100,
+    saturation: 0,
+    hue: 0,
+  });
   assert.equal(B.isDefault({}), true);
   assert.equal(B.isDefault({ hue: 1 }), false);
   assert.equal(B.isDefault({ tint: 1 }), false);
@@ -62,7 +77,10 @@ test('css: the same change as a CSS filter, none at the defaults', () => {
   assert.equal(B.css({ brightness: 80, contrast: 150, hue: 30 }), 'brightness(80%) contrast(150%) hue-rotate(108deg)');
   assert.equal(B.css({ hue: 33 }), 'brightness(100%) contrast(100%) hue-rotate(118.8deg)');
   // tint and saturation come before the hue, and only once moved
-  assert.equal(B.css({ tint: 60, saturation: 250, hue: 30 }), 'brightness(100%) contrast(100%) sepia(60%) saturate(250%) hue-rotate(108deg)');
+  assert.equal(
+    B.css({ tint: 60, saturation: 250, hue: 30 }),
+    'brightness(100%) contrast(100%) sepia(60%) saturate(250%) hue-rotate(108deg)',
+  );
   assert.equal(B.css({ saturation: 0 }), 'brightness(100%) contrast(100%) saturate(0%) hue-rotate(0deg)');
 });
 
@@ -97,7 +115,8 @@ test('filter: tint (sepia) colours a grey, saturation strengthens it, and hue th
 });
 
 test('colours: a flat board’s squares and every board’s coordinates go through the sliders', () => {
-  const c = B.colours('brown', { hue: 50 }), f = B.filter({ hue: 50 });
+  const c = B.colours('brown', { hue: 50 }),
+    f = B.filter({ hue: 50 });
   const hex = (rgb) => '#' + rgb.map((v) => v.toString(16).padStart(2, '0')).join('');
   assert.equal(c.light, hex(f(0xf0, 0xd9, 0xb5)));
   assert.equal(c.dark, hex(f(0xb5, 0x88, 0x63)));
@@ -107,7 +126,8 @@ test('colours: a flat board’s squares and every board’s coordinates go throu
 });
 
 test('filterPixels: the same change as filter, on RGBA pixels, alpha untouched', () => {
-  const a = { brightness: 80, contrast: 150, hue: 23 }, f = B.filter(a);
+  const a = { brightness: 80, contrast: 150, hue: 23 },
+    f = B.filter(a);
   const px = new Uint8ClampedArray([240, 217, 181, 255, 12, 200, 99, 128]);
   B.filterPixels(px, a);
   assert.deepEqual([...px.slice(0, 3)], f(240, 217, 181));

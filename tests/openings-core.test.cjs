@@ -60,15 +60,25 @@ test('a FEN start inside the book is named', () => {
 
 test('continuations from the start are the book first moves, most lines first', () => {
   const next = window.Openings.book().continuations([]);
-  assert.deepEqual(next.slice(0, 2).map((m) => m.uci).sort(), ['d2d4', 'e2e4']);
+  assert.deepEqual(
+    next
+      .slice(0, 2)
+      .map((m) => m.uci)
+      .sort(),
+    ['d2d4', 'e2e4'],
+  );
   assert.ok(next.length >= 15, next.length);
-  assert.ok(next.every((m) => m.san && m.uci), 'every move has SAN and UCI');
+  assert.ok(
+    next.every((m) => m.san && m.uci),
+    'every move has SAN and UCI',
+  );
   assert.equal(new Set(next.map((m) => m.uci)).size, next.length, 'no move twice');
 });
 test('continuations name the opening each move reaches, from moves or a FEN', () => {
   const book = window.Openings.book();
   const bb5 = book.continuations(['e2e4', 'e7e5', 'g1f3', 'b8c6']).find((m) => m.uci === 'f1b5');
-  assert.match(bb5.name, /^Ruy Lopez/); assert.equal(bb5.san, 'Bb5');
+  assert.match(bb5.name, /^Ruy Lopez/);
+  assert.equal(bb5.san, 'Bb5');
   const fen = 'r1bqkbnr/pppp1ppp/2n5/4p3/4P3/5N2/PPPP1PPP/RNBQKB1R w KQkq - 2 3';
   assert.deepEqual(book.continuations([], fen), book.continuations(['e2e4', 'e7e5', 'g1f3', 'b8c6']));
 });
@@ -82,7 +92,7 @@ test('name gives the position after the moves its name, the start position inclu
   const book = window.Openings.book();
   // a pasted FEN that is itself a book position: named with no moves played, and its moves fall back to it
   const e4 = 'rnbqkbnr/pppppppp/8/8/4P3/8/PPPP1PPP/RNBQKBNR b KQkq e3 0 1';
-  assert.deepEqual(book.name([], e4), { eco: 'B00', name: 'King\'s Pawn Game' });
+  assert.deepEqual(book.name([], e4), { eco: 'B00', name: "King's Pawn Game" });
   assert.deepEqual(book.name(['e7e5'], e4), book.identify(['e2e4', 'e7e5']));
   assert.deepEqual(book.name(['a7a6', 'h2h3', 'h7h6'], e4), book.identify(['e2e4', 'a7a6', 'h2h3', 'h7h6']));
   // the standard start isn't named; outside the book there is no name

@@ -18,9 +18,18 @@ function fakeFetch(answers) {
     calls.push(url);
     const a = answers.shift();
     if (a instanceof Error) throw a;
-    if (a && a.wait) await new Promise((r) => { a.release = r; if (opts.signal) opts.signal.addEventListener('abort', r); });
-    if (opts.signal && opts.signal.aborted) { const e = new Error('aborted'); e.name = 'AbortError'; throw e; }
-    const status = (a && a.status) || 200, body = a && 'body' in a ? a.body : a;
+    if (a && a.wait)
+      await new Promise((r) => {
+        a.release = r;
+        if (opts.signal) opts.signal.addEventListener('abort', r);
+      });
+    if (opts.signal && opts.signal.aborted) {
+      const e = new Error('aborted');
+      e.name = 'AbortError';
+      throw e;
+    }
+    const status = (a && a.status) || 200,
+      body = a && 'body' in a ? a.body : a;
     return { status, ok: status >= 200 && status < 300, json: async () => body };
   };
   fn.calls = calls;
@@ -41,18 +50,21 @@ test('parseTablebase keeps the verdict, distances and moves of a real answer', (
   assert.throws(() => LC.parseTablebase(null));
 });
 
-test('verdicts in Lichess\'s words, for the side to move', () => {
+test("verdicts in Lichess's words, for the side to move", () => {
   assert.equal(LC.verdict(LC.parseTablebase(KBNK), 'w'), 'White wins');
   assert.equal(LC.verdict(LC.parseTablebase(KBNK), 'b'), 'Black wins');
   assert.equal(LC.verdict(LC.parseTablebase(KRKR), 'w'), 'Draw');
   assert.equal(LC.verdict(LC.parseTablebase(CURSED), 'w'), 'Cursed win for White · drawn by the 50-move rule');
-  assert.equal(LC.verdict({ category: 'blessed-loss', moves: [] }, 'b'), 'Blessed loss for Black · saved by the 50-move rule');
+  assert.equal(
+    LC.verdict({ category: 'blessed-loss', moves: [] }, 'b'),
+    'Blessed loss for Black · saved by the 50-move rule',
+  );
   assert.equal(LC.verdict({ category: 'loss', moves: [] }, 'w'), 'Black wins');
   assert.equal(LC.verdict(LC.parseTablebase(MATED), 'w'), 'Checkmate · Black wins');
   assert.equal(LC.verdict({ category: 'unknown', moves: [] }, 'w'), 'Unknown');
 });
 
-test('the eval bar: a win as a mate in moves from White\'s side, draws and cursed wins as 0.00, nothing uncertain', () => {
+test("the eval bar: a win as a mate in moves from White's side, draws and cursed wins as 0.00, nothing uncertain", () => {
   assert.deepEqual(LC.bar(LC.parseTablebase(KBNK), 'w'), { cp: 10000 - 280, txt: 'TB M28' });
   assert.deepEqual(LC.bar(LC.parseTablebase(KBNK), 'b'), { cp: -(10000 - 280), txt: 'TB −M28' });
   assert.deepEqual(LC.bar({ category: 'loss', dtm: -3, moves: [] }, 'b'), { cp: 10000 - 20, txt: 'TB M2' });
@@ -68,11 +80,15 @@ test('moves are grouped by what they get the mover, best first', () => {
   assert.equal(g[0].outcome, 'win');
   assert.equal(g[0].moves[0].san, 'Ke3');
   assert.equal(g[0].moves[0].mine, 'win');
-  const all = g.flatMap((x) => x.moves.map((m) => m.uci)).sort(), want = KBNK.moves.map((m) => m.uci).sort();
+  const all = g.flatMap((x) => x.moves.map((m) => m.uci)).sort(),
+    want = KBNK.moves.map((m) => m.uci).sort();
   assert.deepEqual(all, want);
   // the cursed win's moves: the cursed ones are draws for the mover (the fifty-move rule)
   const c = LC.groups(LC.parseTablebase(CURSED));
-  assert.deepEqual(c.map((x) => x.outcome), ['draw']);
+  assert.deepEqual(
+    c.map((x) => x.outcome),
+    ['draw'],
+  );
   assert.ok(c[0].moves.some((m) => m.mine === 'cursed-win'));
 });
 
@@ -82,7 +98,7 @@ test('fenOf writes castling rights, the en passant square and the fifty-move cou
   assert.equal(LC.fenOf({ ...pos, castle: '', ep: -1 }, 60), '4k3/8/8/3pP3/8/8/8/4K2R w - - 60 1');
 });
 
-test('the fifty-move count is sent and keys the cache; the move number doesn\'t', async () => {
+test("the fifty-move count is sent and keys the cache; the move number doesn't", async () => {
   // the real service: 8/8/8/4k3/8/8/3KB3/7N w - - 60 … is a cursed win (60 plies gone, DTZ 55)
   const f = fakeFetch([KBNK, { ...KBNK, category: 'cursed-win' }]);
   const c = LC.create({ fetchFn: f });
@@ -104,18 +120,23 @@ test('never asks above 7 pieces', async () => {
 });
 
 test('a second ask for a position comes from the cache', async () => {
-  const fen = '8/8/8/4k3/8/8/3KB3/7N w - - 0 1', f = fakeFetch([KBNK]);
+  const fen = '8/8/8/4k3/8/8/3KB3/7N w - - 0 1',
+    f = fakeFetch([KBNK]);
   const c = LC.create({ fetchFn: f });
-  const a = await c.tablebase(fen), b = await c.tablebase(fen);
+  const a = await c.tablebase(fen),
+    b = await c.tablebase(fen);
   assert.equal(a.category, 'win');
   assert.equal(b, a);
   assert.equal(c.tablebaseCached(fen), a);
   assert.equal(c.tablebaseCached('4k3/8/8/8/8/8/3RK3/7r w - - 0 1'), undefined);
-  assert.deepEqual(f.calls, ['https://tablebase.lichess.ovh/standard?fen=8%2F8%2F8%2F4k3%2F8%2F8%2F3KB3%2F7N%20w%20-%20-%200%201']);
+  assert.deepEqual(f.calls, [
+    'https://tablebase.lichess.ovh/standard?fen=8%2F8%2F8%2F4k3%2F8%2F8%2F3KB3%2F7N%20w%20-%20-%200%201',
+  ]);
 });
 
-test('errors answer null and aren\'t cached', async () => {
-  const fen = '4k3/8/8/8/8/8/3RK3/7r w - - 0 1', f = fakeFetch([{ status: 400, body: {} }, new Error('offline'), { body: 'nonsense' }, KRKR]);
+test("errors answer null and aren't cached", async () => {
+  const fen = '4k3/8/8/8/8/8/3RK3/7r w - - 0 1',
+    f = fakeFetch([{ status: 400, body: {} }, new Error('offline'), { body: 'nonsense' }, KRKR]);
   const c = LC.create({ fetchFn: f });
   assert.equal(await c.tablebase(fen), null);
   assert.equal(await c.tablebase(fen), null);
@@ -126,7 +147,8 @@ test('errors answer null and aren\'t cached', async () => {
 
 test('a 429 backs off for a minute: nothing is sent meanwhile', async () => {
   let t = 1000;
-  const fen = '4k3/8/8/8/8/8/3RK3/7r w - - 0 1', f = fakeFetch([{ status: 429, body: {} }, KRKR]);
+  const fen = '4k3/8/8/8/8/8/3RK3/7r w - - 0 1',
+    f = fakeFetch([{ status: 429, body: {} }, KRKR]);
   const c = LC.create({ fetchFn: f, now: () => t });
   assert.equal(await c.tablebase(fen), null);
   assert.equal(c.backedOff('tablebase'), true);
@@ -164,23 +186,33 @@ const CMATED = fixture('cloud-mated.json'); // 8/8/8/8/8/2k5/8/K1q5 w: Black mat
 const E4_FEN = 'rnbqkbnr/pppppppp/8/8/4P3/8/PPPP1PPP/RNBQKBNR b KQkq - 0 1';
 const CASTLES_FEN = 'r1b1k2r/pp3ppp/2n1p3/q7/1b1P4/2N2N2/PP1B1PPP/R2QKB1R w KQkq - 0 9';
 
-test('parseCloud gives an engine result from White\'s side, its lines ranked', () => {
+test("parseCloud gives an engine result from White's side, its lines ranked", () => {
   const r = LC.parseCloud(E4, E4_FEN);
   assert.equal(r.source, 'cloud');
   assert.equal(r.depth, 60);
   assert.equal(r.cp, 22); // Black to move, White better: the API's scores are White's, as the page's
   assert.equal(r.nodes, 119133000);
-  assert.deepEqual(r.lines.map((l) => [l.k, l.cp, l.depth]), [[1, 22, 60], [2, 27, 60], [3, 32, 60]]);
+  assert.deepEqual(
+    r.lines.map((l) => [l.k, l.cp, l.depth]),
+    [
+      [1, 22, 60],
+      [2, 27, 60],
+      [3, 32, 60],
+    ],
+  );
   assert.equal(r.best, 'e7e5');
   assert.deepEqual(r.pv, r.lines[0].pv);
   assert.throws(() => LC.parseCloud({ error: 'No cloud evaluation available for that position' }, E4_FEN));
   assert.throws(() => LC.parseCloud({ depth: 20, pvs: [] }, E4_FEN));
 });
 
-test('cloud mates as ±(10000 − 10·N), as the engine\'s', () => {
+test("cloud mates as ±(10000 − 10·N), as the engine's", () => {
   const r = LC.parseCloud(CMATED, '8/8/8/8/8/2k5/8/K1q5 w - - 0 1');
   assert.equal(r.cp, -(10000 - 10));
-  assert.equal(LC.parseCloud({ depth: 30, pvs: [{ moves: 'e2e4', mate: 3 }] }, window.ChessCore.START_FEN).cp, 10000 - 30);
+  assert.equal(
+    LC.parseCloud({ depth: 30, pvs: [{ moves: 'e2e4', mate: 3 }] }, window.ChessCore.START_FEN).cp,
+    10000 - 30,
+  );
 });
 
 test('cloud lines: the king taking its rook becomes castling, and the line stops at an illegal move', () => {
@@ -192,14 +224,17 @@ test('cloud lines: the king taking its rook becomes castling, and the line stops
   assert.deepEqual(LC.cloudMoves(window.ChessCore.START_FEN, 'e2e4 e2e4 e7e5'), ['e2e4']);
 });
 
-test('the cloud\'s key leaves out the clocks and keeps the lines; the URL asks for them', () => {
+test("the cloud's key leaves out the clocks and keeps the lines; the URL asks for them", () => {
   assert.equal(LC.cloudKey(CASTLES_FEN, 1), LC.cloudKey(CASTLES_FEN.replace('0 9', '17 40'), 1));
   assert.notEqual(LC.cloudKey(CASTLES_FEN, 1), LC.cloudKey(CASTLES_FEN, 3));
   assert.notEqual(LC.cloudKey(E4_FEN, 1), LC.cloudKey(E4_FEN.replace('KQkq', '-'), 1));
-  assert.equal(LC.cloudUrl(E4_FEN, 3), 'https://lichess.org/api/cloud-eval?fen=' + encodeURIComponent(E4_FEN) + '&multiPv=3');
+  assert.equal(
+    LC.cloudUrl(E4_FEN, 3),
+    'https://lichess.org/api/cloud-eval?fen=' + encodeURIComponent(E4_FEN) + '&multiPv=3',
+  );
 });
 
-test('a cloud miss (404) is null and remembered: the position isn\'t asked again', async () => {
+test("a cloud miss (404) is null and remembered: the position isn't asked again", async () => {
   const f = fakeFetch([{ status: 404, body: fixture('cloud-miss.json') }]);
   const c = LC.create({ fetchFn: f });
   assert.equal(c.cloudCached(E4_FEN, 1), undefined);
@@ -209,7 +244,7 @@ test('a cloud miss (404) is null and remembered: the position isn\'t asked again
   assert.equal(f.calls.length, 1);
 });
 
-test('a cloud answer is cached by position and lines; errors aren\'t; a 429 backs the cloud off alone', async () => {
+test("a cloud answer is cached by position and lines; errors aren't; a 429 backs the cloud off alone", async () => {
   let t = 1000;
   const f = fakeFetch([E4, new Error('offline'), { status: 429, body: {} }, KRKR]);
   const c = LC.create({ fetchFn: f, now: () => t });
@@ -234,9 +269,23 @@ const EXFEN = 'rnbqkbnr/pppppppp/8/8/4P3/8/PPPP1PPP/RNBQKBNR b KQkq - 0 1';
 test('parseExplorer totals the counts and keeps the moves, top games and opening', () => {
   const e = LC.parseExplorer(EXPL);
   assert.equal(e.total, 2500);
-  assert.deepEqual(e.moves[0], { uci: 'e7e5', san: 'e5', white: 500, draws: 250, black: 300, total: 1050, averageRating: 2210 });
-  assert.deepEqual(e.games[0], { id: 'abcd1234', white: 'Carlsen, M (2850)', black: 'Nakamura, H (2790)', winner: 'white', year: 2019 });
-  assert.deepEqual(e.opening, { eco: 'B00', name: 'King\'s Pawn Game' });
+  assert.deepEqual(e.moves[0], {
+    uci: 'e7e5',
+    san: 'e5',
+    white: 500,
+    draws: 250,
+    black: 300,
+    total: 1050,
+    averageRating: 2210,
+  });
+  assert.deepEqual(e.games[0], {
+    id: 'abcd1234',
+    white: 'Carlsen, M (2850)',
+    black: 'Nakamura, H (2790)',
+    winner: 'white',
+    year: 2019,
+  });
+  assert.deepEqual(e.opening, { eco: 'B00', name: "King's Pawn Game" });
   assert.equal(LC.parseExplorer({ moves: [] }).opening, null);
   assert.throws(() => LC.parseExplorer({ error: 'x' }));
 });
@@ -259,7 +308,10 @@ test('explorerUrl picks the database and sends the filters for Lichess games onl
 test('explorer sends the token only when given, answers 401 as auth without caching it, and caches answers', async () => {
   const seen = [];
   const f = fakeFetch([{ status: 401, body: '' }, EXPL]);
-  const fn = async (url, opts) => { seen.push(opts.headers.Authorization || null); return f(url, opts); };
+  const fn = async (url, opts) => {
+    seen.push(opts.headers.Authorization || null);
+    return f(url, opts);
+  };
   const c = LC.create({ fetchFn: fn });
   assert.deepEqual(await c.explorer(EXFEN, {}), { auth: true });
   assert.equal(c.explorerCached(EXFEN, {}), undefined);
@@ -273,7 +325,10 @@ test('explorer sends the token only when given, answers 401 as auth without cach
 
 test('explorer backs off after a 429 and gives null for an error', async () => {
   let t = 0;
-  const f = fakeFetch([{ status: 429, body: '' }, { status: 500, body: '' }]);
+  const f = fakeFetch([
+    { status: 429, body: '' },
+    { status: 500, body: '' },
+  ]);
   const c = LC.create({ fetchFn: f, now: () => t });
   assert.equal(await c.explorer(EXFEN, {}, { token: 'x' }), null);
   assert.equal(await c.explorer(EXFEN, { db: 'masters' }, { token: 'x' }), null); // inside the minute: no request
@@ -284,40 +339,100 @@ test('explorer backs off after a 429 and gives null for an error', async () => {
 });
 
 test('parseExplorer keeps counts above 2^31 (the start position has billions of games)', () => {
-  const e = LC.parseExplorer({ white: 1500000000, draws: 900000000, black: 1300000000, moves: [{ uci: 'e2e4', san: 'e4', white: 1500000000, draws: 900000000, black: 1300000000 }] });
+  const e = LC.parseExplorer({
+    white: 1500000000,
+    draws: 900000000,
+    black: 1300000000,
+    moves: [{ uci: 'e2e4', san: 'e4', white: 1500000000, draws: 900000000, black: 1300000000 }],
+  });
   assert.equal(e.total, 3700000000);
   assert.equal(e.moves[0].total, 3700000000);
 });
-test('parseExplorer turns the king-takes-rook castling into the board\'s move', () => {
-  const e = LC.parseExplorer({ moves: [{ uci: 'e1h1', san: 'O-O' }, { uci: 'e8a8', san: 'O-O-O+' }, { uci: 'e1g1', san: 'O-O' }, { uci: 'e2e4', san: 'e4' }, { uci: 'e1h1', san: 'Rh1' }] });
-  assert.deepEqual(e.moves.map((m) => m.uci), ['e1g1', 'e8c8', 'e1g1', 'e2e4', 'e1h1']);
+test("parseExplorer turns the king-takes-rook castling into the board's move", () => {
+  const e = LC.parseExplorer({
+    moves: [
+      { uci: 'e1h1', san: 'O-O' },
+      { uci: 'e8a8', san: 'O-O-O+' },
+      { uci: 'e1g1', san: 'O-O' },
+      { uci: 'e2e4', san: 'e4' },
+      { uci: 'e1h1', san: 'Rh1' },
+    ],
+  });
+  assert.deepEqual(
+    e.moves.map((m) => m.uci),
+    ['e1g1', 'e8c8', 'e1g1', 'e2e4', 'e1h1'],
+  );
 });
 
 // ---------- game import ----------
 test('gameLink reads game links', () => {
   const g = (t) => LC.gameLink(t);
-  for (const t of ['https://lichess.org/q7ZvsdUF', 'lichess.org/q7ZvsdUF', 'http://www.lichess.org/q7ZvsdUF', '  https://lichess.org/game/q7ZvsdUF  ', 'https://lichess.org/q7ZvsdUFab12', 'https://lichess.org/q7ZvsdUF?foo=1']) {
+  for (const t of [
+    'https://lichess.org/q7ZvsdUF',
+    'lichess.org/q7ZvsdUF',
+    'http://www.lichess.org/q7ZvsdUF',
+    '  https://lichess.org/game/q7ZvsdUF  ',
+    'https://lichess.org/q7ZvsdUFab12',
+    'https://lichess.org/q7ZvsdUF?foo=1',
+  ]) {
     const l = g(t);
-    assert.equal(l && l.kind, 'game', t); assert.equal(l.id, 'q7ZvsdUF', t);
-    assert.equal(l.url, 'https://lichess.org/game/export/q7ZvsdUF?clocks=true&evals=true'); assert.equal(l.side, null); assert.equal(l.ply, null);
+    assert.equal(l && l.kind, 'game', t);
+    assert.equal(l.id, 'q7ZvsdUF', t);
+    assert.equal(l.url, 'https://lichess.org/game/export/q7ZvsdUF?clocks=true&evals=true');
+    assert.equal(l.side, null);
+    assert.equal(l.ply, null);
   }
-  assert.deepEqual([g('https://lichess.org/q7ZvsdUF/black#32').side, g('https://lichess.org/q7ZvsdUF/black#32').ply], ['b', 32]);
+  assert.deepEqual(
+    [g('https://lichess.org/q7ZvsdUF/black#32').side, g('https://lichess.org/q7ZvsdUF/black#32').ply],
+    ['b', 32],
+  );
   assert.equal(g('https://lichess.org/game/q7ZvsdUF/white').side, 'w');
   assert.equal(g('lichess.org/jYSkjcuG#0').ply, 0);
 });
 test('gameLink reads broadcast and study links', () => {
   const bg = LC.gameLink('https://lichess.org/broadcast/kazchess-masters-almaty-2026/round-9/IKZUMzM4/SgsEz8ct');
-  assert.deepEqual({ k: bg.kind, id: bg.id, url: bg.url }, { k: 'game', id: 'SgsEz8ct', url: 'https://lichess.org/api/study/IKZUMzM4/SgsEz8ct.pgn?clocks=true&comments=true&variations=true' });
+  assert.deepEqual(
+    { k: bg.kind, id: bg.id, url: bg.url },
+    {
+      k: 'game',
+      id: 'SgsEz8ct',
+      url: 'https://lichess.org/api/study/IKZUMzM4/SgsEz8ct.pgn?clocks=true&comments=true&variations=true',
+    },
+  );
   const r = LC.gameLink('https://lichess.org/broadcast/kazchess-masters-almaty-2026/round-9/IKZUMzM4');
-  assert.deepEqual({ k: r.kind, id: r.id, url: r.url }, { k: 'list', id: 'IKZUMzM4', url: 'https://lichess.org/api/broadcast/round/IKZUMzM4.pgn?clocks=true&comments=true&variations=true' });
+  assert.deepEqual(
+    { k: r.kind, id: r.id, url: r.url },
+    {
+      k: 'list',
+      id: 'IKZUMzM4',
+      url: 'https://lichess.org/api/broadcast/round/IKZUMzM4.pgn?clocks=true&comments=true&variations=true',
+    },
+  );
   assert.equal(LC.gameLink('lichess.org/broadcast/a-tour/round-1/IKZUMzM4#5').kind, 'list');
-  assert.equal(LC.gameLink('https://lichess.org/study/abcdEFGH/ijklMNOP#12').url, 'https://lichess.org/api/study/abcdEFGH/ijklMNOP.pgn?clocks=true&comments=true&variations=true');
+  assert.equal(
+    LC.gameLink('https://lichess.org/study/abcdEFGH/ijklMNOP#12').url,
+    'https://lichess.org/api/study/abcdEFGH/ijklMNOP.pgn?clocks=true&comments=true&variations=true',
+  );
   assert.equal(LC.gameLink('https://lichess.org/study/abcdEFGH/ijklMNOP#12').ply, 12);
   assert.equal(LC.gameLink('https://lichess.org/study/abcdEFGH').kind, 'list');
 });
 test('gameLink refuses other links and text', () => {
-  for (const t of ['', 'hello', 'https://lichess.org/', 'https://lichess.org/analysis', 'https://lichess.org/training', 'https://lichess.org/@/DrNykterstein', 'https://lichess.org/q7ZvsdUF/foo',
-    'https://lichess.org/tournament/abcdEFGH', 'https://lichess.org/broadcast/a-tour', 'https://example.com/q7ZvsdUF', 'https://lichess.org.evil.com/q7ZvsdUF', 'lichess.org/q7Zvs', '1. e4 e5', 'https://lichess.org/game/export/q7ZvsdUF']) {
+  for (const t of [
+    '',
+    'hello',
+    'https://lichess.org/',
+    'https://lichess.org/analysis',
+    'https://lichess.org/training',
+    'https://lichess.org/@/DrNykterstein',
+    'https://lichess.org/q7ZvsdUF/foo',
+    'https://lichess.org/tournament/abcdEFGH',
+    'https://lichess.org/broadcast/a-tour',
+    'https://example.com/q7ZvsdUF',
+    'https://lichess.org.evil.com/q7ZvsdUF',
+    'lichess.org/q7Zvs',
+    '1. e4 e5',
+    'https://lichess.org/game/export/q7ZvsdUF',
+  ]) {
     assert.equal(LC.gameLink(t), null, t);
   }
 });
@@ -326,11 +441,21 @@ test('finished and listGames', () => {
   assert.equal(LC.finished('[Result "1/2-1/2"]\n\n1. e4 1/2-1/2'), true);
   assert.equal(LC.finished('[Result "*"]\n\n1. e4 *'), false);
   assert.equal(LC.finished('1. e4 e5'), false, 'no Result tag');
-  const round = '[White "A"]\n[Black "B"]\n[Result "0-1"]\n[Round "9.1"]\n\n1. e4 0-1\n\n[White "C"]\n[Black "D"]\n[Result "*"]\n[Round "9.2"]\n\n1. d4 *\n';
+  const round =
+    '[White "A"]\n[Black "B"]\n[Result "0-1"]\n[Round "9.1"]\n\n1. e4 0-1\n\n[White "C"]\n[Black "D"]\n[Result "*"]\n[Round "9.2"]\n\n1. d4 *\n';
   const L = LC.listGames(round);
-  assert.deepEqual(L.map((g) => [g.white, g.black, g.result, g.board]), [['A', 'B', '0–1', 1], ['C', 'D', null, 2]]);
+  assert.deepEqual(
+    L.map((g) => [g.white, g.black, g.result, g.board]),
+    [
+      ['A', 'B', '0–1', 1],
+      ['C', 'D', null, 2],
+    ],
+  );
   assert.match(L[1].pgn, /1\. d4/);
-  assert.deepEqual(L.map((g) => g.variant), [null, null]);
+  assert.deepEqual(
+    L.map((g) => g.variant),
+    [null, null],
+  );
   const mixed = LC.listGames('[White "A"]\n[Black "B"]\n[Variant "Atomic"]\n[Result "1-0"]\n\n1. e4 1-0\n');
   assert.equal(mixed[0].variant, 'Atomic', 'a variant game says which');
   const lines = LC.listGames('[White "A"]\n[Black "B"]\n[Result "1-0"]\n\n1. e4 e5 (1... c5 2. Nf3) 2. Nf3 1-0\n');
@@ -339,7 +464,11 @@ test('finished and listGames', () => {
 test('variant: null for standard chess, else the Variant tag', () => {
   assert.equal(LC.variant('1. e4 e5'), null, 'no tag');
   assert.equal(LC.variant('[Variant "Standard"]\n\n1. e4'), null);
-  assert.equal(LC.variant('[Variant "From Position"]\n[FEN "4k3/8/8/8/8/8/8/4K3 w - - 0 1"]\n\n1. Kd2'), null, "Lichess's standard game from a position");
+  assert.equal(
+    LC.variant('[Variant "From Position"]\n[FEN "4k3/8/8/8/8/8/8/4K3 w - - 0 1"]\n\n1. Kd2'),
+    null,
+    "Lichess's standard game from a position",
+  );
   assert.equal(LC.variant('[Variant "standard"]\n\n1. e4'), null, 'any case');
   assert.equal(LC.variant('[Variant "Crazyhouse"]\n\n1. e4'), 'Crazyhouse');
   assert.equal(LC.variant('[Variant "Chess960"]\n\n1. e4'), null, 'Chess960 opens here');
@@ -353,31 +482,83 @@ test('is960Pgn: the Variant tag says Chess960', () => {
   assert.equal(LC.is960Pgn('1. e4 e5'), false);
 });
 test('listGames: a Chess960 game is loadable, a crazyhouse one not', () => {
-  const L = LC.listGames('[White "A"]\n[Black "B"]\n[Variant "Chess960"]\n[Result "1-0"]\n\n1. e4 1-0\n\n[White "C"]\n[Black "D"]\n[Variant "Crazyhouse"]\n[Result "1-0"]\n\n1. e4 1-0\n');
-  assert.deepEqual(L.map((g) => g.variant), [null, 'Crazyhouse']);
+  const L = LC.listGames(
+    '[White "A"]\n[Black "B"]\n[Variant "Chess960"]\n[Result "1-0"]\n\n1. e4 1-0\n\n[White "C"]\n[Black "D"]\n[Variant "Crazyhouse"]\n[Result "1-0"]\n\n1. e4 1-0\n',
+  );
+  assert.deepEqual(
+    L.map((g) => g.variant),
+    [null, 'Crazyhouse'],
+  );
 });
 test('fetchGame: a finished game, an unfinished one, errors and a list', async () => {
   const reply = (status, body) => async () => ({ status, ok: status >= 200 && status < 300, text: async () => body });
   const link = LC.gameLink('lichess.org/q7ZvsdUF');
   let asked;
-  const ok = await LC.fetchGame(link, { fetchFn: async (u, o) => { asked = u; return reply(200, '[Result "1-0"]\n\n1. e4 1-0')(); } });
-  assert.equal(asked, link.url); assert.match(ok.pgn, /1\. e4/);
-  assert.match((await LC.fetchGame(link, { fetchFn: reply(200, '[Result "*"]\n\n1. e4 *') })).error, /still being played/);
+  const ok = await LC.fetchGame(link, {
+    fetchFn: async (u, o) => {
+      asked = u;
+      return reply(200, '[Result "1-0"]\n\n1. e4 1-0')();
+    },
+  });
+  assert.equal(asked, link.url);
+  assert.match(ok.pgn, /1\. e4/);
+  assert.match(
+    (await LC.fetchGame(link, { fetchFn: reply(200, '[Result "*"]\n\n1. e4 *') })).error,
+    /still being played/,
+  );
   assert.match((await LC.fetchGame(link, { fetchFn: reply(404, '') })).error, /no game/);
   assert.match((await LC.fetchGame(link, { fetchFn: reply(429, '') })).error, /busy/);
   assert.match((await LC.fetchGame(link, { fetchFn: reply(500, '') })).error, /500/);
-  assert.match((await LC.fetchGame(LC.gameLink('lichess.org/study/abcdEFGH/ijklMNOP'), { fetchFn: reply(403, '') })).error, /private/);
-  assert.match((await LC.fetchGame(link, { fetchFn: async () => { throw new TypeError('Failed to fetch'); } })).error, /online/);
-  assert.deepEqual(await LC.fetchGame(link, { fetchFn: async () => { const e = new Error('x'); e.name = 'AbortError'; throw e; } }), { aborted: true });
-  const list = await LC.fetchGame(LC.gameLink('lichess.org/broadcast/t/r/IKZUMzM4'), { fetchFn: reply(200, '[White "A"]\n[Black "B"]\n[Result "1-0"]\n\n1. e4 1-0\n') });
+  assert.match(
+    (await LC.fetchGame(LC.gameLink('lichess.org/study/abcdEFGH/ijklMNOP'), { fetchFn: reply(403, '') })).error,
+    /private/,
+  );
+  assert.match(
+    (
+      await LC.fetchGame(link, {
+        fetchFn: async () => {
+          throw new TypeError('Failed to fetch');
+        },
+      })
+    ).error,
+    /online/,
+  );
+  assert.deepEqual(
+    await LC.fetchGame(link, {
+      fetchFn: async () => {
+        const e = new Error('x');
+        e.name = 'AbortError';
+        throw e;
+      },
+    }),
+    { aborted: true },
+  );
+  const list = await LC.fetchGame(LC.gameLink('lichess.org/broadcast/t/r/IKZUMzM4'), {
+    fetchFn: reply(200, '[White "A"]\n[Black "B"]\n[Result "1-0"]\n\n1. e4 1-0\n'),
+  });
   assert.equal(list.list.length, 1);
-  assert.match((await LC.fetchGame(LC.gameLink('lichess.org/broadcast/t/r/IKZUMzM4'), { fetchFn: reply(200, '') })).error, /no games there yet/);
-  assert.match((await LC.fetchGame(LC.gameLink('lichess.org/broadcast/t/r/IKZUMzM4'), { fetchFn: reply(200, '[Event "R"]\n[Result "*"]\n\n*\n') })).error, /no games there yet/, 'a round not started');
+  assert.match(
+    (await LC.fetchGame(LC.gameLink('lichess.org/broadcast/t/r/IKZUMzM4'), { fetchFn: reply(200, '') })).error,
+    /no games there yet/,
+  );
+  assert.match(
+    (
+      await LC.fetchGame(LC.gameLink('lichess.org/broadcast/t/r/IKZUMzM4'), {
+        fetchFn: reply(200, '[Event "R"]\n[Result "*"]\n\n*\n'),
+      })
+    ).error,
+    /no games there yet/,
+    'a round not started',
+  );
 });
 
 test('cloud in a 960 position: variant=chess960 in the URL, a distinct key, castling stays king-takes-rook', () => {
-  const F = '4k3/8/8/8/8/8/8/R4K1R w HA - 0 1', S = '4k3/8/8/8/8/8/8/R3K2R w KQ - 0 1';
-  assert.equal(LC.cloudUrl(F, 2), 'https://lichess.org/api/cloud-eval?fen=' + encodeURIComponent(F) + '&multiPv=2&variant=chess960');
+  const F = '4k3/8/8/8/8/8/8/R4K1R w HA - 0 1',
+    S = '4k3/8/8/8/8/8/8/R3K2R w KQ - 0 1';
+  assert.equal(
+    LC.cloudUrl(F, 2),
+    'https://lichess.org/api/cloud-eval?fen=' + encodeURIComponent(F) + '&multiPv=2&variant=chess960',
+  );
   assert.equal(LC.cloudUrl(S, 2), 'https://lichess.org/api/cloud-eval?fen=' + encodeURIComponent(S) + '&multiPv=2');
   assert.notEqual(LC.cloudKey(F, 1), LC.cloudKey(S, 1));
   assert.deepEqual(LC.cloudMoves(F, 'f1h1 e8e7'), ['f1h1', 'e8e7']);

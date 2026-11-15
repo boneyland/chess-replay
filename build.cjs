@@ -1,15 +1,26 @@
 // Assemble the page (out/site): plain scripts inlined as-is, JSX precompiled with Babel, each unit in its own scope.
-const fs = require('fs'), path = require('path');
-const dir = __dirname, src = path.join(dir, 'src'), app = path.join(dir, 'app');
+const fs = require('fs'),
+  path = require('path');
+const dir = __dirname,
+  src = path.join(dir, 'src'),
+  app = path.join(dir, 'app');
 const Babel = require(path.join(dir, 'babel', 'babel.min.js'));
-const jsx = (code, name) => Babel.transform(code, { filename: name, presets: ['react'] }).code;
+// compact: false, or Babel squeezes a unit over 500 KB (game-video.jsx since the Prettier pass) onto a few long lines,
+// which makes the crash screen's line and column numbers useless
+const jsx = (code, name) => Babel.transform(code, { filename: name, presets: ['react'], compact: false }).code;
 const read = (p) => fs.readFileSync(p, 'utf8');
 // Lichess's sound sets (vendor/sounds: Enigmahack's AGPL-3.0-or-later ones and EdinburghCollective's lisp, CC BY-NC-SA 4.0),
 // served next to the page as sounds/<set>/<Kind>.mp3 (Sfx.soundUrl) and kept by the service worker from the first visit
 const SOUNDS = path.join(dir, 'vendor', 'sounds');
-const SOUND_FILES = ['futuristic', 'lisp', 'nes', 'piano', 'sfx'].flatMap((set) => ['Move', 'Capture', 'Check', 'Victory', 'Draw'].map((f) => `sounds/${set}/${f}.mp3`));
+const SOUND_FILES = ['futuristic', 'lisp', 'nes', 'piano', 'sfx'].flatMap((set) =>
+  ['Move', 'Capture', 'Check', 'Victory', 'Draw'].map((f) => `sounds/${set}/${f}.mp3`),
+);
 // the theme's colours (app/theme.js), which the page also loads: shell.html's CSS tokens and the manifest's colour
-const THEME = (() => { const w = {}; new Function('window', read(path.join(app, 'theme.js')))(w); return w.THEME; })();
+const THEME = (() => {
+  const w = {};
+  new Function('window', read(path.join(app, 'theme.js')))(w);
+  return w.THEME;
+})();
 const units = [
   ['theme.js', read(path.join(app, 'theme.js'))],
   ['pieces.js', read(path.join(src, 'pieces.js'))],
@@ -19,7 +30,12 @@ const units = [
   ['analysis-core.js', read(path.join(app, 'analysis-core.js'))],
   ['lichess-core.js', read(path.join(app, 'lichess-core.js'))],
   ['pkce.js', read(path.join(app, 'pkce.js'))],
-  ['openings-data.js', 'window.OPENINGS_TSV = ' + JSON.stringify(require('./openings-data.cjs').openingsTsv()).replace(/</g, '\\u003c') + ';'],
+  [
+    'openings-data.js',
+    'window.OPENINGS_TSV = ' +
+      JSON.stringify(require('./openings-data.cjs').openingsTsv()).replace(/</g, '\\u003c') +
+      ';',
+  ],
   ['openings-core.js', read(path.join(app, 'openings-core.js'))],
   ['board-core.js', read(path.join(app, 'board-core.js'))],
   ['edit-core.js', read(path.join(app, 'edit-core.js'))],
@@ -46,21 +62,72 @@ const units = [
   ['sample-analysis.js', read(path.join(app, 'sample-analysis.js'))],
   ['engine.jsx', jsx(read(path.join(app, 'engine.jsx')), 'engine.jsx')],
   ['tweaks.jsx', jsx(read(path.join(app, 'tweaks.jsx')), 'tweaks.jsx')],
-  ['game-video.jsx', jsx(read(path.join(app, 'game-video-core.jsx')) + '\n' + read(path.join(app, 'queen.jsx')) + '\n' + read(path.join(app, 'kept-download.jsx')) + '\n' + read(path.join(app, 'stockfish.jsx')) + '\n' + read(path.join(app, 'tablebase.jsx')) + '\n' + read(path.join(app, 'dead.jsx')) + '\n' + read(path.join(app, 'explorer.jsx')) + '\n' + read(path.join(app, 'free-board.jsx')) + '\n' + read(path.join(app, 'edit-board.jsx')) + '\n' + read(path.join(app, 'sfx.jsx')) + '\n' + read(path.join(app, 'export.jsx')) + '\n' + read(path.join(app, 'vision.jsx')) + '\n' + read(path.join(app, 'settings-tabs.jsx')) + '\n' + read(path.join(app, 'share-dialog.jsx')) + '\n' + read(path.join(app, 'game-app.jsx')), 'game-video.jsx')],
+  [
+    'game-video.jsx',
+    jsx(
+      read(path.join(app, 'game-video-core.jsx')) +
+        '\n' +
+        read(path.join(app, 'queen.jsx')) +
+        '\n' +
+        read(path.join(app, 'kept-download.jsx')) +
+        '\n' +
+        read(path.join(app, 'stockfish.jsx')) +
+        '\n' +
+        read(path.join(app, 'tablebase.jsx')) +
+        '\n' +
+        read(path.join(app, 'dead.jsx')) +
+        '\n' +
+        read(path.join(app, 'explorer.jsx')) +
+        '\n' +
+        read(path.join(app, 'free-board.jsx')) +
+        '\n' +
+        read(path.join(app, 'edit-board.jsx')) +
+        '\n' +
+        read(path.join(app, 'sfx.jsx')) +
+        '\n' +
+        read(path.join(app, 'export.jsx')) +
+        '\n' +
+        read(path.join(app, 'vision.jsx')) +
+        '\n' +
+        read(path.join(app, 'settings-tabs.jsx')) +
+        '\n' +
+        read(path.join(app, 'share-dialog.jsx')) +
+        '\n' +
+        read(path.join(app, 'game-app.jsx')),
+      'game-video.jsx',
+    ),
+  ],
 ];
-const scripts = units.map(([name, code]) => {
-  if (/<\/script/i.test(code)) throw new Error(name + ' contains </script');
-  return `<script>\n// ${name}\n(function () {\n${code}\n})();\n</script>`;
-}).join('\n');
+const scripts = units
+  .map(([name, code]) => {
+    if (/<\/script/i.test(code)) throw new Error(name + ' contains </script');
+    return `<script>\n// ${name}\n(function () {\n${code}\n})();\n</script>`;
+  })
+  .join('\n');
 const page = read(path.join(app, 'shell.html')).replace(/\/\*THEME:(light|dark)\*\//g, (_, m) => THEME.css(m));
 const out = page.replace('<!--SCRIPTS-->', () => scripts); // a function, so $' or $& in the code stay as they are
 fs.mkdirSync(path.join(dir, 'out', 'site'), { recursive: true });
 // what a shared link and the browser tab show
-const DESCRIPTION = 'Replay an annotated chess game as a broadcast-style video: move ratings, best lines, commentary and an eval graph, with Stockfish in your browser.';
+const DESCRIPTION =
+  'Replay an annotated chess game as a broadcast-style video: move ratings, best lines, commentary and an eval graph, with Stockfish in your browser.';
 // A link preview's image needs an absolute URL: the host's own (Render sets RENDER_EXTERNAL_URL; a local build points at Render)
 const SITE_URL = (process.env.RENDER_EXTERNAL_URL || 'https://chess-replay.onrender.com').replace(/\/$/, '');
-const VENDOR = ['stockfish-19-asm.js', 'stockfish-19-lite-single.js', 'stockfish-19-lite-single.wasm', 'stockfish-19-lite.js', 'stockfish-19-lite.wasm', 'webp_enc_simd.js', 'webp_enc_simd.wasm', 'mediabunny.min.js', 'chasolver.wasm'];
-const ICON = 'data:image/svg+xml,' + encodeURIComponent('<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 32 32"><rect width="32" height="32" rx="6" fill="#9a6a1c"/><circle cx="16" cy="9.5" r="4" fill="#fffaf2"/><path d="M12.5 14h7l1.5 9h-10z M8.5 24h15v3h-15z" fill="#fffaf2"/></svg>');
+const VENDOR = [
+  'stockfish-19-asm.js',
+  'stockfish-19-lite-single.js',
+  'stockfish-19-lite-single.wasm',
+  'stockfish-19-lite.js',
+  'stockfish-19-lite.wasm',
+  'webp_enc_simd.js',
+  'webp_enc_simd.wasm',
+  'mediabunny.min.js',
+  'chasolver.wasm',
+];
+const ICON =
+  'data:image/svg+xml,' +
+  encodeURIComponent(
+    '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 32 32"><rect width="32" height="32" rx="6" fill="#9a6a1c"/><circle cx="16" cy="9.5" r="4" fill="#fffaf2"/><path d="M12.5 14h7l1.5 9h-10z M8.5 24h15v3h-15z" fill="#fffaf2"/></svg>',
+  );
 // The document shell around the page. It doesn't zoom (maximum-scale, user-scalable): a browser set to ignore that (iPhone Safari, Chrome's Force
 // enable zoom) still lets the viewer pinch
 // Firefox for Android reports the gesture bar as a bottom safe-area inset though it never draws the page under it, so
@@ -117,23 +184,38 @@ if ('serviceWorker' in navigator) window.addEventListener('load', () => { naviga
 const CDN_HOSTS = ['cdnjs.cloudflare.com', 'cdn.jsdelivr.net', 'fonts.googleapis.com', 'fonts.gstatic.com'];
 // the other hosts the page talks to, never kept: Hugging Face (sign-in, the Queen Space), Lichess (tablebase, explorer,
 // games), the full engine's download (unpkg, kept in a cache of its own)
-const API_HOSTS = ['huggingface.co', 'boneyland-queen-pawn-8.hf.space', 'tablebase.lichess.ovh', 'explorer.lichess.ovh', 'lichess.org', 'unpkg.com'];
+const API_HOSTS = [
+  'huggingface.co',
+  'boneyland-queen-pawn-8.hf.space',
+  'tablebase.lichess.ovh',
+  'explorer.lichess.ovh',
+  'lichess.org',
+  'unpkg.com',
+];
 // The CDN URLs are read only where the page uses them: shell.html's src and href attributes, export.jsx's quoted strings
 // (EXPORT_LIBS), never a comment's. (A folder URL, such as a preconnect's, names no file: cache.addAll would fail the
 // worker's install on it)
 const cdnUrl = `https://(?:${CDN_HOSTS.map((h) => h.replace(/\./g, '\\.')).join('|')})/[^'"\\s\`]+`;
-const SW_REMOTE = [...new Set([
-  ...[...read(path.join(app, 'shell.html')).matchAll(new RegExp(`\\s(?:src|href)="(${cdnUrl})"`, 'g'))].map((m) => m[1]),
-  ...[...read(path.join(app, 'export.jsx')).matchAll(new RegExp(`'(${cdnUrl})'`, 'g'))].map((m) => m[1]),
-])].filter((u) => !/\/$/.test(u));
+const SW_REMOTE = [
+  ...new Set([
+    ...[...read(path.join(app, 'shell.html')).matchAll(new RegExp(`\\s(?:src|href)="(${cdnUrl})"`, 'g'))].map(
+      (m) => m[1],
+    ),
+    ...[...read(path.join(app, 'export.jsx')).matchAll(new RegExp(`'(${cdnUrl})'`, 'g'))].map((m) => m[1]),
+  ]),
+].filter((u) => !/\/$/.test(u));
 const CDN_SCRIPTS = SW_REMOTE.filter((u) => /\.js$/.test(u));
 const cspFor = (html) => {
-  const inlineHashes = [...html.matchAll(/<script>([\s\S]*?)<\/script>/g)].map((m) => `'sha256-${require('crypto').createHash('sha256').update(m[1]).digest('base64')}'`);
+  const inlineHashes = [...html.matchAll(/<script>([\s\S]*?)<\/script>/g)].map(
+    (m) => `'sha256-${require('crypto').createHash('sha256').update(m[1]).digest('base64')}'`,
+  );
   return [
     "default-src 'self'",
     `script-src 'self' 'wasm-unsafe-eval' ${CDN_SCRIPTS.join(' ')} ${inlineHashes.join(' ')}`,
     "worker-src 'self' blob:",
-    `connect-src 'self' blob: data: ${API_HOSTS.concat(CDN_HOSTS).map((h) => 'https://' + h).join(' ')}`,
+    `connect-src 'self' blob: data: ${API_HOSTS.concat(CDN_HOSTS)
+      .map((h) => 'https://' + h)
+      .join(' ')}`,
     "style-src 'self' 'unsafe-inline' https://fonts.googleapis.com",
     "font-src 'self' data: https://fonts.gstatic.com",
     "img-src 'self' data: blob:",
@@ -145,13 +227,16 @@ const cspFor = (html) => {
 };
 // Everything served next to the page goes through put(), which says whether the service worker keeps it at install
 // (SW_LOCAL below is built from those, so a file copied here is never left out of the offline copy by mistake)
-const SITE = path.join(dir, 'out', 'site'), PAGE = 'chess-game-video.html';
-const kept = [], served = [];
+const SITE = path.join(dir, 'out', 'site'),
+  PAGE = 'chess-game-video.html';
+const kept = [],
+  served = [];
 // a folder's files (no dotfiles, no folders)
 const filesIn = (d) => fs.readdirSync(d).filter((f) => !f.startsWith('.') && fs.statSync(path.join(d, f)).isFile());
 const put = (rel, from, { keep = false, text } = {}) => {
   fs.mkdirSync(path.dirname(path.join(SITE, rel)), { recursive: true });
-  if (text != null) fs.writeFileSync(path.join(SITE, rel), text); else fs.copyFileSync(from, path.join(SITE, rel));
+  if (text != null) fs.writeFileSync(path.join(SITE, rel), text);
+  else fs.copyFileSync(from, path.join(SITE, rel));
   if (keep) kept.push(rel);
   if (!rel.startsWith('vision/')) served.push(rel);
 };
@@ -165,11 +250,13 @@ put('dead-worker.js', path.join(app, 'dead-worker.js'), { keep: true });
 put('vision-worker.js', path.join(app, 'vision-worker.js'), { keep: true });
 // the board reader's model and runtime (vision/, 56 MB), served next to the page for the viewer who asks to keep them
 // (sw.js answers them from VISION_CACHE, never from its own copy); the licence texts stay in the repo
-for (const f of filesIn(path.join(dir, 'vision'))) if (!/LICENSE$|^NOTICE$/.test(f)) put('vision/' + f, path.join(dir, 'vision', f));
+for (const f of filesIn(path.join(dir, 'vision')))
+  if (!/LICENSE$|^NOTICE$/.test(f)) put('vision/' + f, path.join(dir, 'vision', f));
 // the piece sets other than cburnett (which is in the page), served as pieces/<set>/<piece>.svg (PieceSets.url); the service
 // worker keeps a set when it's first drawn, not at install, so a first visit doesn't fetch all 1.4 MB
 const PIECES = path.join(dir, 'vendor', 'pieces');
-for (const set of fs.readdirSync(PIECES).filter((s) => !s.startsWith('.'))) for (const f of filesIn(path.join(PIECES, set))) put(`pieces/${set}/${f}`, path.join(PIECES, set, f));
+for (const set of fs.readdirSync(PIECES).filter((s) => !s.startsWith('.')))
+  for (const f of filesIn(path.join(PIECES, set))) put(`pieces/${set}/${f}`, path.join(PIECES, set, f));
 // the picture boards and every board's picker tile, served as boards/<file> (BoardThemes.url, .thumb), kept by the
 // service worker as they're used, as the piece sets are
 for (const f of filesIn(path.join(dir, 'vendor', 'boards'))) put('boards/' + f, path.join(dir, 'vendor', 'boards', f));
@@ -179,9 +266,16 @@ for (const f of SOUND_FILES) put(f, path.join(SOUNDS, f.slice('sounds/'.length))
 const ICONS = path.join(app, 'icons');
 for (const f of filesIn(ICONS)) put(f, path.join(ICONS, f), { keep: true });
 const manifest = {
-  name: 'Chess Replay', short_name: 'Chess Replay', description: DESCRIPTION,
-  start_url: './', scope: './', display: 'fullscreen', display_override: ['fullscreen', 'standalone'], orientation: 'any',
-  background_color: THEME.light.bg, theme_color: THEME.light.bg, // --bg (light)
+  name: 'Chess Replay',
+  short_name: 'Chess Replay',
+  description: DESCRIPTION,
+  start_url: './',
+  scope: './',
+  display: 'fullscreen',
+  display_override: ['fullscreen', 'standalone'],
+  orientation: 'any',
+  background_color: THEME.light.bg,
+  theme_color: THEME.light.bg, // --bg (light)
   icons: [
     { src: 'icon-192.png', sizes: '192x192', type: 'image/png', purpose: 'any' },
     { src: 'icon-512.png', sizes: '512x512', type: 'image/png', purpose: 'any' },
@@ -200,17 +294,25 @@ put('manifest.webmanifest', null, { keep: true, text: JSON.stringify(manifest, n
 const SW_LOCAL = [PAGE, ...kept];
 const VISION_CACHE = (() => {
   const m = [...read(path.join(app, 'vision-core.js')).matchAll(/const CACHE = '(chess-vision-\d+)'/g)];
-  if (m.length !== 1) throw new Error('vision-core.js: no single `const CACHE = \'chess-vision-N\'`');
+  if (m.length !== 1) throw new Error("vision-core.js: no single `const CACHE = 'chess-vision-N'`");
   return m[0][1];
 })();
 const swFilled = read(path.join(app, 'sw.js'))
-  .replace('__LOCAL__', () => JSON.stringify(SW_LOCAL)).replace('__REMOTE__', () => JSON.stringify(SW_REMOTE, null, 2))
-  .replace('__VISION_CACHE__', () => VISION_CACHE).replace('__ISOLATION__', () => JSON.stringify(require('./render-headers.cjs').isolation()))
+  .replace('__LOCAL__', () => JSON.stringify(SW_LOCAL))
+  .replace('__REMOTE__', () => JSON.stringify(SW_REMOTE, null, 2))
+  .replace('__VISION_CACHE__', () => VISION_CACHE)
+  .replace('__ISOLATION__', () => JSON.stringify(require('./render-headers.cjs').isolation()))
   .replace('__KEEP_HOSTS__', () => JSON.stringify(CDN_HOSTS));
 const swHash = require('crypto').createHash('sha256').update(swFilled);
 for (const f of served) swHash.update(f + '\0').update(fs.readFileSync(path.join(SITE, f)));
 const VERSION = swHash.digest('hex').slice(0, 16);
 fs.writeFileSync(path.join(SITE, 'sw.js'), swFilled.replace('__VERSION__', VERSION));
 const html = site.replace('__SITE_VERSION__', VERSION);
-fs.writeFileSync(path.join(SITE, PAGE), html.replace('<meta charset="utf-8">\n', () => `<meta charset="utf-8">\n<meta http-equiv="Content-Security-Policy" content="${cspFor(html)}">\n`));
+fs.writeFileSync(
+  path.join(SITE, PAGE),
+  html.replace(
+    '<meta charset="utf-8">\n',
+    () => `<meta charset="utf-8">\n<meta http-equiv="Content-Security-Policy" content="${cspFor(html)}">\n`,
+  ),
+);
 console.log('wrote', html.length, 'bytes (site)');

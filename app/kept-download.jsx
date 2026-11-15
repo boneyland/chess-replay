@@ -11,18 +11,27 @@ const keptMB = (bytes) => Math.round(bytes / 1e6);
 // already running; cancel() stops it, as unmounting does
 function useKeptDownload() {
   const [st, setSt] = React.useState({ on: false, got: 0, err: '' });
-  const ctl = React.useRef(null), alive = React.useRef(true);
+  const ctl = React.useRef(null),
+    alive = React.useRef(true);
   React.useEffect(() => {
     alive.current = true;
-    return () => { alive.current = false; if (ctl.current) ctl.current.abort(); };
+    return () => {
+      alive.current = false;
+      if (ctl.current) ctl.current.abort();
+    };
   }, []);
-  const set = (fn) => { if (alive.current) setSt(fn); };
+  const set = (fn) => {
+    if (alive.current) setSt(fn);
+  };
   const start = async (run) => {
     if (ctl.current) return null;
-    const c = ctl.current = new AbortController();
+    const c = (ctl.current = new AbortController());
     set({ on: true, got: 0, err: '' });
     try {
-      await run({ signal: c.signal, onProgress: (got) => set((s) => (keptMB(got) === keptMB(s.got) ? s : { ...s, got })) });
+      await run({
+        signal: c.signal,
+        onProgress: (got) => set((s) => (keptMB(got) === keptMB(s.got) ? s : { ...s, got })),
+      });
       set({ on: false, got: 0, err: '' });
       return true;
     } catch (e) {
@@ -32,18 +41,30 @@ function useKeptDownload() {
       if (ctl.current === c) ctl.current = null;
     }
   };
-  const cancel = () => { if (ctl.current) ctl.current.abort(); };
+  const cancel = () => {
+    if (ctl.current) ctl.current.abort();
+  };
   const setErr = (err) => set((s) => ({ ...s, err }));
   return { ...st, start, cancel, setErr };
 }
 
 // The download under way: "Downloading <what> · 12 of 99 MB" and a bar
 function KeptProgress({ what, got, total }) {
-  return <>
-    <div className="twk-note" role="status">Downloading {what} · {keptMB(got)} of {keptMB(total)} MB</div>
-    <div className="twk-progress"><i style={{ width: `${(100 * got / total).toFixed(1)}%` }} /></div>
-  </>;
+  return (
+    <>
+      <div className="twk-note" role="status">
+        Downloading {what} · {keptMB(got)} of {keptMB(total)} MB
+      </div>
+      <div className="twk-progress">
+        <i style={{ width: `${((100 * got) / total).toFixed(1)}%` }} />
+      </div>
+    </>
+  );
 }
 
 // Remove's question, above its Remove and Keep buttons
-const KeptRemoveAsk = ({ what, total }) => <div className="twk-note" role="alert">Remove the {what}? You’d need to download {keptMB(total)} MB again to use it.</div>;
+const KeptRemoveAsk = ({ what, total }) => (
+  <div className="twk-note" role="alert">
+    Remove the {what}? You’d need to download {keptMB(total)} MB again to use it.
+  </div>
+);

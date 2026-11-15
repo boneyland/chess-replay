@@ -9,8 +9,15 @@
   // only names the position, how it plays comes from pos.rooks
   const label960 = (v) => (v === true || (Number.isInteger(v) && v >= 0 && v <= 959) ? v : undefined);
   function fromFen(fen, { chess960 } = {}) {
-    const s = CC().parseFen(fen == null ? CC().START_FEN : fen), c = label960(chess960);
-    return { fen: s.fen, start: { pos: s.pos, ply0: s.ply0 }, steps: [], upto: -1, ...(c !== undefined ? { chess960: c } : {}) };
+    const s = CC().parseFen(fen == null ? CC().START_FEN : fen),
+      c = label960(chess960);
+    return {
+      fen: s.fen,
+      start: { pos: s.pos, ply0: s.ply0 },
+      steps: [],
+      upto: -1,
+      ...(c !== undefined ? { chess960: c } : {}),
+    };
   }
 
   const pos = (b) => (b.upto >= 0 ? b.steps[b.upto].pos : b.start.pos);
@@ -22,11 +29,21 @@
   // so they are still labelled as its replies after a reload
   const save = (b) => {
     const engine = b.steps.map((s, j) => (s.byEngine ? j : -1)).filter((j) => j >= 0);
-    return { fen: b.fen, moves: b.steps.map((s) => s.uci), upto: b.upto, ...(label960(b.chess960) !== undefined ? { chess960: b.chess960 } : {}), ...(engine.length ? { engine } : {}), ...(b.game ? { game: b.game } : {}) };
+    return {
+      fen: b.fen,
+      moves: b.steps.map((s) => s.uci),
+      upto: b.upto,
+      ...(label960(b.chess960) !== undefined ? { chess960: b.chess960 } : {}),
+      ...(engine.length ? { engine } : {}),
+      ...(b.game ? { game: b.game } : {}),
+    };
   };
 
   // today as PGN's YYYY.MM.DD
-  const today = () => { const d = new Date(); return `${d.getFullYear()}.${String(d.getMonth() + 1).padStart(2, '0')}.${String(d.getDate()).padStart(2, '0')}`; };
+  const today = () => {
+    const d = new Date();
+    return `${d.getFullYear()}.${String(d.getMonth() + 1).padStart(2, '0')}.${String(d.getDate()).padStart(2, '0')}`;
+  };
 
   // The board's whole line (not only up to the move shown) as a PGN ending in res (ChessCore.pgnText): the tags, SetUp and
   // Variant for a Chess960 board, FEN after them when the start isn't the standard one (or the board is a Chess960 one), then `more`; after(j) is the comment written after step j's move
@@ -34,7 +51,17 @@
   // A board with no label whose start has Chess960 rights (pos.rooks: a pasted or edited 960 setup) is tagged too
   function pgnOf(b, tags, res, { more = [], after = () => '' } = {}) {
     const c = label960(b.chess960) !== undefined || CC().is960(b.start.pos);
-    const all = tags.concat(c ? [['Variant', 'Chess960']] : [], c || b.fen !== CC().START_FEN ? [['SetUp', '1'], ['FEN', b.fen]] : [], more), toks = [];
+    const all = tags.concat(
+        c ? [['Variant', 'Chess960']] : [],
+        c || b.fen !== CC().START_FEN
+          ? [
+              ['SetUp', '1'],
+              ['FEN', b.fen],
+            ]
+          : [],
+        more,
+      ),
+      toks = [];
     b.steps.forEach((s, j) => {
       toks.push(CC().pgnMoveNo(b.start.ply0 + j, j === 0 || CC().pgnReopens(toks[toks.length - 1])) + s.san);
       const c = after(j);
@@ -44,7 +71,19 @@
   }
 
   // The board's moves as a game for the replay. date: PGN's YYYY.MM.DD, today when omitted
-  const pgn = (b, date) => pgnOf(b, [['Event', 'Free board'], ['Site', 'chess-replay'], ['Date', date || today()], ['White', 'White'], ['Black', 'Black'], ['Result', '*']], '*');
+  const pgn = (b, date) =>
+    pgnOf(
+      b,
+      [
+        ['Event', 'Free board'],
+        ['Site', 'chess-replay'],
+        ['Date', date || today()],
+        ['White', 'White'],
+        ['Black', 'Black'],
+        ['Result', '*'],
+      ],
+      '*',
+    );
 
   // A stored board back: the legal prefix of its moves, upto clamped (a missing one shows the last move), its game resumed
   // (`now` given for a reload: PlayCore.resume); null when the FEN doesn't parse. Never throws, whatever localStorage held.
@@ -55,7 +94,9 @@
       const engine = new Set(Array.isArray(saved.engine) ? saved.engine : []);
       for (const u of Array.isArray(saved.moves) ? saved.moves : []) {
         let step = null;
-        try { step = typeof u === 'string' ? CC().stepFromUci(pos(b), u) : null; } catch (e) {}
+        try {
+          step = typeof u === 'string' ? CC().stepFromUci(pos(b), u) : null;
+        } catch (e) {}
         if (!step) break;
         b = play(b, engine.has(b.upto + 1) ? { ...step, byEngine: true } : step);
       }
@@ -82,5 +123,20 @@
     return { w: { acc: 0, last: now, at: now }, d: Math.sign(acc) };
   }
 
-  window.BoardCore = { fromFen, restore, save, play, go, pos, ucis, label, today, pgnOf, pgn, WHEEL, wheelStart, wheel };
+  window.BoardCore = {
+    fromFen,
+    restore,
+    save,
+    play,
+    go,
+    pos,
+    ucis,
+    label,
+    today,
+    pgnOf,
+    pgn,
+    WHEEL,
+    wheelStart,
+    wheel,
+  };
 })();

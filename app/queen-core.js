@@ -3,42 +3,76 @@
   // The tool's text answer can come back as a Python dict repr ({'key': 'value', 'x': None}), not JSON
   function pyParse(src) {
     let i = 0;
-    const ws = () => { while (i < src.length && /\s/.test(src[i])) i++; };
+    const ws = () => {
+      while (i < src.length && /\s/.test(src[i])) i++;
+    };
     const val = () => {
       ws();
       const ch = src[i];
-      if (ch === '{' || ch === '[' || ch === '(') { // a tuple reads as an array
-        const close = { '{': '}', '[': ']', '(': ')' }[ch], out = ch === '{' ? {} : [];
-        i++; ws();
+      if (ch === '{' || ch === '[' || ch === '(') {
+        // a tuple reads as an array
+        const close = { '{': '}', '[': ']', '(': ')' }[ch],
+          out = ch === '{' ? {} : [];
+        i++;
+        ws();
         while (src[i] !== close) {
-          if (ch === '{') { const k = val(); ws(); if (src[i++] !== ':') throw new Error('bad dict'); out[k] = val(); }
-          else out.push(val());
-          ws(); if (src[i] === ',') { i++; ws(); }
+          if (ch === '{') {
+            const k = val();
+            ws();
+            if (src[i++] !== ':') throw new Error('bad dict');
+            out[k] = val();
+          } else out.push(val());
+          ws();
+          if (src[i] === ',') {
+            i++;
+            ws();
+          }
           if (i >= src.length) throw new Error('unterminated');
         }
-        i++; return out;
+        i++;
+        return out;
       }
       if (ch === "'" || ch === '"') {
-        let s = ''; i++;
+        let s = '';
+        i++;
         while (src[i] !== ch) {
           if (i >= src.length) throw new Error('unterminated string');
           if (src[i] === '\\') {
             const e = src[++i];
-            if (e === 'n') s += '\n'; else if (e === 't') s += '\t'; else if (e === 'r') s += '\r';
-            else if (e === 'u') { s += String.fromCharCode(parseInt(src.slice(i + 1, i + 5), 16)); i += 4; }
-            else if (e === 'U') { s += String.fromCodePoint(parseInt(src.slice(i + 1, i + 9), 16)); i += 8; }
-            else if (e === 'x') { s += String.fromCharCode(parseInt(src.slice(i + 1, i + 3), 16)); i += 2; }
-            else s += e;
+            if (e === 'n') s += '\n';
+            else if (e === 't') s += '\t';
+            else if (e === 'r') s += '\r';
+            else if (e === 'u') {
+              s += String.fromCharCode(parseInt(src.slice(i + 1, i + 5), 16));
+              i += 4;
+            } else if (e === 'U') {
+              s += String.fromCodePoint(parseInt(src.slice(i + 1, i + 9), 16));
+              i += 8;
+            } else if (e === 'x') {
+              s += String.fromCharCode(parseInt(src.slice(i + 1, i + 3), 16));
+              i += 2;
+            } else s += e;
             i++;
           } else s += src[i++];
         }
-        i++; return s;
+        i++;
+        return s;
       }
       // nan and inf (a float Python couldn't give a number for) read as null: one such field doesn't lose the answer
       const m = /^(None|True|False|null|true|false|nan|-?inf|-?\d+(?:\.\d+)?(?:[eE][-+]?\d+)?)/.exec(src.slice(i));
       if (!m) throw new Error('unexpected ' + ch);
       i += m[0].length;
-      const LIT = { None: null, null: null, True: true, true: true, False: false, false: false, nan: null, inf: null, '-inf': null };
+      const LIT = {
+        None: null,
+        null: null,
+        True: true,
+        true: true,
+        False: false,
+        false: false,
+        nan: null,
+        inf: null,
+        '-inf': null,
+      };
       return Object.prototype.hasOwnProperty.call(LIT, m[0]) ? LIT[m[0]] : Number(m[0]);
     };
     return val();
@@ -46,8 +80,21 @@
 
   function queenPayload(res) {
     let p = res && res.payload !== undefined ? res.payload : res;
-    if (typeof p === 'string') { try { p = JSON.parse(p); } catch (e) { try { p = pyParse(p.trim()); } catch (e2) {} } }
-    if (!p || typeof p !== 'object' || !('best_move_uci' in p || 'analysis' in p)) throw { code: 'bad_answer', message: 'Queen answered in a shape this page does not recognise.', raw: JSON.stringify(res && res.payload !== undefined ? res.payload : res) };
+    if (typeof p === 'string') {
+      try {
+        p = JSON.parse(p);
+      } catch (e) {
+        try {
+          p = pyParse(p.trim());
+        } catch (e2) {}
+      }
+    }
+    if (!p || typeof p !== 'object' || !('best_move_uci' in p || 'analysis' in p))
+      throw {
+        code: 'bad_answer',
+        message: 'Queen answered in a shape this page does not recognise.',
+        raw: JSON.stringify(res && res.payload !== undefined ? res.payload : res),
+      };
     return p;
   }
 
@@ -57,7 +104,10 @@
     text = text.replace(/\b(approx|ca|est)\.\s*/gi, '$1 '); // "approx. 0.9" is not the end of a sentence
     const num = (x) => parseFloat(x.replace('−', '-'));
     // "+0.26 pawns from Black's perspective" -> -0.26
-    const v = /([+\-−]?\d+(?:\.\d+)?)\s*pawns?\s+(?:from|in)\s+(White|Black)['’]s\s+(?:perspective|point of view|view)/i.exec(text);
+    const v =
+      /([+\-−]?\d+(?:\.\d+)?)\s*pawns?\s+(?:from|in)\s+(White|Black)['’]s\s+(?:perspective|point of view|view)/i.exec(
+        text,
+      );
     if (v) return (v[2].toLowerCase() === 'white' ? 1 : -1) * num(v[1]);
     // A side, then within the same sentence a number of pawns: "White is better by approximately 1.37 pawns",
     // "Black is down about 0.5 pawns", "White is winning by approximatedly 3 pawns", "Black has an edge of 0.8 pawns"
@@ -72,18 +122,33 @@
   }
   function queenProse(text) {
     if (!text) return [];
-    const body = text.replace(/^\s*ANALYSIS:\s*/i, '').split(/\n(?=BEST_MOVE:|CRITICAL_LINE:|PROMISING_MOVES:|EVALUATION:)/)[0];
-    return body.split(/\n\s*\n/).map((p) => p.replace(/\s+/g, ' ').trim()).filter(Boolean);
+    const body = text
+      .replace(/^\s*ANALYSIS:\s*/i, '')
+      .split(/\n(?=BEST_MOVE:|CRITICAL_LINE:|PROMISING_MOVES:|EVALUATION:)/)[0];
+    return body
+      .split(/\n\s*\n/)
+      .map((p) => p.replace(/\s+/g, ' ').trim())
+      .filter(Boolean);
   }
-
 
   // Gradio's server-sent events: blocks of "event: <name>" and "data: <json>"; the last complete and error win
   function readSse(text) {
-    let result = null, error = null;
+    let result = null,
+      error = null;
     for (const block of text.split(/\n\n+/)) {
-      const ev = (block.match(/^event:\s*(.+)$/m) || [])[1], data = (block.match(/^data:\s*(.*)$/m) || [])[1];
-      if (ev === 'complete') { try { result = JSON.parse(data); } catch (e) {} }
-      else if (ev === 'error') { try { error = JSON.parse(data); } catch (e) { error = data; } }
+      const ev = (block.match(/^event:\s*(.+)$/m) || [])[1],
+        data = (block.match(/^data:\s*(.*)$/m) || [])[1];
+      if (ev === 'complete') {
+        try {
+          result = JSON.parse(data);
+        } catch (e) {}
+      } else if (ev === 'error') {
+        try {
+          error = JSON.parse(data);
+        } catch (e) {
+          error = data;
+        }
+      }
     }
     return { result, error };
   }
@@ -94,7 +159,8 @@
   function capQueenCache(c, limit = QUEEN_CHARS) {
     const keys = Object.keys(c);
     const size = keys.map((k) => JSON.stringify(k).length + JSON.stringify(c[k]).length + 2);
-    let total = 2 + size.reduce((x, y) => x + y, 0), from = 0;
+    let total = 2 + size.reduce((x, y) => x + y, 0),
+      from = 0;
     while (total > limit && from < keys.length - 1) total -= size[from++];
     return from ? Object.fromEntries(keys.slice(from).map((k) => [k, c[k]])) : c;
   }
@@ -107,10 +173,15 @@
     const str = (v) => (typeof v === 'string' ? v : '');
     const num = (v) => (typeof v === 'number' && isFinite(v) ? v : null);
     return {
-      best: typeof r.best === 'string' && UCI.test(r.best) ? r.best : null, bestSan: str(r.bestSan) || null, line: str(r.line),
-      evalText: str(r.evalText), evalPawns: num(r.evalPawns),
+      best: typeof r.best === 'string' && UCI.test(r.best) ? r.best : null,
+      bestSan: str(r.bestSan) || null,
+      line: str(r.line),
+      evalText: str(r.evalText),
+      evalPawns: num(r.evalPawns),
       prose: Array.isArray(r.prose) ? r.prose.filter((x) => typeof x === 'string' && x) : r.prose ? [r.prose] : [],
-      seconds: num(r.seconds), source: str(r.source) || 'best_move', at,
+      seconds: num(r.seconds),
+      source: str(r.source) || 'best_move',
+      at,
     };
   }
 
@@ -123,13 +194,27 @@
   function queenFile(cache, ucis, fen) {
     // every position from the start to the one after the last move (Queen also scores the positions after moves)
     const keys = new Set([...ucis, null].map((_, i) => queenKey(fen, ucis.slice(0, i).join(' '))));
-    const answers = Object.fromEntries(Object.keys(cache).filter((k) => keys.has(k)).map((k) => [k, cache[k]]));
-    return { format: QUEEN_FILE, version: 1, moves: ucis.join(' '), ...(queenKey(fen, '') !== '' ? { start_fen: fen } : {}), answers };
+    const answers = Object.fromEntries(
+      Object.keys(cache)
+        .filter((k) => keys.has(k))
+        .map((k) => [k, cache[k]]),
+    );
+    return {
+      format: QUEEN_FILE,
+      version: 1,
+      moves: ucis.join(' '),
+      ...(queenKey(fen, '') !== '' ? { start_fen: fen } : {}),
+      answers,
+    };
   }
   // the answers in a saved file, or null when the text isn't one; entries that don't look like answers are dropped
   function readQueenFile(text) {
     let j;
-    try { j = typeof text === 'string' ? JSON.parse(text) : text; } catch (e) { return null; }
+    try {
+      j = typeof text === 'string' ? JSON.parse(text) : text;
+    } catch (e) {
+      return null;
+    }
     if (!j || j.format !== QUEEN_FILE || !j.answers || typeof j.answers !== 'object') return null;
     return readQueenCache(j.answers);
   }
@@ -146,5 +231,17 @@
     return out;
   }
 
-  window.QueenCore = { pyParse, queenPayload, queenEval, queenProse, readSse, capQueenCache, queenAnswer, queenKey, queenFile, readQueenFile, readQueenCache };
+  window.QueenCore = {
+    pyParse,
+    queenPayload,
+    queenEval,
+    queenProse,
+    readSse,
+    capQueenCache,
+    queenAnswer,
+    queenKey,
+    queenFile,
+    readQueenFile,
+    readQueenCache,
+  };
 })();

@@ -1,9 +1,16 @@
 const test = require('node:test');
 const assert = require('node:assert/strict');
 const { loadUnit } = require('./load.cjs');
-loadUnit('chess-core.js'); loadUnit('board-core.js'); loadUnit('edit-core.js');
-const E = window.EditCore, CC = window.ChessCore;
-const setup = (fen) => { const r = E.fromFen(fen); assert.ok(r.setup, `${fen}: ${r.error}`); return r.setup; };
+loadUnit('chess-core.js');
+loadUnit('board-core.js');
+loadUnit('edit-core.js');
+const E = window.EditCore,
+  CC = window.ChessCore;
+const setup = (fen) => {
+  const r = E.fromFen(fen);
+  assert.ok(r.setup, `${fen}: ${r.error}`);
+  return r.setup;
+};
 const sq = (s) => CC.sqIndex(s);
 
 test('empty and start', () => {
@@ -11,16 +18,24 @@ test('empty and start', () => {
   assert.equal(E.toFen(E.start()), CC.START_FEN);
 });
 test('fromFen loads an illegal but well-formed position', () => {
-  for (const f of ['8/8/8/8/8/8/8/8 b - - 0 1', 'P7/8/8/8/8/8/8/K6k w - - 0 1', '4k3/8/8/8/8/8/8/K2KR3 w - - 0 1']) assert.ok(E.fromFen(f).setup, f);
+  for (const f of ['8/8/8/8/8/8/8/8 b - - 0 1', 'P7/8/8/8/8/8/8/K6k w - - 0 1', '4k3/8/8/8/8/8/8/K2KR3 w - - 0 1'])
+    assert.ok(E.fromFen(f).setup, f);
   assert.equal(E.toFen(setup('4k3/8/8/8/8/8/8/K2KR3 w - - 0 1')), '4k3/8/8/8/8/8/8/K2KR3 w - - 0 1');
 });
 test('fromFen refuses malformed text', () => {
-  for (const f of ['', 'rnbqkbnr/pppppppp', 'rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBN w', '8/8/8/8/8/8/8/8 x - - 0 1']) {
+  for (const f of [
+    '',
+    'rnbqkbnr/pppppppp',
+    'rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBN w',
+    '8/8/8/8/8/8/8/8 x - - 0 1',
+  ]) {
     const r = E.fromFen(f);
-    assert.equal(r.setup, undefined, f); assert.equal(typeof r.error, 'string', f);
+    assert.equal(r.setup, undefined, f);
+    assert.equal(typeof r.error, 'string', f);
   }
   const s = setup('[FEN "4k3/8/8/8/8/8/8/4K3 b - - 0 40"]');
-  assert.equal(s.turn, 'b'); assert.equal(s.full, 40);
+  assert.equal(s.turn, 'b');
+  assert.equal(s.full, 40);
 });
 test('unsupported castling is dropped, not refused', () => {
   assert.equal(setup('4k3/8/8/8/8/8/8/4K3 w KQkq - 0 1').castle, '');
@@ -33,7 +48,9 @@ test('put and move drop rights, and an en passant square the pieces no longer al
   const e = setup('4k3/8/8/3pP3/8/8/8/4K3 w - d6 3 20');
   assert.equal(e.ep, 19);
   const p = E.put(e, sq('a1'), 'R');
-  assert.equal(p.ep, 19); assert.equal(p.half, 3); assert.equal(p.full, 20);
+  assert.equal(p.ep, 19);
+  assert.equal(p.half, 3);
+  assert.equal(p.full, 20);
   assert.equal(E.put(e, sq('d5'), null).ep, -1);
   assert.equal(E.put(e, sq('d7'), 'p').ep, -1);
   assert.equal(E.move(e, sq('d5'), sq('c5')).ep, -1);
@@ -56,14 +73,17 @@ test('en passant squares, half-move clock and move number', () => {
   assert.equal(E.setHalf(e, '0').ep, sq('d6'));
   const c = E.setFull(E.setHalf(e, '12'), 34);
   assert.equal(E.toFen(c), '4k3/8/8/p2pP2p/8/8/8/4K3 w - - 12 34');
-  assert.equal(E.count(' 12 ', 0), 12); assert.equal(E.count('0', 1), null); assert.equal(E.count(E.MAX_COUNT + 1, 0), null);
+  assert.equal(E.count(' 12 ', 0), 12);
+  assert.equal(E.count('0', 1), null);
+  assert.equal(E.count(E.MAX_COUNT + 1, 0), null);
   for (const v of ['', '-1', '1.5', 'x', 10000]) assert.equal(E.setHalf(c, v), c, `half ${v}`);
   for (const v of ['', '0', 0, 'x']) assert.equal(E.setFull(c, v), c, `full ${v}`);
   assert.equal(E.setHalf(c, '0').half, 0);
   // the FEN goes on to the free board and a game as set
   const B = window.BoardCore.fromFen(E.toFen(E.setEp(E.setFull(e, 34), sq('d6'))));
   assert.equal(B.fen, '4k3/8/8/p2pP2p/8/8/8/4K3 w - d6 0 34');
-  assert.equal(B.start.pos.ep, sq('d6')); assert.equal(B.start.ply0, 66);
+  assert.equal(B.start.pos.ep, sq('d6'));
+  assert.equal(B.start.ply0, 66);
 });
 test('castling boxes', () => {
   assert.equal(E.canCastle(E.empty(), 'K'), false);
@@ -75,13 +95,19 @@ test('castling boxes', () => {
 test('problems, each message', () => {
   assert.deepEqual(E.problems(E.empty()), ['White has no king.', 'Black has no king.']);
   assert.deepEqual(E.problems(setup('kk6/8/8/8/8/8/8/K7 w - - 0 1')), ['Black has 2 kings.']);
-  assert.deepEqual(E.problems(setup('4k3/8/8/8/8/8/8/P3K3 w - - 0 1')), ["The pawn on a1 can't stand on the first or last rank."]);
+  assert.deepEqual(E.problems(setup('4k3/8/8/8/8/8/8/P3K3 w - - 0 1')), [
+    "The pawn on a1 can't stand on the first or last rank.",
+  ]);
   assert.deepEqual(E.problems(setup('4k3/4R3/8/8/8/8/8/4K3 w - - 0 1')), ["Black is in check, but it's White's turn."]);
   assert.deepEqual(E.problems(setup('4k3/8/8/8/8/8/8/4K3 w - - 0 1')), []);
 });
 test('impossible checks', () => {
-  assert.deepEqual(E.problems(setup('4r2k/8/8/b7/8/3n4/8/4K3 w - - 0 1')), ['White is in check from 3 pieces, which no move can give.']);
-  assert.deepEqual(E.problems(setup('7k/8/8/8/8/8/8/r3K2r w - - 0 1')), ['White is in check from two pieces in a line, which no move can give.']);
+  assert.deepEqual(E.problems(setup('4r2k/8/8/b7/8/3n4/8/4K3 w - - 0 1')), [
+    'White is in check from 3 pieces, which no move can give.',
+  ]);
+  assert.deepEqual(E.problems(setup('7k/8/8/8/8/8/8/r3K2r w - - 0 1')), [
+    'White is in check from two pieces in a line, which no move can give.',
+  ]);
   assert.deepEqual(E.problems(setup('4r2k/8/8/8/8/5n2/8/4K3 w - - 0 1')), []);
 });
 test('ok means parseFen accepts it', () => {
@@ -90,22 +116,31 @@ test('ok means parseFen accepts it', () => {
     assert.doesNotThrow(() => CC.parseFen(E.toFen(s)));
   }
   assert.equal(E.ok(E.empty()), false);
-  assert.equal(E.isEmpty(E.empty()), true); assert.equal(E.isEmpty(E.start()), false);
+  assert.equal(E.isEmpty(E.empty()), true);
+  assert.equal(E.isEmpty(E.start()), false);
 });
 test('setups are never mutated', () => {
-  const s = E.start(), f = E.toFen(s);
-  E.put(s, 0, null); E.move(s, 52, 36); E.setTurn(s, 'b'); E.setCastle(s, 'K', false);
+  const s = E.start(),
+    f = E.toFen(s);
+  E.put(s, 0, null);
+  E.move(s, 52, 36);
+  E.setTurn(s, 'b');
+  E.setCastle(s, 'K', false);
   assert.equal(E.toFen(s), f);
 });
 test('ChessCore.checkers lists the checking pieces', () => {
   const s = setup('4r2k/8/8/8/8/5n2/8/4K3 w - - 0 1');
-  assert.deepEqual(CC.checkers(s.b, 'w').sort((a, b) => a - b), [sq('e8'), sq('f3')].sort((a, b) => a - b));
+  assert.deepEqual(
+    CC.checkers(s.b, 'w').sort((a, b) => a - b),
+    [sq('e8'), sq('f3')].sort((a, b) => a - b),
+  );
   assert.deepEqual(CC.checkers(E.empty().b, 'w'), []);
 });
 
 test('960 castling rights: a king off e1 with a rook on h1', () => {
   let s = setup('4k3/8/8/8/8/8/8/5K1R w - - 0 1');
-  assert.equal(E.canCastle(s, 'K'), true); assert.equal(E.canCastle(s, 'Q'), false);
+  assert.equal(E.canCastle(s, 'K'), true);
+  assert.equal(E.canCastle(s, 'Q'), false);
   s = E.setCastle(s, 'K', true);
   assert.equal(s.castle, 'K');
   assert.equal(E.toFen(s), '4k3/8/8/8/8/8/8/5K1R w K - 0 1');
@@ -116,40 +151,51 @@ test('960 castling rights: a king off e1 with a rook on h1', () => {
 });
 test('standard setups carry no rooks', () => {
   const s = setup('r3k2r/8/8/8/8/8/8/R3K2R w KQkq - 0 1');
-  assert.equal(s.castle, 'KQkq'); assert.equal(s.rooks, undefined);
+  assert.equal(s.castle, 'KQkq');
+  assert.equal(s.rooks, undefined);
   const t = E.setCastle(E.setCastle(s, 'K', false), 'K', true);
-  assert.equal(t.rooks, undefined); assert.equal(CC.fenIs960(E.toFen(t)), false);
+  assert.equal(t.rooks, undefined);
+  assert.equal(CC.fenIs960(E.toFen(t)), false);
 });
 test('an inner-rook right stays on its rook until that rook goes, then is dropped', () => {
   let s = setup('4k3/8/8/8/8/8/8/4K1RR w G - 0 1');
-  assert.equal(s.castle, 'K'); assert.equal(s.rooks.K, sq('g1'));
+  assert.equal(s.castle, 'K');
+  assert.equal(s.rooks.K, sq('g1'));
   s = E.put(s, sq('e5'), 'n');
-  assert.equal(s.castle, 'K'); assert.equal(s.rooks.K, sq('g1'));
+  assert.equal(s.castle, 'K');
+  assert.equal(s.rooks.K, sq('g1'));
   assert.match(E.toFen(s), / G /);
   s = E.put(s, sq('g1'), null);
-  assert.equal(s.castle, ''); assert.equal(s.rooks, undefined);
+  assert.equal(s.castle, '');
+  assert.equal(s.rooks, undefined);
   assert.equal(E.toFen(s), '4k3/8/8/4n3/8/8/8/4K2R w - - 0 1');
 });
 test('a king leaving e1 drops K and Q, and makes no 960 setup', () => {
   let s = E.put(E.put(E.start(), sq('f1'), null), sq('g1'), null);
   assert.equal(s.castle, 'KQkq');
   s = E.move(s, sq('e1'), sq('f1'));
-  assert.equal(s.castle, 'kq'); assert.equal(s.rooks, undefined); assert.equal(CC.fenIs960(E.toFen(s)), false);
+  assert.equal(s.castle, 'kq');
+  assert.equal(s.rooks, undefined);
+  assert.equal(CC.fenIs960(E.toFen(s)), false);
   // the "castled" king and rook by hand
   s = E.move(E.move(E.put(E.put(E.start(), sq('f1'), null), sq('g1'), null), sq('e1'), sq('g1')), sq('h1'), sq('f1'));
-  assert.equal(E.toFen(s), 'rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQ1RK1 w kq - 0 1'); assert.equal(s.rooks, undefined);
+  assert.equal(E.toFen(s), 'rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQ1RK1 w kq - 0 1');
+  assert.equal(s.rooks, undefined);
 });
 test('a rook leaving h1 drops K', () => {
   const s = E.move(setup('r3k2r/8/8/8/8/8/8/R3K2R w KQkq - 0 1'), sq('h1'), sq('g1'));
-  assert.equal(s.castle, 'Qkq'); assert.equal(s.rooks, undefined);
+  assert.equal(s.castle, 'Qkq');
+  assert.equal(s.rooks, undefined);
 });
 test('a 960 right stays while other pieces change and goes when its king moves', () => {
   let s = E.setCastle(setup('4k3/8/8/8/8/8/8/5K1R w - - 0 1'), 'K', true);
   assert.equal(s.castle, 'K');
   s = E.put(s, sq('c3'), 'N');
-  assert.equal(s.castle, 'K'); assert.equal(s.rooks.K, sq('h1'));
+  assert.equal(s.castle, 'K');
+  assert.equal(s.rooks.K, sq('h1'));
   s = E.move(s, sq('f1'), sq('e1'));
-  assert.equal(s.castle, ''); assert.equal(E.toFen(s), '4k3/8/8/8/8/2N5/8/4K2R w - - 0 1');
+  assert.equal(s.castle, '');
+  assert.equal(E.toFen(s), '4k3/8/8/8/8/2N5/8/4K2R w - - 0 1');
 });
 test('vision reads no right for a king on f1, and the standard ones as before', () => {
   loadUnit('vision-core.js');

@@ -19,8 +19,14 @@
   // Whether `color` has the material to mate at all: not with a lone king, nor a king and one minor piece against a lone
   // king, nor when the only pieces besides the kings are bishops all on squares of one colour
   function canMate(pos, color) {
-    const own = [], all = [];
-    pos.b.forEach((p, i) => { if (p && p.toLowerCase() !== 'k') { all.push({ t: p.toLowerCase(), i }); if (colorOf(p) === color) own.push(p.toLowerCase()); } });
+    const own = [],
+      all = [];
+    pos.b.forEach((p, i) => {
+      if (p && p.toLowerCase() !== 'k') {
+        all.push({ t: p.toLowerCase(), i });
+        if (colorOf(p) === color) own.push(p.toLowerCase());
+      }
+    });
     if (!own.length) return false;
     if (all.every((x) => x.t === 'b') && new Set(all.map((x) => sqColor(x.i))).size === 1) return false;
     return !(own.length === 1 && (own[0] === 'n' || own[0] === 'b') && all.length === 1);
@@ -35,7 +41,9 @@
   // reaches never touch (one king can't cover the other's squares) and each such square has a neighbour of the other
   // colour in the king's reach, which no bishop, pawn or king can take from it. Positions this can't prove play on
   function lockedDead(pos) {
-    const b = pos.b, pawns = [], bishops = { w: [], b: [] };
+    const b = pos.b,
+      pawns = [],
+      bishops = { w: [], b: [] };
     for (let i = 0; i < 64; i++) {
       const p = b[i];
       if (!p) continue;
@@ -52,12 +60,15 @@
     // squares a pawn of each colour attacks: a8 is 0, so White's pawns take towards lower indexes
     const guard = { w: new Set(), b: new Set() };
     for (const i of pawns) {
-      const c = colorOf(b[i]), f = i % 8, row = c === 'w' ? i - 8 : i + 8;
+      const c = colorOf(b[i]),
+        f = i % 8,
+        row = c === 'w' ? i - 8 : i + 8;
       // every pawn blocked by a pawn straight ahead (no pushes from here on, so no double step and no further en passant)
       if (row < 0 || row > 63 || !b[row] || b[row].toLowerCase() !== 'p') return false;
       for (const df of [-1, 1]) {
         if (f + df < 0 || f + df > 7) continue;
-        const t = row + df, x = b[t];
+        const t = row + df,
+          x = b[t];
         // a capture now: the pawn structure could change
         if (x && x.toLowerCase() === 'p' && colorOf(x) !== c) return false;
         guard[c].add(t);
@@ -65,23 +76,31 @@
     }
     const near = (i) => {
       const out = [];
-      for (let dr = -1; dr <= 1; dr++) for (let df = -1; df <= 1; df++) {
-        const r = Math.floor(i / 8) + dr, f = (i % 8) + df;
-        if ((dr || df) && r >= 0 && r <= 7 && f >= 0 && f <= 7) out.push(r * 8 + f);
-      }
+      for (let dr = -1; dr <= 1; dr++)
+        for (let df = -1; df <= 1; df++) {
+          const r = Math.floor(i / 8) + dr,
+            f = (i % 8) + df;
+          if ((dr || df) && r >= 0 && r <= 7 && f >= 0 && f <= 7) out.push(r * 8 + f);
+        }
       return out;
     };
     const reach = {};
     for (const c of ['w', 'b']) {
-      const king = b.indexOf(c === 'w' ? 'K' : 'k'), foe = other(c);
+      const king = b.indexOf(c === 'w' ? 'K' : 'k'),
+        foe = other(c);
       if (king < 0) return false;
-      const seen = new Set([king]), todo = [king];
+      const seen = new Set([king]),
+        todo = [king];
       while (todo.length) {
         for (const j of near(todo.pop())) {
           if (seen.has(j) || guard[foe].has(j)) continue;
           const x = b[j];
-          if (x && x.toLowerCase() === 'p') { if (colorOf(x) === c) continue; return false; } // an enemy pawn it could take
-          seen.add(j); todo.push(j);
+          if (x && x.toLowerCase() === 'p') {
+            if (colorOf(x) === c) continue;
+            return false;
+          } // an enemy pawn it could take
+          seen.add(j);
+          todo.push(j);
         }
       }
       reach[c] = seen;
@@ -90,14 +109,19 @@
     // each side's bishops' squares; a diagonal step onto an enemy pawn is a capture that could change the pawns
     const sweep = {};
     for (const c of ['w', 'b']) {
-      const seen = new Set(bishops[c]), todo = [...bishops[c]];
+      const seen = new Set(bishops[c]),
+        todo = [...bishops[c]];
       while (todo.length) {
         const i = todo.pop();
         for (const j of near(i)) {
           if (j % 8 === i % 8 || Math.floor(j / 8) === Math.floor(i / 8) || seen.has(j)) continue;
           const x = b[j];
-          if (x && x.toLowerCase() === 'p') { if (colorOf(x) === c) continue; return false; }
-          seen.add(j); todo.push(j);
+          if (x && x.toLowerCase() === 'p') {
+            if (colorOf(x) === c) continue;
+            return false;
+          }
+          seen.add(j);
+          todo.push(j);
         }
       }
       sweep[c] = seen;
@@ -105,7 +129,8 @@
     const checks = { w: [...reach.w].filter((i) => sweep.b.has(i)), b: [...reach.b].filter((i) => sweep.w.has(i)) };
     if (!checks.w.length && !checks.b.length) return true;
     for (const i of reach.w) if (reach.b.has(i) || near(i).some((j) => reach.b.has(j))) return false;
-    for (const c of ['w', 'b']) for (const i of checks[c]) if (!near(i).some((j) => sqColor(j) !== shade && reach[c].has(j))) return false;
+    for (const c of ['w', 'b'])
+      for (const i of checks[c]) if (!near(i).some((j) => sqColor(j) !== shade && reach[c].has(j))) return false;
     return true;
   }
 
@@ -117,7 +142,8 @@
   // In the position after the board's last move: half, the half-moves since a capture or pawn move (from the FEN's), and
   // seen, how often the position has stood on the board, counted from the start
   function drawCounts(board) {
-    const steps = board.steps, pos = lastPos(board);
+    const steps = board.steps,
+      pos = lastPos(board);
     let half = +board.fen.split(' ')[4] || 0;
     for (const s of steps) half = /^[a-h]/.test(s.san) || s.san.includes('x') ? 0 : half + 1;
     const key = positionKey(pos);
@@ -129,7 +155,9 @@
   // chasolver's answers (DeadCore, through dead.jsx): (pos, color) → true when color can't mate by any legal sequence,
   // false when it can, null when not known (yet); read synchronously, so a game only ends on an answer already in
   let prover = null;
-  const setProver = (fn) => { prover = fn || null; };
+  const setProver = (fn) => {
+    prover = fn || null;
+  };
   // color proven unable to mate in the board's last position, or in any position before it on the line: a side that
   // can't mate stays unable after any legal move, so a proof outlives a later position's pending or undecided search
   function provenUnable(board, color) {
@@ -161,7 +189,10 @@
   const TIME_CONTROLS = ['5+3', '10+0', '15+10', '30+0'];
   // games stored before 5+0 became 5+3 keep their clock
   const RETIRED_TCS = ['5+0'];
-  const parseTc = (tc) => { const m = /^(\d+)\+(\d+)$/.exec(tc || ''); return m ? { base: +m[1] * 60000, inc: +m[2] * 1000 } : null; };
+  const parseTc = (tc) => {
+    const m = /^(\d+)\+(\d+)$/.exec(tc || '');
+    return m ? { base: +m[1] * 60000, inc: +m[2] * 1000 } : null;
+  };
   const B = () => window.BoardCore;
   const other = (side) => (side === 'w' ? 'b' : 'w');
   const inProgress = (b) => !!(b && b.game && !b.game.result);
@@ -185,10 +216,24 @@
   // opts { mode: 'human' | 'stockfish', you: 'w' | 'b', keep } (vs human by default; you only against Stockfish; keep:
   // from the move shown, keeping the moves up to it, and dropping those after)
   function start(board, tc, date, { mode = 'human', you = 'w', keep = false } = {}) {
-    const n = keep ? board.upto + 1 : 0, t = parseTc(tc), b = { ...board, steps: board.steps.slice(0, n), upto: n - 1 };
+    const n = keep ? board.upto + 1 : 0,
+      t = parseTc(tc),
+      b = { ...board, steps: board.steps.slice(0, n), upto: n - 1 };
     const clock = t ? { left: { w: t.base, b: t.base }, since: null, clk: [] } : null;
     const head = mode === 'stockfish' ? { mode, you: you === 'b' ? 'b' : 'w' } : { mode: 'human' };
-    return { ...b, game: { ...head, id: newId(), tc: t ? tc : null, date: date || today(), clock, result: outcome(b, mode !== 'stockfish'), ...(n ? { from: n } : {}), ...(head.you ? { critique: [], hints: [] } : {}) } };
+    return {
+      ...b,
+      game: {
+        ...head,
+        id: newId(),
+        tc: t ? tc : null,
+        date: date || today(),
+        clock,
+        result: outcome(b, mode !== 'stockfish'),
+        ...(n ? { from: n } : {}),
+        ...(head.you ? { critique: [], hints: [] } : {}),
+      },
+    };
   }
 
   // the side to move's time left at `now`; null without clocks
@@ -199,7 +244,8 @@
   }
   // the clock with the side to move charged up to `now`, and stopped
   const charged = (b, now) => {
-    const c = b.game.clock, side = lastPos(b).turn;
+    const c = b.game.clock,
+      side = lastPos(b).turn;
     return { ...c, left: { ...c.left, [side]: timeLeft(b, side, now) }, since: null };
   };
 
@@ -209,8 +255,10 @@
     if (!inProgress(b) || !b.game.clock || b.game.clock.since == null) return b;
     const side = lastPos(b).turn;
     if (timeLeft(b, side, now) > 0) return b;
-    const c = charged(b, now), opp = other(side);
-    const pos = lastPos(b), dead = !canMate(pos, opp) || provenUnable(b, opp);
+    const c = charged(b, now),
+      opp = other(side);
+    const pos = lastPos(b),
+      dead = !canMate(pos, opp) || provenUnable(b, opp);
     const result = dead ? '1/2-1/2' : opp === 'w' ? '1-0' : '0-1';
     return withGame(b, { clock: { ...c, left: { ...c.left, [side]: 0 } }, result: { result, reason: 'time', side } });
   }
@@ -220,10 +268,12 @@
     if (!inProgress(b)) return b;
     const flagged = flag(b, now);
     if (flagged !== b) return flagged;
-    const side = lastPos(b).turn, next = B().play(B().go(b, b.steps.length - 1), step);
+    const side = lastPos(b).turn,
+      next = B().play(B().go(b, b.steps.length - 1), step);
     let clock = b.game.clock;
     if (clock) {
-      const c = charged(b, now), left = c.left[side] + parseTc(b.game.tc).inc;
+      const c = charged(b, now),
+        left = c.left[side] + parseTc(b.game.tc).inc;
       clock = { left: { ...c.left, [side]: left }, since: now, clk: [...c.clk, left], begun: true };
     }
     const result = outcome(next, claims(b));
@@ -255,8 +305,14 @@
     const prev = { ...b, steps: b.steps.slice(0, -1), upto: b.steps.length - 2 };
     let clock = b.game.clock;
     if (clock) {
-      const c = charged(b, now), mover = other(lastPos(b).turn);
-      clock = { ...c, left: { ...c.left, [mover]: c.left[mover] - parseTc(b.game.tc).inc }, since: now, clk: c.clk.slice(0, -1) };
+      const c = charged(b, now),
+        mover = other(lastPos(b).turn);
+      clock = {
+        ...c,
+        left: { ...c.left, [mover]: c.left[mover] - parseTc(b.game.tc).inc },
+        since: now,
+        clk: c.clk.slice(0, -1),
+      };
     }
     return withGame(prev, { clock });
   }
@@ -267,7 +323,8 @@
     if (!isSf(b)) return takeOne(b, now);
     let x = b;
     for (;;) {
-      const mine = moverOf(x, x.steps.length - 1) === x.game.you, y = takeOne(x, now);
+      const mine = moverOf(x, x.steps.length - 1) === x.game.you,
+        y = takeOne(x, now);
       if (y.game.result) return y;
       x = y;
       if (mine) break;
@@ -290,22 +347,45 @@
   // say. Both at MIN_RATED_DEPTH rate any move; short of it (a slow engine: Stockfish's 3 s reply reached depth 12 in
   // WebKit on GitHub Actions, the asm.js engine less), a blunder losing BIG_LOSS_CP or more (about a piece, a mate) still
   // counts once both reach SHALLOW_DEPTH, as a hanging queen is plain at any depth while a borderline inaccuracy isn't
-  const MIN_RATED_DEPTH = 15, SHALLOW_DEPTH = 8, BIG_LOSS_CP = 300;
+  const MIN_RATED_DEPTH = 15,
+    SHALLOW_DEPTH = 8,
+    BIG_LOSS_CP = 300;
   function rateMove({ before, after, you, playedIsBest, isCheckmate }) {
     if (!before || !after || before.cp == null || after.cp == null) return null;
     const depth = Math.min(before.depth || 0, after.depth || 0);
     if (depth < SHALLOW_DEPTH) return null;
-    const r = window.AnalysisCore.rateMove({ bestEval: before.cp, currentEval: after.cp, isWhite: you === 'w', playedIsBest, isCheckmate });
-    if (depth >= MIN_RATED_DEPTH || (r.classification === 'blunder' && r.evalLoss >= BIG_LOSS_CP)) return r.classification;
+    const r = window.AnalysisCore.rateMove({
+      bestEval: before.cp,
+      currentEval: after.cp,
+      isWhite: you === 'w',
+      playedIsBest,
+      isCheckmate,
+    });
+    if (depth >= MIN_RATED_DEPTH || (r.classification === 'blunder' && r.evalLoss >= BIG_LOSS_CP))
+      return r.classification;
     return null;
   }
 
   // The board with a player's move flagged ({ j, cls, best, text }; text, critiqueText's line, is optional): only in a
   // Stockfish game, for a step still on the board that the player played, once per step; the board as it was otherwise.
   // A rating that lands after the end still counts
-  const TEXT_MAX = 120, entry = (c) => ({ j: c.j, cls: c.cls, best: c.best, ...(typeof c.text === 'string' && c.text && c.text.length <= TEXT_MAX ? { text: c.text } : {}) });
+  const TEXT_MAX = 120,
+    entry = (c) => ({
+      j: c.j,
+      cls: c.cls,
+      best: c.best,
+      ...(typeof c.text === 'string' && c.text && c.text.length <= TEXT_MAX ? { text: c.text } : {}),
+    });
   function addCritique(b, e) {
-    if (!isSf(b) || !e || !Number.isInteger(e.j) || e.j < fromOf(b) || e.j >= b.steps.length || moverOf(b, e.j) !== b.game.you) return b;
+    if (
+      !isSf(b) ||
+      !e ||
+      !Number.isInteger(e.j) ||
+      e.j < fromOf(b) ||
+      e.j >= b.steps.length ||
+      moverOf(b, e.j) !== b.game.you
+    )
+      return b;
     if (!CLASSES.includes(e.cls) || b.game.critique.some((c) => c.j === e.j)) return b;
     return withGame(b, { critique: [...b.game.critique, entry(e)] });
   }
@@ -317,16 +397,31 @@
   // isn't the player's turn or the position has one already
   const HINTS = 3;
   const hintsOf = (b) => (isSf(b) && Array.isArray(b.game.hints) ? b.game.hints : []);
-  function hintsLeft(b) { return isSf(b) ? Math.max(0, HINTS - hintsOf(b).length) : 0; }
+  function hintsLeft(b) {
+    return isSf(b) ? Math.max(0, HINTS - hintsOf(b).length) : 0;
+  }
   function hintFor(b) {
     if (!isSf(b)) return null;
-    const j = b.steps.length, at = j ? b.steps[j - 1].pos : b.start.pos, key = positionKey(at);
+    const j = b.steps.length,
+      at = j ? b.steps[j - 1].pos : b.start.pos,
+      key = positionKey(at);
     // a hint had here before a takeback counts again only in the same position
-    for (let k = hintsOf(b).length - 1; k >= 0; k--) { const h = b.game.hints[k]; if (h.j === j && h.fen === key) return CC().applyUci(at, h.best) ? h : null; }
+    for (let k = hintsOf(b).length - 1; k >= 0; k--) {
+      const h = b.game.hints[k];
+      if (h.j === j && h.fen === key) return CC().applyUci(at, h.best) ? h : null;
+    }
     return null;
   }
   function addHint(b, j, best) {
-    if (!inProgress(b) || !hintsLeft(b) || j !== b.steps.length || moverOf(b, j) !== b.game.you || typeof best !== 'string' || !UCI_RE.test(best)) return b;
+    if (
+      !inProgress(b) ||
+      !hintsLeft(b) ||
+      j !== b.steps.length ||
+      moverOf(b, j) !== b.game.you ||
+      typeof best !== 'string' ||
+      !UCI_RE.test(best)
+    )
+      return b;
     const h = hintFor(b);
     if (h && h.best === best) return b;
     return withGame(b, { hints: [...hintsOf(b), { j, fen: positionKey(j ? b.steps[j - 1].pos : b.start.pos), best }] });
@@ -338,28 +433,46 @@
   const VALUE = { p: 1, n: 3, b: 3, r: 5, q: 9 };
   const PIECE = { p: 'a pawn', n: 'the knight', b: 'the bishop', r: 'the rook', q: 'the queen' };
   function critiqueText(pos, pv, you, cls, mateAgainst) {
-    let p = pos, lost = 0, won = 0, top = null;
+    let p = pos,
+      lost = 0,
+      won = 0,
+      top = null;
     for (const u of (pv || []).slice(0, 4)) {
-      const m = /^([a-h][1-8])([a-h][1-8])/.exec(u || ''), r = m && CC().applyUci(p, u);
+      const m = /^([a-h][1-8])([a-h][1-8])/.exec(u || ''),
+        r = m && CC().applyUci(p, u);
       if (!r) break;
-      const from = CC().sqIndex(m[1]), to = CC().sqIndex(m[2]), mover = p.b[from];
+      const from = CC().sqIndex(m[1]),
+        to = CC().sqIndex(m[2]),
+        mover = p.b[from];
       // en passant: a pawn moving sideways onto an empty square
-      const taken = p.b[to] || (mover.toLowerCase() === 'p' && from % 8 !== to % 8 ? (p.turn === 'w' ? 'p' : 'P') : null);
+      const taken =
+        p.b[to] || (mover.toLowerCase() === 'p' && from % 8 !== to % 8 ? (p.turn === 'w' ? 'p' : 'P') : null);
       if (taken) {
-        const t = taken.toLowerCase(), v = VALUE[t] || 0;
-        if (colorOf(taken) === you) { lost += v; if (!top || v > VALUE[top]) top = t; } else won += v;
+        const t = taken.toLowerCase(),
+          v = VALUE[t] || 0;
+        if (colorOf(taken) === you) {
+          lost += v;
+          if (!top || v > VALUE[top]) top = t;
+        } else won += v;
       }
       p = r.pos;
     }
     if (lost > won && top) return 'that drops ' + PIECE[top];
     if (mateAgainst) return 'that allows mate';
-    return { inaccuracy: 'there was a better move', mistake: 'that gives Stockfish the edge', blunder: 'that should lose' }[cls] || '';
+    return (
+      { inaccuracy: 'there was a better move', mistake: 'that gives Stockfish the edge', blunder: 'that should lose' }[
+        cls
+      ] || ''
+    );
   }
 
   // The side to move resigns, or `side` (against Stockfish the player can resign while it thinks)
   function resign(b, now, side = lastPos(b).turn) {
     if (!inProgress(b)) return b;
-    return withGame(b, { clock: b.game.clock && charged(b, now), result: { result: side === 'w' ? '0-1' : '1-0', reason: 'resign', side } });
+    return withGame(b, {
+      clock: b.game.clock && charged(b, now),
+      result: { result: side === 'w' ? '0-1' : '1-0', reason: 'resign', side },
+    });
   }
 
   // A draw both players agree to
@@ -384,7 +497,10 @@
     if (!(half >= 100) || !CC().hasLegal(pos)) return null;
     const moves = `${Math.floor(half / 2)} moves without a capture or pawn move`;
     if (half >= 150) return { head: '75-move rule · ½–½', note: `${moves}: the game is drawn by itself (FIDE 9.6.2)` };
-    return { head: 'Fifty-move rule', note: `${moves}: the side to move can claim a draw (FIDE 9.3). The engine scores it a draw unless a capture or pawn move does better` };
+    return {
+      head: 'Fifty-move rule',
+      note: `${moves}: the side to move can claim a draw (FIDE 9.3). The engine scores it a draw unless a capture or pawn move does better`,
+    };
   }
   // The draw claimed; the board as it was when there's none to claim
   function claimDraw(b, now) {
@@ -396,23 +512,43 @@
   // The result for people: the score and why
   const NAME = { w: 'White', b: 'Black' };
   // a game's players: White and Black, or "You" and "Stockfish 19" against Stockfish
-  const playerName = (g, side) => (g && g.mode === 'stockfish' ? (side === g.you ? 'You' : 'Stockfish 19') : NAME[side]);
+  const playerName = (g, side) =>
+    g && g.mode === 'stockfish' ? (side === g.you ? 'You' : 'Stockfish 19') : NAME[side];
   // where a board (its game, if it has one) started from, for a note ("from after 12. Nf3"); long: as a sentence's
   // start ("From the position after 12. Nf3"). A Chess960 board names its position by number ("from Chess960 #612"),
   // 518 too, or "a Chess960 position" when the number isn't known
   function fromText(b, { long = false } = {}) {
-    const g = b.game, c = b.chess960, t = g && g.from ? (long ? 'the position after ' : 'after ') + window.BoardCore.label(b, g.from - 1)
-      : Number.isInteger(c) ? `Chess960 #${c}` : c === true ? 'a Chess960 position'
-        : b.fen === window.ChessCore.START_FEN ? 'the starting position' : 'a set-up position';
+    const g = b.game,
+      c = b.chess960,
+      t =
+        g && g.from
+          ? (long ? 'the position after ' : 'after ') + window.BoardCore.label(b, g.from - 1)
+          : Number.isInteger(c)
+            ? `Chess960 #${c}`
+            : c === true
+              ? 'a Chess960 position'
+              : b.fen === window.ChessCore.START_FEN
+                ? 'the starting position'
+                : 'a set-up position';
     return (long ? 'From ' : 'from ') + t;
   }
   function resultText(r) {
     const score = { '1-0': '1–0', '0-1': '0–1', '1/2-1/2': '½–½' }[r.result];
     const why = {
-      checkmate: 'Checkmate', stalemate: 'Stalemate', repetition: 'Draw by threefold repetition', fifty: 'Draw by the fifty-move rule',
-      fivefold: 'Draw by fivefold repetition', seventyfive: 'Draw by the 75-move rule',
-      material: 'Draw: neither side can mate', dead: 'Draw: dead position, neither side can mate', agreement: 'Draw by agreement', resign: `${NAME[r.side]} resigned`,
-      time: r.result === '1/2-1/2' ? `${NAME[r.side]}’s flag fell, but ${NAME[other(r.side)]} can’t mate` : `${NAME[r.side]}’s flag fell`,
+      checkmate: 'Checkmate',
+      stalemate: 'Stalemate',
+      repetition: 'Draw by threefold repetition',
+      fifty: 'Draw by the fifty-move rule',
+      fivefold: 'Draw by fivefold repetition',
+      seventyfive: 'Draw by the 75-move rule',
+      material: 'Draw: neither side can mate',
+      dead: 'Draw: dead position, neither side can mate',
+      agreement: 'Draw by agreement',
+      resign: `${NAME[r.side]} resigned`,
+      time:
+        r.result === '1/2-1/2'
+          ? `${NAME[r.side]}’s flag fell, but ${NAME[other(r.side)]} can’t mate`
+          : `${NAME[r.side]}’s flag fell`,
     }[r.reason];
     return { score, why };
   }
@@ -423,23 +559,55 @@
   // position's end where it gives that result, else the Termination's words, else who won
   function ending({ r, pos, dead, pgn }) {
     const SHORT = {
-      checkmate: 'Checkmate', stalemate: 'Stalemate', repetition: 'Threefold repetition', fifty: 'Fifty-move rule', fivefold: 'Fivefold repetition',
-      seventyfive: '75-move rule', material: 'Insufficient material', dead: 'Dead position', agreement: 'Draw agreed',
+      checkmate: 'Checkmate',
+      stalemate: 'Stalemate',
+      repetition: 'Threefold repetition',
+      fifty: 'Fifty-move rule',
+      fivefold: 'Fivefold repetition',
+      seventyfive: '75-move rule',
+      material: 'Insufficient material',
+      dead: 'Dead position',
+      agreement: 'Draw agreed',
     };
-    const words = (x) => ({ score: resultText(x).score, why: x.reason === 'resign' ? `${NAME[x.side]} resigned` : x.reason === 'time' ? `${NAME[x.side]}’s flag fell` : SHORT[x.reason] });
+    const words = (x) => ({
+      score: resultText(x).score,
+      why:
+        x.reason === 'resign'
+          ? `${NAME[x.side]} resigned`
+          : x.reason === 'time'
+            ? `${NAME[x.side]}’s flag fell`
+            : SHORT[x.reason],
+    });
     if (r) return words(r);
     let own = null;
     if (pos) {
-      if (!CC().hasLegal(pos)) own = CC().inCheck(pos.b, pos.turn) ? { result: pos.turn === 'w' ? '0-1' : '1-0', reason: 'checkmate' } : { result: '1/2-1/2', reason: 'stalemate' };
+      if (!CC().hasLegal(pos))
+        own = CC().inCheck(pos.b, pos.turn)
+          ? { result: pos.turn === 'w' ? '0-1' : '1-0', reason: 'checkmate' }
+          : { result: '1/2-1/2', reason: 'stalemate' };
       else if (!canMate(pos, 'w') && !canMate(pos, 'b')) own = { result: '1/2-1/2', reason: 'material' };
       else if (dead || lockedDead(pos)) own = { result: '1/2-1/2', reason: 'dead' };
     }
     const res = pgn && pgn.result;
     if (!res || res === '*' || (own && own.result === res)) return own && words(own);
-    const t = String(pgn.termination || ''), loser = res === '1-0' ? 'b' : 'w';
-    const why = res === '1/2-1/2'
-      ? (/agree/i.test(t) ? 'Draw agreed' : /repetition/i.test(t) ? 'Repetition' : /time|flag/i.test(t) ? 'Time forfeit' : 'Draw')
-      : (/resign/i.test(t) ? `${NAME[loser]} resigned` : /time|flag/i.test(t) ? `${NAME[loser]}’s flag fell` : /abandon/i.test(t) ? `${NAME[loser]} left` : `${NAME[other(loser)]} wins`);
+    const t = String(pgn.termination || ''),
+      loser = res === '1-0' ? 'b' : 'w';
+    const why =
+      res === '1/2-1/2'
+        ? /agree/i.test(t)
+          ? 'Draw agreed'
+          : /repetition/i.test(t)
+            ? 'Repetition'
+            : /time|flag/i.test(t)
+              ? 'Time forfeit'
+              : 'Draw'
+        : /resign/i.test(t)
+          ? `${NAME[loser]} resigned`
+          : /time|flag/i.test(t)
+            ? `${NAME[loser]}’s flag fell`
+            : /abandon/i.test(t)
+              ? `${NAME[loser]} left`
+              : `${NAME[other(loser)]} wins`;
     return { score: resultText({ result: res }).score, why };
   }
 
@@ -466,19 +634,44 @@
   // claimed draw the moves still allow. A game stored without an id gets one
   function resume(board, g, now) {
     if (!g || typeof g !== 'object' || (g.mode !== 'human' && g.mode !== 'stockfish')) return board;
-    const tc = TIME_CONTROLS.includes(g.tc) || RETIRED_TCS.includes(g.tc) ? g.tc : null, t = parseTc(tc), n = board.steps.length;
+    const tc = TIME_CONTROLS.includes(g.tc) || RETIRED_TCS.includes(g.tc) ? g.tc : null,
+      t = parseTc(tc),
+      n = board.steps.length;
     // the moves before the game, at most all of them; m the game's own
-    const from = Number.isInteger(g.from) && g.from > 0 ? Math.min(g.from, n) : 0, m = n - from, at = from ? { from } : {};
+    const from = Number.isInteger(g.from) && g.from > 0 ? Math.min(g.from, n) : 0,
+      m = n - from,
+      at = from ? { from } : {};
     let clock = null;
     if (t) {
-      const c = g.clock || {}, ms = (x) => (Number.isFinite(x) ? Math.max(0, x) : t.base);
-      const since = !Number.isFinite(now) || !(m || c.begun === true) ? null : Number.isFinite(c.since) && c.since > 0 && c.since <= now ? c.since : now;
-      clock = { left: { w: ms(c.left && c.left.w), b: ms(c.left && c.left.b) }, since, clk: (Array.isArray(c.clk) ? c.clk : []).filter(Number.isFinite).slice(0, m), ...(c.begun === true || m ? { begun: true } : {}) };
+      const c = g.clock || {},
+        ms = (x) => (Number.isFinite(x) ? Math.max(0, x) : t.base);
+      const since =
+        !Number.isFinite(now) || !(m || c.begun === true)
+          ? null
+          : Number.isFinite(c.since) && c.since > 0 && c.since <= now
+            ? c.since
+            : now;
+      clock = {
+        left: { w: ms(c.left && c.left.w), b: ms(c.left && c.left.b) },
+        since,
+        clk: (Array.isArray(c.clk) ? c.clk : []).filter(Number.isFinite).slice(0, m),
+        ...(c.begun === true || m ? { begun: true } : {}),
+      };
     }
-    const human = g.mode === 'human', claimed = human && { ...board, game: { mode: 'human', ...at } };
-    const r = g.result, kept = !r ? null : r.reason === 'agreement' && r.result === '1/2-1/2' ? { result: r.result, reason: r.reason }
-      : human && r.result === '1/2-1/2' && r.reason === claimable(claimed) ? { result: r.result, reason: r.reason }
-      : ['resign', 'time'].includes(r.reason) && ['1-0', '0-1', '1/2-1/2'].includes(r.result) && (r.side === 'w' || r.side === 'b') ? { result: r.result, reason: r.reason, side: r.side } : null;
+    const human = g.mode === 'human',
+      claimed = human && { ...board, game: { mode: 'human', ...at } };
+    const r = g.result,
+      kept = !r
+        ? null
+        : r.reason === 'agreement' && r.result === '1/2-1/2'
+          ? { result: r.result, reason: r.reason }
+          : human && r.result === '1/2-1/2' && r.reason === claimable(claimed)
+            ? { result: r.result, reason: r.reason }
+            : ['resign', 'time'].includes(r.reason) &&
+                ['1-0', '0-1', '1/2-1/2'].includes(r.result) &&
+                (r.side === 'w' || r.side === 'b')
+              ? { result: r.result, reason: r.reason, side: r.side }
+              : null;
     const result = kept || outcome(board, human);
     if (result && clock) clock = { ...clock, since: null };
     const b = result ? board : B().go(board, n - 1);
@@ -486,30 +679,107 @@
     const date = typeof g.date === 'string' && /^\d{4}\.\d\d\.\d\d$/.test(g.date) ? g.date : today();
     if (g.mode === 'human') return { ...b, game: { mode: 'human', id, tc, date, clock, result, ...at } };
     // a flagged move must still be one of the player's on the board, once each
-    const you = g.you === 'b' ? 'b' : 'w', seen = new Set();
-    const critique = (Array.isArray(g.critique) ? g.critique : []).filter((c) => c && Number.isInteger(c.j) && c.j >= from && c.j < n && moverOf(board, c.j) === you
-      && CLASSES.includes(c.cls) && typeof c.best === 'string' && UCI_RE.test(c.best) && !seen.has(c.j) && seen.add(c.j)).map(entry);
-    const hints = (Array.isArray(g.hints) ? g.hints : []).filter((h) => h && Number.isInteger(h.j) && h.j >= from && typeof h.best === 'string' && UCI_RE.test(h.best)
-      && typeof h.fen === 'string' && h.fen.length <= 100).slice(0, HINTS).map((h) => ({ j: h.j, fen: h.fen, best: h.best }));
+    const you = g.you === 'b' ? 'b' : 'w',
+      seen = new Set();
+    const critique = (Array.isArray(g.critique) ? g.critique : [])
+      .filter(
+        (c) =>
+          c &&
+          Number.isInteger(c.j) &&
+          c.j >= from &&
+          c.j < n &&
+          moverOf(board, c.j) === you &&
+          CLASSES.includes(c.cls) &&
+          typeof c.best === 'string' &&
+          UCI_RE.test(c.best) &&
+          !seen.has(c.j) &&
+          seen.add(c.j),
+      )
+      .map(entry);
+    const hints = (Array.isArray(g.hints) ? g.hints : [])
+      .filter(
+        (h) =>
+          h &&
+          Number.isInteger(h.j) &&
+          h.j >= from &&
+          typeof h.best === 'string' &&
+          UCI_RE.test(h.best) &&
+          typeof h.fen === 'string' &&
+          h.fen.length <= 100,
+      )
+      .slice(0, HINTS)
+      .map((h) => ({ j: h.j, fen: h.fen, best: h.best }));
     return { ...b, game: { mode: 'stockfish', you, id, tc, date, clock, result, ...at, critique, hints } };
   }
 
   // The game as a PGN (for saving, step 4 of the free-board design): the result, the start when it isn't the standard
   // one, the time control and each move's clock
   function pgn(b) {
-    const g = b.game, t = parseTc(g.tc), res = g.result ? g.result.result : '*';
+    const g = b.game,
+      t = parseTc(g.tc),
+      res = g.result ? g.result.result : '*';
     const sf = g.mode === 'stockfish';
-    const tags = [['Event', sf ? 'Play vs computer' : 'Play vs human'], ['Site', 'chess-replay'], ['Date', g.date], ['White', playerName(g, 'w')], ['Black', playerName(g, 'b')], ['Result', res]];
+    const tags = [
+      ['Event', sf ? 'Play vs computer' : 'Play vs human'],
+      ['Site', 'chess-replay'],
+      ['Date', g.date],
+      ['White', playerName(g, 'w')],
+      ['Black', playerName(g, 'b')],
+      ['Result', res],
+    ];
     const more = [];
     if (t) more.push(['TimeControl', `${t.base / 1000}+${t.inc / 1000}`]);
     if (g.result) more.push(['Termination', g.result.reason === 'time' ? 'time forfeit' : 'normal']);
     // clk has the game's own moves, from step `from` on, in ms; written as an annotated game's are (ChessCore.pgnClk: tenths kept wherever the clock has them)
-    const f = fromOf(b), has = (j) => !!t && j >= f && g.clock.clk[j - f] != null;
-    return B().pgnOf(b, tags, res, { more, after: (j) => (has(j) ? `{[%clk ${window.ChessCore.pgnClk(Math.max(0, g.clock.clk[j - f]) / 1000)}]}` : '') });
+    const f = fromOf(b),
+      has = (j) => !!t && j >= f && g.clock.clk[j - f] != null;
+    return B().pgnOf(b, tags, res, {
+      more,
+      after: (j) => (has(j) ? `{[%clk ${window.ChessCore.pgnClk(Math.max(0, g.clock.clk[j - f]) / 1000)}]}` : ''),
+    });
   }
 
   window.PlayCore = {
-    canMate, lockedDead, positionKey, outcome, TIME_CONTROLS, parseTc, start, inProgress, played, begun, move, canTakeback, takeback, thinkMs, MIN_RATED_DEPTH, SHALLOW_DEPTH, BIG_LOSS_CP, rateMove, addCritique, critiqueText, HINTS, hintsLeft, hintFor, addHint,
-    resign, agreeDraw, claimable, claimDraw, fiftyRule, flag, recheck, setProver, pause, runClock, timeLeft, resultText, playerName, fromText, ending, resume, pgn,
+    canMate,
+    lockedDead,
+    positionKey,
+    outcome,
+    TIME_CONTROLS,
+    parseTc,
+    start,
+    inProgress,
+    played,
+    begun,
+    move,
+    canTakeback,
+    takeback,
+    thinkMs,
+    MIN_RATED_DEPTH,
+    SHALLOW_DEPTH,
+    BIG_LOSS_CP,
+    rateMove,
+    addCritique,
+    critiqueText,
+    HINTS,
+    hintsLeft,
+    hintFor,
+    addHint,
+    resign,
+    agreeDraw,
+    claimable,
+    claimDraw,
+    fiftyRule,
+    flag,
+    recheck,
+    setProver,
+    pause,
+    runClock,
+    timeLeft,
+    resultText,
+    playerName,
+    fromText,
+    ending,
+    resume,
+    pgn,
   };
 })();

@@ -1,28 +1,38 @@
 const test = require('node:test');
 const assert = require('node:assert/strict');
 const { loadUnit } = require('./load.cjs');
-loadUnit('chess-core.js'); loadUnit('board-core.js');
-const B = window.BoardCore, CC = window.ChessCore;
+loadUnit('chess-core.js');
+loadUnit('board-core.js');
+const B = window.BoardCore,
+  CC = window.ChessCore;
 const step = (b, uci) => CC.stepFromUci(B.pos(b), uci);
 
 test('a new board is the starting position with no moves', () => {
   const b = B.fromFen();
-  assert.equal(b.fen, CC.START_FEN); assert.equal(b.upto, -1); assert.equal(B.pos(b).turn, 'w');
+  assert.equal(b.fen, CC.START_FEN);
+  assert.equal(b.upto, -1);
+  assert.equal(B.pos(b).turn, 'w');
 });
 test('play, go back, and play again branches', () => {
   let b = B.fromFen();
   for (const u of ['e2e4', 'e7e5', 'g1f3']) b = B.play(b, step(b, u));
   assert.deepEqual(B.ucis(b), ['e2e4', 'e7e5', 'g1f3']);
   b = B.go(b, 0);
-  assert.deepEqual(B.ucis(b), ['e2e4']); assert.equal(b.steps.length, 3, 'redo kept until a new move');
+  assert.deepEqual(B.ucis(b), ['e2e4']);
+  assert.equal(b.steps.length, 3, 'redo kept until a new move');
   b = B.play(b, step(b, 'c7c5'));
-  assert.deepEqual(B.ucis(b), ['e2e4', 'c7c5']); assert.equal(b.steps.length, 2);
-  assert.equal(B.go(b, 9).upto, 1); assert.equal(B.go(b, -5).upto, -1);
+  assert.deepEqual(B.ucis(b), ['e2e4', 'c7c5']);
+  assert.equal(b.steps.length, 2);
+  assert.equal(B.go(b, 9).upto, 1);
+  assert.equal(B.go(b, -5).upto, -1);
 });
 test('boards are never mutated', () => {
-  const a = B.fromFen(), b = B.play(a, step(a, 'e2e4'));
-  assert.equal(a.steps.length, 0); assert.equal(a.upto, -1);
-  B.go(b, -1); assert.equal(b.upto, 0);
+  const a = B.fromFen(),
+    b = B.play(a, step(a, 'e2e4'));
+  assert.equal(a.steps.length, 0);
+  assert.equal(a.upto, -1);
+  B.go(b, -1);
+  assert.equal(b.upto, 0);
 });
 test('a FEN with Black to move numbers its moves from the FEN', () => {
   let b = B.fromFen('4k3/8/8/8/8/8/4P3/4K3 b - - 0 40');
@@ -35,23 +45,40 @@ test('save and restore round-trip; restore keeps the legal prefix', () => {
   b = B.go(b, 0);
   assert.deepEqual(B.save(B.restore(B.save(b))), { fen: CC.START_FEN, moves: ['e2e4', 'e7e5'], upto: 0 });
   const r = B.restore({ fen: CC.START_FEN, moves: ['e2e4', 'e2e4', 'd7d5'], upto: 2 });
-  assert.deepEqual(B.ucis(r), ['e2e4']); assert.equal(r.steps.length, 1);
+  assert.deepEqual(B.ucis(r), ['e2e4']);
+  assert.equal(r.steps.length, 1);
   assert.equal(B.restore({ fen: 'nonsense', moves: [], upto: -1 }), null);
 });
-test('Stockfish\'s replies (byEngine) are still its replies after a save and restore', () => {
+test("Stockfish's replies (byEngine) are still its replies after a save and restore", () => {
   let b = B.fromFen();
   b = B.play(b, step(b, 'e2e4'));
   b = B.play(b, { ...step(b, 'e7e5'), byEngine: true });
   b = B.play(b, step(b, 'g1f3'));
   const saved = B.save(b);
   assert.deepEqual(saved.engine, [1]);
-  assert.deepEqual(B.restore(saved).steps.map((s) => !!s.byEngine), [false, true, false]);
-  assert.equal(B.restore({ ...saved, engine: 'x' }).steps.filter((s) => s.byEngine).length, 0, 'a damaged list marks none');
+  assert.deepEqual(
+    B.restore(saved).steps.map((s) => !!s.byEngine),
+    [false, true, false],
+  );
+  assert.equal(
+    B.restore({ ...saved, engine: 'x' }).steps.filter((s) => s.byEngine).length,
+    0,
+    'a damaged list marks none',
+  );
 });
 test('restore never throws on a damaged stored board', () => {
-  for (const bad of [null, undefined, 3, 'x', [], {}, { fen: 5 }, { fen: null }, { fen: '' }]) assert.equal(B.restore(bad), null);
-  const odd = [{ fen: CC.START_FEN }, { fen: CC.START_FEN, moves: 'e2e4' }, { fen: CC.START_FEN, moves: [null, 7, {}], upto: 'x' }];
-  for (const s of odd) { const r = B.restore(s); assert.equal(r.steps.length, 0); assert.equal(r.upto, -1); }
+  for (const bad of [null, undefined, 3, 'x', [], {}, { fen: 5 }, { fen: null }, { fen: '' }])
+    assert.equal(B.restore(bad), null);
+  const odd = [
+    { fen: CC.START_FEN },
+    { fen: CC.START_FEN, moves: 'e2e4' },
+    { fen: CC.START_FEN, moves: [null, 7, {}], upto: 'x' },
+  ];
+  for (const s of odd) {
+    const r = B.restore(s);
+    assert.equal(r.steps.length, 0);
+    assert.equal(r.upto, -1);
+  }
   const r = B.restore({ fen: CC.START_FEN, moves: ['e2e4', 42, 'e7e5'], upto: 1.5 });
   assert.deepEqual(B.ucis(r), ['e2e4']);
   assert.equal(B.restore({ fen: CC.START_FEN, moves: ['e2e4', 'e7e5'] }).upto, 1, 'a missing upto shows the last move');
@@ -65,26 +92,54 @@ test('pgn writes every move of the board as a game that buildGame replays', () =
   assert.doesNotMatch(pgn, /\[FEN /);
   assert.match(pgn, /\n\n1\. e4 e5 2\. Nf3 \*\n$/);
   const M = CC.buildGame({ pgn });
-  assert.deepEqual(M.plies.map((p) => p.uci), ['e2e4', 'e7e5', 'g1f3']);
+  assert.deepEqual(
+    M.plies.map((p) => p.uci),
+    ['e2e4', 'e7e5', 'g1f3'],
+  );
 });
-test('pgn from a FEN with Black to move carries the FEN and starts on Black\'s move', () => {
+test("pgn from a FEN with Black to move carries the FEN and starts on Black's move", () => {
   let b = B.fromFen('4k3/8/8/8/8/8/4P3/4K3 b - - 0 40');
   for (const u of ['e8d7', 'e2e4']) b = B.play(b, step(b, u));
   const pgn = B.pgn(b, '2026.10.19');
   assert.match(pgn, /\[SetUp "1"\]\n\[FEN "4k3\/8\/8\/8\/8\/8\/4P3\/4K3 b - - 0 40"\]/);
   assert.match(pgn, /\n\n40\.\.\. Kd7 41\. e4 \*\n$/);
   const M = CC.buildGame({ pgn });
-  assert.equal(M.ply0, 79); assert.deepEqual(M.plies.map((p) => p.san), ['Kd7', 'e4']);
+  assert.equal(M.ply0, 79);
+  assert.deepEqual(
+    M.plies.map((p) => p.san),
+    ['Kd7', 'e4'],
+  );
 });
 
 // feeds wheel deltas [dy, ms] (pixels) and returns the steps taken
 const wheelRun = (events, mode = 0) => {
   let w = B.wheelStart();
-  return events.map(([dy, t]) => { const r = B.wheel(w, dy, mode, t); w = r.w; return r.d; });
+  return events.map(([dy, t]) => {
+    const r = B.wheel(w, dy, mode, t);
+    w = r.w;
+    return r.d;
+  });
 };
 test('a wheel turn after a pause steps one move: down the next, up the previous', () => {
-  assert.deepEqual(wheelRun([[100, 0], [-100, 1000], [3, 2000]]), [1, -1, 1]);
-  assert.deepEqual(wheelRun([[3, 0], [-3, 1000]], 1), [1, -1], 'line mode');
+  assert.deepEqual(
+    wheelRun([
+      [100, 0],
+      [-100, 1000],
+      [3, 2000],
+    ]),
+    [1, -1, 1],
+  );
+  assert.deepEqual(
+    wheelRun(
+      [
+        [3, 0],
+        [-3, 1000],
+      ],
+      1,
+    ),
+    [1, -1],
+    'line mode',
+  );
   assert.deepEqual(wheelRun([[0, 0]]), [0], 'no vertical delta');
 });
 test('a fast wheel steps at most once per gap', () => {
@@ -100,17 +155,30 @@ test("a trackpad's stream of small deltas adds up to a step every WHEEL.px", () 
   assert.ok(d.every((x) => x >= 0));
 });
 test('a turn the other way mid-stream starts the count again', () => {
-  const d = wheelRun([[10, 0], [40, 100], [-40, 116], [-40, 132]]);
+  const d = wheelRun([
+    [10, 0],
+    [40, 100],
+    [-40, 116],
+    [-40, 132],
+  ]);
   assert.deepEqual(d, [1, 0, 0, -1]);
 });
 
 test('pgnOf writes as the annotated PGN does: tag values escaped, moves wrapped at 80 columns', () => {
   let b = B.fromFen();
-  for (const u of ['g1f3', 'g8f6', 'f3g1', 'f6g8'].concat(['g1f3', 'g8f6', 'f3g1', 'f6g8'], ['g1f3', 'g8f6', 'f3g1', 'f6g8'], ['g1f3', 'g8f6', 'f3g1', 'f6g8'])) b = B.play(b, CC.stepFromUci(B.pos(b), u));
+  for (const u of ['g1f3', 'g8f6', 'f3g1', 'f6g8'].concat(
+    ['g1f3', 'g8f6', 'f3g1', 'f6g8'],
+    ['g1f3', 'g8f6', 'f3g1', 'f6g8'],
+    ['g1f3', 'g8f6', 'f3g1', 'f6g8'],
+  ))
+    b = B.play(b, CC.stepFromUci(B.pos(b), u));
   const text = B.pgnOf(b, [['Event', 'A "quoted" \\ name']], '*', { after: (j) => (j === 2 ? '{a note}' : '') });
   assert.match(text, /^\[Event "A \\"quoted\\" \\\\ name"\]\n\n/);
   const moves = text.split('\n\n')[1];
-  assert.ok(moves.split('\n').every((l) => l.length <= 80), moves);
+  assert.ok(
+    moves.split('\n').every((l) => l.length <= 80),
+    moves,
+  );
   assert.ok(moves.trim().split('\n').length > 1, 'wrapped');
   assert.match(moves.replace(/\n/g, ' '), /^1\. Nf3 Nf6 2\. Ng1 \{a note\} 2\.\.\. Ng8 3\. Nf3/);
   // the export reads it back
@@ -136,19 +204,27 @@ test('a Chess960 board keeps its number and a played 960 castle through save and
 test('restore keeps a chess960 label of 0-959 or true and drops anything else', () => {
   const base = B.save(B.fromFen());
   for (const v of [0, 518, 959, true]) assert.equal(B.restore({ ...base, chess960: v }).chess960, v);
-  for (const v of [960, -1, 1.5, '612', false, null, {}, NaN]) assert.equal('chess960' in B.restore({ ...base, chess960: v }), false, String(v));
+  for (const v of [960, -1, 1.5, '612', false, null, {}, NaN])
+    assert.equal('chess960' in B.restore({ ...base, chess960: v }), false, String(v));
 });
 test('a Chess960 board writes Variant before SetUp and FEN, even for 518', () => {
   const b = B.fromFen(CC.START_FEN, { chess960: 518 });
   const t = B.pgn(b, '2026.11.13');
-  assert.match(t, /\[Black "Black"\]\n\[Result "\*"\]\n\[Variant "Chess960"\]\n\[SetUp "1"\]\n\[FEN "rnbqkbnr\/pppppppp\/8\/8\/8\/8\/PPPPPPPP\/RNBQKBNR w KQkq - 0 1"\]/);
+  assert.match(
+    t,
+    /\[Black "Black"\]\n\[Result "\*"\]\n\[Variant "Chess960"\]\n\[SetUp "1"\]\n\[FEN "rnbqkbnr\/pppppppp\/8\/8\/8\/8\/PPPPPPPP\/RNBQKBNR w KQkq - 0 1"\]/,
+  );
   assert.doesNotMatch(B.pgn(B.fromFen(), '2026.11.13'), /Variant|SetUp/);
 });
 test('a board with no label but Chess960 rights in its start (a pasted or edited 960 setup) is tagged Chess960 too', () => {
-  const fen = CC.chess960Fen(612), b = B.fromFen(fen);
+  const fen = CC.chess960Fen(612),
+    b = B.fromFen(fen);
   assert.equal('chess960' in b, false);
   const t = B.pgn(b, '2026.11.13');
-  assert.match(t, /\[Variant "Chess960"\]\n\[SetUp "1"\]\n\[FEN "rbbnqkrn\/pppppppp\/8\/8\/8\/8\/PPPPPPPP\/RBBNQKRN w KQkq - 0 1"\]/);
+  assert.match(
+    t,
+    /\[Variant "Chess960"\]\n\[SetUp "1"\]\n\[FEN "rbbnqkrn\/pppppppp\/8\/8\/8\/8\/PPPPPPPP\/RBBNQKRN w KQkq - 0 1"\]/,
+  );
   // a standard set-up position without castling rights stays untagged
   assert.doesNotMatch(B.pgn(B.fromFen('4k3/8/8/8/8/8/4P3/4K3 w - - 0 1'), '2026.11.13'), /Variant/);
 });

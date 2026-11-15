@@ -23,48 +23,70 @@ const KEEP_TIMEOUT_MS = 20000;
 const PAGE_TIMEOUT_MS = 6000;
 
 self.addEventListener('install', (e) => {
-  e.waitUntil((async () => {
-    const cache = await caches.open(CACHE);
-    await cache.addAll(LOCAL);
-    // the CDN files are kept if they can be fetched now (three tries each: one font missed offline is one font in the
-    // wrong face), and otherwise when the page first uses them
-    const keep = async (url) => {
-      for (let i = 0; i < 3; i++) {
-        const ctl = new AbortController(), timer = setTimeout(() => ctl.abort(), KEEP_TIMEOUT_MS);
-        try {
-          const r = await fetch(url, { mode: 'cors', signal: ctl.signal });
-          if (r.ok) { await cache.put(url, r.clone()); return r; }
-        } catch (err) {} finally { clearTimeout(timer); }
-      }
-      return null;
-    };
-    await Promise.all(REMOTE.map(async (url) => {
-      const r = await keep(url);
-      if (r && /^https:\/\/fonts\.googleapis\.com\//.test(url)) {
-        const fonts = [...new Set([...(await r.text()).matchAll(/url\((https:\/\/fonts\.gstatic\.com\/[^)]+)\)/g)].map((m) => m[1]))];
-        await Promise.all(fonts.map(keep));
-      }
-    }));
-    await self.skipWaiting();
-  })());
+  e.waitUntil(
+    (async () => {
+      const cache = await caches.open(CACHE);
+      await cache.addAll(LOCAL);
+      // the CDN files are kept if they can be fetched now (three tries each: one font missed offline is one font in the
+      // wrong face), and otherwise when the page first uses them
+      const keep = async (url) => {
+        for (let i = 0; i < 3; i++) {
+          const ctl = new AbortController(),
+            timer = setTimeout(() => ctl.abort(), KEEP_TIMEOUT_MS);
+          try {
+            const r = await fetch(url, { mode: 'cors', signal: ctl.signal });
+            if (r.ok) {
+              await cache.put(url, r.clone());
+              return r;
+            }
+          } catch (err) {
+          } finally {
+            clearTimeout(timer);
+          }
+        }
+        return null;
+      };
+      await Promise.all(
+        REMOTE.map(async (url) => {
+          const r = await keep(url);
+          if (r && /^https:\/\/fonts\.googleapis\.com\//.test(url)) {
+            const fonts = [
+              ...new Set(
+                [...(await r.text()).matchAll(/url\((https:\/\/fonts\.gstatic\.com\/[^)]+)\)/g)].map((m) => m[1]),
+              ),
+            ];
+            await Promise.all(fonts.map(keep));
+          }
+        }),
+      );
+      await self.skipWaiting();
+    })(),
+  );
 });
 
 self.addEventListener('activate', (e) => {
-  e.waitUntil((async () => {
-    // older deploys' copies, and a board reader kept under an older name (a model or runtime update bumps VISION_CACHE)
-    for (const k of await caches.keys()) if ((k.startsWith('chess-replay-') && k !== CACHE) || (k.startsWith('chess-vision-') && k !== VISION_CACHE)) await caches.delete(k);
-    await self.clients.claim();
-  })());
+  e.waitUntil(
+    (async () => {
+      // older deploys' copies, and a board reader kept under an older name (a model or runtime update bumps VISION_CACHE)
+      for (const k of await caches.keys())
+        if ((k.startsWith('chess-replay-') && k !== CACHE) || (k.startsWith('chess-vision-') && k !== VISION_CACHE))
+          await caches.delete(k);
+      await self.clients.claim();
+    })(),
+  );
 });
 
 self.addEventListener('fetch', (e) => {
-  const req = e.request, url = new URL(req.url);
+  const req = e.request,
+    url = new URL(req.url);
   if (req.method !== 'GET' && req.method !== 'HEAD') return;
   const here = url.origin === self.location.origin;
-  if (here && url.pathname.startsWith(new URL('vision/', self.location.href).pathname)) return e.respondWith(vision(req).then(isolated));
+  if (here && url.pathname.startsWith(new URL('vision/', self.location.href).pathname))
+    return e.respondWith(vision(req).then(isolated));
   // only the page's own address is kept as the page: opening another file in a tab (the link-preview image) must
   // not replace it, or the next offline visit would show that file
-  if (req.mode === 'navigate' && here && (url.pathname === SCOPE || url.pathname === SCOPE + PAGE)) return e.respondWith(page(e).then(isolated));
+  if (req.mode === 'navigate' && here && (url.pathname === SCOPE || url.pathname === SCOPE + PAGE))
+    return e.respondWith(page(e).then(isolated));
   if (here) return e.respondWith(cacheFirst(e).then(isolated));
   if (KEEP_HOSTS.includes(url.hostname) && req.method === 'GET') return e.respondWith(cacheFirst(e));
   // anything else (Hugging Face, Lichess's tablebase: live data, never kept) goes to the network as usual
@@ -108,7 +130,14 @@ async function answer(net) {
 // They are render.yaml's, filled in by build.cjs: none there, none here
 const ISOLATION = __ISOLATION__;
 function isolated(r) {
-  if (!r || r.type === 'opaque' || r.type === 'opaqueredirect' || r.status === 0 || Object.keys(ISOLATION).every((k) => r.headers.has(k))) return r;
+  if (
+    !r ||
+    r.type === 'opaque' ||
+    r.type === 'opaqueredirect' ||
+    r.status === 0 ||
+    Object.keys(ISOLATION).every((k) => r.headers.has(k))
+  )
+    return r;
   const headers = new Headers(r.headers);
   for (const [k, v] of Object.entries(ISOLATION)) headers.set(k, v);
   return new Response(r.body, { status: r.status, statusText: r.statusText, headers });
@@ -117,7 +146,9 @@ function isolated(r) {
 // a kept GET answers a HEAD too (Stockfish checks its file with one), without its body (Firefox refuses one with a body)
 async function kept(req, name = CACHE, key = req.url) {
   const hit = await (await caches.open(name)).match(key, { ignoreVary: true });
-  return hit && req.method === 'HEAD' ? new Response(null, { status: hit.status, statusText: hit.statusText, headers: hit.headers }) : hit;
+  return hit && req.method === 'HEAD'
+    ? new Response(null, { status: hit.status, statusText: hit.statusText, headers: hit.headers })
+    : hit;
 }
 
 // The page asks for its Workers and libraries with its deploy's VERSION (?v=, window.siteFile in build.cjs). This
@@ -127,11 +158,14 @@ async function kept(req, name = CACHE, key = req.url) {
 // CORS, which the CDNs and font hosts allow, so its status can be read. The write is held open with waitUntil, which the
 // event still takes while its answer is pending
 async function cacheFirst(e) {
-  const req = e.request, url = new URL(req.url);
-  const here = url.origin === self.location.origin, v = here ? url.searchParams.get('v') : null;
+  const req = e.request,
+    url = new URL(req.url);
+  const here = url.origin === self.location.origin,
+    v = here ? url.searchParams.get('v') : null;
   if (v !== null && v !== VERSION) return fetch(req);
   if (v !== null) url.searchParams.delete('v');
-  const key = url.href, cache = await caches.open(CACHE);
+  const key = url.href,
+    cache = await caches.open(CACHE);
   const hit = await kept(req, CACHE, key);
   if (hit) return hit;
   const r = await (here ? fetch(req) : fetch(req.url, { method: req.method, mode: 'cors', credentials: 'omit' }));

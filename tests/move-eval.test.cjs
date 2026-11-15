@@ -16,30 +16,83 @@ function fakeEngine({ starts = Infinity } = {}) {
   const eng = {
     search(q) {
       let resolve;
-      const promise = new Promise((r) => { resolve = r; });
+      const promise = new Promise((r) => {
+        resolve = r;
+      });
       const c = { q, cancelled: false, info: (sc) => q.onInfo(sc), finish: (r) => resolve(r) };
       calls.push(c);
-      return { promise, cancel() { c.cancelled = true; resolve(null); } };
+      return {
+        promise,
+        cancel() {
+          c.cancelled = true;
+          resolve(null);
+        },
+      };
     },
     failed: () => null,
   };
-  return { calls, gets: () => gets, handle: { get: () => (gets++ < starts ? Promise.resolve(eng) : Promise.reject(new Error('no worker'))) } };
+  return {
+    calls,
+    gets: () => gets,
+    handle: { get: () => (gets++ < starts ? Promise.resolve(eng) : Promise.reject(new Error('no worker'))) },
+  };
 }
-const found = (cp, depth, pv = ['e7e5']) => ({ cp, depth, maxDepth: depth, pv, lines: [{ k: 1, cp, depth, pv }], nodes: 1000, timeMs: 500 });
+const found = (cp, depth, pv = ['e7e5']) => ({
+  cp,
+  depth,
+  maxDepth: depth,
+  pv,
+  lines: [{ k: 1, cp, depth, pv }],
+  nodes: 1000,
+  timeMs: 500,
+});
 
 // A scripted cloud: cloudEval waits for answer(result or null), which it then has cached
 function fakeCloud() {
-  const cache = new Map(), asked = [];
+  const cache = new Map(),
+    asked = [];
   return {
     asked,
     cloudCached: (fen, n) => cache.get(fen + '/' + n),
-    cloudEval: (fen, n, { signal }) => new Promise((res) => { asked.push({ fen, n, signal, answer: (r) => { cache.set(fen + '/' + n, r); res(r); } }); }),
+    cloudEval: (fen, n, { signal }) =>
+      new Promise((res) => {
+        asked.push({
+          fen,
+          n,
+          signal,
+          answer: (r) => {
+            cache.set(fen + '/' + n, r);
+            res(r);
+          },
+        });
+      }),
   };
 }
-const fromCloud = (cp, depth, pv = ['e7e5']) => ({ cp, depth, maxDepth: depth, pv, best: pv[0], lines: [{ k: 1, cp, depth, pv }], nodes: null, timeMs: null, source: 'cloud' });
+const fromCloud = (cp, depth, pv = ['e7e5']) => ({
+  cp,
+  depth,
+  maxDepth: depth,
+  pv,
+  best: pv[0],
+  lines: [{ k: 1, cp, depth, pv }],
+  nodes: null,
+  timeMs: null,
+  source: 'cloud',
+});
 
 const OWN = { depth: 12, time_limit: 2, lines: 1, name: 'lite' };
-const request = (e, more = {}) => ({ engine: e ? e.handle : null, before: [], after: ['e2e4'], settings: OWN, fen: undefined, stored: null, cloud: { on: false, prefer: false }, off: false, auto: false, ...more });
+const request = (e, more = {}) => ({
+  engine: e ? e.handle : null,
+  before: [],
+  after: ['e2e4'],
+  settings: OWN,
+  fen: undefined,
+  stored: null,
+  cloud: { on: false, prefer: false },
+  off: false,
+  auto: false,
+  ...more,
+});
 // both searches of a level, answered in the order they are asked (after, then before)
 async function finishBoth(e, from, after, before) {
   await tick();
@@ -50,7 +103,8 @@ async function finishBoth(e, from, after, before) {
 }
 
 test('the position after the move is searched, then the one before, and both are kept', async () => {
-  const evals = ME.create(), e = fakeEngine();
+  const evals = ME.create(),
+    e = fakeEngine();
   let changes = 0;
   const w = evals.watch(request(e), () => changes++);
   assert.equal(changes, 0, 'watch() itself reports nothing');
@@ -80,7 +134,8 @@ test('the position after the move is searched, then the one before, and both are
 });
 
 test('the start position is both before and after: one search', async () => {
-  const evals = ME.create(), e = fakeEngine();
+  const evals = ME.create(),
+    e = fakeEngine();
   const w = evals.watch(request(e, { after: [] }), () => {});
   await tick();
   e.calls[0].finish(found(15, 12, ['e2e4']));
@@ -89,8 +144,10 @@ test('the start position is both before and after: one search', async () => {
   assert.deepEqual([w.get().after.cp, w.get().before.cp, w.get().pending], [15, 15, false]);
 });
 
-test('only the position after the move searches the Lines setting\'s lines, and its search answers a one-line ask', async () => {
-  const evals = ME.create(), e = fakeEngine(), own = { ...OWN, lines: 3 };
+test("only the position after the move searches the Lines setting's lines, and its search answers a one-line ask", async () => {
+  const evals = ME.create(),
+    e = fakeEngine(),
+    own = { ...OWN, lines: 3 };
   evals.watch(request(e, { settings: own }), () => {});
   await finishBoth(e, 0, found(30, 12), found(25, 12));
   assert.deepEqual([e.calls[0].q.lines, e.calls[1].q.lines], [3, 1]);
@@ -103,14 +160,18 @@ test('only the position after the move searches the Lines setting\'s lines, and 
 });
 
 test('Go deeper searches both positions deeper, holding the last result until the search passes it', async () => {
-  const evals = ME.create(), e = fakeEngine();
+  const evals = ME.create(),
+    e = fakeEngine();
   let changes = 0;
   const w = evals.watch(request(e), () => changes++);
   await finishBoth(e, 0, found(30, 12), found(25, 12));
   const before = changes;
   w.get().deeper();
   assert.equal(changes, before + 1, 'the press reports at once');
-  assert.deepEqual([w.get().after.cp, w.get().after.partial, w.get().after.held, w.get().pending, w.get().deeper], [30, true, true, true, null]);
+  assert.deepEqual(
+    [w.get().after.cp, w.get().after.partial, w.get().after.held, w.get().pending, w.get().deeper],
+    [30, true, true, true, null],
+  );
   await tick();
   assert.deepEqual([e.calls[2].q.depth, e.calls[2].q.movetimeMs], [16, 4000]);
   e.calls[2].info({ cp: 99, depth: 10, pv: ['c7c5'], timeMs: 100 });
@@ -134,15 +195,18 @@ test('Go deeper searches both positions deeper, holding the last result until th
 });
 
 test('Go deeper is not offered once the depth and the time are at their caps', async () => {
-  const L = window.AnalysisCore.SEARCH_LIMITS, own = { ...OWN, depth: L.depth[1], time_limit: L.seconds[1] };
-  const evals = ME.create(), e = fakeEngine();
+  const L = window.AnalysisCore.SEARCH_LIMITS,
+    own = { ...OWN, depth: L.depth[1], time_limit: L.seconds[1] };
+  const evals = ME.create(),
+    e = fakeEngine();
   const w = evals.watch(request(e, { settings: own }), () => {});
   await finishBoth(e, 0, found(30, own.depth), found(25, own.depth));
   assert.deepEqual([w.get().pending, w.get().deeper, w.get().deeperTo], [false, null, null]);
 });
 
 test('a Go deeper search that stops is undone: the last results show, with why, and it is offered again', async () => {
-  const evals = ME.create(), e = fakeEngine();
+  const evals = ME.create(),
+    e = fakeEngine();
   const w = evals.watch(request(e), () => {});
   await finishBoth(e, 0, found(30, 12), found(25, 12));
   w.get().deeper();
@@ -160,8 +224,9 @@ test('a Go deeper search that stops is undone: the last results show, with why, 
   w.stop();
 });
 
-test('a Go deeper press when Stockfish doesn\'t start is undone too; a first search that fails just stops waiting', async () => {
-  const evals = ME.create(), e = fakeEngine({ starts: 1 });
+test("a Go deeper press when Stockfish doesn't start is undone too; a first search that fails just stops waiting", async () => {
+  const evals = ME.create(),
+    e = fakeEngine({ starts: 1 });
   const w = evals.watch(request(e), () => {});
   await finishBoth(e, 0, found(30, 12), found(25, 12));
   w.get().deeper();
@@ -176,12 +241,17 @@ test('a Go deeper press when Stockfish doesn\'t start is undone too; a first sea
 
 test('the cloud is asked after the wait; its answer shows until a finished local search is deeper', async (t) => {
   t.mock.timers.enable({ apis: ['setTimeout'] });
-  const cloud = fakeCloud(), evals = ME.create({ cloud }), e = fakeEngine();
+  const cloud = fakeCloud(),
+    evals = ME.create({ cloud }),
+    e = fakeEngine();
   const w = evals.watch(request(e, { cloud: { on: true } }), () => {});
   t.mock.timers.tick(299);
   assert.equal(cloud.asked.length, 0);
   t.mock.timers.tick(1);
-  assert.deepEqual(cloud.asked.map((a) => a.n), [1, 1]);
+  assert.deepEqual(
+    cloud.asked.map((a) => a.n),
+    [1, 1],
+  );
   assert.match(cloud.asked[0].fen, / b KQkq /, 'after the move first');
   await tick();
   cloud.asked[0].answer(fromCloud(40, 30));
@@ -191,7 +261,7 @@ test('the cloud is asked after the wait; its answer shows until a finished local
   await finishBoth(e, 0, found(30, 12), found(25, 12, ['e2e4']));
   const s = w.get();
   assert.deepEqual([s.after.source, s.after.cp], ['cloud', 40], 'depth 30 from the cloud stands over a local 12');
-  assert.deepEqual([s.before.source, s.before.cp], [undefined, 25], 'a local 12 replaces the cloud\'s 10');
+  assert.deepEqual([s.before.source, s.before.cp], [undefined, 25], "a local 12 replaces the cloud's 10");
   // cached: another watch shows it at once, without asking
   const w2 = evals.watch(request(e, { cloud: { on: true } }), () => {});
   assert.equal(w2.get().after.cp, 40);
@@ -201,7 +271,9 @@ test('the cloud is asked after the wait; its answer shows until a finished local
 
 test('a cloud miss falls back to the local search, and the cloud setting off asks nothing', async (t) => {
   t.mock.timers.enable({ apis: ['setTimeout'] });
-  const cloud = fakeCloud(), evals = ME.create({ cloud }), e = fakeEngine();
+  const cloud = fakeCloud(),
+    evals = ME.create({ cloud }),
+    e = fakeEngine();
   const w = evals.watch(request(e, { cloud: { on: true } }), () => {});
   t.mock.timers.tick(300);
   cloud.asked.forEach((a) => a.answer(null));
@@ -214,7 +286,9 @@ test('a cloud miss falls back to the local search, and the cloud setting off ask
 
 test('Prefer cloud: a position the cloud has as deep as the depth limit is not searched locally', async (t) => {
   t.mock.timers.enable({ apis: ['setTimeout'] });
-  const cloud = fakeCloud(), evals = ME.create({ cloud }), e = fakeEngine();
+  const cloud = fakeCloud(),
+    evals = ME.create({ cloud }),
+    e = fakeEngine();
   const w = evals.watch(request(e, { cloud: { on: true, prefer: true } }), () => {});
   t.mock.timers.tick(300);
   await tick();
@@ -233,7 +307,9 @@ test('Prefer cloud: a position the cloud has as deep as the depth limit is not s
 
 test('Go deeper is not offered over cloud answers as deep as the next search would reach', async (t) => {
   t.mock.timers.enable({ apis: ['setTimeout'] });
-  const cloud = fakeCloud(), evals = ME.create({ cloud }), e = fakeEngine();
+  const cloud = fakeCloud(),
+    evals = ME.create({ cloud }),
+    e = fakeEngine();
   const w = evals.watch(request(e, { cloud: { on: true, prefer: true } }), () => {});
   t.mock.timers.tick(300);
   cloud.asked[0].answer(fromCloud(40, 16));
@@ -245,7 +321,9 @@ test('Go deeper is not offered over cloud answers as deep as the next search wou
 
 test('off: nothing is searched and Go deeper is not offered, the cloud is still asked, finished searches still show', async (t) => {
   t.mock.timers.enable({ apis: ['setTimeout'] });
-  const cloud = fakeCloud(), evals = ME.create({ cloud }), e = fakeEngine();
+  const cloud = fakeCloud(),
+    evals = ME.create({ cloud }),
+    e = fakeEngine();
   const off = evals.watch(request(null, { off: true, cloud: { on: true } }), () => {});
   assert.deepEqual([off.get().pending, off.get().after], [false, null]);
   t.mock.timers.tick(300);
@@ -270,7 +348,9 @@ test('off: nothing is searched and Go deeper is not offered, the cloud is still 
 
 test('a stored result stands in for the first search; only a press searches, and a shallower answer leaves it showing', async (t) => {
   t.mock.timers.enable({ apis: ['setTimeout'] });
-  const cloud = fakeCloud(), evals = ME.create({ cloud }), e = fakeEngine();
+  const cloud = fakeCloud(),
+    evals = ME.create({ cloud }),
+    e = fakeEngine();
   const stored = { cp: 50, depth: 18, pv: [], stored: true, src: 'analysis A' };
   const req = request(e, { before: ['e2e4'], stored, cloud: { on: true } });
   const w = evals.watch(req, () => {});
@@ -288,7 +368,11 @@ test('a stored result stands in for the first search; only a press searches, and
   e.calls[0].finish(found(44, 16));
   await tick();
   assert.equal(e.calls.length, 1, 'one position, one search');
-  assert.deepEqual([w.get().after.cp, w.get().after.stored, w.get().pending], [50, true, false], 'depth 16 does not pass the stored 18');
+  assert.deepEqual(
+    [w.get().after.cp, w.get().after.stored, w.get().pending],
+    [50, true, false],
+    'depth 16 does not pass the stored 18',
+  );
   w.get().deeper();
   await tick();
   e.calls[1].finish(found(47, 20));
@@ -300,14 +384,19 @@ test('a stored result stands in for the first search; only a press searches, and
   assert.notEqual(evals.positionKey(req), evals.positionKey({ ...req, stored: { ...stored, src: 'analysis B' } }));
 });
 
-test('auto: a stored result\'s position is searched at the live settings without a press, Go deeper goes on from it, and it stays once off', async () => {
-  const evals = ME.create(), e = fakeEngine();
+test("auto: a stored result's position is searched at the live settings without a press, Go deeper goes on from it, and it stays once off", async () => {
+  const evals = ME.create(),
+    e = fakeEngine();
   const stored = { cp: 50, depth: 10, pv: [], stored: true, src: 'analysis A' };
   const req = request(e, { before: ['e2e4'], stored, auto: true });
   const w = evals.watch(req, () => {});
   assert.deepEqual([w.get().after, w.get().pending], [null, true]);
   await tick();
-  assert.deepEqual([e.calls[0].q.depth, e.calls[0].q.movetimeMs], [12, 2000], 'the live settings, not a Go deeper level');
+  assert.deepEqual(
+    [e.calls[0].q.depth, e.calls[0].q.movetimeMs],
+    [12, 2000],
+    'the live settings, not a Go deeper level',
+  );
   e.calls[0].finish(found(44, 16));
   await tick();
   assert.deepEqual([w.get().after.cp, w.get().after.stored], [44, undefined]);
@@ -321,7 +410,8 @@ test('auto: a stored result\'s position is searched at the live settings without
 });
 
 test('auto: the live search shows from its first depth with its own lines, even where it ends shallower than the stored result', async () => {
-  const evals = ME.create(), e = fakeEngine();
+  const evals = ME.create(),
+    e = fakeEngine();
   const stored = { cp: 50, depth: 30, pv: [], stored: true, src: 'analysis A' };
   const req = request(e, { before: ['e2e4'], stored, auto: true, settings: { ...OWN, lines: 3 } });
   const w = evals.watch(req, () => {});
@@ -332,24 +422,34 @@ test('auto: the live search shows from its first depth with its own lines, even 
   assert.deepEqual([w.get().after.cp, w.get().after.partial], [20, true]);
   e.calls[0].finish({ ...found(44, 16), lines: [1, 2, 3].map((k) => ({ k, cp: 44 - k, depth: 16, pv: ['e7e5'] })) });
   await tick();
-  assert.deepEqual([w.get().after.cp, w.get().after.lines.length], [44, 3], 'depth 16 shows, though the stored result was 30');
+  assert.deepEqual(
+    [w.get().after.cp, w.get().after.lines.length],
+    [44, 3],
+    'depth 16 shows, though the stored result was 30',
+  );
   const off = evals.watch({ ...req, engine: null, auto: false, off: true }, () => {});
   assert.equal(off.get().after.cp, 50, 'switched off, a shallower live search gives way to the stored result');
 });
 
 test('auto: a live search that fails gives way to the stored result, with Go deeper to try again', async () => {
-  const evals = ME.create(), e = fakeEngine({ starts: 0 });
+  const evals = ME.create(),
+    e = fakeEngine({ starts: 0 });
   const stored = { cp: 50, depth: 30, pv: [], stored: true, src: 'analysis A' };
   const w = evals.watch(request(e, { before: ['e2e4'], stored, auto: true }), () => {});
-  await tick(); await tick();
-  assert.deepEqual([w.get().after.cp, w.get().after.stored, w.get().pending, typeof w.get().deeper], [50, true, false, 'function']);
+  await tick();
+  await tick();
+  assert.deepEqual(
+    [w.get().after.cp, w.get().after.stored, w.get().pending, typeof w.get().deeper],
+    [50, true, false, 'function'],
+  );
   assert.match(w.get().failed, /didn’t start/);
-  assert.equal(e.gets(), 1, 'the stored result needs no engine: its start isn\'t tried again');
+  assert.equal(e.gets(), 1, "the stored result needs no engine: its start isn't tried again");
   assert.equal(w.get().level, 0);
 });
 
 test('level: the Go deeper level shown', async () => {
-  const evals = ME.create(), e = fakeEngine();
+  const evals = ME.create(),
+    e = fakeEngine();
   const w = evals.watch(request(e), () => {});
   assert.equal(w.get().level, 0);
   await finishBoth(e, 0, found(30, 12), found(20, 12));
@@ -357,9 +457,11 @@ test('level: the Go deeper level shown', async () => {
   assert.equal(w.get().level, 1);
 });
 
-test('stop() cancels the searches, the cloud\'s wait and its requests, and nothing changes after it', async (t) => {
+test("stop() cancels the searches, the cloud's wait and its requests, and nothing changes after it", async (t) => {
   t.mock.timers.enable({ apis: ['setTimeout'] });
-  const cloud = fakeCloud(), evals = ME.create({ cloud }), e = fakeEngine();
+  const cloud = fakeCloud(),
+    evals = ME.create({ cloud }),
+    e = fakeEngine();
   let changes = 0;
   const w = evals.watch(request(e, { cloud: { on: true } }), () => changes++);
   await tick();
@@ -381,12 +483,19 @@ test('stop() cancels the searches, the cloud\'s wait and its requests, and nothi
 });
 
 test('results are kept apart by engine name, start FEN and settings', async () => {
-  const evals = ME.create(), e = fakeEngine();
+  const evals = ME.create(),
+    e = fakeEngine();
   evals.watch(request(e), () => {});
   await finishBoth(e, 0, found(30, 12), found(25, 12));
   const fen = 'rnbqkbnr/pppp1ppp/8/4p3/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 2';
-  for (const more of [{ settings: { ...OWN, name: 'full' } }, { fen }, { settings: { ...OWN, depth: 14 } }, { settings: { ...OWN, time_limit: 3 } }]) {
-    const n = e.calls.length, w = evals.watch(request(e, more), () => {});
+  for (const more of [
+    { settings: { ...OWN, name: 'full' } },
+    { fen },
+    { settings: { ...OWN, depth: 14 } },
+    { settings: { ...OWN, time_limit: 3 } },
+  ]) {
+    const n = e.calls.length,
+      w = evals.watch(request(e, more), () => {});
     assert.equal(w.get().pending, true);
     await tick();
     assert.equal(e.calls.length, n + 1);
@@ -395,12 +504,22 @@ test('results are kept apart by engine name, start FEN and settings', async () =
 });
 
 test('keyOf: empty for a request that asks nothing, and changed by what needs a new watch', () => {
-  const evals = ME.create(), e = fakeEngine(), r = request(e);
+  const evals = ME.create(),
+    e = fakeEngine(),
+    r = request(e);
   assert.equal(evals.keyOf(request(e, { after: null })), '');
   assert.equal(evals.positionKey(request(e, { after: null })), '');
   assert.equal(evals.keyOf(r), evals.keyOf(request(fakeEngine())));
   const stored = { cp: 1, depth: 10, pv: [], stored: true, src: 'a' };
-  const others = [{ after: ['d2d4'] }, { off: true }, { auto: true }, { cloud: { on: true } }, { cloud: { on: true, prefer: true } }, { stored }, { settings: { ...OWN, lines: 2 } }];
+  const others = [
+    { after: ['d2d4'] },
+    { off: true },
+    { auto: true },
+    { cloud: { on: true } },
+    { cloud: { on: true, prefer: true } },
+    { stored },
+    { settings: { ...OWN, lines: 2 } },
+  ];
   const keys = new Set([evals.keyOf(r), ...others.map((m) => evals.keyOf(request(e, m)))]);
   assert.equal(keys.size, others.length + 1);
   const w = evals.watch(request(e, { after: null }), () => {});

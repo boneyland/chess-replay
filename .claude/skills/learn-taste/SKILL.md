@@ -17,7 +17,7 @@ It does ONE thing: write rules. It never changes the page's code, and it never a
 1. **Only the user's taste.** Every rule traces back to something the user said, edited or confirmed. Never add a rule because it seems like good practice: that's your taste, and your taste is what the user was correcting.
 2. **Never invent a why.** If the user gave no reason, propose one marked *inferred* and get it confirmed before writing. A wrong why is worse than none: the next agent extends the reasoning to cases it doesn't fit.
 3. **Propose, then stop.** Present every candidate and write only what the user approves.
-4. **A test beats a sentence.** If a violation can be found by matching code (a banned value, a word the page must not use, a colour outside `app/theme.js`), propose a test. This repo has no linter; a test is a Node test in `tests/*.test.cjs`, or a step in `tests/live/` when only a browser can see it. A sentence in a long file gets skipped when the agent's context is full.
+4. **A test beats a sentence.** If a violation can be found by matching code (a banned value, a word the page must not use, a colour outside `app/theme.js`), propose a check: an ESLint rule in `eslint.config.mjs` (a core rule's options such as `no-restricted-syntax`, or a small rule in its `local` plugin) when it's about code shape, else a Node test in `tests/*.test.cjs`, or a step in `tests/live/` when only a browser can see it. A sentence in a long file gets skipped when the agent's context is full.
 5. **Write for an agent that wasn't here.** No "like we discussed" or "the button from earlier". Name the part (by `docs/parts.md`'s names: Game info, Transport bar, Dock…), the value, the token in `app/theme.js`, the file.
 
 ## Workflow
@@ -95,7 +95,7 @@ Then the why. Use the user's reason, in their words, when they gave one. Otherwi
 | Layout, sizes, spacing | `docs/spec/layout.md` (and `LayoutCore`'s constants if a value is a number) |
 | Colours | `app/theme.js` is the source; a rule about using them goes in CLAUDE.md › Gotchas |
 | Visual and motion taste with no home above (shadows, timings, borders) | Ask the user. If they want a DESIGN.md, create it at the repo root and add `Before changing how the page looks, read DESIGN.md.` to CLAUDE.md |
-| A test candidate | `tests/<area>.test.cjs` (pure code) or `tests/live/site.test.cjs` (needs a browser), plus the one-line rule above |
+| A check candidate | `eslint.config.mjs` (code shape), `tests/<area>.test.cjs` (pure code) or `tests/live/site.test.cjs` (needs a browser), plus the one-line rule above |
 
 Keep each entry in the style of the file it goes into: CLAUDE.md and the skills use bullet points with the reason in the same line, and the decisions log keeps one line per decision with its date.
 

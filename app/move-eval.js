@@ -49,7 +49,8 @@
   const WHICH = ['after', 'before'];
 
   function create({ cloud = null, debounceMs = 300 } = {}) {
-    const A = window.AnalysisCore, START = window.ChessCore.START_FEN;
+    const A = window.AnalysisCore,
+      START = window.ChessCore.START_FEN;
     const finishedSearches = new Map(); // by settings and move list, for the session
     const presses = new Map(); // of Go deeper, by position (positionKey), for the session
     const autoRan = new Set(); // the positions (positionKey) auto has searched, for the session
@@ -57,7 +58,11 @@
     // what a request's keys and cached results are worked out from
     function plan({ before, after, settings: own, fen, stored }) {
       // a search of several lines (Analysis › ☰ › Lines) is cached apart from one of one line
-      const keyOf = (s, moves) => (own.name ? own.name + '|' : '') + (fen && fen !== START ? fen + '|' : '') + `${s.depth}/${s.movetimeMs}${s.lines > 1 ? '/' + s.lines : ''}:` + moves.join(' ');
+      const keyOf = (s, moves) =>
+        (own.name ? own.name + '|' : '') +
+        (fen && fen !== START ? fen + '|' : '') +
+        `${s.depth}/${s.movetimeMs}${s.lines > 1 ? '/' + s.lines : ''}:` +
+        moves.join(' ');
       const toSearch = (o, lines = own.lines || 1) => ({ depth: o.depth, movetimeMs: o.time_limit * 1000, lines });
       const base = keyOf(toSearch(own), after) + (stored ? '|' + stored.src : '');
       // only after's lines are shown, so before (what the move is rated against) searches one line, as deep as it can;
@@ -68,22 +73,39 @@
       // a finished search at level lv: its own, or for a position searched as one line (before), a search of several
       // lines of the same position (the move before's after, stepping on through a game), whose line 1 is the one
       // line's answer
-      const cachedAt = (lv, which) => finishedSearches.get(keyAt(lv, which)) || (linesOf(which) === 1 && (own.lines || 1) > 1 && finishedSearches.get(keyOf(toSearch(A.deeperSearch(own, lv)), moves[which]))) || null;
+      const cachedAt = (lv, which) =>
+        finishedSearches.get(keyAt(lv, which)) ||
+        (linesOf(which) === 1 &&
+          (own.lines || 1) > 1 &&
+          finishedSearches.get(keyOf(toSearch(A.deeperSearch(own, lv)), moves[which]))) ||
+        null;
       const finished = (lv) => WHICH.every((w) => cachedAt(lv, w));
       return { toSearch, base, linesOf, moves, keyAt, cachedAt, finished };
     }
 
     const positionKey = (req) => (req.after ? plan(req).base : '');
-    const keyOf = (req) => (req.after ? plan(req).base + (req.cloud && req.cloud.on ? (req.cloud.prefer ? '|cloud+' : '|cloud') : '') + (req.off ? '|off' : '') + (req.auto ? '|auto' : '') : '');
+    const keyOf = (req) =>
+      req.after
+        ? plan(req).base +
+          (req.cloud && req.cloud.on ? (req.cloud.prefer ? '|cloud+' : '|cloud') : '') +
+          (req.off ? '|off' : '') +
+          (req.auto ? '|auto' : '')
+        : '';
 
     function watch(req, onChange) {
       if (!req.after) return { get: () => ({ ...EMPTY, deeper: null, deeperTo: null, failed: null }), stop() {} };
-      const { settings: own, fen, stored, engine, off } = req, p = plan(req);
+      const { settings: own, fen, stored, engine, off } = req,
+        p = plan(req);
       // auto asks the cloud as a press does, and that stays (with the cloud's answers) once the switch goes off
       if (req.auto && stored) autoRan.add(p.base);
       // the Stockfish switch on: the live search is what shows, shallower than the stored result or not
       let liveFirst = !!(req.auto && stored && !off);
-      let st = EMPTY, level = 0, search = null, failed = null, stopped = false, stopRun = () => {};
+      let st = EMPTY,
+        level = 0,
+        search = null,
+        failed = null,
+        stopped = false,
+        stopRun = () => {};
 
       // one level's cloud asks and searches; returns what cancels them
       function run() {
@@ -93,30 +115,66 @@
         if (off) while (level > 0 && !p.finished(level)) level--;
         search = p.toSearch(A.deeperSearch(own, level));
         // a stored result asks the cloud once Go deeper is pressed (or auto ran), whatever the local searches got to (off keeps it asked)
-        const cloudOn = !!(req.cloud && req.cloud.on && cloud && (!stored || pressed > 0 || autoRan.has(p.base))), prefer = cloudOn && !!req.cloud.prefer;
-        const lv = level, lines = p.linesOf, moves = p.moves;
+        const cloudOn = !!(req.cloud && req.cloud.on && cloud && (!stored || pressed > 0 || autoRan.has(p.base))),
+          prefer = cloudOn && !!req.cloud.prefer;
+        const lv = level,
+          lines = p.linesOf,
+          moves = p.moves;
         let live = true;
-        const change = (fn) => { if (!live) return; st = fn(st); onChange(); };
+        const change = (fn) => {
+          if (!live) return;
+          st = fn(st);
+          onChange();
+        };
         // the cloud's answers, as promises (null: a miss); a cached one shows at once
-        const ctl = new AbortController(), timers = [], asked = {};
-        const fenOf = (m) => { const f = A.positionFens(fen || START, m); return f.length === m.length + 1 ? f[m.length] : null; };
+        const ctl = new AbortController(),
+          timers = [],
+          asked = {};
+        const fenOf = (m) => {
+          const f = A.positionFens(fen || START, m);
+          return f.length === m.length + 1 ? f[m.length] : null;
+        };
         const cloudHit = {};
-        if (cloudOn) for (const which of WHICH) {
-          const f = fenOf(moves[which]), n = lines(which), hit = f ? cloud.cloudCached(f, n) : null;
-          if (hit !== undefined) { cloudHit[which] = hit; asked[which] = Promise.resolve(hit); continue; }
-          asked[which] = new Promise((res) => { timers.push(setTimeout(() => cloud.cloudEval(f, n, { signal: ctl.signal }).then(res), debounceMs)); })
-            .then((r) => { if (r) change((s) => ({ ...s, cloud: { ...s.cloud, [which]: r } })); return r; });
-        }
+        if (cloudOn)
+          for (const which of WHICH) {
+            const f = fenOf(moves[which]),
+              n = lines(which),
+              hit = f ? cloud.cloudCached(f, n) : null;
+            if (hit !== undefined) {
+              cloudHit[which] = hit;
+              asked[which] = Promise.resolve(hit);
+              continue;
+            }
+            asked[which] = new Promise((res) => {
+              timers.push(setTimeout(() => cloud.cloudEval(f, n, { signal: ctl.signal }).then(res), debounceMs));
+            }).then((r) => {
+              if (r) change((s) => ({ ...s, cloud: { ...s.cloud, [which]: r } }));
+              return r;
+            });
+          }
         const cloudLimit = A.cloudEnough(search.depth, own.name);
         // level 0 with stored: auto's search at the live settings (liveFirst), else the stored result, or that search
         // where one finished earlier (notPast then keeps the stored result over a shallower one)
-        const at = (l, which) => (l === 0 && stored && !liveFirst ? p.cachedAt(0, which) || stored : p.cachedAt(l, which));
-        const handles = [], cached = (which) => at(lv, which);
+        const at = (l, which) =>
+          l === 0 && stored && !liveFirst ? p.cachedAt(0, which) || stored : p.cachedAt(l, which);
+        const handles = [],
+          cached = (which) => at(lv, which);
         // the result a press of Go deeper started from, shown until the deeper search passes its depth
         const prev = (which) => (lv > 0 ? at(lv - 1, which) : null);
         const shown = (which) => cached(which) || (prev(which) && { ...prev(which), partial: true, held: true });
-        st = { before: shown('before'), after: shown('after'), cloud: { before: cloudHit.before || null, after: cloudHit.after || null }, pending: !off && (!cached('after') || !cached('before')), progress: 0 };
-        const cancel = () => { live = false; handles.forEach((h) => h.cancel()); timers.forEach(clearTimeout); ctl.abort(); };
+        st = {
+          before: shown('before'),
+          after: shown('after'),
+          cloud: { before: cloudHit.before || null, after: cloudHit.after || null },
+          pending: !off && (!cached('after') || !cached('before')),
+          progress: 0,
+        };
+        const cancel = () => {
+          live = false;
+          handles.forEach((h) => h.cancel());
+          timers.forEach(clearTimeout);
+          ctl.abort();
+        };
         // no local search: the cloud's answers (asked above) are all that can come
         if (off) return cancel;
         // the searches to run (the start position's two are one)
@@ -124,42 +182,100 @@
         let ran = 0;
         // a failed Go deeper: the press is undone and the level before it runs again (its results are cached); a failed
         // auto search gives way to the stored result, with Go deeper to try again
-        const fail = (msg) => { if (lv > 0) { presses.set(p.base, lv - 1); failed = msg; restart(); } else if (liveFirst) { liveFirst = false; failed = msg; restart(); } };
+        const fail = (msg) => {
+          if (lv > 0) {
+            presses.set(p.base, lv - 1);
+            failed = msg;
+            restart();
+          } else if (liveFirst) {
+            liveFirst = false;
+            failed = msg;
+            restart();
+          }
+        };
         (async () => {
           // nothing to search (the stored result, or every search cached): no engine is started, so a failed start isn't
           // retried by the run that gives way to the stored result
-          if (!todo) { await null; change((s) => ({ ...s, before: cached('before'), after: cached('after'), pending: false })); return; }
+          if (!todo) {
+            await null;
+            change((s) => ({ ...s, before: cached('before'), after: cached('after'), pending: false }));
+            return;
+          }
           let eng;
-          try { eng = await engine.get(); } catch (e) { if (live) { change((s) => ({ ...s, pending: false })); fail('Stockfish didn’t start' + (e && e.message ? ': ' + e.message : '')); } return; }
+          try {
+            eng = await engine.get();
+          } catch (e) {
+            if (live) {
+              change((s) => ({ ...s, pending: false }));
+              fail('Stockfish didn’t start' + (e && e.message ? ': ' + e.message : ''));
+            }
+            return;
+          }
           for (const which of WHICH) {
             if (!live) return;
             // the start position is both before and after: its second search is the first one's, cached
-            if (cached(which)) { const c = cached(which); change((s) => ({ ...s, [which]: c })); continue; }
+            if (cached(which)) {
+              const c = cached(which);
+              change((s) => ({ ...s, [which]: c }));
+              continue;
+            }
             if (prefer) {
               const c = await asked[which];
               if (!live) return;
-              if (c && c.depth >= cloudLimit) { ran++; continue; }
+              if (c && c.depth >= cloudLimit) {
+                ran++;
+                continue;
+              }
             }
             const floor = prev(which) ? prev(which).depth : 0;
             // a depth takes about 1.5 times the one before it, so depth d of D is about 1.5^(d − D) of the way
-            const part = (sc) => Math.max(sc.timeMs ? sc.timeMs / search.movetimeMs : 0, search.depth ? Math.pow(1.5, sc.depth - search.depth) : 0);
+            const part = (sc) =>
+              Math.max(
+                sc.timeMs ? sc.timeMs / search.movetimeMs : 0,
+                search.depth ? Math.pow(1.5, sc.depth - search.depth) : 0,
+              );
             const i = ran++;
-            const h = eng.search({ moves: moves[which], fen, ...search, lines: lines(which), priority: 'own', onInfo: (sc) => {
-              const progress = (i + Math.min(1, part(sc))) / todo;
-              change((s) => ({ ...s, progress: Math.max(s.progress, progress), ...(sc.depth > floor && { [which]: { ...sc, best: sc.pv[0] || null, partial: true } }) }));
-            } });
+            const h = eng.search({
+              moves: moves[which],
+              fen,
+              ...search,
+              lines: lines(which),
+              priority: 'own',
+              onInfo: (sc) => {
+                const progress = (i + Math.min(1, part(sc))) / todo;
+                change((s) => ({
+                  ...s,
+                  progress: Math.max(s.progress, progress),
+                  ...(sc.depth > floor && { [which]: { ...sc, best: sc.pv[0] || null, partial: true } }),
+                }));
+              },
+            });
             handles.push(h);
             const r = await h.promise;
             if (!live) return;
-            if (!r) { const e = eng.failed && eng.failed(); change((s) => ({ ...s, pending: false })); fail('Stockfish stopped before it finished' + (e && e.message ? ': ' + e.message : '')); return; }
-            if (r.cp != null) { const fin = { ...r, best: A.bestOf(r) }; finishedSearches.set(p.keyAt(lv, which), fin); change((s) => ({ ...s, [which]: fin })); }
+            if (!r) {
+              const e = eng.failed && eng.failed();
+              change((s) => ({ ...s, pending: false }));
+              fail('Stockfish stopped before it finished' + (e && e.message ? ': ' + e.message : ''));
+              return;
+            }
+            if (r.cp != null) {
+              const fin = { ...r, best: A.bestOf(r) };
+              finishedSearches.set(p.keyAt(lv, which), fin);
+              change((s) => ({ ...s, [which]: fin }));
+            }
           }
           change((s) => ({ ...s, pending: false }));
         })();
         return cancel;
       }
       // another level (a press, or a failed one undone): its state replaces the old one in the same change
-      function restart() { if (stopped) return; stopRun(); stopRun = run(); onChange(); }
+      function restart() {
+        if (stopped) return;
+        stopRun();
+        stopRun = run();
+        onChange();
+      }
 
       function get() {
         // the cloud's answer stands until a finished local search goes deeper; it replaces the result a Go deeper
@@ -167,20 +283,48 @@
         const pick = (loc, cl) => (cl && (!loc || cl.depth >= loc.depth || (loc.partial && !loc.held)) ? cl : loc);
         // a finished search that reached less deep than the stored result it set out to pass (its time ran out first,
         // as on fewer threads than the analysis had) leaves the stored result showing: a shallower eval isn't a better one
-        const notPast = (r) => (stored && !liveFirst && r && !r.partial && !r.stored && r.source !== 'cloud' && stored.depth && r.depth < stored.depth ? stored : r);
-        const out = { ...st, before: pick(notPast(st.before), st.cloud.before), after: pick(notPast(st.after), st.cloud.after) };
+        const notPast = (r) =>
+          stored &&
+          !liveFirst &&
+          r &&
+          !r.partial &&
+          !r.stored &&
+          r.source !== 'cloud' &&
+          stored.depth &&
+          r.depth < stored.depth
+            ? stored
+            : r;
+        const out = {
+          ...st,
+          before: pick(notPast(st.before), st.cloud.before),
+          after: pick(notPast(st.after), st.cloud.after),
+        };
         const fromCloud = (r) => !!(r && r.source === 'cloud');
         const done = out.after && !out.after.partial && out.before && !out.before.partial && !out.pending;
-        const lv = level, next = A.deeperSearch(own, lv + 1);
+        const lv = level,
+          next = A.deeperSearch(own, lv + 1);
         // nothing to go deeper on where both positions show a cloud answer at least as deep as the next search would
         // reach (AnalysisCore.cloudEnough)
         const cloudDeep = (r) => fromCloud(r) && r.depth >= A.cloudEnough(next.depth, own.name);
-        const deeper = !off && done && !(cloudDeep(out.after) && cloudDeep(out.before)) && A.canGoDeeper(own, lv) ? () => { presses.set(p.base, lv + 1); failed = null; restart(); } : null;
+        const deeper =
+          !off && done && !(cloudDeep(out.after) && cloudDeep(out.before)) && A.canGoDeeper(own, lv)
+            ? () => {
+                presses.set(p.base, lv + 1);
+                failed = null;
+                restart();
+              }
+            : null;
         return { ...out, deeper, deeperTo: deeper ? next : null, failed, level: lv };
       }
 
       stopRun = run();
-      return { get, stop() { stopped = true; stopRun(); } };
+      return {
+        get,
+        stop() {
+          stopped = true;
+          stopRun();
+        },
+      };
     }
 
     return { watch, keyOf, positionKey };

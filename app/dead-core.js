@@ -14,19 +14,29 @@
   // that grew the module's memory (which never shrinks) past memLimitMb restarts it after answering; one that fails to
   // start or load isn't started again for retryMs
   function create({ makeWorker, timeoutMs = 5000, memLimitMb = 64, retryMs = 30000, now = Date.now }) {
-    const cache = new Map(), queue = [];
-    let worker = null, busy = null, seq = 0, downUntil = -Infinity;
+    const cache = new Map(),
+      queue = [];
+    let worker = null,
+      busy = null,
+      seq = 0,
+      downUntil = -Infinity;
     const ck = (fen, side) => key(fen) + ' ' + side;
     const remember = (k, v) => {
       cache.set(k, v);
       if (cache.size > CACHE_MAX) cache.delete(cache.keys().next().value);
     };
     const kill = () => {
-      if (worker) try { worker.terminate(); } catch (e) {}
+      if (worker)
+        try {
+          worker.terminate();
+        } catch (e) {}
       worker = null;
     };
     function finish(verdict, { restart = false, keep = true, failed = false } = {}) {
-      if (!busy) { kill(); return; }
+      if (!busy) {
+        kill();
+        return;
+      }
       const { job, timer } = busy;
       clearTimeout(timer);
       busy = null;
@@ -52,10 +62,14 @@
           worker = makeWorker();
           worker.onmessage = (e) => {
             const d = e.data || {};
-            if (busy && d.id === busy.id) finish(d.verdict, { restart: d.mb > memLimitMb || !!d.error, keep: !d.error, failed: !!d.error });
+            if (busy && d.id === busy.id)
+              finish(d.verdict, { restart: d.mb > memLimitMb || !!d.error, keep: !d.error, failed: !!d.error });
           };
           // handled here, so the browser needn't report it as uncaught
-          worker.onerror = (e) => { if (e && e.preventDefault) e.preventDefault(); finish('undecided', { restart: true, keep: false, failed: true }); };
+          worker.onerror = (e) => {
+            if (e && e.preventDefault) e.preventDefault();
+            finish('undecided', { restart: true, keep: false, failed: true });
+          };
         } catch (e) {
           worker = null;
           downUntil = now() + retryMs;
@@ -97,7 +111,10 @@
         if (gone[side]) continue;
         const v = await client.ask(fens[i], side, { signal });
         if (signal && signal.aborted) return null;
-        if (v !== 'unwinnable') { dead = false; break; }
+        if (v !== 'unwinnable') {
+          dead = false;
+          break;
+        }
         gone[side] = true;
       }
       if (dead) return i;
@@ -108,7 +125,8 @@
   // a position's FEN for chasolver: castling rights only where the king and rook are still at home (it refuses a FEN whose
   // rights don't fit the pieces, as an edited start's might not; ChessCore.fullFen); none in Chess960 (it knows no X-FEN
   // rights, and a castle can't change whether a side can still mate); the move counters don't matter to it
-  const fenFor = (pos) => window.ChessCore.fullFen(window.ChessCore.is960(pos) ? { ...pos, castle: '' } : pos, { counters: [0, 1] });
+  const fenFor = (pos) =>
+    window.ChessCore.fullFen(window.ChessCore.is960(pos) ? { ...pos, castle: '' } : pos, { counters: [0, 1] });
 
   window.DeadCore = { key, create, firstDead, fenFor };
 })();

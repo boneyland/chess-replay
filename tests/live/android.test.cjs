@@ -8,8 +8,15 @@
 const test = require('node:test');
 const assert = require('node:assert/strict');
 const { execFileSync, execSync } = require('child_process');
-const fs = require('fs'), path = require('path');
-const pw = (() => { try { return require('playwright'); } catch (e) { return require(path.join(execSync('npm root -g').toString().trim(), 'playwright')); } })();
+const fs = require('fs'),
+  path = require('path');
+const pw = (() => {
+  try {
+    return require('playwright');
+  } catch (e) {
+    return require(path.join(execSync('npm root -g').toString().trim(), 'playwright'));
+  }
+})();
 const { serve } = require('./serve.cjs');
 const { loadedOn, boardBox, square, namePending } = require('./board.cjs');
 
@@ -21,7 +28,9 @@ const VERDICT = /your move · .*(stockfish’s choice|cp vs|as good as|can’t r
 test('android · chrome · local build', async (t) => {
   // undone last first: t.after hooks run in the order they were added, which closed the device before Chrome
   const undo = [];
-  t.after(async () => { for (const f of undo.reverse()) await f(); });
+  t.after(async () => {
+    for (const f of undo.reverse()) await f();
+  });
   fs.mkdirSync(OUT, { recursive: true });
   execFileSync(process.execPath, [path.join(ROOT, 'build.cjs')], { cwd: ROOT });
   const local = await serve(path.join(ROOT, 'out', 'site'), PORT);
@@ -31,8 +40,14 @@ test('android · chrome · local build', async (t) => {
   assert.ok(device, 'no adb device');
   undo.push(() => device.close());
   const sh = async (cmd) => (await device.shell(cmd)).toString().trim();
-  assert.match(await sh('pm list packages com.android.chrome'), /com\.android\.chrome/, 'Chrome is not installed on the device');
-  t.diagnostic(`${device.model()} · Android ${await sh('getprop ro.build.version.release')} · ${(await sh('dumpsys package com.android.chrome | grep versionName')).split('\n')[0]}`);
+  assert.match(
+    await sh('pm list packages com.android.chrome'),
+    /com\.android\.chrome/,
+    'Chrome is not installed on the device',
+  );
+  t.diagnostic(
+    `${device.model()} · Android ${await sh('getprop ro.build.version.release')} · ${(await sh('dumpsys package com.android.chrome | grep versionName')).split('\n')[0]}`,
+  );
   // an emulator has no camera cut-out, so the full-screen test would pass whatever the page does with one: give it
   // Android's emulated punch hole (a developer option) for the run. A real phone is left as it is
   const emulator = (await sh('getprop ro.kernel.qemu')) === '1' || (await sh('getprop ro.boot.qemu')) === '1';
@@ -53,34 +68,49 @@ test('android · chrome · local build', async (t) => {
   const ICON_CUT = /^Error while trying to use the following icon from the Manifest: /;
   page.on('console', (m) => {
     if (m.type() !== 'error') return;
-    if (ICON_CUT.test(m.text())) t.diagnostic(m.text()); else errors.push(m.text());
+    if (ICON_CUT.test(m.text())) t.diagnostic(m.text());
+    else errors.push(m.text());
   });
   page.on('pageerror', (e) => errors.push(e.message));
   // a phone kept from an earlier run starts from the defaults. The reload that follows waits for Chrome's download of
   // the manifest: a reload cutting it off once had Chrome report "Manifest: Line: 1, column: 1, Syntax error." Chrome
   // doesn't always fetch it on load, though (3 of 7 CI runs timed out waiting), and then there is nothing to cut off
-  const manifest = page.waitForEvent('requestfinished', { predicate: (r) => r.url().endsWith('/manifest.webmanifest'), timeout: 15000 })
+  const manifest = page
+    .waitForEvent('requestfinished', { predicate: (r) => r.url().endsWith('/manifest.webmanifest'), timeout: 15000 })
     .catch(() => t.diagnostic('Chrome fetched no manifest on load'));
   await page.goto(local.url, { waitUntil: 'load' });
   await manifest;
-  await page.evaluate(() => { localStorage.clear(); localStorage.setItem('chess-video.tweaks.v1', '{"sfOn":true}'); }); // the Stockfish switch on
+  await page.evaluate(() => {
+    localStorage.clear();
+    localStorage.setItem('chess-video.tweaks.v1', '{"sfOn":true}');
+  }); // the Stockfish switch on
 
   await t.test('the page loads in the phone layout, fits the width, with no console errors', async () => {
     await page.reload({ waitUntil: 'load' });
     await loadedOn(page);
     await page.getByRole('button', { name: 'Menu' }).waitFor();
-    assert.equal(await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth), true, 'no sideways scroll');
-    const b = await boardBox(page), w = await page.evaluate(() => window.innerWidth);
+    assert.equal(
+      await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth),
+      true,
+      'no sideways scroll',
+    );
+    const b = await boardBox(page),
+      w = await page.evaluate(() => window.innerWidth);
     assert.equal(b.n, 32, 'pieces on the board');
     assert.ok(b.x0 >= 0 && b.x0 + 8 * b.sq <= w + 1, `the board (${Math.round(8 * b.sq)} px) fits the ${w} px width`);
     await page.screenshot({ path: path.join(OUT, 'android-phone.png') });
     assert.deepEqual(errors, []);
     // each manifest icon downloads and decodes at its stated size
     const bad = await page.evaluate(async () => {
-      const m = await (await fetch('manifest.webmanifest', { cache: 'no-store' })).json(), out = [];
+      const m = await (await fetch('manifest.webmanifest', { cache: 'no-store' })).json(),
+        out = [];
       for (const ic of m.icons) {
-        try { const im = await createImageBitmap(await (await fetch(ic.src, { cache: 'no-store' })).blob()); if (`${im.width}x${im.height}` !== ic.sizes) out.push(`${ic.src}: ${im.width}x${im.height}`); }
-        catch (e) { out.push(`${ic.src}: ${e.message}`); }
+        try {
+          const im = await createImageBitmap(await (await fetch(ic.src, { cache: 'no-store' })).blob());
+          if (`${im.width}x${im.height}` !== ic.sizes) out.push(`${ic.src}: ${im.width}x${im.height}`);
+        } catch (e) {
+          out.push(`${ic.src}: ${e.message}`);
+        }
       }
       return out;
     });
@@ -89,10 +119,15 @@ test('android · chrome · local build', async (t) => {
 
   await t.test('a tap-tap move gets a Stockfish verdict', async () => {
     const b = await boardBox(page);
-    for (const sq of ['e2', 'e4']) { const p = square(b, sq); await page.touchscreen.tap(p.x, p.y); }
+    for (const sq of ['e2', 'e4']) {
+      const p = square(b, sq);
+      await page.touchscreen.tap(p.x, p.y);
+    }
     await page.getByText(/your move ·/i).waitFor({ timeout: 5000 });
     // the emulator runs the engine slowly
-    await page.waitForFunction((re) => new RegExp(re, 'i').test(document.body.innerText), VERDICT.source, { timeout: 120000 });
+    await page.waitForFunction((re) => new RegExp(re, 'i').test(document.body.innerText), VERDICT.source, {
+      timeout: 120000,
+    });
     assert.doesNotMatch(await page.getByText(/your move ·/i).innerText(), /can’t run here|stopped/i);
     await page.screenshot({ path: path.join(OUT, 'android-own-move.png') });
     assert.deepEqual(errors, []);
@@ -103,18 +138,40 @@ test('android · chrome · local build', async (t) => {
     await menu.tap();
     await page.getByRole('button', { name: 'Ask Queen' }).waitFor({ state: 'visible', timeout: 3000 });
     // the browser's safe-area insets (the cut-out's strip, on a phone) beside the root's and the stage's padding
-    const insets = () => page.evaluate(() => {
-      const probe = document.body.appendChild(document.createElement('div'));
-      const px = (v) => { probe.style.cssText = `position:fixed;top:0;left:0;width:${v}`; return probe.getBoundingClientRect().width; };
-      const r = { height: px('env(safe-area-inset-top,0px)'), l: px('env(safe-area-inset-left,0px)'), r: px('env(safe-area-inset-right,0px)') };
-      probe.remove();
-      const stage = document.querySelector('.stage');
-      // the board, its eval bar, the player bars and the transport bar's contents: how far each comes to the screen's sides
-      // (the transport bar's own box is a bottom bar that runs to the screen's edges, its contents padded clear of the inset)
-      const parts = [...document.querySelectorAll('.part-board, .part-eval-bar, .part-player-bar, .part-transport-bar > *')].map((e) => e.getBoundingClientRect()).filter((b) => b.width > 0);
-      const edge = { l: Math.min(...parts.map((b) => b.left)), r: innerWidth - Math.max(...parts.map((b) => b.right)) };
-      return { top: r.height, l: r.l, r: r.r, edge, padding: getComputedStyle(document.documentElement).paddingTop, stageTop: stage.getBoundingClientRect().top };
-    });
+    const insets = () =>
+      page.evaluate(() => {
+        const probe = document.body.appendChild(document.createElement('div'));
+        const px = (v) => {
+          probe.style.cssText = `position:fixed;top:0;left:0;width:${v}`;
+          return probe.getBoundingClientRect().width;
+        };
+        const r = {
+          height: px('env(safe-area-inset-top,0px)'),
+          l: px('env(safe-area-inset-left,0px)'),
+          r: px('env(safe-area-inset-right,0px)'),
+        };
+        probe.remove();
+        const stage = document.querySelector('.stage');
+        // the board, its eval bar, the player bars and the transport bar's contents: how far each comes to the screen's sides
+        // (the transport bar's own box is a bottom bar that runs to the screen's edges, its contents padded clear of the inset)
+        const parts = [
+          ...document.querySelectorAll('.part-board, .part-eval-bar, .part-player-bar, .part-transport-bar > *'),
+        ]
+          .map((e) => e.getBoundingClientRect())
+          .filter((b) => b.width > 0);
+        const edge = {
+          l: Math.min(...parts.map((b) => b.left)),
+          r: innerWidth - Math.max(...parts.map((b) => b.right)),
+        };
+        return {
+          top: r.height,
+          l: r.l,
+          r: r.r,
+          edge,
+          padding: getComputedStyle(document.documentElement).paddingTop,
+          stageTop: stage.getBoundingClientRect().top,
+        };
+      });
     await page.getByRole('button', { name: 'Full screen', exact: true }).tap();
     await page.waitForFunction(() => !!document.fullscreenElement, null, { timeout: 5000 });
     // upright in full screen the page starts under the camera's cut-out strip (the inset the browser reports), and
@@ -136,10 +193,18 @@ test('android · chrome · local build', async (t) => {
         await page.waitForFunction(() => innerWidth > innerHeight, null, { timeout: 10000 });
         await page.waitForTimeout(500); // the layout's resize
         const side = await insets();
-        t.diagnostic(`full screen, sideways: side insets ${side.l} / ${side.r} px, board and bars ${side.edge.l} / ${side.edge.r} px from the sides`);
+        t.diagnostic(
+          `full screen, sideways: side insets ${side.l} / ${side.r} px, board and bars ${side.edge.l} / ${side.edge.r} px from the sides`,
+        );
         assert.ok(side.l + side.r > 0, 'the emulated cut-out reports no side inset');
-        assert.ok(side.edge.l >= side.l - 0.5, `the board or a bar comes ${side.edge.l} px from the left, the inset is ${side.l} px`);
-        assert.ok(side.edge.r >= side.r - 0.5, `the board or a bar comes ${side.edge.r} px from the right, the inset is ${side.r} px`);
+        assert.ok(
+          side.edge.l >= side.l - 0.5,
+          `the board or a bar comes ${side.edge.l} px from the left, the inset is ${side.l} px`,
+        );
+        assert.ok(
+          side.edge.r >= side.r - 0.5,
+          `the board or a bar comes ${side.edge.r} px from the right, the inset is ${side.r} px`,
+        );
         await page.screenshot({ path: path.join(OUT, 'android-full-screen-sideways.png') });
       } finally {
         await sh('settings put system user_rotation 0');
@@ -154,7 +219,9 @@ test('android · chrome · local build', async (t) => {
 
   await t.test('the service worker takes over the page', async () => {
     await page.reload({ waitUntil: 'load' });
-    await page.waitForFunction(() => navigator.serviceWorker && navigator.serviceWorker.controller, null, { timeout: 30000 });
+    await page.waitForFunction(() => navigator.serviceWorker && navigator.serviceWorker.controller, null, {
+      timeout: 30000,
+    });
     assert.deepEqual(errors, []);
   });
 });

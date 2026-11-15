@@ -1,0 +1,22 @@
+# Prettier formats the project's own JavaScript only (`npx prettier --check '**/*.{js,jsx,cjs,mjs}'`); CSS and HTML in
+# app/shell.html are hand-formatted, and these are vendored, generated or data
+*.html
+*.css
+*.md
+*.json
+*.yaml
+*.yml
+vendor/
+babel/
+openings/
+vision/
+out/
+games/
+media/*.mp4
+tests/fixtures/
+tests/out/
+tools/
+app/sample-analysis.js
+src/pieces.js
+src/sample-game.js
+src/game-data.js

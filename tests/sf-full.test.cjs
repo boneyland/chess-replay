@@ -12,62 +12,119 @@ globalThis.caches = {
     if (!store.has(name)) store.set(name, new Map());
     const m = store.get(name);
     return {
-      async match(url) { return m.has(url) ? new Response(m.get(url)) : undefined; },
-      async put(url, r) { if (globalThis.putFails) throw globalThis.putFails; m.set(url, new Uint8Array(await r.arrayBuffer())); },
-      async delete(url) { return m.delete(url); },
+      async match(url) {
+        return m.has(url) ? new Response(m.get(url)) : undefined;
+      },
+      async put(url, r) {
+        if (globalThis.putFails) throw globalThis.putFails;
+        m.set(url, new Uint8Array(await r.arrayBuffer()));
+      },
+      async delete(url) {
+        return m.delete(url);
+      },
     };
   },
-  async delete(name) { return store.delete(name); },
+  async delete(name) {
+    return store.delete(name);
+  },
 };
 const workers = [];
-globalThis.Worker = class { constructor(url) { this.url = url; workers.push(this); } };
+globalThis.Worker = class {
+  constructor(url) {
+    this.url = url;
+    workers.push(this);
+  }
+};
 const storage = { quota: 1e9, usage: 0, persisted: 0 };
-Object.defineProperty(navigator, 'storage', { configurable: true, value: {
-  estimate: async () => ({ quota: storage.quota, usage: storage.usage }),
-  persist: async () => { storage.persisted++; return true; },
-} });
+Object.defineProperty(navigator, 'storage', {
+  configurable: true,
+  value: {
+    estimate: async () => ({ quota: storage.quota, usage: storage.usage }),
+    persist: async () => {
+      storage.persisted++;
+      return true;
+    },
+  },
+});
 
 loadUnit('kept-files.js');
 loadUnit('sf-full.js');
 const F = window.SFFull;
-const REAL = F.FILES.map((f) => ({ ...f })), REAL_THREADS = F.BUILDS.threads.map((f) => ({ ...f }));
+const REAL = F.FILES.map((f) => ({ ...f })),
+  REAL_THREADS = F.BUILDS.threads.map((f) => ({ ...f }));
 
 const bytes = (n, seed) => Uint8Array.from({ length: n }, (_, i) => (i * 31 + seed) & 255);
-const GLUE = bytes(300, 1), WASM = bytes(5000, 2), GLUE2 = bytes(320, 3), WASM2 = bytes(4800, 4);
+const GLUE = bytes(300, 1),
+  WASM = bytes(5000, 2),
+  GLUE2 = bytes(320, 3),
+  WASM2 = bytes(4800, 4);
 const hex = (b) => crypto.createHash('sha256').update(b).digest('hex');
 // what unpkg serves, by file name; a body arrives in 1 KB chunks
 let served = {};
 const fetched = [];
 globalThis.fetch = async (url, opts = {}) => {
   fetched.push(url);
-  const name = url.slice(F.BASE.length), b = served[name];
+  const name = url.slice(F.BASE.length),
+    b = served[name];
   if (!b) return new Response('not found', { status: 404 });
   let at = 0;
-  return new Response(new ReadableStream({
-    pull(c) {
-      if (opts.signal && opts.signal.aborted) { c.error(new DOMException('aborted', 'AbortError')); return; }
-      // a connection that stops sending: nothing more until the download gives up
-      if (globalThis.stallAt != null && at >= globalThis.stallAt) return new Promise((res) => opts.signal.addEventListener('abort', () => { c.error(new DOMException('aborted', 'AbortError')); res(); }));
-      if (at >= b.length) { c.close(); return; }
-      c.enqueue(b.slice(at, at + 1024)); at += 1024;
-    },
-  }));
+  return new Response(
+    new ReadableStream({
+      pull(c) {
+        if (opts.signal && opts.signal.aborted) {
+          c.error(new DOMException('aborted', 'AbortError'));
+          return;
+        }
+        // a connection that stops sending: nothing more until the download gives up
+        if (globalThis.stallAt != null && at >= globalThis.stallAt)
+          return new Promise((res) =>
+            opts.signal.addEventListener('abort', () => {
+              c.error(new DOMException('aborted', 'AbortError'));
+              res();
+            }),
+          );
+        if (at >= b.length) {
+          c.close();
+          return;
+        }
+        c.enqueue(b.slice(at, at + 1024));
+        at += 1024;
+      },
+    }),
+  );
 };
 
 function reset() {
-  store.clear(); workers.length = 0; fetched.length = 0; storage.quota = 1e9; storage.persisted = 0; globalThis.putFails = null; globalThis.stallAt = null;
+  store.clear();
+  workers.length = 0;
+  fetched.length = 0;
+  storage.quota = 1e9;
+  storage.persisted = 0;
+  globalThis.putFails = null;
+  globalThis.stallAt = null;
   F.limits.stallMs = 30000;
   F.remove();
   Object.assign(F.FILES[0], { size: GLUE.length, sha256: hex(GLUE) });
   Object.assign(F.FILES[1], { size: WASM.length, sha256: hex(WASM) });
   Object.assign(F.BUILDS.threads[0], { size: GLUE2.length, sha256: hex(GLUE2) });
   Object.assign(F.BUILDS.threads[1], { size: WASM2.length, sha256: hex(WASM2) });
-  served = { 'stockfish-19-single.js': GLUE, 'stockfish-19-single.wasm': WASM, 'stockfish-19.js': GLUE2, 'stockfish-19.wasm': WASM2 };
+  served = {
+    'stockfish-19-single.js': GLUE,
+    'stockfish-19-single.wasm': WASM,
+    'stockfish-19.js': GLUE2,
+    'stockfish-19.wasm': WASM2,
+  };
 }
 
 test('the pinned files are stockfish.js v19.0.1 full single-threaded from unpkg', () => {
   assert.equal(F.BASE, 'https://unpkg.com/stockfish@19.0.1/bin/');
-  assert.deepEqual(REAL.map((f) => [f.name, f.size]), [['stockfish-19-single.js', 28130], ['stockfish-19-single.wasm', 99169054]]);
+  assert.deepEqual(
+    REAL.map((f) => [f.name, f.size]),
+    [
+      ['stockfish-19-single.js', 28130],
+      ['stockfish-19-single.wasm', 99169054],
+    ],
+  );
   for (const f of REAL) assert.match(f.sha256, /^[0-9a-f]{64}$/);
   assert.equal(F.TOTAL, 28130 + 99169054);
   assert.notEqual(F.CACHE.indexOf('chess-replay-'), 0); // sw.js deletes caches named so on every deploy
@@ -139,7 +196,12 @@ test('download: a connection that stops sending is given up, and nothing is kept
 test('download: cancelling rejects it and keeps nothing', async () => {
   reset();
   const c = new AbortController();
-  const p = F.download({ signal: c.signal, onProgress: (got) => { if (got > 2000) c.abort(); } });
+  const p = F.download({
+    signal: c.signal,
+    onProgress: (got) => {
+      if (got > 2000) c.abort();
+    },
+  });
   await assert.rejects(p);
   assert.equal(await F.present(), false);
 });
@@ -169,26 +231,43 @@ test('removeKept: gone, or why not and what is still kept', async () => {
   reset();
   await F.download();
   const real = caches.delete;
-  caches.delete = async () => { throw new Error('The operation is insecure.'); };
+  caches.delete = async () => {
+    throw new Error('The operation is insecure.');
+  };
   try {
     const r = await F.removeKept();
     assert.deepEqual(r.kept, { single: true, threads: false });
     assert.match(r.err, /^The full engine could not be removed: The operation is insecure\.$/);
     assert.equal(await F.present(), true, 'still kept');
-  } finally { caches.delete = real; }
+  } finally {
+    caches.delete = real;
+  }
   assert.deepEqual(await F.removeKept(), { kept: { single: false, threads: false }, err: '' });
   assert.equal(await F.present(), false);
 });
 
 test('the pinned threaded files are stockfish.js v19.0.1 full multi-threaded from unpkg, as LAYOUT.md pins them', () => {
   assert.equal(F.FILES, F.BUILDS.single);
-  assert.deepEqual(REAL_THREADS.map((f) => [f.name, f.size]), [['stockfish-19.js', 33326], ['stockfish-19.wasm', 99076105]]);
+  assert.deepEqual(
+    REAL_THREADS.map((f) => [f.name, f.size]),
+    [
+      ['stockfish-19.js', 33326],
+      ['stockfish-19.wasm', 99076105],
+    ],
+  );
   const layout = require('fs').readFileSync(require('path').join(__dirname, '..', 'LAYOUT.md'), 'utf8');
-  for (const f of [...REAL, ...REAL_THREADS]) assert.ok(layout.split('\n').some((l) => l.includes('`' + f.name + '`') && l.includes(f.sha256)), f.name);
-  assert.equal(F.total('threads'), F.BUILDS.threads.reduce((s, f) => s + f.size, 0));
+  for (const f of [...REAL, ...REAL_THREADS])
+    assert.ok(
+      layout.split('\n').some((l) => l.includes('`' + f.name + '`') && l.includes(f.sha256)),
+      f.name,
+    );
+  assert.equal(
+    F.total('threads'),
+    F.BUILDS.threads.reduce((s, f) => s + f.size, 0),
+  );
 });
 
-test('present, download and start are per build: the single copy doesn\'t make the threaded one present', async () => {
+test("present, download and start are per build: the single copy doesn't make the threaded one present", async () => {
   reset();
   await F.download();
   assert.equal(await F.present('single'), true);
