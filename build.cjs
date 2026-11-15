@@ -5,7 +5,9 @@ const dir = __dirname,
   src = path.join(dir, 'src'),
   app = path.join(dir, 'app');
 const Babel = require(path.join(dir, 'babel', 'babel.min.js'));
-const jsx = (code, name) => Babel.transform(code, { filename: name, presets: ['react'] }).code;
+// compact: false, or Babel squeezes a unit over 500 KB (game-video.jsx since the Prettier pass) onto a few long lines,
+// which makes the crash screen's line and column numbers useless
+const jsx = (code, name) => Babel.transform(code, { filename: name, presets: ['react'], compact: false }).code;
 const read = (p) => fs.readFileSync(p, 'utf8');
 // Lichess's sound sets (vendor/sounds: Enigmahack's AGPL-3.0-or-later ones and EdinburghCollective's lisp, CC BY-NC-SA 4.0),
 // served next to the page as sounds/<set>/<Kind>.mp3 (Sfx.soundUrl) and kept by the service worker from the first visit
