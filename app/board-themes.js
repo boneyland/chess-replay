@@ -35,29 +35,52 @@
     ['purple-diag', 'Purple diag', 'purple-diag.png', null, null, '#957ab0', '#e5daf0'],
     ['pink', 'Pink', 'pink-pyramid.png', null, null, '#ed7272', '#e8e9b7'],
   ].map(([id, name, file, light, dark, onLight, onDark]) => ({ id, name, file, light, dark, onLight, onDark }));
-  const DEFAULT = THEMES[0].id, IDS = THEMES.map((t) => t.id);
+  const DEFAULT = THEMES[0].id,
+    IDS = THEMES.map((t) => t.id);
   const valid = (id) => (IDS.includes(id) ? id : DEFAULT);
   const byId = (id) => THEMES.find((t) => t.id === valid(id));
-  const url = (id) => { const t = byId(id); return t.file ? `boards/${t.file}` : null; };
+  const url = (id) => {
+    const t = byId(id);
+    return t.file ? `boards/${t.file}` : null;
+  };
   // the picker's tile: lila's 64×32 thumbnail of two squares (newspaper has none: its own picture, see the picker)
-  const thumb = (id) => { const t = byId(id); return t.file === 'newspaper.svg' ? null : `boards/${t.file ? t.file.replace(/\.(\w+)$/, '.thumbnail.$1') : t.id + '.thumbnail.png'}`; };
+  const thumb = (id) => {
+    const t = byId(id);
+    return t.file === 'newspaper.svg'
+      ? null
+      : `boards/${t.file ? t.file.replace(/\.(\w+)$/, '.thumbnail.$1') : t.id + '.thumbnail.png'}`;
+  };
 
   // the sliders. Lichess's: brightness and contrast in %, hue 0–100 (× 3.6°). Ours: tint (CSS's sepia(), in %: a
   // one-tone board at 100, which Hue then turns) and saturation (CSS's saturate(), in %)
   const SLIDERS = {
-    brightness: { min: 20, max: 140, step: 1, def: 100 }, contrast: { min: 40, max: 200, step: 2, def: 100 },
-    tint: { min: 0, max: 100, step: 1, def: 0 }, saturation: { min: 0, max: 300, step: 5, def: 100 }, hue: { min: 0, max: 100, step: 1, def: 0 },
+    brightness: { min: 20, max: 140, step: 1, def: 100 },
+    contrast: { min: 40, max: 200, step: 2, def: 100 },
+    tint: { min: 0, max: 100, step: 1, def: 0 },
+    saturation: { min: 0, max: 300, step: 5, def: 100 },
+    hue: { min: 0, max: 100, step: 1, def: 0 },
   };
   const NAMES = Object.keys(SLIDERS);
   const num = (v, s) => (Number.isFinite(v) ? Math.min(s.max, Math.max(s.min, v)) : s.def);
   const adjust = (a = {}) => Object.fromEntries(NAMES.map((n) => [n, num(a[n], SLIDERS[n])]));
-  const isDefault = (a) => { a = adjust(a); return NAMES.every((n) => a[n] === SLIDERS[n].def); };
+  const isDefault = (a) => {
+    a = adjust(a);
+    return NAMES.every((n) => a[n] === SLIDERS[n].def);
+  };
   // the same change as a CSS filter, for what has to follow a slider at once: the picker's tiles, and a picture board
   // until it's drawn through the sliders (render). sepia() and saturate() only once their sliders are moved
   const css = (a) => {
     a = adjust(a);
     if (isDefault(a)) return 'none';
-    return [`brightness(${a.brightness}%)`, `contrast(${a.contrast}%)`, a.tint ? `sepia(${a.tint}%)` : '', a.saturation !== 100 ? `saturate(${a.saturation}%)` : '', `hue-rotate(${Math.round(a.hue * 3.6 * 100) / 100}deg)`].filter(Boolean).join(' ');
+    return [
+      `brightness(${a.brightness}%)`,
+      `contrast(${a.contrast}%)`,
+      a.tint ? `sepia(${a.tint}%)` : '',
+      a.saturation !== 100 ? `saturate(${a.saturation}%)` : '',
+      `hue-rotate(${Math.round(a.hue * 3.6 * 100) / 100}deg)`,
+    ]
+      .filter(Boolean)
+      .join(' ');
   };
 
   // The sliders' colour change, in Lichess's order with ours before its hue (CSS's brightness(), contrast(), sepia(),
@@ -68,32 +91,66 @@
   const cl = (v) => (v < 0 ? 0 : v > 255 ? 255 : v);
   function steps(a) {
     a = adjust(a);
-    const b = a.brightness / 100, k = a.contrast / 100, th = (a.hue * 3.6 * Math.PI) / 180, c = Math.cos(th), s = Math.sin(th);
+    const b = a.brightness / 100,
+      k = a.contrast / 100,
+      th = (a.hue * 3.6 * Math.PI) / 180,
+      c = Math.cos(th),
+      s = Math.sin(th);
     const lut = new Float64Array(256);
     for (let v = 0; v < 256; v++) lut[v] = cl((cl(v * b) - 127.5) * k + 127.5);
-    const ms = [], q = 1 - a.tint / 100, u = a.saturation / 100;
-    if (a.tint) ms.push([
-      0.393 + 0.607 * q, 0.769 - 0.769 * q, 0.189 - 0.189 * q,
-      0.349 - 0.349 * q, 0.686 + 0.314 * q, 0.168 - 0.168 * q,
-      0.272 - 0.272 * q, 0.534 - 0.534 * q, 0.131 + 0.869 * q,
-    ]);
-    if (a.saturation !== 100) ms.push([
-      0.213 + 0.787 * u, 0.715 - 0.715 * u, 0.072 - 0.072 * u,
-      0.213 - 0.213 * u, 0.715 + 0.285 * u, 0.072 - 0.072 * u,
-      0.213 - 0.213 * u, 0.715 - 0.715 * u, 0.072 + 0.928 * u,
-    ]);
-    if (a.hue) ms.push([
-      0.213 + c * 0.787 - s * 0.213, 0.715 - c * 0.715 - s * 0.715, 0.072 - c * 0.072 + s * 0.928,
-      0.213 - c * 0.213 + s * 0.143, 0.715 + c * 0.285 + s * 0.140, 0.072 - c * 0.072 - s * 0.283,
-      0.213 - c * 0.213 - s * 0.787, 0.715 - c * 0.715 + s * 0.715, 0.072 + c * 0.928 + s * 0.072,
-    ]);
+    const ms = [],
+      q = 1 - a.tint / 100,
+      u = a.saturation / 100;
+    if (a.tint)
+      ms.push([
+        0.393 + 0.607 * q,
+        0.769 - 0.769 * q,
+        0.189 - 0.189 * q,
+        0.349 - 0.349 * q,
+        0.686 + 0.314 * q,
+        0.168 - 0.168 * q,
+        0.272 - 0.272 * q,
+        0.534 - 0.534 * q,
+        0.131 + 0.869 * q,
+      ]);
+    if (a.saturation !== 100)
+      ms.push([
+        0.213 + 0.787 * u,
+        0.715 - 0.715 * u,
+        0.072 - 0.072 * u,
+        0.213 - 0.213 * u,
+        0.715 + 0.285 * u,
+        0.072 - 0.072 * u,
+        0.213 - 0.213 * u,
+        0.715 - 0.715 * u,
+        0.072 + 0.928 * u,
+      ]);
+    if (a.hue)
+      ms.push([
+        0.213 + c * 0.787 - s * 0.213,
+        0.715 - c * 0.715 - s * 0.715,
+        0.072 - c * 0.072 + s * 0.928,
+        0.213 - c * 0.213 + s * 0.143,
+        0.715 + c * 0.285 + s * 0.14,
+        0.072 - c * 0.072 - s * 0.283,
+        0.213 - c * 0.213 - s * 0.787,
+        0.715 - c * 0.715 + s * 0.715,
+        0.072 + c * 0.928 + s * 0.072,
+      ]);
     return { lut, ms };
   }
   function filter(a) {
     const { lut, ms } = steps(a);
     return (r, g, b) => {
-      r = lut[r]; g = lut[g]; b = lut[b];
-      for (const m of ms) [r, g, b] = [cl(m[0] * r + m[1] * g + m[2] * b), cl(m[3] * r + m[4] * g + m[5] * b), cl(m[6] * r + m[7] * g + m[8] * b)];
+      r = lut[r];
+      g = lut[g];
+      b = lut[b];
+      for (const m of ms)
+        [r, g, b] = [
+          cl(m[0] * r + m[1] * g + m[2] * b),
+          cl(m[3] * r + m[4] * g + m[5] * b),
+          cl(m[6] * r + m[7] * g + m[8] * b),
+        ];
       return [r, g, b].map(Math.round);
     };
   }
@@ -101,32 +158,60 @@
   const toHex = (rgb) => '#' + rgb.map((v) => v.toString(16).padStart(2, '0')).join('');
   // a board's colours through the sliders: the squares (flat boards; null for a picture) and the coordinates on them
   function colours(id, a) {
-    const t = byId(id), f = filter(a), go = (h) => (h ? toHex(f(...hex(h))) : null);
+    const t = byId(id),
+      f = filter(a),
+      go = (h) => (h ? toHex(f(...hex(h))) : null);
     return { light: go(t.light), dark: go(t.dark), onLight: go(t.onLight), onDark: go(t.onDark) };
   }
   // the sliders on an RGBA picture's pixels (a Uint8ClampedArray, which rounds what it's given), in place
   function filterPixels(px, a) {
     const { lut, ms } = steps(a);
     for (let i = 0; i < px.length; i += 4) {
-      let r = lut[px[i]], g = lut[px[i + 1]], b = lut[px[i + 2]];
+      let r = lut[px[i]],
+        g = lut[px[i + 1]],
+        b = lut[px[i + 2]];
       for (let j = 0; j < ms.length; j++) {
-        const m = ms[j], x = m[0] * r + m[1] * g + m[2] * b, y = m[3] * r + m[4] * g + m[5] * b, z = m[6] * r + m[7] * g + m[8] * b;
-        r = cl(x); g = cl(y); b = cl(z);
+        const m = ms[j],
+          x = m[0] * r + m[1] * g + m[2] * b,
+          y = m[3] * r + m[4] * g + m[5] * b,
+          z = m[6] * r + m[7] * g + m[8] * b;
+        r = cl(x);
+        g = cl(y);
+        b = cl(z);
       }
-      px[i] = r; px[i + 1] = g; px[i + 2] = b;
+      px[i] = r;
+      px[i + 1] = g;
+      px[i + 2] = b;
     }
     return px;
   }
 
   // A picture board through the sliders, as a blob: URL of a SIZE px square PNG (the last few kept, so moving a slider
   // back, or a later view, finds it at once; older ones are let go). At the defaults it is lila's file as it is.
-  const SIZE = 1024, KEEP = 4, made = new Map(), pictures = {}, decoded = {};
-  const key = (id, a) => { a = adjust(a); return [valid(id), ...NAMES.map((n) => a[n])].join('/'); };
+  const SIZE = 1024,
+    KEEP = 4,
+    made = new Map(),
+    pictures = {},
+    decoded = {};
+  const key = (id, a) => {
+    a = adjust(a);
+    return [valid(id), ...NAMES.map((n) => a[n])].join('/');
+  };
   const rendered = (id, a) => (byId(id).file ? (isDefault(a) ? url(id) : made.get(key(id, a)) || null) : null);
   function picture(id) {
     if (pictures[id]) return pictures[id];
-    const im = new Image(); im.src = url(id);
-    return (pictures[id] = im.decode().then(() => { decoded[id] = true; return im; }, (e) => { delete pictures[id]; throw e; }));
+    const im = new Image();
+    im.src = url(id);
+    return (pictures[id] = im.decode().then(
+      () => {
+        decoded[id] = true;
+        return im;
+      },
+      (e) => {
+        delete pictures[id];
+        throw e;
+      },
+    ));
   }
   // lila's file for the board has been loaded, so an <img> of it draws at once (preload: load it)
   const loaded = (id) => !!decoded[valid(id)];
@@ -134,12 +219,21 @@
   async function render(id, a) {
     id = valid(id);
     if (!byId(id).file) return null;
-    const k = key(id, a), have = rendered(id, a);
-    if (have && isDefault(a)) { await picture(id); return have; }
-    if (have) { made.delete(k); made.set(k, have); return have; } // the newest again, so the one shown is let go last
+    const k = key(id, a),
+      have = rendered(id, a);
+    if (have && isDefault(a)) {
+      await picture(id);
+      return have;
+    }
+    if (have) {
+      made.delete(k);
+      made.set(k, have);
+      return have;
+    } // the newest again, so the one shown is let go last
     const im = await picture(id);
     if (made.has(k)) return made.get(k);
-    const cv = document.createElement('canvas'); cv.width = cv.height = SIZE;
+    const cv = document.createElement('canvas');
+    cv.width = cv.height = SIZE;
     const cx = cv.getContext('2d', { willReadFrequently: true });
     cx.drawImage(im, 0, 0, SIZE, SIZE);
     const d = cx.getImageData(0, 0, SIZE, SIZE);
@@ -149,9 +243,32 @@
     if (made.has(k)) return made.get(k);
     const u = URL.createObjectURL(blob);
     made.set(k, u);
-    while (made.size > KEEP) { const [old, ou] = made.entries().next().value; made.delete(old); setTimeout(() => URL.revokeObjectURL(ou), 5000); }
+    while (made.size > KEEP) {
+      const [old, ou] = made.entries().next().value;
+      made.delete(old);
+      setTimeout(() => URL.revokeObjectURL(ou), 5000);
+    }
     return u;
   }
 
-  window.BoardThemes = { THEMES, DEFAULT, SLIDERS, valid, byId, url, thumb, adjust, isDefault, css, key, filter, colours, filterPixels, rendered, loaded, preload, render };
+  window.BoardThemes = {
+    THEMES,
+    DEFAULT,
+    SLIDERS,
+    valid,
+    byId,
+    url,
+    thumb,
+    adjust,
+    isDefault,
+    css,
+    key,
+    filter,
+    colours,
+    filterPixels,
+    rendered,
+    loaded,
+    preload,
+    render,
+  };
 })();

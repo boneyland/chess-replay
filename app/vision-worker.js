@@ -7,23 +7,37 @@
 // input side, VisionCore.SIZE), then { type: 'image', image } (an ImageBitmap, closed here after use).
 // Out: { type: 'ready' } once loaded, { type: 'logits', logits } (a Float32Array of 64 x 13, squares a8..h1,
 // transferred), or { type: 'error', message }.
-const MEAN = [0.485, 0.456, 0.406], STD = [0.229, 0.224, 0.225]; // ImageNet's RGB normalisation, which the model was trained with
-let SIZE = 0, PLANE = 0; // the model's input side, and its square
-let ort = null, session = null;
+const MEAN = [0.485, 0.456, 0.406],
+  STD = [0.229, 0.224, 0.225]; // ImageNet's RGB normalisation, which the model was trained with
+let SIZE = 0,
+  PLANE = 0; // the model's input side, and its square
+let ort = null,
+  session = null;
 
-self.onmessage = (e) => handle(e.data).catch((err) => self.postMessage({ type: 'error', message: err instanceof Error ? err.message : String(err) }));
+self.onmessage = (e) =>
+  handle(e.data).catch((err) =>
+    self.postMessage({ type: 'error', message: err instanceof Error ? err.message : String(err) }),
+  );
 
 async function handle(msg) {
   if (msg.type === 'load') {
-    const url = (name) => { const u = msg.urls && msg.urls[name]; if (!u) throw new Error('The board reader is missing ' + name); return u; };
+    const url = (name) => {
+      const u = msg.urls && msg.urls[name];
+      if (!u) throw new Error('The board reader is missing ' + name);
+      return u;
+    };
     SIZE = msg.size;
     PLANE = SIZE * SIZE;
     ort = await import(url('ort.wasm.min.mjs'));
     // threads need SharedArrayBuffer, which only a cross-origin isolated page has (render.yaml's COOP and COEP)
-    ort.env.wasm.numThreads = self.crossOriginIsolated && typeof SharedArrayBuffer === 'function' ? Math.max(1, msg.threads) : 1;
+    ort.env.wasm.numThreads =
+      self.crossOriginIsolated && typeof SharedArrayBuffer === 'function' ? Math.max(1, msg.threads) : 1;
     ort.env.wasm.proxy = false; // this is already a Worker
     ort.env.wasm.wasmPaths = { wasm: url('ort-wasm-simd-threaded.wasm'), mjs: url('ort-wasm-simd-threaded.mjs') };
-    session = await ort.InferenceSession.create(url('chessq-lite-v4-int8.onnx'), { executionProviders: ['wasm'], graphOptimizationLevel: 'all' });
+    session = await ort.InferenceSession.create(url('chessq-lite-v4-int8.onnx'), {
+      executionProviders: ['wasm'],
+      graphOptimizationLevel: 'all',
+    });
     // the Blob URLs are read by now (the runtime imported, its threads started, the model loaded)
     self.postMessage({ type: 'ready' });
     return;

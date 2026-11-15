@@ -16,17 +16,26 @@ const EXPORT_LIBS = {
 const EXPORT_FORMATS = ['MP4', 'WebM', 'WebP'];
 // MP4 and WebM need WebCodecs' VideoEncoder, which Firefox for Android lacks (2026-11): there only the WebP is offered
 const VIDEO_EXPORT = typeof VideoEncoder === 'function';
-const EXPORT_NO_VIDEO = 'MP4 and WebM need a video encoder this browser doesn’t have (Firefox for Android has none yet), so the export is an animated WebP.';
+const EXPORT_NO_VIDEO =
+  'MP4 and WebM need a video encoder this browser doesn’t have (Firefox for Android has none yet), so the export is an animated WebP.';
 // The WebP's encoder (webp_enc_simd) needs WebAssembly SIMD, as Stockfish's wasm does (SFEngine.simdSupport: Firefox on
 // 32-bit Android lacks it), so the WebP isn't offered without it
 const WEBP_EXPORT = !window.SFEngine || window.SFEngine.simdSupport();
 const EXPORT_NO_WEBP = 'No animated WebP here: its encoder needs WebAssembly SIMD, which this browser lacks.';
-const EXPORT_NONE = 'This browser can’t export a video: MP4 and WebM need a video encoder, and the animated WebP needs WebAssembly SIMD. Try a recent Chrome, Edge, Safari or desktop Firefox.';
+const EXPORT_NONE =
+  'This browser can’t export a video: MP4 and WebM need a video encoder, and the animated WebP needs WebAssembly SIMD. Try a recent Chrome, Edge, Safari or desktop Firefox.';
 // A WebM is VP9 with Opus sound. It is offered where the encoder takes VP9 at 1080p (not every browser's does); the
 // frame's own size is checked again when the export starts. WEBM_OK: the answer once known (null before)
 let WEBM_OK = VIDEO_EXPORT ? null : false;
-const WEBM_EXPORT = !VIDEO_EXPORT ? Promise.resolve(false)
-  : Promise.resolve().then(() => VideoEncoder.isConfigSupported({ codec: 'vp09.00.10.08', width: 1920, height: 1080 })).then((r) => !!(r && r.supported), () => false).then((ok) => (WEBM_OK = ok));
+const WEBM_EXPORT = !VIDEO_EXPORT
+  ? Promise.resolve(false)
+  : Promise.resolve()
+      .then(() => VideoEncoder.isConfigSupported({ codec: 'vp09.00.10.08', width: 1920, height: 1080 }))
+      .then(
+        (r) => !!(r && r.supported),
+        () => false,
+      )
+      .then((ok) => (WEBM_OK = ok));
 // WebP widths offered besides the frame's own (the screen-sized page's width at the screen's density): 1676 fills GitHub's 838 px README
 // column on 2× screens. Quality is 50–95 (lossy), or 100: lossless. Encoded straight from the drawn frames, a WebP looks better than one
 // converted from the MP4, though it is larger than the MP4 of the same clip
@@ -38,37 +47,82 @@ const WEBP_QUALITY = { min: 50, max: 100, step: 5 };
 // No Very high: a stage is mostly still, and High already reaches what the encoders do with it (a 1440×900 clip came
 // out the same size at both, 58–63 dB apart); a saved Very high falls back to High
 const MP4_QUALITIES = ['Very low', 'Low', 'Medium', 'High'];
-const mp4Bitrate = (MB, q) => new MB.Quality({ quality: { 'Very low': 'very-low', Low: 'low', Medium: 'medium' }[q] || 'high', preferBitrate: true });
+const mp4Bitrate = (MB, q) =>
+  new MB.Quality({
+    quality: { 'Very low': 'very-low', Low: 'low', Medium: 'medium' }[q] || 'high',
+    preferBitrate: true,
+  });
 // libwebp 1.1.0 built to WebAssembly (Squoosh's codec, as packaged in @jsquash/webp 1.5.0), served next to the page.
 // The browser's own encoder (canvas.toBlob) takes only a quality, and at most qualities it sometimes chose a strong deblocking
 // filter for a frame, smearing the board's square edges and the text for that one frame. Here the filter is off, so
 // every frame is as sharp as its quality allows. These are all of libwebp's WebPConfig fields, which the codec needs
 const WEBP_LIB = { js: 'webp_enc_simd.js', wasm: 'webp_enc_simd.wasm' };
 const WEBP_CONFIG = {
-  quality: 75, target_size: 0, target_PSNR: 0, method: 4, sns_strength: 50, filter_strength: 0, filter_sharpness: 0,
-  filter_type: 1, partitions: 0, segments: 4, pass: 1, show_compressed: 0, preprocessing: 0, autofilter: 0,
-  partition_limit: 0, alpha_compression: 1, alpha_filtering: 1, alpha_quality: 100, lossless: 0, exact: 0, image_hint: 0,
-  emulate_jpeg_size: 0, thread_level: 0, low_memory: 0, near_lossless: 100, use_delta_palette: 0, use_sharp_yuv: 0,
+  quality: 75,
+  target_size: 0,
+  target_PSNR: 0,
+  method: 4,
+  sns_strength: 50,
+  filter_strength: 0,
+  filter_sharpness: 0,
+  filter_type: 1,
+  partitions: 0,
+  segments: 4,
+  pass: 1,
+  show_compressed: 0,
+  preprocessing: 0,
+  autofilter: 0,
+  partition_limit: 0,
+  alpha_compression: 1,
+  alpha_filtering: 1,
+  alpha_quality: 100,
+  lossless: 0,
+  exact: 0,
+  image_hint: 0,
+  emulate_jpeg_size: 0,
+  thread_level: 0,
+  low_memory: 0,
+  near_lossless: 100,
+  use_delta_palette: 0,
+  use_sharp_yuv: 0,
 };
 // quality 100 is lossless: libwebp then reads `quality` as effort, so it is left at the top
 const WEBP_LOSSLESS = { lossless: 1 };
 // each library loads once; a failed load is tried again on the next export
-const once = (load) => { let p = null; return () => (p = p || load().catch((e) => { p = null; throw e; })); };
-const loadHtml2canvas = once(() => new Promise((ok, fail) => {
-  if (window.html2canvas) return ok(window.html2canvas);
-  const s = document.createElement('script');
-  s.src = EXPORT_LIBS.html2canvas; s.integrity = EXPORT_LIBS.html2canvasHash; s.crossOrigin = 'anonymous';
-  s.onload = () => ok(window.html2canvas); s.onerror = () => fail(new Error('could not load html2canvas-pro'));
-  document.head.appendChild(s);
-}));
+const once = (load) => {
+  let p = null;
+  return () =>
+    (p =
+      p ||
+      load().catch((e) => {
+        p = null;
+        throw e;
+      }));
+};
+const loadHtml2canvas = once(
+  () =>
+    new Promise((ok, fail) => {
+      if (window.html2canvas) return ok(window.html2canvas);
+      const s = document.createElement('script');
+      s.src = EXPORT_LIBS.html2canvas;
+      s.integrity = EXPORT_LIBS.html2canvasHash;
+      s.crossOrigin = 'anonymous';
+      s.onload = () => ok(window.html2canvas);
+      s.onerror = () => fail(new Error('could not load html2canvas-pro'));
+      document.head.appendChild(s);
+    }),
+);
 const loadMediabunny = once(() => import(new URL(window.siteFile(EXPORT_LIBS.mediabunny), document.baseURI).href));
 // the codec's glue is an ES module; given the wasm's bytes, it doesn't fetch them itself
 const loadWebp = once(async () => {
   const at = (f) => new URL(window.siteFile(f), document.baseURI).href;
-  const [glue, wasm] = await Promise.all([import(at(WEBP_LIB.js)), fetch(at(WEBP_LIB.wasm)).then((r) => {
-    if (!r.ok) throw new Error('could not load the WebP encoder');
-    return r.arrayBuffer();
-  })]);
+  const [glue, wasm] = await Promise.all([
+    import(at(WEBP_LIB.js)),
+    fetch(at(WEBP_LIB.wasm)).then((r) => {
+      if (!r.ok) throw new Error('could not load the WebP encoder');
+      return r.arrayBuffer();
+    }),
+  ]);
   return glue.default({ noInitialRun: true, wasmBinary: wasm });
 });
 
@@ -79,28 +133,57 @@ const loadWebp = once(async () => {
 // drifted from the picture. A packet's length is known from its data instead: an Opus packet says it in its first bytes,
 // an AAC one is always 1024 samples; the times are those lengths added up
 const opusPacketSeconds = (d) => {
-  const toc = d[0], c = toc >> 3, frame = c < 12 ? [0.01, 0.02, 0.04, 0.06][c & 3] : c < 16 ? [0.01, 0.02][c & 1] : [0.0025, 0.005, 0.01, 0.02][c & 3];
-  const n = (toc & 3) === 0 ? 1 : (toc & 3) === 3 ? (d[1] & 63) : 2;
+  const toc = d[0],
+    c = toc >> 3,
+    frame =
+      c < 12 ? [0.01, 0.02, 0.04, 0.06][c & 3] : c < 16 ? [0.01, 0.02][c & 1] : [0.0025, 0.005, 0.01, 0.02][c & 3];
+  const n = (toc & 3) === 0 ? 1 : (toc & 3) === 3 ? d[1] & 63 : 2;
   return frame * n;
 };
 async function encodeSound(MB, sound, acodec) {
-  const sr = sound.sampleRate, ch = sound.numberOfChannels, out = [];
-  let err = null, config = null;
-  const enc = new AudioEncoder({ output: (chunk, meta) => { out.push(MB.EncodedPacket.fromEncodedChunk(chunk)); config = config || meta?.decoderConfig || null; }, error: (e) => { err = e; } });
-  enc.configure({ codec: acodec === 'aac' ? 'mp4a.40.2' : 'opus', sampleRate: sr, numberOfChannels: ch, bitrate: 96000 });
+  const sr = sound.sampleRate,
+    ch = sound.numberOfChannels,
+    out = [];
+  let err = null,
+    config = null;
+  const enc = new AudioEncoder({
+    output: (chunk, meta) => {
+      out.push(MB.EncodedPacket.fromEncodedChunk(chunk));
+      config = config || meta?.decoderConfig || null;
+    },
+    error: (e) => {
+      err = e;
+    },
+  });
+  enc.configure({
+    codec: acodec === 'aac' ? 'mp4a.40.2' : 'opus',
+    sampleRate: sr,
+    numberOfChannels: ch,
+    bitrate: 96000,
+  });
   const step = Math.round(sr / 2);
   for (let at = 0; at < sound.length && !err; at += step) {
-    const n = Math.min(step, sound.length - at), data = new Float32Array(n * ch);
+    const n = Math.min(step, sound.length - at),
+      data = new Float32Array(n * ch);
     for (let c = 0; c < ch; c++) data.set(sound.getChannelData(c).subarray(at, at + n), c * n);
-    const ad = new AudioData({ format: 'f32-planar', sampleRate: sr, numberOfFrames: n, numberOfChannels: ch, timestamp: Math.round((at / sr) * 1e6), data });
-    enc.encode(ad); ad.close();
+    const ad = new AudioData({
+      format: 'f32-planar',
+      sampleRate: sr,
+      numberOfFrames: n,
+      numberOfChannels: ch,
+      timestamp: Math.round((at / sr) * 1e6),
+      data,
+    });
+    enc.encode(ad);
+    ad.close();
   }
   if (!err) await enc.flush();
   enc.close();
   if (err) throw err;
   let t = 0;
   return out.map((p, k) => {
-    const dur = acodec === 'aac' ? 1024 / sr : opusPacketSeconds(p.data), packet = new MB.EncodedPacket(p.data, p.type, t, dur);
+    const dur = acodec === 'aac' ? 1024 / sr : opusPacketSeconds(p.data),
+      packet = new MB.EncodedPacket(p.data, p.type, t, dur);
     t += dur;
     return [packet, k === 0 ? { decoderConfig: config } : undefined];
   });
@@ -112,29 +195,51 @@ async function encodeSound(MB, sound, acodec) {
 // webm: VP9 in a WebM; else H.264 in an MP4, or VP9 in a WebM where the browser has no H.264 encoder
 async function videoEncoder(cv, W, H, fps, audio, { webm = false, quality = 'High', vfr = false } = {}) {
   const MB = await loadMediabunny();
-  const avc = !webm && await MB.canEncodeVideo('avc', { width: W, height: H });
+  const avc = !webm && (await MB.canEncodeVideo('avc', { width: W, height: H }));
   const codec = avc ? 'avc' : (await MB.canEncodeVideo('vp9', { width: W, height: H })) ? 'vp9' : null;
-  if (!codec) throw new Error(webm ? 'this browser can’t encode VP9 video at this size. Export an MP4 or an animated WebP instead.' : 'this browser can’t encode the video (as H.264 or VP9, at this size). Export an animated WebP instead.');
-  const output = new MB.Output({ format: avc ? new MB.Mp4OutputFormat() : new MB.WebMOutputFormat(), target: new MB.BufferTarget() });
-  const hold = vfr ? Object.assign(document.createElement('canvas'), { width: W, height: H }) : null, hx = vfr ? hold.getContext('2d') : null;
+  if (!codec)
+    throw new Error(
+      webm
+        ? 'this browser can’t encode VP9 video at this size. Export an MP4 or an animated WebP instead.'
+        : 'this browser can’t encode the video (as H.264 or VP9, at this size). Export an animated WebP instead.',
+    );
+  const output = new MB.Output({
+    format: avc ? new MB.Mp4OutputFormat() : new MB.WebMOutputFormat(),
+    target: new MB.BufferTarget(),
+  });
+  const hold = vfr ? Object.assign(document.createElement('canvas'), { width: W, height: H }) : null,
+    hx = vfr ? hold.getContext('2d') : null;
   const src = new MB.CanvasSource(vfr ? hold : cv, { codec, bitrate: mp4Bitrate(MB, quality) });
   output.addVideoTrack(src, { frameRate: fps });
   // the move sounds, when the browser can encode them: AAC in an MP4, else Opus (which MP4 and WebM both hold)
   const sound = audio ? await audio() : null;
-  let asrc = null, packets = null;
+  let asrc = null,
+    packets = null;
   if (sound) {
-    const acodec = await MB.getFirstEncodableAudioCodec(avc ? ['aac', 'opus'] : ['opus'], { numberOfChannels: sound.numberOfChannels, sampleRate: sound.sampleRate });
-    if (acodec) { asrc = new MB.EncodedAudioPacketSource(acodec); output.addAudioTrack(asrc); packets = await encodeSound(MB, sound, acodec); }
+    const acodec = await MB.getFirstEncodableAudioCodec(avc ? ['aac', 'opus'] : ['opus'], {
+      numberOfChannels: sound.numberOfChannels,
+      sampleRate: sound.sampleRate,
+    });
+    if (acodec) {
+      asrc = new MB.EncodedAudioPacketSource(acodec);
+      output.addAudioTrack(asrc);
+      packets = await encodeSound(MB, sound, acodec);
+    }
   }
   await output.start();
   if (asrc) {
     for (const [packet, meta] of packets) await asrc.add(packet, meta);
     asrc.close();
   }
-  let i = 0, from = null; // from: when the picture in hold began, in frames
+  let i = 0,
+    from = null; // from: when the picture in hold began, in frames
   return {
     frame: async (isNew) => {
-      if (!vfr) { await src.add(i / fps, 1 / fps); i++; return; }
+      if (!vfr) {
+        await src.add(i / fps, 1 / fps);
+        i++;
+        return;
+      }
       if (isNew || from == null) {
         if (from != null) await src.add(from / fps, (i - from) / fps);
         hx.drawImage(cv, 0, 0);
@@ -145,9 +250,14 @@ async function videoEncoder(cv, W, H, fps, audio, { webm = false, quality = 'Hig
     finish: async () => {
       if (vfr && from != null) await src.add(from / fps, (i - from) / fps);
       await output.finalize();
-      return { blob: new Blob([output.target.buffer], { type: avc ? 'video/mp4' : 'video/webm' }), ext: avc ? '.mp4' : '.webm' };
+      return {
+        blob: new Blob([output.target.buffer], { type: avc ? 'video/mp4' : 'video/webm' }),
+        ext: avc ? '.mp4' : '.webm',
+      };
     },
-    cancel: async () => { if (output.state === 'started') await output.cancel(); },
+    cancel: async () => {
+      if (output.state === 'started') await output.cancel();
+    },
   };
 }
 
@@ -159,35 +269,63 @@ async function videoEncoder(cv, W, H, fps, audio, { webm = false, quality = 'Hig
 // frames: how many the export draws, for their durations
 async function webpEncoder(cv, W, H, fps, frames, { width = 0, quality = 75 } = {}) {
   const scale = width && width < W ? width / W : 1;
-  const w = Math.round(W * scale), h = Math.round(H * scale);
+  const w = Math.round(W * scale),
+    h = Math.round(H * scale);
   let codec;
-  try { codec = await loadWebp(); } catch (e) { throw new Error('the WebP encoder couldn’t be downloaded from this site. Check the connection and try again, or export an MP4.'); }
+  try {
+    codec = await loadWebp();
+  } catch (e) {
+    throw new Error(
+      'the WebP encoder couldn’t be downloaded from this site. Check the connection and try again, or export an MP4.',
+    );
+  }
   // at the frame's own size the pixels are read straight from cv; a smaller WebP is drawn into its own canvas first
   const out = scale === 1 ? cv : Object.assign(document.createElement('canvas'), { width: w, height: h });
   const ox = out.getContext('2d', { willReadFrequently: true });
   ox.imageSmoothingQuality = 'high';
   const config = { ...WEBP_CONFIG, quality, ...(quality >= WEBP_QUALITY.max && WEBP_LOSSLESS) };
   // whole milliseconds that add up to the clip, so the file keeps time
-  const durs = window.WebPAnim.durations(frames, fps), stills = [];
-  let i = 0, prev = null;
+  const durs = window.WebPAnim.durations(frames, fps),
+    stills = [];
+  let i = 0,
+    prev = null;
   return {
     frame: async (isNew) => {
       if (i >= durs.length) throw new Error('more frames than the export said');
-      const last = stills[stills.length - 1], dur = durs[i];
+      const last = stills[stills.length - 1],
+        dur = durs[i];
       i++;
-      if (!isNew && last) { last.duration += dur; return; }
-      if (out !== cv) { ox.clearRect(0, 0, w, h); ox.drawImage(cv, 0, 0, w, h); }
+      if (!isNew && last) {
+        last.duration += dur;
+        return;
+      }
+      if (out !== cv) {
+        ox.clearRect(0, 0, w, h);
+        ox.drawImage(cv, 0, 0, w, h);
+      }
       const pixels = ox.getImageData(0, 0, w, h).data;
       const box = prev ? window.WebPAnim.changedBox(prev, pixels, w, h) : { x: 0, y: 0, w, h };
       prev = pixels;
-      if (!box) { last.duration += dur; return; }
+      if (!box) {
+        last.duration += dur;
+        return;
+      }
       const part = box.w === w && box.h === h ? pixels : ox.getImageData(box.x, box.y, box.w, box.h).data;
       const still = codec.encode(part, box.w, box.h, config);
       if (!still) throw new Error('the WebP encoder failed on frame ' + i);
       const { offset, alpha } = window.WebPAnim.stillImage(still);
-      stills.push({ data: new Blob([still.subarray(offset)]), size: still.length - offset, duration: dur, alpha, ...box });
+      stills.push({
+        data: new Blob([still.subarray(offset)]),
+        size: still.length - offset,
+        duration: dur,
+        alpha,
+        ...box,
+      });
     },
-    finish: async () => ({ blob: new Blob(window.WebPAnim.mux(stills, { width: w, height: h }), { type: 'image/webp' }), ext: '.webp' }),
+    finish: async () => ({
+      blob: new Blob(window.WebPAnim.mux(stills, { width: w, height: h }), { type: 'image/webp' }),
+      ext: '.webp',
+    }),
     cancel: async () => {},
   };
 }
@@ -204,7 +342,8 @@ function useVideoExport({ fps, format, webp, mp4Quality, mp4Vfr = false, save, s
     if (state && state.phase !== 'error') return;
     stopRef.current = false;
     setState({ phase: 'load', done: 0, N: 0 });
-    let enc = null, stage = null;
+    let enc = null,
+      stage = null;
     try {
       const html2canvas = await loadHtml2canvas();
       // the stage is in its screen-sized video layout once the busy state has rendered: wait a frame, then draw it from
@@ -219,21 +358,41 @@ function useVideoExport({ fps, format, webp, mp4Quality, mp4Vfr = false, save, s
       // the frame where it sits across it, and the page's margins above and below it (stageMargins), all in the page's
       // background (the stage's side padding, and one column's and its scrollbar's room). It is drawn at the screen's
       // density (LayoutCore.exportScale), up to 1920 px on its longer side; the frame has no transform, the page may (onclone)
-      const vw = document.documentElement.clientWidth, left = el.closest('.stage-frame').getBoundingClientRect().left, m = stageMargins(area);
-      const cssW = el.offsetWidth, cssH = el.offsetHeight, fullH = cssH + m.top + m.bottom, scale = LayoutCore.exportScale(vw, fullH, window.devicePixelRatio);
-      const W = LayoutCore.exportPx(vw, scale), H = LayoutCore.exportPx(fullH, scale), k = W / vw;
-      const cv = document.createElement('canvas'); cv.width = W; cv.height = H;
+      const vw = document.documentElement.clientWidth,
+        left = el.closest('.stage-frame').getBoundingClientRect().left,
+        m = stageMargins(area);
+      const cssW = el.offsetWidth,
+        cssH = el.offsetHeight,
+        fullH = cssH + m.top + m.bottom,
+        scale = LayoutCore.exportScale(vw, fullH, window.devicePixelRatio);
+      const W = LayoutCore.exportPx(vw, scale),
+        H = LayoutCore.exportPx(fullH, scale),
+        k = W / vw;
+      const cv = document.createElement('canvas');
+      cv.width = W;
+      cv.height = H;
       const cx = cv.getContext('2d', { willReadFrequently: format === 'WebP' }); // the WebP encoder reads every frame back
       // Full (0) and Half are taken against the canvas drawn now, whatever Settings' widths were worked out from
       const wpx = webp.width === 'Half' ? Math.round(W / 2) : webp.width;
       const N = Math.floor((end - start) * fps) + 1;
-      enc = format === 'WebP' ? await webpEncoder(cv, W, H, fps, N, { ...webp, width: wpx }) : await videoEncoder(cv, W, H, fps, audio, { webm: format === 'WebM', quality: mp4Quality, vfr: mp4Vfr });
+      enc =
+        format === 'WebP'
+          ? await webpEncoder(cv, W, H, fps, N, { ...webp, width: wpx })
+          : await videoEncoder(cv, W, H, fps, audio, { webm: format === 'WebM', quality: mp4Quality, vfr: mp4Vfr });
       // html2canvas copies the whole document every frame: leave out the scripts (the page inlines its
       // opening tables) and the page around the stage, but keep the head and every stylesheet (fonts and base styles)
       const keep = (n) => n.tagName === 'STYLE' || n.tagName === 'LINK' || n.tagName === 'HEAD' || n.closest('head');
-      const skip = (target) => (n) => n.tagName === 'SCRIPT' || (!keep(n) && n !== target && !n.contains(target) && !target.contains(n));
+      const skip = (target) => (n) =>
+        n.tagName === 'SCRIPT' || (!keep(n) && n !== target && !n.contains(target) && !target.contains(n));
       // the stage drawn layer by layer, each redrawn only when its markup changes (export-draw.js)
-      stage = window.ExportDraw.compositor(el, { W, H, scale: k, html2canvas, skip, frame: { x: Math.round(left * k), y: Math.round(m.top * k), w: Math.round(cssW * k), h: Math.round(cssH * k) } });
+      stage = window.ExportDraw.compositor(el, {
+        W,
+        H,
+        scale: k,
+        html2canvas,
+        skip,
+        frame: { x: Math.round(left * k), y: Math.round(m.top * k), w: Math.round(cssW * k), h: Math.round(cssH * k) },
+      });
       // loading is over: the first frame, which draws every layer, is the slowest and counts as drawing
       setState({ phase: 'render', done: 0, N });
       const t0 = performance.now();
@@ -241,17 +400,25 @@ function useVideoExport({ fps, format, webp, mp4Quality, mp4Vfr = false, save, s
       for (let i = 0; i < N; i++) {
         if (stopRef.current) {
           // the viewer's own Cancel: an encoder that fails to stop is no export failure
-          try { await enc.cancel(); } catch (_) {}
-          stage.done(); setState(null); return;
+          try {
+            await enc.cancel();
+          } catch (_) {}
+          stage.done();
+          setState(null);
+          return;
         }
         seekStage(start + i / fps);
         // a frame whose layers all match the last one's (holds, the title and end cards) leaves the canvas as it is
         await enc.frame(await stage.draw(cx));
-        const now = performance.now(), per = (now - t0) / (i + 1);
-        setState({ phase: 'render', done: i + 1, N, eta: per * (N - i - 1) / 1000 });
+        const now = performance.now(),
+          per = (now - t0) / (i + 1);
+        setState({ phase: 'render', done: i + 1, N, eta: (per * (N - i - 1)) / 1000 });
         // frames that need no new capture finish in microtasks, which never let React render or the browser paint:
         // give it a turn a few times a second, so the count moves (and Cancel answers) on a fast export too
-        if (now - shown > 100) { shown = now; await new Promise((ok) => setTimeout(ok, 0)); }
+        if (now - shown > 100) {
+          shown = now;
+          await new Promise((ok) => setTimeout(ok, 0));
+        }
       }
       stage.done();
       setState({ phase: 'save', done: N, N });
@@ -260,39 +427,66 @@ function useVideoExport({ fps, format, webp, mp4Quality, mp4Vfr = false, save, s
       setState(null);
     } catch (e) {
       if (stage) stage.done();
-      try { if (enc) await enc.cancel(); } catch (_) {}
+      try {
+        if (enc) await enc.cancel();
+      } catch (_) {}
       setState({ phase: 'error', msg: 'Export failed: ' + ((e && e.message) || e) });
     }
   };
-  return { state, run, format, cancel: () => { stopRef.current = true; }, dismiss: () => setState(null), busy: !!state && state.phase !== 'error' };
+  return {
+    state,
+    run,
+    format,
+    cancel: () => {
+      stopRef.current = true;
+    },
+    dismiss: () => setState(null),
+    busy: !!state && state.phase !== 'error',
+  };
 }
 
 function ExportOverlay({ x }) {
   const s = x.state;
   if (!s) return null;
-  if (s.phase === 'error') return (
-    <div className="export part-export-failed-dialog" role="alertdialog" aria-label="Export failed">
-      <div className="export-box">
-        <div className="export-title">Export failed</div>
-        <div className="export-line export-err">{s.msg.replace(/^Export failed: /, '')}</div>
-        <button type="button" className="twk-btn secondary" onClick={x.dismiss}>Close</button>
+  if (s.phase === 'error')
+    return (
+      <div className="export part-export-failed-dialog" role="alertdialog" aria-label="Export failed">
+        <div className="export-box">
+          <div className="export-title">Export failed</div>
+          <div className="export-line export-err">{s.msg.replace(/^Export failed: /, '')}</div>
+          <button type="button" className="twk-btn secondary" onClick={x.dismiss}>
+            Close
+          </button>
+        </div>
       </div>
-    </div>
-  );
+    );
   const pct = s.N ? Math.round((100 * s.done) / s.N) : 0;
   // minutes and seconds, as the Settings note gives the export's length
-  const left = s.eta != null ? Math.ceil(s.eta) : 0, eta = `${Math.floor(left / 60)}:${String(left % 60).padStart(2, '0')}`;
-  const line = s.phase === 'load' ? 'Loading the encoder…'
-    : s.phase === 'save' ? 'Finishing the file…'
-    : `Frame ${s.done} of ${s.N}` + (s.eta != null ? ` · about ${eta} left` : '');
+  const left = s.eta != null ? Math.ceil(s.eta) : 0,
+    eta = `${Math.floor(left / 60)}:${String(left % 60).padStart(2, '0')}`;
+  const line =
+    s.phase === 'load'
+      ? 'Loading the encoder…'
+      : s.phase === 'save'
+        ? 'Finishing the file…'
+        : `Frame ${s.done} of ${s.N}` + (s.eta != null ? ` · about ${eta} left` : '');
   return (
     <div className="export part-exporting-dialog" role="dialog" aria-label="Exporting">
       <div className="export-box">
         <div className="export-title">Exporting {x.format === 'WebP' ? 'animated WebP' : 'video'}</div>
-        <div className="export-bar"><div style={{ width: pct + '%' }} /></div>
+        <div className="export-bar">
+          <div style={{ width: pct + '%' }} />
+        </div>
         <div className="export-line">{line}</div>
-        <div className="export-note">Keep this tab active and in front: the export slows or stops while the tab or window is hidden (another tab, or minimized). Resizing the window or turning the phone changes the layout, and the video with it.</div>
-        {s.phase === 'render' && <button type="button" className="twk-btn secondary" onClick={x.cancel}>Cancel</button>}
+        <div className="export-note">
+          Keep this tab active and in front: the export slows or stops while the tab or window is hidden (another tab,
+          or minimized). Resizing the window or turning the phone changes the layout, and the video with it.
+        </div>
+        {s.phase === 'render' && (
+          <button type="button" className="twk-btn secondary" onClick={x.cancel}>
+            Cancel
+          </button>
+        )}
       </div>
     </div>
   );

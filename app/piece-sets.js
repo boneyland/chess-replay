@@ -5,10 +5,14 @@
 (function () {
   const PIECES = ['wK', 'wQ', 'wR', 'wB', 'wN', 'wP', 'bK', 'bQ', 'bR', 'bB', 'bN', 'bP'];
   const LIC = {
-    'GPL-2.0-or-later': 'https://www.gnu.org/licenses/gpl-2.0.txt', 'GPL-3.0-or-later': 'https://www.gnu.org/licenses/gpl-3.0.html',
-    'AGPL-3.0-or-later': 'https://www.gnu.org/licenses/agpl-3.0.html', 'Apache 2.0': 'https://www.apache.org/licenses/LICENSE-2.0',
-    MIT: 'https://opensource.org/license/mit', 'CC0 1.0': 'https://creativecommons.org/publicdomain/zero/1.0/',
-    'CC BY 4.0': 'https://creativecommons.org/licenses/by/4.0/', 'CC BY-NC-SA 4.0': 'https://creativecommons.org/licenses/by-nc-sa/4.0/',
+    'GPL-2.0-or-later': 'https://www.gnu.org/licenses/gpl-2.0.txt',
+    'GPL-3.0-or-later': 'https://www.gnu.org/licenses/gpl-3.0.html',
+    'AGPL-3.0-or-later': 'https://www.gnu.org/licenses/agpl-3.0.html',
+    'Apache 2.0': 'https://www.apache.org/licenses/LICENSE-2.0',
+    MIT: 'https://opensource.org/license/mit',
+    'CC0 1.0': 'https://creativecommons.org/publicdomain/zero/1.0/',
+    'CC BY 4.0': 'https://creativecommons.org/licenses/by/4.0/',
+    'CC BY-NC-SA 4.0': 'https://creativecommons.org/licenses/by-nc-sa/4.0/',
     'CC BY-NC-SA 2.5': 'https://xkcd.com/license.html',
   };
   // [id, name, author, licence, author's page]; the first is the default, then the open sets, then the non-commercial ones
@@ -41,7 +45,8 @@
     ['anarcandy', 'Anarcandy', 'caderek', 'CC BY-NC-SA 4.0', 'https://github.com/caderek'],
     ['xkcd', 'xkcd', 'Randall Munroe', 'CC BY-NC-SA 2.5', 'https://xkcd.com/about'],
   ].map(([id, name, by, licence, home]) => ({ id, name, by, licence, licenceUrl: LIC[licence], home: home || null }));
-  const DEFAULT = SETS[0].id, IDS = SETS.map((s) => s.id);
+  const DEFAULT = SETS[0].id,
+    IDS = SETS.map((s) => s.id);
   // non-commercial sets (CC BY-NC-SA): an export drawn with one carries its terms, which the Export tab says
   const NON_COMMERCIAL = SETS.filter((s) => /NC/.test(s.licence)).map((s) => s.id);
   const valid = (id) => (IDS.includes(id) ? id : DEFAULT);
@@ -51,16 +56,28 @@
   // A set is drawn only once all twelve pictures have decoded, so the board never mixes sets or shows a broken one;
   // the decoded pictures are held here, so the board's <img>s (and an export's first frame) find them at once. A
   // failed load (offline before the set was ever kept) is forgotten, so the next asks again.
-  const kept = { [DEFAULT]: true }, loading = {};
+  const kept = { [DEFAULT]: true },
+    loading = {};
   const ready = (id) => !!kept[valid(id)];
   const load = (id, make = () => new Image()) => {
     id = valid(id);
     if (kept[id]) return Promise.resolve(true);
     if (loading[id]) return loading[id];
-    const imgs = PIECES.map((p) => { const im = make(); im.src = url(id, p); return im; });
+    const imgs = PIECES.map((p) => {
+      const im = make();
+      im.src = url(id, p);
+      return im;
+    });
     return (loading[id] = Promise.all(imgs.map((im) => im.decode())).then(
-      () => { kept[id] = imgs; delete loading[id]; return true; },
-      () => { delete loading[id]; return false; },
+      () => {
+        kept[id] = imgs;
+        delete loading[id];
+        return true;
+      },
+      () => {
+        delete loading[id];
+        return false;
+      },
     ));
   };
 

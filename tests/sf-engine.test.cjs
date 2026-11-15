@@ -17,17 +17,26 @@ function fakeWorker({ silent = false, noReady = false, maxHashMB = Infinity } = 
     w.posted.push(s);
     if (silent || dead) return;
     const h = /^setoption name Hash value (\d+)$/.exec(s);
-    if (h && +h[1] > maxHashMB) { dead = true; say(`Failed to allocate ${h[1]}MB for transposition table.`); return; }
+    if (h && +h[1] > maxHashMB) {
+      dead = true;
+      say(`Failed to allocate ${h[1]}MB for transposition table.`);
+      return;
+    }
     if (s === 'uci') say('uciok');
     if (s === 'isready' && !noReady) say('readyok');
   };
-  w.finish = (best, info = 'info depth 5 score cp 10 pv ' + best) => { say(info); say('bestmove ' + best); };
+  w.finish = (best, info = 'info depth 5 score cp 10 pv ' + best) => {
+    say(info);
+    say('bestmove ' + best);
+  };
   w.terminate = () => {};
   return w;
 }
 const tick = () => new Promise((r) => setTimeout(r, 5));
 // ticks until cond holds (a loaded build machine can take more than one tick over a chain of worker answers)
-const until = async (cond, ms = 2000) => { for (const t0 = Date.now(); !cond() && Date.now() - t0 < ms;) await tick(); };
+const until = async (cond, ms = 2000) => {
+  for (const t0 = Date.now(); !cond() && Date.now() - t0 < ms; ) await tick();
+};
 const positions = (w) => w.posted.filter((s) => s.startsWith('position'));
 
 test('positionCommand', () => {
@@ -36,8 +45,14 @@ test('positionCommand', () => {
 });
 
 test('positionCommand with a start FEN', () => {
-  assert.equal(SF.positionCommand([], '4k3/8/8/8/8/8/4P3/4K3 b - - 0 1'), 'position fen 4k3/8/8/8/8/8/4P3/4K3 b - - 0 1');
-  assert.equal(SF.positionCommand(['e8d7'], '4k3/8/8/8/8/8/4P3/4K3 b - - 0 1'), 'position fen 4k3/8/8/8/8/8/4P3/4K3 b - - 0 1 moves e8d7');
+  assert.equal(
+    SF.positionCommand([], '4k3/8/8/8/8/8/4P3/4K3 b - - 0 1'),
+    'position fen 4k3/8/8/8/8/8/4P3/4K3 b - - 0 1',
+  );
+  assert.equal(
+    SF.positionCommand(['e8d7'], '4k3/8/8/8/8/8/4P3/4K3 b - - 0 1'),
+    'position fen 4k3/8/8/8/8/8/4P3/4K3 b - - 0 1 moves e8d7',
+  );
   assert.equal(SF.positionCommand(['e2e4'], window.ChessCore.START_FEN), 'position startpos moves e2e4');
 });
 test('ready rejects after readyTimeoutMs when the worker is silent', async () => {
@@ -54,10 +69,23 @@ test('ready rejects at once when the engine died before it was asked', async () 
   assert.ok(Date.now() - t0 < 1000);
 });
 
-test('a worker\'s error event is handled, so the browser doesn\'t also report it as uncaught', async () => {
+test("a worker's error event is handled, so the browser doesn't also report it as uncaught", async () => {
   const ws = [];
-  const e = SF.create(() => { const w = fakeWorker({ silent: true }); ws.push(w); return w; }, { readyTimeoutMs: 60000 });
-  const ev = () => ({ type: 'error', prevented: false, preventDefault() { this.prevented = true; } });
+  const e = SF.create(
+    () => {
+      const w = fakeWorker({ silent: true });
+      ws.push(w);
+      return w;
+    },
+    { readyTimeoutMs: 60000 },
+  );
+  const ev = () => ({
+    type: 'error',
+    prevented: false,
+    preventDefault() {
+      this.prevented = true;
+    },
+  });
   const first = ev();
   ws[0].onerror(first);
   assert.ok(first.prevented);
@@ -81,10 +109,19 @@ test('an own search runs before queued game searches but never interrupts one', 
   const c = e.search({ moves: ['d2d4'], depth: 24, movetimeMs: 3000, priority: 'own' });
   await tick();
   assert.equal(w.posted.filter((s) => s === 'stop').length, 0);
-  w.finish('e7e5'); await a.promise; await tick();
-  w.finish('d7d5'); await c.promise; await tick();
-  w.finish('g1f3'); await b.promise;
-  assert.deepEqual(positions(w), ['position startpos moves e2e4', 'position startpos moves d2d4', 'position startpos moves e2e4 e7e5']);
+  w.finish('e7e5');
+  await a.promise;
+  await tick();
+  w.finish('d7d5');
+  await c.promise;
+  await tick();
+  w.finish('g1f3');
+  await b.promise;
+  assert.deepEqual(positions(w), [
+    'position startpos moves e2e4',
+    'position startpos moves d2d4',
+    'position startpos moves e2e4 e7e5',
+  ]);
   assert.ok(w.posted.includes('go depth 24 movetime 3000'));
 });
 
@@ -100,8 +137,24 @@ test('a play search runs before own and game searches, in queue order within eac
   const p2 = e.search({ moves: ['d2d3'], depth: null, movetimeMs: 2000, priority: 'play' });
   await tick();
   assert.equal(w.posted.filter((s) => s === 'stop').length, 0);
-  for (const [q, best] of [[a, 'e2e4'], [p1, 'e7e5'], [p2, 'e7e5'], [o, 'e7e5'], [g, 'e7e5']]) { w.finish(best); await q.promise; await tick(); }
-  assert.deepEqual(positions(w), ['position startpos', 'position startpos moves c2c3', 'position startpos moves d2d3', 'position startpos moves b2b3', 'position startpos moves a2a3']);
+  for (const [q, best] of [
+    [a, 'e2e4'],
+    [p1, 'e7e5'],
+    [p2, 'e7e5'],
+    [o, 'e7e5'],
+    [g, 'e7e5'],
+  ]) {
+    w.finish(best);
+    await q.promise;
+    await tick();
+  }
+  assert.deepEqual(positions(w), [
+    'position startpos',
+    'position startpos moves c2c3',
+    'position startpos moves d2d3',
+    'position startpos moves b2b3',
+    'position startpos moves a2a3',
+  ]);
   assert.ok(w.posted.includes('go movetime 2000'), 'no depth limit: the time alone ends the search');
 });
 
@@ -112,7 +165,9 @@ test('a cancelled queued search never posts go and resolves null', async () => {
   const a = e.search({ moves: [], depth: 20, movetimeMs: 3000, priority: 'game' });
   const b = e.search({ moves: ['e2e4'], depth: 20, movetimeMs: 3000, priority: 'game' });
   b.cancel();
-  w.finish('e2e4'); await a.promise; await tick();
+  w.finish('e2e4');
+  await a.promise;
+  await tick();
   assert.equal(await b.promise, null);
   assert.deepEqual(positions(w), ['position startpos']);
 });
@@ -126,10 +181,19 @@ test('cancelling the running search sends stop and resolves with its last score'
   a.cancel();
   assert.ok(w.posted.includes('stop'));
   w.finish('d2d4', 'info depth 7 score cp 25 pv d2d4 d7d5');
-  assert.deepEqual(await a.promise, { cp: 25, depth: 7, lines: [{ k: 1, cp: 25, depth: 7, pv: ['d2d4', 'd7d5'] }], maxDepth: 7, pv: ['d2d4', 'd7d5'], nodes: null, timeMs: null, best: 'd2d4' });
+  assert.deepEqual(await a.promise, {
+    cp: 25,
+    depth: 7,
+    lines: [{ k: 1, cp: 25, depth: 7, pv: ['d2d4', 'd7d5'] }],
+    maxDepth: 7,
+    pv: ['d2d4', 'd7d5'],
+    nodes: null,
+    timeMs: null,
+    best: 'd2d4',
+  });
 });
 
-test('onInfo streams scores from White\'s point of view', async () => {
+test("onInfo streams scores from White's point of view", async () => {
   let w;
   const e = SF.create(() => (w = fakeWorker()), {});
   await e.ready();
@@ -141,12 +205,19 @@ test('onInfo streams scores from White\'s point of view', async () => {
   assert.deepEqual(seen, [-30]);
 });
 
-test('onInfo is from White\'s point of view when the FEN has Black to move', async () => {
+test("onInfo is from White's point of view when the FEN has Black to move", async () => {
   let w;
   const e = SF.create(() => (w = fakeWorker()), {});
   await e.ready();
   const seen = [];
-  const a = e.search({ moves: [], fen: '4k3/8/8/8/8/8/4P3/4K3 b - - 0 1', depth: 20, movetimeMs: 3000, priority: 'own', onInfo: (s) => seen.push(s.cp) });
+  const a = e.search({
+    moves: [],
+    fen: '4k3/8/8/8/8/8/4P3/4K3 b - - 0 1',
+    depth: 20,
+    movetimeMs: 3000,
+    priority: 'own',
+    onInfo: (s) => seen.push(s.cp),
+  });
   await tick();
   assert.deepEqual(positions(w), ['position fen 4k3/8/8/8/8/8/4P3/4K3 b - - 0 1']);
   w.finish('e8d7', 'info depth 5 score cp 50 pv e8d7');
@@ -159,10 +230,18 @@ test('real engine: a FEN start with Black to move finds the mate', { timeout: 60
   const e = SF.create(nodeWorker, {});
   try {
     await e.ready();
-    const r = await e.search({ moves: [], fen: 'r5k1/8/8/8/8/8/5PPP/6K1 b - - 0 1', depth: 10, movetimeMs: 3000, priority: 'own' }).promise;
+    const r = await e.search({
+      moves: [],
+      fen: 'r5k1/8/8/8/8/8/5PPP/6K1 b - - 0 1',
+      depth: 10,
+      movetimeMs: 3000,
+      priority: 'own',
+    }).promise;
     assert.ok(r.cp <= -9990, r.cp);
     assert.equal(r.pv[0], 'a8a1');
-  } finally { e.quit(); }
+  } finally {
+    e.quit();
+  }
 });
 
 test('real engine: castling rights survive a move list', { timeout: 60000 }, async () => {
@@ -175,17 +254,22 @@ test('real engine: castling rights survive a move list', { timeout: 60000 }, asy
     let pos = window.ChessCore.posFromFen('rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w');
     for (const u of moves) pos = window.ChessCore.applyUci(pos, u).pos;
     assert.ok(window.ChessCore.applyUci(pos, r.best), r.best);
-  } finally { e.quit(); }
+  } finally {
+    e.quit();
+  }
 });
 
 test('real engine: a mated position gives no move and a mate score', { timeout: 60000 }, async () => {
   const e = SF.create(nodeWorker, {});
   try {
     await e.ready();
-    const r = await e.search({ moves: ['f2f3', 'e7e5', 'g2g4', 'd8h4'], depth: 12, movetimeMs: 3000, priority: 'own' }).promise;
+    const r = await e.search({ moves: ['f2f3', 'e7e5', 'g2g4', 'd8h4'], depth: 12, movetimeMs: 3000, priority: 'own' })
+      .promise;
     assert.equal(r.best, null);
     assert.equal(r.cp, -10000);
-  } finally { e.quit(); }
+  } finally {
+    e.quit();
+  }
 });
 
 test('a search started before ready() finishes waits for readyok', async () => {
@@ -193,10 +277,12 @@ test('a search started before ready() finishes waits for readyok', async () => {
   const e = SF.create(() => (w = fakeWorker()), {});
   const r = e.ready();
   const a = e.search({ moves: [], depth: 20, movetimeMs: 3000, priority: 'own' });
-  await r; await tick();
+  await r;
+  await tick();
   const order = w.posted.filter((s) => s === 'isready' || s.startsWith('position'));
   assert.deepEqual(order, ['isready', 'position startpos']);
-  w.finish('e2e4'); await a.promise;
+  w.finish('e2e4');
+  await a.promise;
 });
 
 test('a worker error resolves the running and queued searches with null', async () => {
@@ -215,7 +301,17 @@ test('a worker error resolves the running and queued searches with null', async 
 
 test('a worker that misses the ready timeout is terminated', async () => {
   let w;
-  const e = SF.create(() => { w = fakeWorker({ silent: true }); w.terminated = false; w.terminate = () => { w.terminated = true; }; return w; }, { readyTimeoutMs: 50 });
+  const e = SF.create(
+    () => {
+      w = fakeWorker({ silent: true });
+      w.terminated = false;
+      w.terminate = () => {
+        w.terminated = true;
+      };
+      return w;
+    },
+    { readyTimeoutMs: 50 },
+  );
   await assert.rejects(e.ready());
   assert.equal(w.terminated, true);
 });
@@ -225,8 +321,13 @@ test('the default ready timeout allows a slow download (30 s)', () => {
 });
 
 test('onFail reports an engine that dies after it started', async () => {
-  let w, reported = null;
-  const e = SF.create(() => (w = fakeWorker()), { onFail: (err) => { reported = err; } });
+  let w,
+    reported = null;
+  const e = SF.create(() => (w = fakeWorker()), {
+    onFail: (err) => {
+      reported = err;
+    },
+  });
   await e.ready();
   const a = e.search({ moves: [], depth: 20, movetimeMs: 3000, priority: 'own' });
   await tick();
@@ -242,7 +343,9 @@ test('a search cut off mid-depth reports the whole search: its time, nodes and t
   const a = e.search({ moves: [], depth: 24, movetimeMs: 3000, priority: 'own' });
   await new Promise((r) => setTimeout(r, 5));
   w.onmessage({ data: 'info depth 22 seldepth 30 multipv 1 score cp 30 nodes 1000000 nps 1 time 2400 pv e2e4 e7e5' });
-  w.onmessage({ data: 'info depth 23 seldepth 33 multipv 1 score cp 41 lowerbound nodes 1500000 nps 1 time 3000 pv e2e4' });
+  w.onmessage({
+    data: 'info depth 23 seldepth 33 multipv 1 score cp 41 lowerbound nodes 1500000 nps 1 time 3000 pv e2e4',
+  });
   w.onmessage({ data: 'bestmove e2e4' });
   const r = await a.promise;
   assert.equal(r.cp, 30, 'eval from the last complete depth');
@@ -262,11 +365,16 @@ test('setHash waits for the running search, then applies before the next one', a
   e.setHash(128);
   assert.ok(!w.posted.includes('setoption name Hash value 128'), 'not mid-search');
   const b = e.search({ moves: ['e2e4'], depth: 5, movetimeMs: 100 });
-  w.finish('e2e4'); await a.promise; await tick();
+  w.finish('e2e4');
+  await a.promise;
+  await tick();
   const i = w.posted.indexOf('setoption name Hash value 128');
   assert.ok(i > 0 && i < w.posted.indexOf('position startpos moves e2e4'), 'set before the next position');
-  w.finish('e7e5'); await b.promise;
-  e.setHash(128); e.search({ moves: [], depth: 5, movetimeMs: 100 }); await tick();
+  w.finish('e7e5');
+  await b.promise;
+  e.setHash(128);
+  e.search({ moves: [], depth: 5, movetimeMs: 100 });
+  await tick();
   assert.equal(w.posted.filter((s) => s === 'setoption name Hash value 128').length, 1, 'only when it changes');
 });
 
@@ -289,10 +397,16 @@ test('MultiPV is set before a search that asks for other lines than the last, an
   const e = SF.create(() => (w = fakeWorker()), {});
   await e.ready();
   const mpv = () => w.posted.filter((s) => s.startsWith('setoption name MultiPV'));
-  const run = async (lines, best) => { const h = e.search({ moves: [], depth: 5, movetimeMs: 100, lines }); await tick(); w.finish(best); return h.promise; };
+  const run = async (lines, best) => {
+    const h = e.search({ moves: [], depth: 5, movetimeMs: 100, lines });
+    await tick();
+    w.finish(best);
+    return h.promise;
+  };
   await run(undefined, 'e2e4');
   assert.deepEqual(mpv(), [], 'one line is the default: nothing sent');
-  await run(3, 'e2e4'); await run(3, 'e2e4');
+  await run(3, 'e2e4');
+  await run(3, 'e2e4');
   assert.deepEqual(mpv(), ['setoption name MultiPV value 3']);
   const i = w.posted.indexOf('setoption name MultiPV value 3');
   assert.ok(w.posted[i + 1].startsWith('position'), 'between searches, before the position');
@@ -319,9 +433,16 @@ test('a MultiPV search keeps each line by rank; cp, pv and best stay line 1’s;
   say('bestmove e2e4');
   const r = await h.promise;
   assert.deepEqual([r.cp, r.pv, r.best, r.depth], [27, ['e2e4', 'e7e6'], 'e2e4', 12]);
-  assert.deepEqual(r.lines, [{ k: 1, cp: 27, depth: 12, pv: ['e2e4', 'e7e6'] }, { k: 2, cp: 24, depth: 11, pv: ['d2d4', 'g8f6'] }, { k: 3, cp: 20, depth: 10, pv: ['g1f3', 'g8f6'] }]);
+  assert.deepEqual(r.lines, [
+    { k: 1, cp: 27, depth: 12, pv: ['e2e4', 'e7e6'] },
+    { k: 2, cp: 24, depth: 11, pv: ['d2d4', 'g8f6'] },
+    { k: 3, cp: 20, depth: 10, pv: ['g1f3', 'g8f6'] },
+  ]);
   const at3 = seen.find((s) => s.lines.length === 3);
-  assert.deepEqual(at3.lines.map((l) => l.pv[0]), ['e2e4', 'd2d4', 'g1f3']);
+  assert.deepEqual(
+    at3.lines.map((l) => l.pv[0]),
+    ['e2e4', 'd2d4', 'g1f3'],
+  );
   assert.equal(at3.cp, 30, 'onInfo carries line 1’s score');
 });
 
@@ -339,7 +460,13 @@ test('several threads: line 1 ends two depths past line 2, whose last report is 
   say('info depth 21 multipv 2 score cp -58 upperbound time 3001 pv a6b6 c6b7');
   say('bestmove b7b8');
   const r = await h.promise;
-  assert.deepEqual(r.lines.map((l) => [l.k, l.depth, l.pv[0]]), [[1, 21, 'b7b8'], [2, 19, 'a6b6']]);
+  assert.deepEqual(
+    r.lines.map((l) => [l.k, l.depth, l.pv[0]]),
+    [
+      [1, 21, 'b7b8'],
+      [2, 19, 'a6b6'],
+    ],
+  );
 });
 
 test('line 1 turns to line 2’s move and line 2’s last report is a bound: line 2 is the move that bound names', async () => {
@@ -357,7 +484,13 @@ test('line 1 turns to line 2’s move and line 2’s last report is a bound: lin
   say('info depth 21 multipv 2 score cp 0 upperbound time 2002 pv f8d8 c3c5');
   say('bestmove c6c5');
   const r = await h.promise;
-  assert.deepEqual(r.lines.map((l) => [l.k, l.depth, l.cp, l.pv[0]]), [[1, 21, 0, 'c6c5'], [2, 20, 2, 'f8d8']]);
+  assert.deepEqual(
+    r.lines.map((l) => [l.k, l.depth, l.cp, l.pv[0]]),
+    [
+      [1, 21, 0, 'c6c5'],
+      [2, 20, 2, 'f8d8'],
+    ],
+  );
 });
 
 test('line 1’s last report is a bound on a new move, and line 2’s names line 1’s old move: line 2 is the new move', async () => {
@@ -375,7 +508,13 @@ test('line 1’s last report is a bound on a new move, and line 2’s names line
   say('bestmove c7c5');
   const r = await h.promise;
   // Black to move: the scores are White's
-  assert.deepEqual(r.lines.map((l) => [l.k, l.depth, l.cp, l.pv[0]]), [[1, 22, 17, 'g7g6'], [2, 22, 20, 'c7c5']]);
+  assert.deepEqual(
+    r.lines.map((l) => [l.k, l.depth, l.cp, l.pv[0]]),
+    [
+      [1, 22, 17, 'g7g6'],
+      [2, 22, 20, 'c7c5'],
+    ],
+  );
 });
 
 test('line 2’s last report is a bound on a move never scored complete: line 2 is the deepest other move scored', async () => {
@@ -394,7 +533,13 @@ test('line 2’s last report is a bound on a move never scored complete: line 2 
   say('info depth 19 multipv 2 score cp 7 lowerbound time 2000 pv d2e3');
   say('bestmove f1d1');
   const r = await h.promise;
-  assert.deepEqual(r.lines.map((l) => [l.k, l.depth, l.cp, l.pv[0]]), [[1, 19, 9, 'f1d1'], [2, 18, 9, 'd2g5']]);
+  assert.deepEqual(
+    r.lines.map((l) => [l.k, l.depth, l.cp, l.pv[0]]),
+    [
+      [1, 19, 9, 'f1d1'],
+      [2, 18, 9, 'd2g5'],
+    ],
+  );
 });
 
 test('a line whose move is already listed is left out, and an empty rank filled with the deepest other move scored', async () => {
@@ -414,7 +559,14 @@ test('a line whose move is already listed is left out, and an empty rank filled 
   say('info depth 19 multipv 3 score cp 15 pv g1f2 b8b2');
   say('bestmove g1f1');
   const r = await h.promise;
-  assert.deepEqual(r.lines.map((l) => [l.k, l.depth, l.pv[0]]), [[1, 19, 'g1f1'], [2, 19, 'g1f2'], [3, 18, 'g1h1']]);
+  assert.deepEqual(
+    r.lines.map((l) => [l.k, l.depth, l.pv[0]]),
+    [
+      [1, 19, 'g1f1'],
+      [2, 19, 'g1f2'],
+      [3, 18, 'g1h1'],
+    ],
+  );
 });
 
 test('lines are from White’s point of view with Black to move, and a one-line search lists its one line', async () => {
@@ -426,9 +578,13 @@ test('lines are from White’s point of view with Black to move, and a one-line 
   w.onmessage({ data: 'info depth 5 multipv 1 score cp 10 pv e7e5' });
   w.onmessage({ data: 'info depth 5 multipv 2 score cp -5 pv c7c5' });
   w.onmessage({ data: 'bestmove e7e5' });
-  assert.deepEqual((await a.promise).lines.map((l) => l.cp), [-10, 5]);
+  assert.deepEqual(
+    (await a.promise).lines.map((l) => l.cp),
+    [-10, 5],
+  );
   const b = e.search({ moves: [], depth: 5, movetimeMs: 100 });
-  await tick(); w.finish('e2e4');
+  await tick();
+  w.finish('e2e4');
   assert.deepEqual((await b.promise).lines, [{ k: 1, cp: 10, depth: 5, pv: ['e2e4'] }]);
 });
 
@@ -440,8 +596,13 @@ test('real engine: three lines at the start begin with three different moves', {
     assert.equal(r.lines.length, 3);
     assert.equal(new Set(r.lines.map((l) => l.pv[0])).size, 3, JSON.stringify(r.lines));
     assert.equal(r.lines[0].pv[0], r.best);
-    assert.ok(r.lines.every((l) => l.depth >= 11), JSON.stringify(r.lines.map((l) => l.depth)));
-  } finally { e.quit(); }
+    assert.ok(
+      r.lines.every((l) => l.depth >= 11),
+      JSON.stringify(r.lines.map((l) => l.depth)),
+    );
+  } finally {
+    e.quit();
+  }
 });
 
 test('ready sets Threads after Hash when more than one, and not at all for one', async () => {
@@ -464,44 +625,84 @@ test('setThreads waits for the running search, then applies before the next one,
   e.setThreads(4);
   assert.ok(!w.posted.includes('setoption name Threads value 4'), 'not mid-search');
   const b = e.search({ moves: ['e2e4'], depth: 5, movetimeMs: 100 });
-  w.finish('e2e4'); await a.promise; await tick();
+  w.finish('e2e4');
+  await a.promise;
+  await tick();
   const i = w.posted.indexOf('setoption name Threads value 4');
   assert.ok(i > 0 && i < w.posted.indexOf('position startpos moves e2e4'), 'set before the next position');
-  w.finish('e7e5'); await b.promise;
-  e.setThreads(4); e.search({ moves: [], depth: 5, movetimeMs: 100 }); await tick();
+  w.finish('e7e5');
+  await b.promise;
+  e.setThreads(4);
+  e.search({ moves: [], depth: 5, movetimeMs: 100 });
+  await tick();
   assert.equal(w.posted.filter((s) => s === 'setoption name Threads value 4').length, 1, 'only when it changes');
 });
 
 test('threadSupport: isolation, shared memory, Safari 26.2, and the cores', () => {
-  const env = (o = {}) => ({ crossOriginIsolated: true, Atomics, SharedArrayBuffer, WebAssembly, navigator: { hardwareConcurrency: 8, userAgent: 'Mozilla/5.0 Firefox/150.0' }, ...o });
+  const env = (o = {}) => ({
+    crossOriginIsolated: true,
+    Atomics,
+    SharedArrayBuffer,
+    WebAssembly,
+    navigator: { hardwareConcurrency: 8, userAgent: 'Mozilla/5.0 Firefox/150.0' },
+    ...o,
+  });
   assert.deepEqual(SF.threadSupport(env()), { ok: true, cores: 8, reason: '' });
-  assert.deepEqual(SF.threadSupport(env({ crossOriginIsolated: false })), { ok: false, cores: 8, reason: 'This page isn’t cross-origin isolated' });
+  assert.deepEqual(SF.threadSupport(env({ crossOriginIsolated: false })), {
+    ok: false,
+    cores: 8,
+    reason: 'This page isn’t cross-origin isolated',
+  });
   assert.equal(SF.threadSupport(env({ SharedArrayBuffer: undefined })).reason, 'This browser has no shared memory');
-  assert.equal(SF.threadSupport(env({ WebAssembly: { Memory: function () { throw new Error('no'); } } })).reason, 'This browser has no shared memory');
-  const safari = { hardwareConcurrency: 8, userAgent: 'Mozilla/5.0 (iPhone; CPU iPhone OS 26_2 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/26.2 Mobile/15E148 Safari/604.1' };
+  assert.equal(
+    SF.threadSupport(
+      env({
+        WebAssembly: {
+          Memory: function () {
+            throw new Error('no');
+          },
+        },
+      }),
+    ).reason,
+    'This browser has no shared memory',
+  );
+  const safari = {
+    hardwareConcurrency: 8,
+    userAgent:
+      'Mozilla/5.0 (iPhone; CPU iPhone OS 26_2 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/26.2 Mobile/15E148 Safari/604.1',
+  };
   assert.equal(SF.threadSupport(env({ navigator: safari })).reason, 'Safari 26.2 crashes with threads');
   assert.equal(SF.threadSupport(env({ navigator: { userAgent: 'x' } })).cores, 1);
 });
 
 // skipped in Render's deploy build (RENDER is set there): its few cores gave 1.9x once, and a flaky test must not stop a deploy; GitHub Actions still runs it
-test('real engine: threaded lite searches more nodes with 4 threads than 1', { timeout: 60000, skip: process.env.RENDER ? 'Render has too few cores to time it' : false }, async () => {
-  const e = SF.create(() => nodeWorker('stockfish-19-lite.js'), { threaded: true });
-  const fen = 'r1bq1rk1/pp2ppbp/2np1np1/8/3NP3/2N1BP2/PPPQ2PP/R3KB1R w KQ - 3 9';
-  try {
-    await e.ready();
-    const one = await e.search({ moves: [], fen, depth: null, movetimeMs: 1500 }).promise;
-    e.setThreads(4);
-    const four = await e.search({ moves: [], fen, depth: null, movetimeMs: 1500 }).promise;
-    assert.ok(four.nodes > 2 * one.nodes, `${one.nodes} → ${four.nodes}`);
-  } finally { e.quit(); }
-});
+test(
+  'real engine: threaded lite searches more nodes with 4 threads than 1',
+  { timeout: 60000, skip: process.env.RENDER ? 'Render has too few cores to time it' : false },
+  async () => {
+    const e = SF.create(() => nodeWorker('stockfish-19-lite.js'), { threaded: true });
+    const fen = 'r1bq1rk1/pp2ppbp/2np1np1/8/3NP3/2N1BP2/PPPQ2PP/R3KB1R w KQ - 3 9';
+    try {
+      await e.ready();
+      const one = await e.search({ moves: [], fen, depth: null, movetimeMs: 1500 }).promise;
+      e.setThreads(4);
+      const four = await e.search({ moves: [], fen, depth: null, movetimeMs: 1500 }).promise;
+      assert.ok(four.nodes > 2 * one.nodes, `${one.nodes} → ${four.nodes}`);
+    } finally {
+      e.quit();
+    }
+  },
+);
 
 // Firefox: the first threaded engine in a page can answer readyok and then never search (no info, no bestmove, even
 // after stop); a fresh worker then works. probeMs: ready() waits for a depth-1 search, else the engine fails
 test('probeMs: ready waits for a depth-1 search after readyok', async () => {
-  let w, ok = false;
+  let w,
+    ok = false;
   const e = SF.create(() => (w = fakeWorker()), { threaded: true, threads: 4, probeMs: 1000 });
-  const r = e.ready().then(() => { ok = true; });
+  const r = e.ready().then(() => {
+    ok = true;
+  });
   await until(() => w && w.posted.includes('go depth 1'));
   assert.equal(ok, false, 'not ready before the probe answers');
   assert.ok(w.posted.includes('go depth 1'), w.posted.join(' | '));
@@ -517,15 +718,25 @@ test('probeMs: ready waits for a depth-1 search after readyok', async () => {
 });
 
 test('probeMs: a probe that never answers fails the engine and terminates it', async () => {
-  let w, terminated = false;
-  const e = SF.create(() => { w = fakeWorker(); w.terminate = () => { terminated = true; }; return w; }, { threaded: true, threads: 4, probeMs: 30 });
+  let w,
+    terminated = false;
+  const e = SF.create(
+    () => {
+      w = fakeWorker();
+      w.terminate = () => {
+        terminated = true;
+      };
+      return w;
+    },
+    { threaded: true, threads: 4, probeMs: 30 },
+  );
   await assert.rejects(e.ready(), /threads didn’t start/);
   assert.equal(terminated, true);
 });
 
 // a game's analysis keeps the threads it started with (search({ threads })), whatever the setting does meanwhile;
 // a single-thread build never gets Threads
-test('a search that asks for threads gets them before it; other searches get the engine\'s', async () => {
+test("a search that asks for threads gets them before it; other searches get the engine's", async () => {
   let w;
   const e = SF.create(() => (w = fakeWorker()), { threaded: true, threads: 2 });
   await e.ready();
@@ -533,19 +744,26 @@ test('a search that asks for threads gets them before it; other searches get the
   const a = e.search({ moves: [], depth: 5, movetimeMs: 100, threads: 4 });
   await tick();
   assert.ok(w.posted.indexOf('setoption name Threads value 4') < w.posted.indexOf('position startpos'));
-  w.finish('e2e4'); await a.promise;
+  w.finish('e2e4');
+  await a.promise;
   const b = e.search({ moves: ['e2e4'], depth: 5, movetimeMs: 100 });
   await tick();
   const i = w.posted.lastIndexOf('setoption name Threads value 2');
-  assert.ok(i > w.posted.indexOf('setoption name Threads value 4') && i < w.posted.indexOf('position startpos moves e2e4'), w.posted.join(' | '));
-  w.finish('e7e5'); await b.promise;
+  assert.ok(
+    i > w.posted.indexOf('setoption name Threads value 4') && i < w.posted.indexOf('position startpos moves e2e4'),
+    w.posted.join(' | '),
+  );
+  w.finish('e7e5');
+  await b.promise;
   let w1;
   const one = SF.create(() => (w1 = fakeWorker()), { threads: 4 });
   await one.ready();
   assert.equal(one.threaded, false);
   one.setThreads(3);
   const c = one.search({ moves: [], depth: 5, movetimeMs: 100, threads: 4 });
-  await tick(); w1.finish('e2e4'); await c.promise;
+  await tick();
+  w1.finish('e2e4');
+  await c.promise;
   assert.ok(!w1.posted.some((m) => m.startsWith('setoption name Threads')), w1.posted.join(' | '));
 });
 
@@ -558,9 +776,21 @@ test('probeMs: from uciok on, a missing readyok fails as the probe does', async 
 // A search can hang after the probe too (WebKit on GitHub, 2026-10-28: a threaded engine passed its probe, then never
 // answered go movetime 1000): hangMs past its movetime, a fresh worker takes the search over, the same engine to the page
 test('a search that runs hangMs past its movetime moves to a fresh worker, which gets the probe and the options again', async () => {
-  const ws = [], ended = [];
-  const e = SF.create(() => { const w = fakeWorker(); w.terminate = () => ended.push(w); ws.push(w); return w; }, { threaded: true, threads: 4, probeMs: 1000, hangMs: 40 });
-  const r = e.ready(); await tick(); ws[0].finish('e2e4'); await r;
+  const ws = [],
+    ended = [];
+  const e = SF.create(
+    () => {
+      const w = fakeWorker();
+      w.terminate = () => ended.push(w);
+      ws.push(w);
+      return w;
+    },
+    { threaded: true, threads: 4, probeMs: 1000, hangMs: 40 },
+  );
+  const r = e.ready();
+  await tick();
+  ws[0].finish('e2e4');
+  await r;
   const s = e.search({ moves: ['e2e4'], depth: null, movetimeMs: 20, lines: 2 });
   await tick();
   assert.equal(ws.length, 1);
@@ -569,8 +799,12 @@ test('a search that runs hangMs past its movetime moves to a fresh worker, which
   assert.deepEqual(ended, [ws[0]], 'the hung one is terminated');
   const w = ws[1];
   assert.ok(w.posted.includes('go depth 1'), 'the fresh worker is probed: ' + w.posted.join(' | '));
-  w.finish('e2e4'); await tick();
-  assert.ok(w.posted.includes('setoption name Threads value 4') && w.posted.includes('setoption name MultiPV value 2'), w.posted.join(' | '));
+  w.finish('e2e4');
+  await tick();
+  assert.ok(
+    w.posted.includes('setoption name Threads value 4') && w.posted.includes('setoption name MultiPV value 2'),
+    w.posted.join(' | '),
+  );
   assert.equal(w.posted.at(-1), 'go movetime 20');
   w.finish('e7e5');
   assert.equal((await s.promise).best, 'e7e5');
@@ -580,7 +814,19 @@ test('a search that runs hangMs past its movetime moves to a fresh worker, which
 test('a search that hangs on three workers in a row fails the engine; a bestmove in between starts the count again', async () => {
   const ws = [];
   let reported = null;
-  const e = SF.create(() => { const w = fakeWorker(); ws.push(w); return w; }, { hangMs: 100, onFail: (err) => { reported = err; } });
+  const e = SF.create(
+    () => {
+      const w = fakeWorker();
+      ws.push(w);
+      return w;
+    },
+    {
+      hangMs: 100,
+      onFail: (err) => {
+        reported = err;
+      },
+    },
+  );
   await e.ready();
   const wait = (ms) => new Promise((res) => setTimeout(res, ms));
   const a = e.search({ moves: [], depth: null, movetimeMs: 10 });
@@ -599,7 +845,14 @@ test('a search that hangs on three workers in a row fails the engine; a bestmove
 
 test('a cancelled search that hangs answers with its last score, and the next search runs on a fresh worker', async () => {
   const ws = [];
-  const e = SF.create(() => { const w = fakeWorker(); ws.push(w); return w; }, { hangMs: 20 });
+  const e = SF.create(
+    () => {
+      const w = fakeWorker();
+      ws.push(w);
+      return w;
+    },
+    { hangMs: 20 },
+  );
   await e.ready();
   const a = e.search({ moves: [], depth: null, movetimeMs: 10 });
   const b = e.search({ moves: ['e2e4'], depth: null, movetimeMs: 10 });
@@ -619,7 +872,16 @@ test('simdSupport: WebAssembly SIMD validates here, and not without it or withou
   assert.equal(SF.simdSupport(), true);
   assert.equal(SF.simdSupport({ WebAssembly: { validate: () => false } }), false);
   assert.equal(SF.simdSupport({}), false);
-  assert.equal(SF.simdSupport({ WebAssembly: { validate: () => { throw new Error('no'); } } }), false);
+  assert.equal(
+    SF.simdSupport({
+      WebAssembly: {
+        validate: () => {
+          throw new Error('no');
+        },
+      },
+    }),
+    false,
+  );
 });
 
 // the asm.js build, for browsers without WebAssembly SIMD: it speaks UCI as the others do, if slowly
@@ -629,14 +891,24 @@ test('the asm.js engine answers a search', async () => {
     await e.ready();
     const r = await e.search({ moves: ['e2e4'], depth: 8, movetimeMs: 10000 }).promise;
     assert.ok(r && r.depth >= 8 && r.cp != null && /^[a-h][1-8][a-h][1-8]/.test(r.best), JSON.stringify(r));
-  } finally { e.quit(); }
+  } finally {
+    e.quit();
+  }
 });
 
 // a hash table the device can't give memory for: the engine says so and answers nothing more; a fresh worker with 64 MB
 // takes over, the search that was running starts again there, and onHashFail says what happened
-test('a Hash the engine can\'t allocate moves to a fresh worker with 64 MB, and the search runs there', async () => {
-  const ws = [], told = [];
-  const e = SF.create(() => { const w = fakeWorker({ maxHashMB: 256 }); ws.push(w); return w; }, { onHashFail: (mb, to) => told.push([mb, to]) });
+test("a Hash the engine can't allocate moves to a fresh worker with 64 MB, and the search runs there", async () => {
+  const ws = [],
+    told = [];
+  const e = SF.create(
+    () => {
+      const w = fakeWorker({ maxHashMB: 256 });
+      ws.push(w);
+      return w;
+    },
+    { onHashFail: (mb, to) => told.push([mb, to]) },
+  );
   await e.ready();
   e.setHash(512);
   const s = e.search({ moves: ['e2e4'], depth: 5, movetimeMs: 100 });
@@ -656,8 +928,16 @@ test('a Hash the engine can\'t allocate moves to a fresh worker with 64 MB, and 
 });
 
 test('a Hash too big from the start: ready() comes on the fresh worker, threads probe included', async () => {
-  const ws = [], told = [];
-  const e = SF.create(() => { const w = fakeWorker({ maxHashMB: 256 }); ws.push(w); return w; }, { hashMB: 512, threaded: true, threads: 4, probeMs: 1000, onHashFail: (mb, to) => told.push([mb, to]) });
+  const ws = [],
+    told = [];
+  const e = SF.create(
+    () => {
+      const w = fakeWorker({ maxHashMB: 256 });
+      ws.push(w);
+      return w;
+    },
+    { hashMB: 512, threaded: true, threads: 4, probeMs: 1000, onHashFail: (mb, to) => told.push([mb, to]) },
+  );
   const r = e.ready();
   await until(() => ws.length === 2 && ws[1].posted.includes('go depth 1'));
   ws[1].finish('e2e4');
@@ -668,8 +948,16 @@ test('a Hash too big from the start: ready() comes on the fresh worker, threads 
 });
 
 test('a smaller Hash asked for while a bigger one fails is kept, and hashMB() says what runs', async () => {
-  const ws = [], told = [];
-  const e = SF.create(() => { const w = fakeWorker({ maxHashMB: 256 }); ws.push(w); return w; }, { onHashFail: (mb, to) => told.push([mb, to]) });
+  const ws = [],
+    told = [];
+  const e = SF.create(
+    () => {
+      const w = fakeWorker({ maxHashMB: 256 });
+      ws.push(w);
+      return w;
+    },
+    { onHashFail: (mb, to) => told.push([mb, to]) },
+  );
   await e.ready();
   assert.equal(e.hashMB(), 64);
   e.setHash(512);
@@ -686,7 +974,11 @@ test('a smaller Hash asked for while a bigger one fails is kept, and hashMB() sa
 
 test('no memory even for the fallback hash fails the engine and says why', async () => {
   let failedWith = null;
-  const e = SF.create(() => fakeWorker({ maxHashMB: 32 }), { onFail: (err) => { failedWith = err; } });
+  const e = SF.create(() => fakeWorker({ maxHashMB: 32 }), {
+    onFail: (err) => {
+      failedWith = err;
+    },
+  });
   await assert.rejects(e.ready(), /Not enough memory for Stockfish’s 64 MB hash table/);
   assert.match(String(failedWith && failedWith.message), /Not enough memory/);
   assert.equal(await e.search({ moves: [], depth: 5, movetimeMs: 100 }).promise, null);
@@ -700,7 +992,9 @@ test('the real engine: a Hash past its 2 GB cap falls back to 64 MB and searches
     const r = await e.search({ moves: ['e2e4'], depth: 8, movetimeMs: 2000 }).promise;
     assert.deepEqual(told, [[2048, 64]]);
     assert.ok(r && r.best, JSON.stringify(r));
-  } finally { e.quit(); }
+  } finally {
+    e.quit();
+  }
 });
 
 test('UCI_Chess960 is set before a 960 search, back after it, and never for standard searches', async () => {
@@ -709,10 +1003,17 @@ test('UCI_Chess960 is set before a 960 search, back after it, and never for stan
   await e.ready();
   const opt = () => w.posted.filter((s) => s.startsWith('setoption name UCI_Chess960'));
   const F960 = '4k3/8/8/8/8/8/8/R4K1R w HA - 0 1';
-  const run = async (fen) => { const h = e.search({ moves: [], fen, depth: 5, movetimeMs: 100 }); await tick(); w.finish('e1e2'); return h.promise; };
-  await run(window.ChessCore.START_FEN); await run(window.ChessCore.START_FEN);
+  const run = async (fen) => {
+    const h = e.search({ moves: [], fen, depth: 5, movetimeMs: 100 });
+    await tick();
+    w.finish('e1e2');
+    return h.promise;
+  };
+  await run(window.ChessCore.START_FEN);
+  await run(window.ChessCore.START_FEN);
   assert.deepEqual(opt(), [], 'standard searches send none');
-  await run(F960); await run(F960);
+  await run(F960);
+  await run(F960);
   assert.deepEqual(opt(), ['setoption name UCI_Chess960 value true']);
   const i = w.posted.indexOf('setoption name UCI_Chess960 value true');
   assert.ok(w.posted[i + 1].startsWith('position'), 'before the position');

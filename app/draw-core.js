@@ -9,7 +9,8 @@
   // the modifier held as the button goes down picks the colour, as on Lichess: none green, Shift or Ctrl red (Ctrl for
   // Firefox, which opens its own menu on Shift+right-click), Alt (or ⌘) blue, one of each yellow
   const brush = (e) => {
-    const a = !!(e.shiftKey || e.ctrlKey), b = !!(e.altKey || e.metaKey);
+    const a = !!(e.shiftKey || e.ctrlKey),
+      b = !!(e.altKey || e.metaKey);
     return a && b ? 'yellow' : a ? 'red' : b ? 'blue' : 'green';
   };
   // a drag that ends on the square it began on is a circle

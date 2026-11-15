@@ -1,7 +1,8 @@
 const test = require('node:test');
 const assert = require('node:assert/strict');
 const { execFileSync } = require('child_process');
-const fs = require('fs'), path = require('path');
+const fs = require('fs'),
+  path = require('path');
 require('./load.cjs'); // sets window
 const ROOT = path.join(__dirname, '..');
 
@@ -9,7 +10,8 @@ const ROOT = path.join(__dirname, '..');
 test('the built page defines the sample game, its analysis and its commentary', () => {
   execFileSync(process.execPath, [path.join(ROOT, 'build.cjs')], { cwd: ROOT });
   const page = fs.readFileSync(path.join(ROOT, 'out', 'site', 'chess-game-video.html'), 'utf8');
-  for (const name of ['SAMPLE_PGN', 'SAMPLE_ANALYSIS', 'SAMPLE_NOTES']) assert.match(page, new RegExp('window\\.' + name + ' = '), name);
+  for (const name of ['SAMPLE_PGN', 'SAMPLE_ANALYSIS', 'SAMPLE_NOTES'])
+    assert.match(page, new RegExp('window\\.' + name + ' = '), name);
 });
 
 test('the sample commentary has an intro and comments on moves', () => {
@@ -21,7 +23,28 @@ test('the sample commentary has an intro and comments on moves', () => {
 // String.replace would expand $' or $& in a script; the page must carry each plain unit's code as written
 test('the built page inlines the plain units verbatim', () => {
   const page = fs.readFileSync(path.join(ROOT, 'out', 'site', 'chess-game-video.html'), 'utf8');
-  const units = ['src/pieces.js', 'app/chess-core.js', 'app/analysis-core.js', 'app/openings-core.js', 'app/board-core.js', 'app/edit-core.js', 'app/import-core.js', 'app/draw-core.js', 'app/play-core.js', 'app/dead-core.js', 'app/games-core.js', 'app/sf-engine.js', 'app/move-eval.js', 'app/queen-core.js', 'app/sfx-core.js', 'app/webp-core.js', 'app/export-draw.js', 'src/sample-game.js', 'src/game-data.js', 'app/sample-analysis.js'];
+  const units = [
+    'src/pieces.js',
+    'app/chess-core.js',
+    'app/analysis-core.js',
+    'app/openings-core.js',
+    'app/board-core.js',
+    'app/edit-core.js',
+    'app/import-core.js',
+    'app/draw-core.js',
+    'app/play-core.js',
+    'app/dead-core.js',
+    'app/games-core.js',
+    'app/sf-engine.js',
+    'app/move-eval.js',
+    'app/queen-core.js',
+    'app/sfx-core.js',
+    'app/webp-core.js',
+    'app/export-draw.js',
+    'src/sample-game.js',
+    'src/game-data.js',
+    'app/sample-analysis.js',
+  ];
   for (const u of units) {
     const code = fs.readFileSync(path.join(ROOT, u), 'utf8');
     assert.ok(page.includes(code), u);
@@ -48,23 +71,36 @@ test('the page has a Content-Security-Policy listing a hash for each inline scri
   assert.doesNotMatch(scriptSrc, /'unsafe-inline'|'unsafe-eval'/);
   const inline = [...page.matchAll(/<script>([\s\S]*?)<\/script>/g)];
   assert.ok(inline.length > 10);
-  for (const m of inline) assert.ok(scriptSrc.includes(`'sha256-${require('crypto').createHash('sha256').update(m[1]).digest('base64')}'`));
-  assert.doesNotMatch(page, /<script\b(?![^>]*\ssrc=)[^>]+>/, 'every inline script is a plain <script>, so its hash is listed');
+  for (const m of inline)
+    assert.ok(scriptSrc.includes(`'sha256-${require('crypto').createHash('sha256').update(m[1]).digest('base64')}'`));
+  assert.doesNotMatch(
+    page,
+    /<script\b(?![^>]*\ssrc=)[^>]+>/,
+    'every inline script is a plain <script>, so its hash is listed',
+  );
 });
 
 // a script on a CDN runs only if it is one the page names: a whole host would let any package there run
 test('the policy allows CDN scripts by their exact URLs, not their hosts', () => {
   const page = fs.readFileSync(path.join(ROOT, 'out', 'site', 'chess-game-video.html'), 'utf8');
-  const scriptSrc = page.match(/<meta http-equiv="Content-Security-Policy" content="([^"]+)">/)[1].split('; ').find((d) => d.startsWith('script-src '));
+  const scriptSrc = page
+    .match(/<meta http-equiv="Content-Security-Policy" content="([^"]+)">/)[1]
+    .split('; ')
+    .find((d) => d.startsWith('script-src '));
   const hosts = scriptSrc.split(' ').filter((s) => /^https:/.test(s));
   for (const h of hosts) assert.match(h, /^https:\/\/[^/]+\/.+\.js$/, h);
   for (const u of [...page.matchAll(/<script src="([^"]+)"/g)].map((m) => m[1])) assert.ok(hosts.includes(u), u);
-  assert.ok(hosts.some((h) => h.includes('html2canvas-pro')), 'the export\'s library too');
+  assert.ok(
+    hosts.some((h) => h.includes('html2canvas-pro')),
+    "the export's library too",
+  );
 });
 
 test('render.yaml lets no other site frame the page', () => {
   const yaml = fs.readFileSync(path.join(ROOT, 'render.yaml'), 'utf8');
-  const h = Object.fromEntries([...yaml.matchAll(/- path: \/\*\n\s+name: (.+)\n\s+value: (.+)/g)].map((m) => [m[1].trim(), m[2].trim()]));
+  const h = Object.fromEntries(
+    [...yaml.matchAll(/- path: \/\*\n\s+name: (.+)\n\s+value: (.+)/g)].map((m) => [m[1].trim(), m[2].trim()]),
+  );
   assert.equal(h['Content-Security-Policy'], "frame-ancestors 'self'");
   assert.equal(h['X-Frame-Options'], 'SAMEORIGIN');
 });
@@ -73,19 +109,22 @@ test('render.yaml lets no other site frame the page', () => {
 test('the built site serves the five Lichess sound sets as MP3s where Sfx.soundUrl names them, kept by sw.js', () => {
   const { loadUnit } = require('./load.cjs');
   loadUnit('sfx-core.js');
-  const X = window.Sfx, site = path.join(ROOT, 'out', 'site');
+  const X = window.Sfx,
+    site = path.join(ROOT, 'out', 'site');
   const page = fs.readFileSync(path.join(site, 'chess-game-video.html'), 'utf8');
   assert.doesNotMatch(page, /SFX_DATA/, 'no sounds inlined in the page');
   const LOCAL = JSON.parse(fs.readFileSync(path.join(site, 'sw.js'), 'utf8').match(/^const LOCAL = (\[.*?\]);/m)[1]);
   const sets = X.SETS.filter((s) => s !== 'Wood');
   assert.deepEqual(sets.map((s) => X.SET_DIR[s]).sort(), ['futuristic', 'lisp', 'nes', 'piano', 'sfx']);
-  for (const set of sets) for (const kind of X.KINDS) {
-    const url = X.soundUrl(set, kind), b = fs.readFileSync(path.join(site, url));
-    // an ID3 tag, or (lisp) straight into an MPEG audio frame
-    assert.ok(b.subarray(0, 3).toString() === 'ID3' || (b[0] === 0xff && (b[1] & 0xe0) === 0xe0), url);
-    assert.ok(b.equals(fs.readFileSync(path.join(ROOT, 'vendor', url))), url + ' is the vendored file');
-    assert.ok(LOCAL.includes(url), url + ' kept by sw.js');
-  }
+  for (const set of sets)
+    for (const kind of X.KINDS) {
+      const url = X.soundUrl(set, kind),
+        b = fs.readFileSync(path.join(site, url));
+      // an ID3 tag, or (lisp) straight into an MPEG audio frame
+      assert.ok(b.subarray(0, 3).toString() === 'ID3' || (b[0] === 0xff && (b[1] & 0xe0) === 0xe0), url);
+      assert.ok(b.equals(fs.readFileSync(path.join(ROOT, 'vendor', url))), url + ' is the vendored file');
+      assert.ok(LOCAL.includes(url), url + ' kept by sw.js');
+    }
   assert.equal(LOCAL.filter((f) => f.startsWith('sounds/')).length, sets.length * X.KINDS.length);
 });
 
@@ -93,12 +132,17 @@ test('the built site serves the five Lichess sound sets as MP3s where Sfx.soundU
 test('the built site serves every piece set but cburnett as SVGs where PieceSets.url names them, not kept at install', () => {
   const { loadUnit } = require('./load.cjs');
   loadUnit('piece-sets.js');
-  const P = window.PieceSets, site = path.join(ROOT, 'out', 'site');
+  const P = window.PieceSets,
+    site = path.join(ROOT, 'out', 'site');
   const LOCAL = JSON.parse(fs.readFileSync(path.join(site, 'sw.js'), 'utf8').match(/^const LOCAL = (\[.*?\]);/m)[1]);
-  for (const s of P.SETS.slice(1)) for (const p of P.PIECES) {
-    const url = P.url(s.id, p);
-    assert.ok(fs.readFileSync(path.join(site, url)).equals(fs.readFileSync(path.join(ROOT, 'vendor', url))), url + ' is the vendored file');
-  }
+  for (const s of P.SETS.slice(1))
+    for (const p of P.PIECES) {
+      const url = P.url(s.id, p);
+      assert.ok(
+        fs.readFileSync(path.join(site, url)).equals(fs.readFileSync(path.join(ROOT, 'vendor', url))),
+        url + ' is the vendored file',
+      );
+    }
   assert.equal(LOCAL.filter((f) => f.startsWith('pieces/')).length, 0);
 });
 
@@ -106,17 +150,24 @@ test('the built site serves every piece set but cburnett as SVGs where PieceSets
 test('the built site serves the boards where BoardThemes.url and .thumb name them, not kept at install', () => {
   const { loadUnit } = require('./load.cjs');
   loadUnit('board-themes.js');
-  const B = window.BoardThemes, site = path.join(ROOT, 'out', 'site');
+  const B = window.BoardThemes,
+    site = path.join(ROOT, 'out', 'site');
   const LOCAL = JSON.parse(fs.readFileSync(path.join(site, 'sw.js'), 'utf8').match(/^const LOCAL = (\[.*?\]);/m)[1]);
   for (const url of B.THEMES.flatMap((t) => [B.url(t.id), B.thumb(t.id)]).filter(Boolean)) {
-    assert.ok(fs.readFileSync(path.join(site, url)).equals(fs.readFileSync(path.join(ROOT, 'vendor', url))), url + ' is the vendored file');
+    assert.ok(
+      fs.readFileSync(path.join(site, url)).equals(fs.readFileSync(path.join(ROOT, 'vendor', url))),
+      url + ' is the vendored file',
+    );
   }
   assert.equal(LOCAL.filter((f) => f.startsWith('boards/')).length, 0);
 });
 
 // an unmatched } in the page's stylesheet makes the browser drop the rule after it (it once hid the drop overlay)
 test('the page stylesheet opens and closes its braces in pairs', () => {
-  const css = fs.readFileSync(path.join(ROOT, 'app', 'shell.html'), 'utf8').match(/<style>([\s\S]*?)<\/style>/)[1].replace(/\/\*[\s\S]*?\*\//g, '');
+  const css = fs
+    .readFileSync(path.join(ROOT, 'app', 'shell.html'), 'utf8')
+    .match(/<style>([\s\S]*?)<\/style>/)[1]
+    .replace(/\/\*[\s\S]*?\*\//g, '');
   let depth = 0;
   css.split('\n').forEach((line, n) => {
     for (const ch of line) {
@@ -159,7 +210,11 @@ test('the page links a web app manifest, and its icons are written next to it', 
   assert.match(m.display, /^(fullscreen|standalone)$/);
   const bg = fs.readFileSync(path.join(site, 'chess-game-video.html'), 'utf8').match(/--bg: (#\w+)/)[1];
   assert.equal(m.background_color, bg, '--bg in the page');
-  const png = (f) => { const b = fs.readFileSync(path.join(site, f)); assert.equal(b.subarray(1, 4).toString(), 'PNG', f); return `${b.readUInt32BE(16)}x${b.readUInt32BE(20)}`; };
+  const png = (f) => {
+    const b = fs.readFileSync(path.join(site, f));
+    assert.equal(b.subarray(1, 4).toString(), 'PNG', f);
+    return `${b.readUInt32BE(16)}x${b.readUInt32BE(20)}`;
+  };
   for (const ic of m.icons) assert.equal(png(ic.src), ic.sizes, ic.src);
   assert.deepEqual(m.icons.map((ic) => ic.sizes).sort(), ['192x192', '512x512', '512x512']);
   assert.ok(m.icons.some((ic) => ic.purpose === 'maskable'));
@@ -168,48 +223,84 @@ test('the page links a web app manifest, and its icons are written next to it', 
 
 // the site serves the engine and the WebP encoder next to the page, unchanged
 test('the site carries the vendored files as they are', () => {
-  for (const f of ['stockfish-19-lite-single.js', 'stockfish-19-lite-single.wasm', 'webp_enc_simd.js', 'webp_enc_simd.wasm', 'mediabunny.min.js']) {
-    assert.ok(fs.readFileSync(path.join(ROOT, 'out', 'site', f)).equals(fs.readFileSync(path.join(ROOT, 'vendor', f))), f);
+  for (const f of [
+    'stockfish-19-lite-single.js',
+    'stockfish-19-lite-single.wasm',
+    'webp_enc_simd.js',
+    'webp_enc_simd.wasm',
+    'mediabunny.min.js',
+  ]) {
+    assert.ok(
+      fs.readFileSync(path.join(ROOT, 'out', 'site', f)).equals(fs.readFileSync(path.join(ROOT, 'vendor', f))),
+      f,
+    );
   }
-  assert.match(fs.readFileSync(path.join(ROOT, 'app', 'export.jsx'), 'utf8'), /WEBP_LIB = \{ js: 'webp_enc_simd\.js', wasm: 'webp_enc_simd\.wasm' \}/);
+  assert.match(
+    fs.readFileSync(path.join(ROOT, 'app', 'export.jsx'), 'utf8'),
+    /WEBP_LIB = \{ js: 'webp_enc_simd\.js', wasm: 'webp_enc_simd\.wasm' \}/,
+  );
 });
 
 // sw.js keeps every file the page needs, so it works offline
 test('the service worker keeps the page, its files and every CDN file the page loads', () => {
-  const site = path.join(ROOT, 'out', 'site'), page = fs.readFileSync(path.join(site, 'chess-game-video.html'), 'utf8');
+  const site = path.join(ROOT, 'out', 'site'),
+    page = fs.readFileSync(path.join(site, 'chess-game-video.html'), 'utf8');
   const sw = fs.readFileSync(path.join(site, 'sw.js'), 'utf8');
-  const LOCAL = JSON.parse(sw.match(/^const LOCAL = (\[.*?\]);/m)[1]), REMOTE = JSON.parse(sw.match(/^const REMOTE = (\[[\s\S]*?\]);/m)[1]);
+  const LOCAL = JSON.parse(sw.match(/^const LOCAL = (\[.*?\]);/m)[1]),
+    REMOTE = JSON.parse(sw.match(/^const REMOTE = (\[[\s\S]*?\]);/m)[1]);
   assert.match(sw, /^const VERSION = '[0-9a-f]{16}';/m);
   assert.equal(LOCAL[0], 'chess-game-video.html');
   for (const f of LOCAL) assert.ok(fs.existsSync(path.join(site, f)), f);
-  for (const f of ['stockfish-19-lite-single.js', 'stockfish-19-lite-single.wasm', 'webp_enc_simd.js', 'webp_enc_simd.wasm', 'mediabunny.min.js', 'manifest.webmanifest']) assert.ok(LOCAL.includes(f), f);
+  for (const f of [
+    'stockfish-19-lite-single.js',
+    'stockfish-19-lite-single.wasm',
+    'webp_enc_simd.js',
+    'webp_enc_simd.wasm',
+    'mediabunny.min.js',
+    'manifest.webmanifest',
+  ])
+    assert.ok(LOCAL.includes(f), f);
   const cdn = page.match(/https:\/\/(?:cdnjs\.cloudflare\.com|cdn\.jsdelivr\.net)\/[^'"\s]+\.m?js/g);
   for (const u of cdn) assert.ok(REMOTE.includes(u), u);
-  assert.ok(REMOTE.some((u) => u.startsWith('https://fonts.googleapis.com/css2?')), 'the fonts');
+  assert.ok(
+    REMOTE.some((u) => u.startsWith('https://fonts.googleapis.com/css2?')),
+    'the fonts',
+  );
   assert.match(page, /navigator\.serviceWorker\.register\('sw\.js'/);
   // the page asks for its Workers and libraries with this deploy's VERSION, the one sw.js answers from its copy
   assert.ok(page.includes(`window.siteFile = (f) => f + '?v=${sw.match(/^const VERSION = '([0-9a-f]{16})';/m)[1]}';`));
   for (const u of REMOTE) assert.ok(!/\/$/.test(u), u);
 });
 
-test('sw.js\'s VERSION changes with a file it keeps only as it is used (a piece set), not only the ones it keeps at install', () => {
-  const site = path.join(ROOT, 'out', 'site'), version = () => fs.readFileSync(path.join(site, 'sw.js'), 'utf8').match(/^const VERSION = '([0-9a-f]+)';/m)[1];
-  const piece = path.join(ROOT, 'vendor', 'pieces', fs.readdirSync(path.join(ROOT, 'vendor', 'pieces')).filter((s) => !s.startsWith('.'))[0]);
-  const file = path.join(piece, fs.readdirSync(piece).filter((f) => !f.startsWith('.'))[0]), was = fs.readFileSync(file);
+test("sw.js's VERSION changes with a file it keeps only as it is used (a piece set), not only the ones it keeps at install", () => {
+  const site = path.join(ROOT, 'out', 'site'),
+    version = () => fs.readFileSync(path.join(site, 'sw.js'), 'utf8').match(/^const VERSION = '([0-9a-f]+)';/m)[1];
+  const piece = path.join(
+    ROOT,
+    'vendor',
+    'pieces',
+    fs.readdirSync(path.join(ROOT, 'vendor', 'pieces')).filter((s) => !s.startsWith('.'))[0],
+  );
+  const file = path.join(piece, fs.readdirSync(piece).filter((f) => !f.startsWith('.'))[0]),
+    was = fs.readFileSync(file);
   execFileSync(process.execPath, [path.join(ROOT, 'build.cjs')], { cwd: ROOT });
   const before = version();
   try {
     fs.writeFileSync(file, Buffer.concat([was, Buffer.from('\n')]));
     execFileSync(process.execPath, [path.join(ROOT, 'build.cjs')], { cwd: ROOT });
     assert.notEqual(version(), before);
-  } finally { fs.writeFileSync(file, was); execFileSync(process.execPath, [path.join(ROOT, 'build.cjs')], { cwd: ROOT }); }
+  } finally {
+    fs.writeFileSync(file, was);
+    execFileSync(process.execPath, [path.join(ROOT, 'build.cjs')], { cwd: ROOT });
+  }
 });
 
 // the page doesn't zoom; a browser set to ignore that still can
 test('the page asks the browser not to zoom', () => {
   const page = fs.readFileSync(path.join(ROOT, 'out', 'site', 'chess-game-video.html'), 'utf8');
   const vp = page.match(/<meta name="viewport" content="([^"]*)">/)[1].split(/,\s*/);
-  for (const v of ['width=device-width', 'initial-scale=1', 'maximum-scale=1', 'user-scalable=no']) assert.ok(vp.includes(v), v);
+  for (const v of ['width=device-width', 'initial-scale=1', 'maximum-scale=1', 'user-scalable=no'])
+    assert.ok(vp.includes(v), v);
 });
 
 // threads need the multi-threaded build where the page is cross-origin isolated; the single-thread pair stays as the fallback
@@ -217,8 +308,14 @@ test('the page asks the browser not to zoom', () => {
 test('the threaded lite and asm.js engines are vendored, pinned in LAYOUT.md and copied next to the page', () => {
   const layout = fs.readFileSync(path.join(ROOT, 'LAYOUT.md'), 'utf8');
   for (const f of ['stockfish-19-lite.js', 'stockfish-19-lite.wasm', 'stockfish-19-asm.js']) {
-    const sha = require('crypto').createHash('sha256').update(fs.readFileSync(path.join(ROOT, 'vendor', f))).digest('hex');
-    assert.ok(layout.split('\n').some((l) => l.includes('`' + f + '`') && l.includes(sha)), f + ' pinned');
+    const sha = require('crypto')
+      .createHash('sha256')
+      .update(fs.readFileSync(path.join(ROOT, 'vendor', f)))
+      .digest('hex');
+    assert.ok(
+      layout.split('\n').some((l) => l.includes('`' + f + '`') && l.includes(sha)),
+      f + ' pinned',
+    );
     assert.ok(fs.existsSync(path.join(ROOT, 'out', 'site', f)), f + ' next to the page');
   }
 });
@@ -251,8 +348,12 @@ test('the service worker gives its own files the isolation headers', () => {
 test('the service worker answers a navigation with the kept page when the server errs', async () => {
   const sw = builtSw();
   const kept = new Response('kept', { status: 200 });
-  const run = (status, copy) => new Function('self', 'caches', 'fetch', sw + '\nreturn page;')(
-    SELF, { open: async () => ({ put: async () => {}, match: async () => copy }) }, async () => new Response(String(status), { status }));
+  const run = (status, copy) =>
+    new Function('self', 'caches', 'fetch', sw + '\nreturn page;')(
+      SELF,
+      { open: async () => ({ put: async () => {}, match: async () => copy }) },
+      async () => new Response(String(status), { status }),
+    );
   const ev = { request: 'x', waitUntil() {} };
   assert.equal(await (await run(503, kept.clone())(ev)).text(), 'kept');
   assert.equal((await run(404, kept.clone())(ev)).status, 404);
@@ -277,7 +378,7 @@ test('the site serves the dead-position worker and chasolver.wasm, and sw.js kee
 });
 
 // the board reader's Worker is a small file of the page's own, kept with it (only the vision/ files it loads are not)
-test('the site serves the board reader\'s worker, and sw.js keeps it', () => {
+test("the site serves the board reader's worker, and sw.js keeps it", () => {
   const site = path.join(ROOT, 'out', 'site');
   assert.ok(fs.existsSync(path.join(site, 'vision-worker.js')));
   const LOCAL = JSON.parse(fs.readFileSync(path.join(site, 'sw.js'), 'utf8').match(/^const LOCAL = (\[.*?\]);/m)[1]);
@@ -286,7 +387,7 @@ test('the site serves the board reader\'s worker, and sw.js keeps it', () => {
 
 // The board reader's model and runtime are 55 MB: they are served next to the page but only the viewer who asks keeps
 // them, so the per-deploy copy (sw.js's LOCAL) must not list them
-test('the built site serves the board reader\'s files from vision/, byte for byte at their pins, and sw.js does not keep them', () => {
+test("the built site serves the board reader's files from vision/, byte for byte at their pins, and sw.js does not keep them", () => {
   execFileSync(process.execPath, [path.join(ROOT, 'build.cjs')], { cwd: ROOT });
   const site = path.join(ROOT, 'out', 'site');
   const pins = {
@@ -311,11 +412,21 @@ test('the built site serves the board reader\'s files from vision/, byte for byt
 // such as .share-row, .share-btns and .share-box: one hid the Share and export dialog's box in a Firefox (2026-11-04).
 // No class of ours may start with share or social
 test('no class name a content blocker hides as a share or social widget', () => {
-  const files = ['app/shell.html', ...fs.readdirSync(path.join(ROOT, 'app')).filter((f) => f.endsWith('.jsx')).map((f) => 'app/' + f)];
+  const files = [
+    'app/shell.html',
+    ...fs
+      .readdirSync(path.join(ROOT, 'app'))
+      .filter((f) => f.endsWith('.jsx'))
+      .map((f) => 'app/' + f),
+  ];
   for (const f of files) {
     const src = fs.readFileSync(path.join(ROOT, f), 'utf8').replace(/\/\*[\s\S]*?\*\//g, '');
     const css = f.endsWith('.html') ? src.match(/\.(share|social)[\w-]*(?=[\s{,:>.[])/gi) : null;
-    const jsx = [...src.matchAll(/className=(?:"([^"]*)"|\{[^}]*?'([^']*)')/g)].map((m) => m[1] || m[2]).join(' ').split(/\s+/).filter((c) => /^(share|social)/i.test(c));
+    const jsx = [...src.matchAll(/className=(?:"([^"]*)"|\{[^}]*?'([^']*)')/g)]
+      .map((m) => m[1] || m[2])
+      .join(' ')
+      .split(/\s+/)
+      .filter((c) => /^(share|social)/i.test(c));
     assert.deepEqual([...(css || []), ...jsx], [], f);
   }
 });
@@ -323,25 +434,36 @@ test('no class name a content blocker hides as a share or social widget', () => 
 // What sw.js is given comes from the one place each is set: VisionCore's cache name, render.yaml's isolation headers,
 // build.cjs's CDN hosts (which the CSP allows too), and the files build.cjs put next to the page
 test('the built sw.js takes its vision cache, isolation headers, hosts and files from where they are set', () => {
-  const sw = builtSw(), site = path.join(ROOT, 'out', 'site');
+  const sw = builtSw(),
+    site = path.join(ROOT, 'out', 'site');
   assert.doesNotMatch(sw, /__[A-Z_]+__/, 'every placeholder filled');
   require('./load.cjs').loadUnit('vision-core.js');
   assert.equal(sw.match(/const VISION_CACHE = '([^']+)'/)[1], window.VisionCore.CACHE);
-  assert.deepEqual(JSON.parse(sw.match(/const ISOLATION = (\{.*\});/)[1]), require('../render-headers.cjs').isolation());
+  assert.deepEqual(
+    JSON.parse(sw.match(/const ISOLATION = (\{.*\});/)[1]),
+    require('../render-headers.cjs').isolation(),
+  );
   const hosts = JSON.parse(sw.match(/const KEEP_HOSTS = (\[.*?\]);/)[1]);
-  const page = fs.readFileSync(path.join(site, 'chess-game-video.html'), 'utf8'), connect = page.match(/connect-src ([^;"]+)/)[1].split(' ');
+  const page = fs.readFileSync(path.join(site, 'chess-game-video.html'), 'utf8'),
+    connect = page.match(/connect-src ([^;"]+)/)[1].split(' ');
   for (const h of hosts) assert.ok(connect.includes('https://' + h), h + ' in connect-src');
-  for (const u of JSON.parse(sw.match(/const REMOTE = (\[[\s\S]*?\]);/)[1])) assert.ok(hosts.includes(new URL(u).hostname), u);
+  for (const u of JSON.parse(sw.match(/const REMOTE = (\[[\s\S]*?\]);/)[1]))
+    assert.ok(hosts.includes(new URL(u).hostname), u);
   const local = JSON.parse(sw.match(/const LOCAL = (\[.*\]);/)[1]);
   assert.equal(local[0], 'chess-game-video.html', 'the page first');
   for (const f of local) assert.ok(fs.statSync(path.join(site, f)).isFile(), f + ' is served');
-  assert.ok(!local.some((f) => /^(vision|pieces|boards)\//.test(f) || f === 'og-image.png'), 'kept on use or on request, not at install');
+  assert.ok(
+    !local.some((f) => /^(vision|pieces|boards)\//.test(f) || f === 'og-image.png'),
+    'kept on use or on request, not at install',
+  );
 });
 
 // render.yaml without the isolation headers (the rollback): the service worker adds none either
 test('without isolation headers in render.yaml, the service worker adds none', () => {
   const RH = require('../render-headers.cjs');
-  const yaml = fs.readFileSync(path.join(ROOT, 'render.yaml'), 'utf8').replace(/\n\s+- path: \/\*\n\s+name: Cross-Origin-(Opener|Embedder)-Policy\n\s+value: .+/g, '');
+  const yaml = fs
+    .readFileSync(path.join(ROOT, 'render.yaml'), 'utf8')
+    .replace(/\n\s+- path: \/\*\n\s+name: Cross-Origin-(Opener|Embedder)-Policy\n\s+value: .+/g, '');
   assert.deepEqual(RH.isolation(RH.headers(yaml)), {});
   assert.equal(RH.headers(yaml)['X-Frame-Options'], 'SAMEORIGIN', 'the other headers stay');
   const sw = builtSw().replace(/const ISOLATION = \{.*\};/, 'const ISOLATION = {};');
@@ -355,8 +477,9 @@ test('without isolation headers in render.yaml, the service worker adds none', (
 // missing a key is refused
 test('render-headers reads every header entry, however its keys are written', () => {
   const RH = require('../render-headers.cjs');
-  const yaml = 'x:\n    headers:\n      - path: /*\n        name: A\n        value: 1\n      - name: B\n        path: /*\n        value: two words\n'
-    + '      - path: /*\n        # a note\n        name: C\n        value: "3"\n    routes:\n      - path: /x\n';
+  const yaml =
+    'x:\n    headers:\n      - path: /*\n        name: A\n        value: 1\n      - name: B\n        path: /*\n        value: two words\n' +
+    '      - path: /*\n        # a note\n        name: C\n        value: "3"\n    routes:\n      - path: /x\n';
   assert.deepEqual(RH.headers(yaml), { A: '1', B: 'two words', C: '3' });
   assert.throws(() => RH.headers('headers:\n  - path: /*\n    name: X\n'), /without path, name and value/);
   assert.equal(Object.keys(RH.headers()).length, 7, "render.yaml's seven headers");

@@ -5,33 +5,53 @@
   const START_FEN = START + ' w KQkq - 0 1';
   const sqIdx = (s) => (8 - +s[1]) * 8 + (s.charCodeAt(0) - 97);
   const idxSq = (i) => FILES[i % 8] + (8 - Math.floor(i / 8));
-  const fx = (i) => i % 8, fy = (i) => Math.floor(i / 8);
+  const fx = (i) => i % 8,
+    fy = (i) => Math.floor(i / 8);
   const at = (x, y) => (x >= 0 && x < 8 && y >= 0 && y < 8 ? y * 8 + x : -1);
   const colorOf = (p) => (p ? (p === p.toUpperCase() ? 'w' : 'b') : null);
 
   function fromFen(f) {
-    const b = new Array(64).fill(null); let i = 0;
-    for (const ch of f.split(' ')[0]) { if (ch === '/') continue; if (/\d/.test(ch)) { i += +ch; continue; } b[i++] = ch; }
+    const b = new Array(64).fill(null);
+    let i = 0;
+    for (const ch of f.split(' ')[0]) {
+      if (ch === '/') continue;
+      if (/\d/.test(ch)) {
+        i += +ch;
+        continue;
+      }
+      b[i++] = ch;
+    }
     return b;
   }
   function geo(b, from, to, type) {
-    const dx = fx(to) - fx(from), dy = fy(to) - fy(from), ax = Math.abs(dx), ay = Math.abs(dy);
+    const dx = fx(to) - fx(from),
+      dy = fy(to) - fy(from),
+      ax = Math.abs(dx),
+      ay = Math.abs(dy);
     if (type === 'n') return (ax === 1 && ay === 2) || (ax === 2 && ay === 1);
     if (type === 'k') return Math.max(ax, ay) === 1;
     if (type === 'r' && dx && dy) return false;
     if (type === 'b' && ax !== ay) return false;
     if (type === 'q' && !(dx === 0 || dy === 0 || ax === ay)) return false;
     if (!dx && !dy) return false;
-    const sx = Math.sign(dx), sy = Math.sign(dy);
-    let x = fx(from) + sx, y = fy(from) + sy;
-    while (x !== fx(to) || y !== fy(to)) { if (b[at(x, y)]) return false; x += sx; y += sy; }
+    const sx = Math.sign(dx),
+      sy = Math.sign(dy);
+    let x = fx(from) + sx,
+      y = fy(from) + sy;
+    while (x !== fx(to) || y !== fy(to)) {
+      if (b[at(x, y)]) return false;
+      x += sx;
+      y += sy;
+    }
     return true;
   }
   function canReach(b, from, to, type, color, ep) {
     const target = b[to];
     if (target && colorOf(target) === color) return false;
     if (type === 'p') {
-      const dir = color === 'w' ? -1 : 1, dx = fx(to) - fx(from), dy = fy(to) - fy(from);
+      const dir = color === 'w' ? -1 : 1,
+        dx = fx(to) - fx(from),
+        dy = fy(to) - fy(from);
       if (dx === 0 && !target) {
         if (dy === dir) return true;
         return fy(from) === (color === 'w' ? 6 : 1) && dy === 2 * dir && !b[at(fx(from), fy(from) + dir)];
@@ -42,9 +62,13 @@
   }
   function attacked(b, sq, by) {
     for (let i = 0; i < 64; i++) {
-      const p = b[i]; if (!p || colorOf(p) !== by) continue;
+      const p = b[i];
+      if (!p || colorOf(p) !== by) continue;
       const t = p.toLowerCase();
-      if (t === 'p') { if (fy(sq) - fy(i) === (by === 'w' ? -1 : 1) && Math.abs(fx(sq) - fx(i)) === 1) return true; continue; }
+      if (t === 'p') {
+        if (fy(sq) - fy(i) === (by === 'w' ? -1 : 1) && Math.abs(fx(sq) - fx(i)) === 1) return true;
+        continue;
+      }
       if (geo(b, i, sq, t)) return true;
     }
     return false;
@@ -53,17 +77,22 @@
   // the rights a move from or to each of those squares takes away
   const CASTLE_HOME = { K: [60, 63], Q: [60, 56], k: [4, 7], q: [4, 0] };
   const CASTLE_LOSS = {};
-  for (const [r, sqs] of Object.entries(CASTLE_HOME)) for (const sq of sqs) CASTLE_LOSS[sq] = (CASTLE_LOSS[sq] || '') + r;
+  for (const [r, sqs] of Object.entries(CASTLE_HOME))
+    for (const sq of sqs) CASTLE_LOSS[sq] = (CASTLE_LOSS[sq] || '') + r;
   // Chess960. A position whose castling rights aren't all the standard homes carries rooks: { K?, Q?, k?, q? }, each
   // right's rook square, kept (the same object) for the whole game, so it stays 960 once its rights are gone. There a
   // castle is the king taken onto its own rook (uci king square + rook square); after it the king and rook stand as in
   // standard chess (a-side: king c, rook d; h-side: king g, rook f)
   const rightSide = (r) => (r === 'K' || r === 'k' ? 'h' : 'a');
-  const rightOf = (color, side) => (color === 'w' ? (side === 'h' ? 'K' : 'Q') : (side === 'h' ? 'k' : 'q'));
+  const rightOf = (color, side) => (color === 'w' ? (side === 'h' ? 'K' : 'Q') : side === 'h' ? 'k' : 'q');
   // The rook of right r: the right's king stands on its first rank and rooks[r] (if given and holding that side's rook
   // on that side of the king), else the outermost rook of that colour on that side of the king on that rank; -1 if none
   function castleRook(b, r, rooks) {
-    const w = r < 'a', y = w ? 7 : 0, k = b.indexOf(w ? 'K' : 'k'), R = w ? 'R' : 'r', h = rightSide(r) === 'h';
+    const w = r < 'a',
+      y = w ? 7 : 0,
+      k = b.indexOf(w ? 'K' : 'k'),
+      R = w ? 'R' : 'r',
+      h = rightSide(r) === 'h';
     if (k < 0 || fy(k) !== y) return -1;
     const ok = (sq) => sq >= 0 && fy(sq) === y && b[sq] === R && (h ? fx(sq) > fx(k) : fx(sq) < fx(k));
     if (rooks && rooks[r] != null && ok(rooks[r])) return rooks[r];
@@ -78,54 +107,100 @@
     return rightOf(colorOf(p), fx(to) > fx(from) ? 'h' : 'a');
   }
   function applyMove(pos, from, to, promo) {
-    const b = pos.b.slice(), p = b[from], t = p.toLowerCase(), color = colorOf(p);
-    let ep = -1, epCap = -1;
-    if (t === 'p' && to === pos.ep && !b[to]) { epCap = at(fx(to), fy(from)); b[epCap] = null; }
+    const b = pos.b.slice(),
+      p = b[from],
+      t = p.toLowerCase(),
+      color = colorOf(p);
+    let ep = -1,
+      epCap = -1;
+    if (t === 'p' && to === pos.ep && !b[to]) {
+      epCap = at(fx(to), fy(from));
+      b[epCap] = null;
+    }
     if (t === 'p' && Math.abs(fy(to) - fy(from)) === 2) ep = at(fx(from), (fy(from) + fy(to)) / 2);
     const c960 = castleRight(pos, from, to);
     if (c960) {
-      const y = fy(from), h = rightSide(c960) === 'h', R = b[to];
-      b[from] = null; b[to] = null; b[at(h ? 5 : 3, y)] = R; b[at(h ? 6 : 2, y)] = p;
+      const y = fy(from),
+        h = rightSide(c960) === 'h',
+        R = b[to];
+      b[from] = null;
+      b[to] = null;
+      b[at(h ? 5 : 3, y)] = R;
+      b[at(h ? 6 : 2, y)] = p;
     } else {
       if (!pos.rooks && t === 'k' && Math.abs(fx(to) - fx(from)) === 2) {
         const y = fy(from);
-        if (fx(to) === 6) { b[at(5, y)] = b[at(7, y)]; b[at(7, y)] = null; } else { b[at(3, y)] = b[at(0, y)]; b[at(0, y)] = null; }
+        if (fx(to) === 6) {
+          b[at(5, y)] = b[at(7, y)];
+          b[at(7, y)] = null;
+        } else {
+          b[at(3, y)] = b[at(0, y)];
+          b[at(0, y)] = null;
+        }
       }
-      b[to] = promo ? (color === 'w' ? promo.toUpperCase() : promo.toLowerCase()) : p; b[from] = null;
+      b[to] = promo ? (color === 'w' ? promo.toUpperCase() : promo.toLowerCase()) : p;
+      b[from] = null;
     }
     // castling rights go when the king or a rook leaves its square, or a rook is taken there
     let castle = pos.castle == null ? 'KQkq' : pos.castle;
     if (pos.rooks) {
-      castle = [...castle].filter((r) => {
-        const rk = castleRook(pos.b, r, pos.rooks);
-        return !(t === 'k' && (r < 'a') === (color === 'w')) && rk !== from && rk !== to;
-      }).join('');
-    } else for (const sq of [from, to]) if (CASTLE_LOSS[sq]) castle = castle.replace(new RegExp(`[${CASTLE_LOSS[sq]}]`, 'g'), '');
+      castle = [...castle]
+        .filter((r) => {
+          const rk = castleRook(pos.b, r, pos.rooks);
+          return !(t === 'k' && r < 'a' === (color === 'w')) && rk !== from && rk !== to;
+        })
+        .join('');
+    } else
+      for (const sq of [from, to])
+        if (CASTLE_LOSS[sq]) castle = castle.replace(new RegExp(`[${CASTLE_LOSS[sq]}]`, 'g'), '');
     const out = { b, ep, epCap, turn: color === 'w' ? 'b' : 'w', castle };
     if (pos.rooks) out.rooks = pos.rooks;
     return out;
   }
   function toFen(pos) {
     const rows = [];
-    for (let y = 0; y < 8; y++) { let s = '', e = 0; for (let x = 0; x < 8; x++) { const p = pos.b[y * 8 + x]; if (p) { if (e) { s += e; e = 0; } s += p; } else e++; } if (e) s += e; rows.push(s); }
+    for (let y = 0; y < 8; y++) {
+      let s = '',
+        e = 0;
+      for (let x = 0; x < 8; x++) {
+        const p = pos.b[y * 8 + x];
+        if (p) {
+          if (e) {
+            s += e;
+            e = 0;
+          }
+          s += p;
+        } else e++;
+      }
+      if (e) s += e;
+      rows.push(s);
+    }
     return rows.join('/') + ' ' + pos.turn;
   }
   const kingIdx = (b, color) => b.findIndex((p) => p === (color === 'w' ? 'K' : 'k'));
-  const inCheck = (b, color) => { const k = kingIdx(b, color); return k >= 0 && attacked(b, k, color === 'w' ? 'b' : 'w'); };
+  const inCheck = (b, color) => {
+    const k = kingIdx(b, color);
+    return k >= 0 && attacked(b, k, color === 'w' ? 'b' : 'w');
+  };
   // the squares of the pieces giving check to color's king (none without a king)
   function checkers(b, color) {
-    const k = kingIdx(b, color), by = color === 'w' ? 'b' : 'w', out = [];
+    const k = kingIdx(b, color),
+      by = color === 'w' ? 'b' : 'w',
+      out = [];
     if (k < 0) return out;
     for (let i = 0; i < 64; i++) {
-      const p = b[i]; if (!p || colorOf(p) !== by) continue;
+      const p = b[i];
+      if (!p || colorOf(p) !== by) continue;
       const t = p.toLowerCase();
-      if (t === 'p' ? fy(k) - fy(i) === (by === 'w' ? -1 : 1) && Math.abs(fx(k) - fx(i)) === 1 : geo(b, i, k, t)) out.push(i);
+      if (t === 'p' ? fy(k) - fy(i) === (by === 'w' ? -1 : 1) && Math.abs(fx(k) - fx(i)) === 1 : geo(b, i, k, t))
+        out.push(i);
     }
     return out;
   }
   function hasLegal(pos) {
     for (let i = 0; i < 64; i++) {
-      const p = pos.b[i]; if (!p || colorOf(p) !== pos.turn) continue;
+      const p = pos.b[i];
+      if (!p || colorOf(p) !== pos.turn) continue;
       for (let j = 0; j < 64; j++) {
         if (!canReach(pos.b, i, j, p.toLowerCase(), pos.turn, pos.ep)) continue;
         if (!inCheck(applyMove(pos, i, j, null).b, pos.turn)) return true;
@@ -134,36 +209,65 @@
     // a Chess960 castle is a king move onto its rook, which canReach doesn't know; legalMove checks it without SAN, so no recursion
     if (pos.rooks) {
       const k = kingIdx(pos.b, pos.turn);
-      if (k >= 0) for (const side of ['a', 'h']) { const rk = castleRook(pos.b, rightOf(pos.turn, side), pos.rooks); if (rk >= 0 && legalMove(pos, k, rk)) return true; }
+      if (k >= 0)
+        for (const side of ['a', 'h']) {
+          const rk = castleRook(pos.b, rightOf(pos.turn, side), pos.rooks);
+          if (rk >= 0 && legalMove(pos, k, rk)) return true;
+        }
     }
     return false;
   }
   const tOf = (p) => p.toLowerCase();
 
-  const FIGURINE = { '♔': 'K', '♕': 'Q', '♖': 'R', '♗': 'B', '♘': 'N', '♙': '', '♚': 'K', '♛': 'Q', '♜': 'R', '♝': 'B', '♞': 'N', '♟': '' };
+  const FIGURINE = {
+    '♔': 'K',
+    '♕': 'Q',
+    '♖': 'R',
+    '♗': 'B',
+    '♘': 'N',
+    '♙': '',
+    '♚': 'K',
+    '♛': 'Q',
+    '♜': 'R',
+    '♝': 'B',
+    '♞': 'N',
+    '♟': '',
+  };
   function sanToMove(pos, san) {
-    if (/^(--|Z0|0000|@@@@)$/.test(san)) throw new Error(`The game has a null move ("${san}"), which this player can't show`);
+    if (/^(--|Z0|0000|@@@@)$/.test(san))
+      throw new Error(`The game has a null move ("${san}"), which this player can't show`);
     // besides plain SAN: figurines (♘f3), an e.p. suffix, long algebraic (e2-e4, Ng1-f3) and castling with zeros
-    let s = san.replace(/[♔-♟]/g, (c) => FIGURINE[c]).replace(/[+#!?]+$/, '').replace(/e\.p\.$/, '').replace(/[+#]+$/, '');
+    let s = san
+      .replace(/[♔-♟]/g, (c) => FIGURINE[c])
+      .replace(/[+#!?]+$/, '')
+      .replace(/e\.p\.$/, '')
+      .replace(/[+#]+$/, '');
     s = s.replace(/^([NBRQK]?[a-h][1-8])-([a-h][1-8])/, '$1$2');
     if (/^0-0/.test(s)) s = s.replace(/0/g, 'O');
     const color = pos.turn;
     // castling is checked in full (rights, rook, empty squares, no check on the king's path): a PGN's O-O isn't trusted
     if (/^O-O(-O)?$/.test(s) && pos.rooks) {
-      const from = kingIdx(pos.b, color), to = castleRook(pos.b, rightOf(color, s.length > 3 ? 'a' : 'h'), pos.rooks);
+      const from = kingIdx(pos.b, color),
+        to = castleRook(pos.b, rightOf(color, s.length > 3 ? 'a' : 'h'), pos.rooks);
       if (from < 0 || to < 0 || !legalMove(pos, from, to)) throw new Error(`"${san}" is not a legal move here`);
       return { from, to, promo: null };
     }
     if (/^O-O(-O)?$/.test(s)) {
-      const y = color === 'w' ? 7 : 0, from = at(4, y), to = at(s.length > 3 ? 2 : 6, y);
-      if (pos.b[from] !== (color === 'w' ? 'K' : 'k') || !legalMove(pos, from, to)) throw new Error(`"${san}" is not a legal move here`);
+      const y = color === 'w' ? 7 : 0,
+        from = at(4, y),
+        to = at(s.length > 3 ? 2 : 6, y);
+      if (pos.b[from] !== (color === 'w' ? 'K' : 'k') || !legalMove(pos, from, to))
+        throw new Error(`"${san}" is not a legal move here`);
       return { from, to, promo: null };
     }
     const m = s.match(/^([NBRQK])?([a-h])?([1-8])?x?([a-h][1-8])(?:=?([NBRQnbrq]))?$/);
     if (!m) throw new Error(`Can't read the move "${san}"`);
-    const type = (m[1] || 'P').toLowerCase(), to = sqIdx(m[4]), promo = m[5] ? m[5].toLowerCase() : null;
+    const type = (m[1] || 'P').toLowerCase(),
+      to = sqIdx(m[4]),
+      promo = m[5] ? m[5].toLowerCase() : null;
     // a promotion piece only on a pawn reaching the last rank, and there always one
-    if (promo ? type !== 'p' || (fy(to) !== 0 && fy(to) !== 7) : type === 'p' && (fy(to) === 0 || fy(to) === 7)) throw new Error(`"${san}" is not a legal move here`);
+    if (promo ? type !== 'p' || (fy(to) !== 0 && fy(to) !== 7) : type === 'p' && (fy(to) === 0 || fy(to) === 7))
+      throw new Error(`"${san}" is not a legal move here`);
     const cands = [];
     for (let i = 0; i < 64; i++) {
       const p = pos.b[i];
@@ -181,27 +285,47 @@
   // Games split at a tag line that follows moves, or at the next text after a game's result. A tag line inside a
   // {comment} stays text, and a result inside a comment or a variation ends nothing
   function splitGames(text) {
-    const games = []; let cur = [], inMoves = false, ended = false, inComment = false, depth = 0;
-    const flush = () => { games.push(cur.join('\n')); cur = []; inMoves = false; ended = false; };
-    text.replace(/\r/g, '').split('\n').forEach((line) => {
-      const hdr = !inComment && /^\s*\[\w+\s+".*"\]\s*$/.test(line);
-      let outside = '';
-      if (!hdr) {
-        for (let i = 0; i < line.length; i++) {
-          const ch = line[i];
-          if (inComment) { if (ch === '}') inComment = false; continue; }
-          if (ch === '{') { inComment = true; outside += ' '; continue; }
-          if (ch === ';') break;
-          if (ch === '(') depth++;
-          else if (ch === ')') depth = Math.max(0, depth - 1);
-          else if (depth === 0) outside += ch;
+    const games = [];
+    let cur = [],
+      inMoves = false,
+      ended = false,
+      inComment = false,
+      depth = 0;
+    const flush = () => {
+      games.push(cur.join('\n'));
+      cur = [];
+      inMoves = false;
+      ended = false;
+    };
+    text
+      .replace(/\r/g, '')
+      .split('\n')
+      .forEach((line) => {
+        const hdr = !inComment && /^\s*\[\w+\s+".*"\]\s*$/.test(line);
+        let outside = '';
+        if (!hdr) {
+          for (let i = 0; i < line.length; i++) {
+            const ch = line[i];
+            if (inComment) {
+              if (ch === '}') inComment = false;
+              continue;
+            }
+            if (ch === '{') {
+              inComment = true;
+              outside += ' ';
+              continue;
+            }
+            if (ch === ';') break;
+            if (ch === '(') depth++;
+            else if (ch === ')') depth = Math.max(0, depth - 1);
+            else if (depth === 0) outside += ch;
+          }
         }
-      }
-      if ((hdr && inMoves) || (ended && outside.trim())) flush();
-      if (outside.trim()) inMoves = true;
-      if (depth === 0 && /(?:^|\s)(?:1-0|0-1|1\/2-1\/2|\*)\s*$/.test(outside)) ended = true;
-      cur.push(line);
-    });
+        if ((hdr && inMoves) || (ended && outside.trim())) flush();
+        if (outside.trim()) inMoves = true;
+        if (depth === 0 && /(?:^|\s)(?:1-0|0-1|1\/2-1\/2|\*)\s*$/.test(outside)) ended = true;
+        cur.push(line);
+      });
     if (cur.join('').trim()) games.push(cur.join('\n'));
     return games.filter((g) => /\S/.test(g));
   }
@@ -209,32 +333,76 @@
   function parsePGN(text) {
     const headers = {};
     // a comment ({…} or ; to the end of the line) is passed over whole, so a tag written inside one stays its text
-    const body = text.replace(/\{[^}]*\}?|;[^\n]*|\[(\w+)\s+"((?:[^"\\]|\\.)*)"\]/g, (m, k, v) => { if (!k) return m; headers[k] = v.replace(/\\(["\\])/g, '$1'); return ' '; });
+    const body = text.replace(/\{[^}]*\}?|;[^\n]*|\[(\w+)\s+"((?:[^"\\]|\\.)*)"\]/g, (m, k, v) => {
+      if (!k) return m;
+      headers[k] = v.replace(/\\(["\\])/g, '$1');
+      return ' ';
+    });
     // a [FEN] start with Black to move: the first ply is Black's (cutechess evals below are the mover's)
     const black0 = (headers.FEN || '').trim().split(/\s+/)[1] === 'b';
-    const plies = []; let intro = '', depth = 0, varPly = -1, varSans = null, varAt = 0, i = 0;
+    const plies = [];
+    let intro = '',
+      depth = 0,
+      varPly = -1,
+      varSans = null,
+      varAt = 0,
+      i = 0;
     const addComment = (raw) => {
       if (depth > 0) return;
-      const ev = raw.match(/\[%eval\s+([^\]\s]+)/), ck = raw.match(/\[%clk\s+([\d:.]+)/);
+      const ev = raw.match(/\[%eval\s+([^\]\s]+)/),
+        ck = raw.match(/\[%clk\s+([\d:.]+)/);
       // cutechess engine comments: {+0.25/20 1.2s}, {+M5/30 0.8s} (M counts plies), {book}; cutechess
       // stores them for the side that just moved (its whitepov option only fixes engines that report White's view)
       const ae = ev ? null : raw.match(/^\s*([+-]?)(?:(\d+(?:\.\d+)?)|M(\d+))\/\d+(?:\s+[\d.]+s\b|\s*$)/);
-      const txt = (ae ? raw.slice(ae[0].length) : raw).replace(/\[%[^\]]*\]/g, '').replace(/^\s*book\s*$/, '').replace(/\s+/g, ' ').trim();
+      const txt = (ae ? raw.slice(ae[0].length) : raw)
+        .replace(/\[%[^\]]*\]/g, '')
+        .replace(/^\s*book\s*$/, '')
+        .replace(/\s+/g, ' ')
+        .trim();
       const t = plies[plies.length - 1];
-      if (!t) { if (txt) intro = (intro + ' ' + txt).trim(); return; }
-      if (ev) { if (ev[1][0] === '#') t.mate = parseInt(ev[1].slice(1), 10); else t.cp = Math.round(parseFloat(ev[1]) * 100); }
+      if (!t) {
+        if (txt) intro = (intro + ' ' + txt).trim();
+        return;
+      }
+      if (ev) {
+        if (ev[1][0] === '#') t.mate = parseInt(ev[1].slice(1), 10);
+        else t.cp = Math.round(parseFloat(ev[1]) * 100);
+      }
       if (ae) {
         const sign = (ae[1] === '-' ? -1 : 1) * ((plies.length - 1 + (black0 ? 1 : 0)) % 2 ? -1 : 1);
-        if (ae[3]) t.mate = sign * Math.ceil(parseInt(ae[3], 10) / 2); else t.cp = sign * Math.round(parseFloat(ae[2]) * 100);
+        if (ae[3]) t.mate = sign * Math.ceil(parseInt(ae[3], 10) / 2);
+        else t.cp = sign * Math.round(parseFloat(ae[2]) * 100);
       }
-      if (ck) t.clk = ck[1].split(':').map(Number).reduce((a, x) => a * 60 + x, 0);
+      if (ck)
+        t.clk = ck[1]
+          .split(':')
+          .map(Number)
+          .reduce((a, x) => a * 60 + x, 0);
       if (txt) t.comment = (t.comment ? t.comment + ' ' : '') + txt;
     };
     while (i < body.length) {
       const ch = body[i];
-      if (ch === '{') { const j = body.indexOf('}', i); addComment(body.slice(i + 1, j < 0 ? body.length : j)); i = j < 0 ? body.length : j + 1; continue; }
-      if (ch === ';') { const j = body.indexOf('\n', i); i = j < 0 ? body.length : j + 1; continue; }
-      if (ch === '(') { depth++; if (depth === 1) { varPly = plies.length - 1; varSans = []; varAt = i; } i++; continue; }
+      if (ch === '{') {
+        const j = body.indexOf('}', i);
+        addComment(body.slice(i + 1, j < 0 ? body.length : j));
+        i = j < 0 ? body.length : j + 1;
+        continue;
+      }
+      if (ch === ';') {
+        const j = body.indexOf('\n', i);
+        i = j < 0 ? body.length : j + 1;
+        continue;
+      }
+      if (ch === '(') {
+        depth++;
+        if (depth === 1) {
+          varPly = plies.length - 1;
+          varSans = [];
+          varAt = i;
+        }
+        i++;
+        continue;
+      }
       if (ch === ')') {
         if (depth === 1 && varPly >= 0) {
           const P = plies[varPly];
@@ -242,17 +410,31 @@
           // every variation as written, nested ones and comments included, so an annotated PGN keeps them
           (P.vars = P.vars || []).push(body.slice(varAt, i + 1));
         }
-        depth = Math.max(0, depth - 1); i++; continue;
+        depth = Math.max(0, depth - 1);
+        i++;
+        continue;
       }
-      if (/\s/.test(ch)) { i++; continue; }
-      let j = i; while (j < body.length && !/[\s{}();]/.test(body[j])) j++;
+      if (/\s/.test(ch)) {
+        i++;
+        continue;
+      }
+      let j = i;
+      while (j < body.length && !/[\s{}();]/.test(body[j])) j++;
       // a stray } (a comment with a { inside it) has no token: skip it, or the loop never moves on
-      if (j === i) { i++; continue; }
-      let tok = body.slice(i, j); i = j;
+      if (j === i) {
+        i++;
+        continue;
+      }
+      let tok = body.slice(i, j);
+      i = j;
       if (/^\$\d+$/.test(tok)) {
-        const P = depth === 0 && plies[plies.length - 1], n = +tok.slice(1);
+        const P = depth === 0 && plies[plies.length - 1],
+          n = +tok.slice(1);
         // $1–$6 are the move's mark; the rest ($14 White is slightly better, …) are kept as they are
-        if (P) { if (NAG[n]) P.mark = NAG[n]; else (P.nags = P.nags || []).push(n); }
+        if (P) {
+          if (NAG[n]) P.mark = NAG[n];
+          else (P.nags = P.nags || []).push(n);
+        }
         continue;
       }
       tok = tok.replace(/^\d+\.+/, '');
@@ -264,25 +446,50 @@
     return { headers, plies, intro };
   }
   function parseNotes(text) {
-    const out = { plies: {} }, re = /^\s*\[(\d+|INTRO|RESULT|CONCLUSION)\]/gim, keys = []; let m;
+    const out = { plies: {} },
+      re = /^\s*\[(\d+|INTRO|RESULT|CONCLUSION)\]/gim,
+      keys = [];
+    let m;
     while ((m = re.exec(text))) keys.push({ k: m[1].toUpperCase(), s: m.index, e: m.index + m[0].length });
     keys.forEach((k, i) => {
-      const txt = text.slice(k.e, i + 1 < keys.length ? keys[i + 1].s : text.length).replace(/\s+/g, ' ').trim();
-      if (/^\d+$/.test(k.k)) out.plies[+k.k] = txt; else out[k.k.toLowerCase()] = txt;
+      const txt = text
+        .slice(k.e, i + 1 < keys.length ? keys[i + 1].s : text.length)
+        .replace(/\s+/g, ' ')
+        .trim();
+      if (/^\d+$/.test(k.k)) out.plies[+k.k] = txt;
+      else out[k.k.toLowerCase()] = txt;
     });
     return out;
   }
 
-  const MARK_CLASS = { '?!': 'inaccuracy', '?': 'mistake', '??': 'blunder', '!': 'good', '!!': 'brilliant', '!?': 'interesting' };
+  const MARK_CLASS = {
+    '?!': 'inaccuracy',
+    '?': 'mistake',
+    '??': 'blunder',
+    '!': 'good',
+    '!!': 'brilliant',
+    '!?': 'interesting',
+  };
   const ENGINE_MARK = { inaccuracy: '?!', mistake: '?', blunder: '??' };
   const MONTHS = 'Jan Feb Mar Apr May Jun Jul Aug Sep Oct Nov Dec'.split(' ');
-  const fmtDate = (d) => { const m = (d || '').match(/^(\d{4})\.(\d{2})\.(\d{2})$/); return m ? `${+m[3]} ${MONTHS[+m[2] - 1]} ${m[1]}` : (d || '').replace(/\.\?\?/g, ''); };
+  const fmtDate = (d) => {
+    const m = (d || '').match(/^(\d{4})\.(\d{2})\.(\d{2})$/);
+    return m ? `${+m[3]} ${MONTHS[+m[2] - 1]} ${m[1]}` : (d || '').replace(/\.\?\?/g, '');
+  };
   const surname = (n) => (n || '').split(',')[0].trim();
   const clean = (v) => (v && v !== '?' && v !== '-' ? v : '');
 
   function classifyFile(name, text) {
-    try { const j = JSON.parse(text); if (j && j.format === 'queen-answers') return 'queen'; if (j && Array.isArray(j.moves)) return 'analysis'; } catch (e) {}
-    if (/_notes\.txt$/i.test(name) || (/^\s*\[(\d+|INTRO|RESULT|CONCLUSION)\]/im.test(text) && !/^\s*\[\w+\s+"/m.test(text))) return 'notes';
+    try {
+      const j = JSON.parse(text);
+      if (j && j.format === 'queen-answers') return 'queen';
+      if (j && Array.isArray(j.moves)) return 'analysis';
+    } catch (e) {}
+    if (
+      /_notes\.txt$/i.test(name) ||
+      (/^\s*\[(\d+|INTRO|RESULT|CONCLUSION)\]/im.test(text) && !/^\s*\[\w+\s+"/m.test(text))
+    )
+      return 'notes';
     return 'pgn';
   }
 
@@ -292,48 +499,82 @@
   // ---------- FEN and setups ----------
   // A setup is { b, turn, castle, ep, half, full }: b a board (64 squares, 0 = a8), castle the rights in KQkq order ('' for
   // none), ep a square index or -1. Any placement is a setup; setupProblems says what stops it being a position.
-  const canCastle = (b, r) => { const [k, rk] = CASTLE_HOME[r], w = r < 'a'; return b[k] === (w ? 'K' : 'k') && b[rk] === (w ? 'R' : 'r'); };
+  const canCastle = (b, r) => {
+    const [k, rk] = CASTLE_HOME[r],
+      w = r < 'a';
+    return b[k] === (w ? 'K' : 'k') && b[rk] === (w ? 'R' : 'r');
+  };
   // the en passant square stands if the pawn that just moved two is in front of it and the squares it crossed are empty
   function epFits(b, turn, ep) {
     const dir = turn === 'w' ? 1 : -1;
-    return Math.floor(ep / 8) === (turn === 'w' ? 2 : 5) && !b[ep] && !b[ep - 8 * dir] && b[ep + 8 * dir] === (turn === 'w' ? 'p' : 'P');
+    return (
+      Math.floor(ep / 8) === (turn === 'w' ? 2 : 5) &&
+      !b[ep] &&
+      !b[ep - 8 * dir] &&
+      b[ep + 8 * dir] === (turn === 'w' ? 'p' : 'P')
+    );
   }
 
   // A FEN's castling field (X-FEN or Shredder-FEN: K/Q the outermost rook on that side of the king, a file letter the
   // rook on that file, in any order) read against board b: { castle: the rights the pieces support in KQkq order, rooks
   // (only when some right isn't the standard king e1/e8 with rook a/h), dropped: the letters left out }
   function readRights(b, field) {
-    const rooks = {}, dropped = [];
+    const rooks = {},
+      dropped = [];
     for (const ch of field === '-' ? '' : field) {
-      const w = ch < 'a', y = w ? 7 : 0, k = b.indexOf(w ? 'K' : 'k');
+      const w = ch < 'a',
+        y = w ? 7 : 0,
+        k = b.indexOf(w ? 'K' : 'k');
       let r, rk;
-      if (/[KQkq]/.test(ch)) { r = ch; rk = castleRook(b, r); }
-      else {
+      if (/[KQkq]/.test(ch)) {
+        r = ch;
+        rk = castleRook(b, r);
+      } else {
         rk = at(ch.toLowerCase().charCodeAt(0) - 97, y);
         r = k >= 0 && fy(k) === y && fx(rk) !== fx(k) ? rightOf(w ? 'w' : 'b', fx(rk) > fx(k) ? 'h' : 'a') : null;
         if (r && castleRook(b, r, { [r]: rk }) !== rk) r = null;
       }
       if (r && rk >= 0 && rooks[r] === rk) continue; // the same right twice
-      if (!r || rk < 0 || r in rooks) { dropped.push(ch); continue; }
+      if (!r || rk < 0 || r in rooks) {
+        dropped.push(ch);
+        continue;
+      }
       rooks[r] = rk;
     }
     const order = (c) => ('KQkq'.includes(c) ? 'KQkq'.indexOf(c) : 4);
     dropped.sort((a, c) => order(a) - order(c));
-    const castle = 'KQkq'.split('').filter((r) => r in rooks).join('');
-    return stdRights(b, castle, rooks) ? { castle, dropped: dropped.join('') } : { castle, rooks, dropped: dropped.join('') };
+    const castle = 'KQkq'
+      .split('')
+      .filter((r) => r in rooks)
+      .join('');
+    return stdRights(b, castle, rooks)
+      ? { castle, dropped: dropped.join('') }
+      : { castle, rooks, dropped: dropped.join('') };
   }
   // whether every right in castle is the standard king e1/e8 with rook a/h (rooks: each right's rook square), so the
   // position plays as standard chess and carries no rooks
-  const stdRights = (b, castle, rooks) => [...castle].every((r) => rooks[r] === CASTLE_HOME[r][1] && b[CASTLE_HOME[r][0]] === (r < 'a' ? 'K' : 'k'));
+  const stdRights = (b, castle, rooks) =>
+    [...castle].every((r) => rooks[r] === CASTLE_HOME[r][1] && b[CASTLE_HOME[r][0]] === (r < 'a' ? 'K' : 'k'));
   // A position's or setup's castling field: standard rights in KQkq order where the king and rook are at home; with
   // rooks (960), X-FEN, K/Q where the right's rook is the outermost, else its file letter
   function castleField(b, asked, rooks) {
-    if (!rooks) return 'KQkq'.split('').filter((r) => asked.includes(r) && canCastle(b, r)).join('') || '-';
-    return 'KQkq'.split('').map((r) => {
-      const rk = castleRook(b, r, rooks);
-      if (!asked.includes(r) || rk < 0 || (rooks[r] != null && rk !== rooks[r])) return '';
-      return rk === castleRook(b, r) ? r : r < 'a' ? FILES[fx(rk)].toUpperCase() : FILES[fx(rk)];
-    }).join('') || '-';
+    if (!rooks)
+      return (
+        'KQkq'
+          .split('')
+          .filter((r) => asked.includes(r) && canCastle(b, r))
+          .join('') || '-'
+      );
+    return (
+      'KQkq'
+        .split('')
+        .map((r) => {
+          const rk = castleRook(b, r, rooks);
+          if (!asked.includes(r) || rk < 0 || (rooks[r] != null && rk !== rooks[r])) return '';
+          return rk === castleRook(b, r) ? r : r < 'a' ? FILES[fx(rk)].toUpperCase() : FILES[fx(rk)];
+        })
+        .join('') || '-'
+    );
   }
 
   // A FEN's text as a setup: the fields after the board optional, rights in any order (X-FEN or Shredder-FEN, so a
@@ -341,13 +582,23 @@
   // rights or an en passant square the pieces don't support are left out of the setup and named in
   // dropped: { castle: the rights left out, ep: whether the square was }
   function readFen(text) {
-    const t = String(text == null ? '' : text).trim(), f = t.split(/\s+/), bad = { error: `That isn't a FEN: ${t.replace(/\s+/g, ' ').slice(0, 80)}` };
-    const ranks = f[0].split('/'), width = (r) => [...r].reduce((n, c) => n + (/\d/.test(c) ? +c : 1), 0);
-    if (f.length > 6 || ranks.length !== 8 || !ranks.every((r) => /^[pnbrqkPNBRQK1-8]+$/.test(r) && width(r) === 8)) return bad;
-    const turn = f[1] || 'w', castle = f[2] || '-', ep = f[3] || '-', half = f[4] || '0', full = f[5] || '1';
+    const t = String(text == null ? '' : text).trim(),
+      f = t.split(/\s+/),
+      bad = { error: `That isn't a FEN: ${t.replace(/\s+/g, ' ').slice(0, 80)}` };
+    const ranks = f[0].split('/'),
+      width = (r) => [...r].reduce((n, c) => n + (/\d/.test(c) ? +c : 1), 0);
+    if (f.length > 6 || ranks.length !== 8 || !ranks.every((r) => /^[pnbrqkPNBRQK1-8]+$/.test(r) && width(r) === 8))
+      return bad;
+    const turn = f[1] || 'w',
+      castle = f[2] || '-',
+      ep = f[3] || '-',
+      half = f[4] || '0',
+      full = f[5] || '1';
     if (!/^[wb]$/.test(turn) || !/^\d+$/.test(half) || !/^\d+$/.test(full) || !/^(-|[a-h][1-8])$/.test(ep)) return bad;
     if (castle !== '-' && !/^[KQkqA-Ha-h]{1,4}$/.test(castle)) return bad;
-    const b = fromFen(f[0]), epIdx = ep === '-' ? -1 : sqIdx(ep), rr = readRights(b, castle);
+    const b = fromFen(f[0]),
+      epIdx = ep === '-' ? -1 : sqIdx(ep),
+      rr = readRights(b, castle);
     const epOk = epIdx >= 0 && epFits(b, turn, epIdx);
     const setup = { b, turn, castle: rr.castle, ep: epOk ? epIdx : -1, half: +half, full: Math.max(1, +full) };
     if (rr.rooks) setup.rooks = rr.rooks;
@@ -356,58 +607,107 @@
   const is960 = (pos) => !!(pos && pos.rooks);
   // a PGN's Variant tag says Chess960
   const isVariant960 = (v) => /^chess960$/i.test(String(v || '').trim());
-  const fenIs960 = (fen) => { const r = readFen(fen); return !r.error && is960(r.setup); };
+  const fenIs960 = (fen) => {
+    const r = readFen(fen);
+    return !r.error && is960(r.setup);
+  };
 
   // Chess960 starts by Scharnagl's numbering (as Lichess and Wikipedia use; 518 is the standard start): the six-field FEN
   // with X-FEN rights KQkq
-  const KNIGHTS960 = [[0, 1], [0, 2], [0, 3], [0, 4], [1, 2], [1, 3], [1, 4], [2, 3], [2, 4], [3, 4]];
+  const KNIGHTS960 = [
+    [0, 1],
+    [0, 2],
+    [0, 3],
+    [0, 4],
+    [1, 2],
+    [1, 3],
+    [1, 4],
+    [2, 3],
+    [2, 4],
+    [3, 4],
+  ];
   function backRank960(n) {
-    const r = new Array(8).fill(null), empty = () => r.map((p, i) => (p ? -1 : i)).filter((i) => i >= 0);
-    r[2 * (n % 4) + 1] = 'B'; n = Math.floor(n / 4);
-    r[2 * (n % 4)] = 'B'; n = Math.floor(n / 4);
-    r[empty()[n % 6]] = 'Q'; n = Math.floor(n / 6);
-    const e = empty(); for (const j of KNIGHTS960[n]) r[e[j]] = 'N';
-    empty().forEach((i, j) => { r[i] = 'RKR'[j]; });
+    const r = new Array(8).fill(null),
+      empty = () => r.map((p, i) => (p ? -1 : i)).filter((i) => i >= 0);
+    r[2 * (n % 4) + 1] = 'B';
+    n = Math.floor(n / 4);
+    r[2 * (n % 4)] = 'B';
+    n = Math.floor(n / 4);
+    r[empty()[n % 6]] = 'Q';
+    n = Math.floor(n / 6);
+    const e = empty();
+    for (const j of KNIGHTS960[n]) r[e[j]] = 'N';
+    empty().forEach((i, j) => {
+      r[i] = 'RKR'[j];
+    });
     return r.join('');
   }
-  const chess960Fen = (n) => { const r = backRank960(n); return `${r.toLowerCase()}/pppppppp/8/8/8/8/PPPPPPPP/${r} w KQkq - 0 1`; };
+  const chess960Fen = (n) => {
+    const r = backRank960(n);
+    return `${r.toLowerCase()}/pppppppp/8/8/8/8/PPPPPPPP/${r} w KQkq - 0 1`;
+  };
   // a number from 0 to 959 but 518, uniformly
-  const chess960Random = (rand = Math.random) => { const k = Math.min(958, Math.max(0, Math.floor(rand() * 959))); return k >= 518 ? k + 1 : k; };
+  const chess960Random = (rand = Math.random) => {
+    const k = Math.min(958, Math.max(0, Math.floor(rand() * 959)));
+    return k >= 518 ? k + 1 : k;
+  };
   let RANKS960 = null;
   // the number of the Chess960 start this FEN's placement is (both back ranks mirrored, pawns on 2 and 7, nothing else), else null
   function chess960Number(fen) {
-    if (!RANKS960) { RANKS960 = new Map(); for (let n = 0; n < 960; n++) RANKS960.set(backRank960(n), n); }
-    const m = /^([a-z]{8})\/pppppppp\/8\/8\/8\/8\/PPPPPPPP\/([A-Z]{8})$/.exec(String(fen || '').trim().split(/\s+/)[0]);
+    if (!RANKS960) {
+      RANKS960 = new Map();
+      for (let n = 0; n < 960; n++) RANKS960.set(backRank960(n), n);
+    }
+    const m = /^([a-z]{8})\/pppppppp\/8\/8\/8\/8\/PPPPPPPP\/([A-Z]{8})$/.exec(
+      String(fen || '')
+        .trim()
+        .split(/\s+/)[0],
+    );
     return m && m[1] === m[2].toLowerCase() && RANKS960.has(m[2]) ? RANKS960.get(m[2]) : null;
   }
 
   // two pieces on one rank, file or diagonal with the king: no single move gives both checks
   function inLine(a, c, k) {
-    const dx = (k % 8) - (a % 8), dy = Math.floor(k / 8) - Math.floor(a / 8), ex = (c % 8) - (a % 8), ey = Math.floor(c / 8) - Math.floor(a / 8);
+    const dx = (k % 8) - (a % 8),
+      dy = Math.floor(k / 8) - Math.floor(a / 8),
+      ex = (c % 8) - (a % 8),
+      ey = Math.floor(c / 8) - Math.floor(a / 8);
     const line = ex === 0 || ey === 0 || Math.abs(ex) === Math.abs(ey);
     return line && dx * ey === dy * ex;
   }
   const SIDE_NAME = { w: 'White', b: 'Black' };
   // What stops the setup being a position, in plain words, each a sentence; [] when it is one
   function setupProblems(s) {
-    const out = [], count = (p) => s.b.filter((x) => x === p).length;
-    for (const [side, K] of [['w', 'K'], ['b', 'k']]) {
+    const out = [],
+      count = (p) => s.b.filter((x) => x === p).length;
+    for (const [side, K] of [
+      ['w', 'K'],
+      ['b', 'k'],
+    ]) {
       const n = count(K);
-      if (n === 0) out.push(`${SIDE_NAME[side]} has no king.`); else if (n > 1) out.push(`${SIDE_NAME[side]} has ${n} kings.`);
+      if (n === 0) out.push(`${SIDE_NAME[side]} has no king.`);
+      else if (n > 1) out.push(`${SIDE_NAME[side]} has ${n} kings.`);
     }
-    s.b.forEach((p, i) => { if ((p === 'P' || p === 'p') && (i < 8 || i > 55)) out.push(`The pawn on ${idxSq(i)} can't stand on the first or last rank.`); });
+    s.b.forEach((p, i) => {
+      if ((p === 'P' || p === 'p') && (i < 8 || i > 55))
+        out.push(`The pawn on ${idxSq(i)} can't stand on the first or last rank.`);
+    });
     if (count('K') !== 1 || count('k') !== 1) return out;
     const other = s.turn === 'w' ? 'b' : 'w';
     if (inCheck(s.b, other)) out.push(`${SIDE_NAME[other]} is in check, but it's ${SIDE_NAME[s.turn]}'s turn.`);
-    const ch = checkers(s.b, s.turn), k = s.b.indexOf(s.turn === 'w' ? 'K' : 'k');
+    const ch = checkers(s.b, s.turn),
+      k = s.b.indexOf(s.turn === 'w' ? 'K' : 'k');
     if (ch.length > 2) out.push(`${SIDE_NAME[s.turn]} is in check from ${ch.length} pieces, which no move can give.`);
-    else if (ch.length === 2 && inLine(ch[0], ch[1], k)) out.push(`${SIDE_NAME[s.turn]} is in check from two pieces in a line, which no move can give.`);
+    else if (ch.length === 2 && inLine(ch[0], ch[1], k))
+      out.push(`${SIDE_NAME[s.turn]} is in check from two pieces in a line, which no move can give.`);
     return out;
   }
   // ---------- evals ----------
   // Evals are centipawns from White's point of view. A mate in N is ±(MATE_CP − MATE_STEP·N), as in Python's _eval_to_cp
   // (a checkmate on the board ±MATE_CP); any eval at least MATE_MIN from zero is a mate score (Python calls MATE_CP − MATE_MIN its MATE_BAND_CP)
-  const MATE_CP = 10000, MATE_STEP = 10, MATE_MIN = 9000;
+  const MATE_CP = 10000,
+    MATE_STEP = 10,
+    MATE_MIN = 9000;
   const mateCp = (n) => (n > 0 ? 1 : -1) * (MATE_CP - MATE_STEP * Math.abs(n)); // n > 0: White mates
   const isMateCp = (cp) => Math.abs(cp) >= MATE_MIN;
   const mateIn = (cp) => Math.round((MATE_CP - Math.abs(cp)) / MATE_STEP); // the N of a mate score (0 for a checkmate)
@@ -420,7 +720,8 @@
     return { mate: Math.sign(cp) * Math.max(1, mateIn(cp)) };
   }
   // Lichess's win chances (−1 to 1) and the drops in them, for the mover, that make a move ?!, ? or ??
-  const WIN_K = 0.00368208, WIN_DROP = { inaccuracy: 0.10, mistake: 0.20, blunder: 0.30 };
+  const WIN_K = 0.00368208,
+    WIN_DROP = { inaccuracy: 0.1, mistake: 0.2, blunder: 0.3 };
   const winChance = (cp) => 2 / (1 + Math.exp(-WIN_K * cp)) - 1;
 
   // Can the side to move take en passant (a legal capture on pos.ep)? Only then does a position's key name the square
@@ -428,7 +729,9 @@
   function epCapturable(pos) {
     if (pos.ep < 0) return false;
     // only a pawn beside the one that moved two, one rank behind the square, can take there
-    const pawn = pos.turn === 'w' ? 'P' : 'p', row = pos.turn === 'w' ? 8 : -8, x = pos.ep % 8;
+    const pawn = pos.turn === 'w' ? 'P' : 'p',
+      row = pos.turn === 'w' ? 8 : -8,
+      x = pos.ep % 8;
     for (const dx of [-1, 1]) {
       const from = pos.ep + row + dx;
       if (x + dx >= 0 && x + dx < 8 && pos.b[from] === pawn && legalTargets(pos, from).includes(pos.ep)) return true;
@@ -455,12 +758,15 @@
   function parseFen(fen) {
     const r = readFen(fen);
     if (r.error) throw new Error(r.error);
-    const s = r.setup, problems = setupProblems(s);
+    const s = r.setup,
+      problems = setupProblems(s);
     if (problems.length) throw new Error(problems[0]);
     if (r.dropped.castle) throw new Error("Castling rights don't match the pieces");
     if (r.dropped.ep) throw new Error("The en passant square doesn't match the pieces");
     return {
-      pos: s.rooks ? { b: s.b, ep: s.ep, turn: s.turn, castle: s.castle, rooks: s.rooks } : { b: s.b, ep: s.ep, turn: s.turn, castle: s.castle },
+      pos: s.rooks
+        ? { b: s.b, ep: s.ep, turn: s.turn, castle: s.castle, rooks: s.rooks }
+        : { b: s.b, ep: s.ep, turn: s.turn, castle: s.castle },
       ply0: (s.full - 1) * 2 + (s.turn === 'b' ? 1 : 0),
       fen: setupFen(s),
     };
@@ -479,15 +785,26 @@
   const SAY_ORDER = ['notes', 'pgn']; // a notes file wins over the PGN's comments
 
   // the sources of commentary this game has
-  const commentarySources = (M) => SAY_ORDER.filter((k) => M.says && (M.says[k].intro || M.says[k].conclusion || M.plies.some((p) => p.says && p.says[k])));
+  const commentarySources = (M) =>
+    SAY_ORDER.filter(
+      (k) => M.says && (M.says[k].intro || M.says[k].conclusion || M.plies.some((p) => p.says && p.says[k])),
+    );
 
   // M with only the commentary of the sources show leaves on ({ pgn, notes }; a missing key is on)
   function withCommentary(M, show) {
     if (!M.says || SAY_ORDER.every((k) => show[k] !== false)) return M;
     const on = SAY_ORDER.filter((k) => show[k] !== false);
-    const first = (f) => { for (const k of on) { const v = f(k); if (v) return v; } return ''; };
+    const first = (f) => {
+      for (const k of on) {
+        const v = f(k);
+        if (v) return v;
+      }
+      return '';
+    };
     return {
-      ...M, intro: first((k) => M.says[k].intro), conclusion: first((k) => M.says[k].conclusion),
+      ...M,
+      intro: first((k) => M.says[k].intro),
+      conclusion: first((k) => M.says[k].conclusion),
       plies: M.plies.map((p) => ({ ...p, comment: p.says ? first((k) => p.says[k]) : p.comment })),
     };
   }
@@ -504,14 +821,26 @@
   }
 
   // chess-animator's engine_lines of an analysis move: [{ move, eval, depth, line }], best first; [] where the file has none
-  const engineLinesOf = (am) => (am && Array.isArray(am.engine_lines) ? am.engine_lines.filter((l) => l && Array.isArray(l.line) && l.line.length) : []);
+  const engineLinesOf = (am) =>
+    am && Array.isArray(am.engine_lines)
+      ? am.engine_lines.filter((l) => l && Array.isArray(l.line) && l.line.length)
+      : [];
   const engineLinesSan = (am) => engineLinesOf(am).map((l) => l.line);
   // those lines from pos as { k, cp, depth, pv: uci moves }, each cut at its first illegal move; a line that doesn't start legally is left out
   function linesFromSan(pos, ls) {
     const out = [];
     ls.forEach((l) => {
-      const pv = []; let p = pos;
-      for (const san of l.line) { try { const mv = sanToMove(p, san); pv.push(idxSq(mv.from) + idxSq(mv.to) + (mv.promo || '')); p = applyMove(p, mv.from, mv.to, mv.promo); } catch (e) { break; } }
+      const pv = [];
+      let p = pos;
+      for (const san of l.line) {
+        try {
+          const mv = sanToMove(p, san);
+          pv.push(idxSq(mv.from) + idxSq(mv.to) + (mv.promo || ''));
+          p = applyMove(p, mv.from, mv.to, mv.promo);
+        } catch (e) {
+          break;
+        }
+      }
       if (pv.length) out.push({ k: out.length + 1, cp: l.eval, depth: l.depth, pv });
     });
     return out;
@@ -524,14 +853,21 @@
   // The game's plies: each of sans replayed from start (a move that isn't legal throws, with its number), with what the
   // PGN (P), the analysis file (A, its evals where useA) and the notes (NT) say of it
   function replay({ sans, start, P, A, useA, NT }) {
-    const ply0 = start.ply0, plies = [];
+    const ply0 = start.ply0,
+      plies = [];
     let pos = start.pos;
     sans.forEach((san, i) => {
       const am = useA && A.moves[i];
       let mv;
-      try { mv = sanToMove(pos, san); } catch (e) { throw new Error(`${e.message} (move ${moveNo(ply0 + i)})`); }
-      const before = pos, std = canon(pos, mv);
-      if (A && P && am && bare(am.move_san) !== bare(san) && bare(am.move_san) !== bare(std)) throw new Error(`The analysis file doesn't match this PGN at ply ${i + 1}`);
+      try {
+        mv = sanToMove(pos, san);
+      } catch (e) {
+        throw new Error(`${e.message} (move ${moveNo(ply0 + i)})`);
+      }
+      const before = pos,
+        std = canon(pos, mv);
+      if (A && P && am && bare(am.move_san) !== bare(san) && bare(am.move_san) !== bare(std))
+        throw new Error(`The analysis file doesn't match this PGN at ply ${i + 1}`);
       pos = applyMove(pos, mv.from, mv.to, mv.promo);
       const pp = P ? P.plies[i] : {};
       const check = inCheck(pos.b, pos.turn);
@@ -548,7 +884,10 @@
       if (am && typeof am.eval_after === 'number') Object.assign(ply, decodeEval(am.eval_after, ply.tb));
       else if (pp.cp != null) ply.cp = pp.cp;
       else if (pp.mate != null) ply.mate = pp.mate;
-      if (ply.checkmate) { ply.mate = ply.side === 'w' ? 0.5 : -0.5; delete ply.cp; }
+      if (ply.checkmate) {
+        ply.mate = ply.side === 'w' ? 0.5 : -0.5;
+        delete ply.cp;
+      }
       const eng = am ? am.classification || '' : '';
       ply.mark = pp.mark || ENGINE_MARK[eng] || null;
       ply.cls = ply.mark ? MARK_CLASS[ply.mark] : eng === 'best' ? 'best' : 'none';
@@ -556,28 +895,48 @@
       if (am && am.best_move_uci && am.best_move_uci !== ply.uci) {
         ply.best = { uci: am.best_move_uci, line: am.best_line || [] };
         // the search's other lines (chess-animator's engine_lines, line 1 the best line), each from the position before the move, none starting with the move played
-        const more = engineLinesSan(am).slice(1).filter((l) => bare(l[0]) !== bare(san) && bare(l[0]) !== bare(std));
+        const more = engineLinesSan(am)
+          .slice(1)
+          .filter((l) => bare(l[0]) !== bare(san) && bare(l[0]) !== bare(std));
         if (more.length) ply.best.more = more;
-      }
-      else if (!useA && pp.variation && pp.variation.length) {
-        try { const bm = sanToMove(before, pp.variation[0]); ply.best = { uci: idxSq(bm.from) + idxSq(bm.to) + (bm.promo || ''), line: pp.variation }; } catch (e) {}
+      } else if (!useA && pp.variation && pp.variation.length) {
+        try {
+          const bm = sanToMove(before, pp.variation[0]);
+          ply.best = { uci: idxSq(bm.from) + idxSq(bm.to) + (bm.promo || ''), line: pp.variation };
+        } catch (e) {}
       }
       // the engine's line from the position after the move, as Lichess shows it: the next move's best line (one search a
       // position, so the same search), or after the last move its short pv_line
-      if (am) { const an = A.moves[i + 1], next = an ? an.best_line : am.pv_line; if (next && next.length) ply.next = next; }
+      if (am) {
+        const an = A.moves[i + 1],
+          next = an ? an.best_line : am.pv_line;
+        if (next && next.length) ply.next = next;
+      }
       // the search's several lines from the position after the move (the next move's engine_lines), as { k, cp, depth, pv: uci }, none when it has one
-      if (am && A.moves[i + 1]) { const ls = linesFromSan(pos, engineLinesOf(A.moves[i + 1])); if (ls.length > 1) ply.nextLines = ls; }
+      if (am && A.moves[i + 1]) {
+        const ls = linesFromSan(pos, engineLinesOf(A.moves[i + 1]));
+        if (ls.length > 1) ply.nextLines = ls;
+      }
       if (am && am.mate_advice) ply.advice = am.mate_advice;
       // the search of the position after the move, as it actually ran
       if (ply.tb) ply.search = { tablebase: true };
-      else if (am && am.search_depth_after) ply.search = { depth: am.search_depth_after, maxDepth: am.search_maxdepth_after || am.search_depth_after, timeMs: am.search_time_after_ms == null ? null : am.search_time_after_ms, nodes: am.search_nodes_after == null ? null : am.search_nodes_after };
+      else if (am && am.search_depth_after)
+        ply.search = {
+          depth: am.search_depth_after,
+          maxDepth: am.search_maxdepth_after || am.search_depth_after,
+          timeMs: am.search_time_after_ms == null ? null : am.search_time_after_ms,
+          nodes: am.search_nodes_after == null ? null : am.search_nodes_after,
+        };
       if (pp.clk != null) ply.clk = pp.clk;
       const note = (NT && NT.plies[i + 1]) || '';
       if (pp.vars) ply.pgnVars = pp.vars;
       if (pp.nags) ply.nags = pp.nags;
       // an annotated PGN imported with its notes file: the note (and after the last move the conclusion) it wrote into
       // the PGN's comment is the notes file's, not the PGN's
-      const own = unsaid(i === sans.length - 1 ? unsaid(pp.comment || '', NT && ends(NT).conclusion, true) : pp.comment || '', note);
+      const own = unsaid(
+        i === sans.length - 1 ? unsaid(pp.comment || '', NT && ends(NT).conclusion, true) : pp.comment || '',
+        note,
+      );
       ply.pgnComment = own;
       ply.comment = note || own;
       ply.says = { pgn: own, notes: note };
@@ -589,14 +948,19 @@
   // A game with the PGN's evals and no analysis file: its unmarked moves rated by their drop in win chances (Lichess's
   // thresholds), in place. stdStart: the game starts from the standard position (+0.20 before the first move)
   function ratePgnOnly(plies, stdStart) {
-    const known = (p) => p && (p.cp != null || (p.mate != null && !p.checkmate)), cpv = plyCp;
+    const known = (p) => p && (p.cp != null || (p.mate != null && !p.checkmate)),
+      cpv = plyCp;
     plies.forEach((p, i) => {
       const prev = i ? plies[i - 1] : stdStart ? { cp: 20 } : null; // no known eval before a custom start's first move
       if (p.mark || !known(p) || !known(prev) || p.mate != null || prev.mate != null) return;
       const sgn = p.side === 'w' ? 1 : -1;
       const drop = sgn * (winChance(cpv(prev)) - winChance(cpv(p)));
-      const mk = drop >= WIN_DROP.blunder ? '??' : drop >= WIN_DROP.mistake ? '?' : drop >= WIN_DROP.inaccuracy ? '?!' : null;
-      if (mk) { p.mark = mk; p.cls = MARK_CLASS[mk]; }
+      const mk =
+        drop >= WIN_DROP.blunder ? '??' : drop >= WIN_DROP.mistake ? '?' : drop >= WIN_DROP.inaccuracy ? '?!' : null;
+      if (mk) {
+        p.mark = mk;
+        p.cls = MARK_CLASS[mk];
+      }
       const loss = Math.round(sgn * (cpv(prev) - cpv(p)));
       if (loss > 0) p.loss = loss;
     });
@@ -608,51 +972,129 @@
   function headersOf({ H, A, useA, pgnHasEval, plies, start }) {
     const eng = useA && A.engine;
     // search as Python's describe_search; one line and one thread (the browser engine) go unsaid
-    const search = eng && (eng.depth && eng.time_limit ? `depth ${eng.depth}, max ${eng.time_limit}s per position` : eng.time_limit ? `${eng.time_limit}s per position` : eng.depth ? `depth ${eng.depth}` : '');
+    const search =
+      eng &&
+      (eng.depth && eng.time_limit
+        ? `depth ${eng.depth}, max ${eng.time_limit}s per position`
+        : eng.time_limit
+          ? `${eng.time_limit}s per position`
+          : eng.depth
+            ? `depth ${eng.depth}`
+            : '');
     const single = eng && eng.lines === 1 && eng.threads === 1;
-    const engine = eng ? [eng.name, search, !single && eng.lines ? `${eng.lines} line${eng.lines > 1 ? 's' : ''}` : '', !single && eng.threads ? `${eng.threads} thread${eng.threads > 1 ? 's' : ''}` : '', eng.tablebase ? 'Lichess tablebase' : ''].filter(Boolean).join(' · ') : pgnHasEval ? 'Evaluations from the PGN' : '';
+    const engine = eng
+      ? [
+          eng.name,
+          search,
+          !single && eng.lines ? `${eng.lines} line${eng.lines > 1 ? 's' : ''}` : '',
+          !single && eng.threads ? `${eng.threads} thread${eng.threads > 1 ? 's' : ''}` : '',
+          eng.tablebase ? 'Lichess tablebase' : '',
+        ]
+          .filter(Boolean)
+          .join(' · ')
+      : pgnHasEval
+        ? 'Evaluations from the PGN'
+        : '';
     const player = (side) => {
-      const S = side === 'w' ? 'White' : 'Black', s = side === 'w' ? 'white' : 'black';
+      const S = side === 'w' ? 'White' : 'Black',
+        s = side === 'w' ? 'white' : 'black';
       const name = clean(H[S]) || (A && A[s]) || S;
-      return { name, named: name !== S, short: surname(name), title: clean(H[S + 'Title']), elo: clean(H[S + 'Elo']) || (A && clean(A[s + '_elo'])) || '', team: clean(H[S + 'Team']), acc: useA && A[s + '_stats'] && A[s + '_stats'].accuracy };
+      return {
+        name,
+        named: name !== S,
+        short: surname(name),
+        title: clean(H[S + 'Title']),
+        elo: clean(H[S + 'Elo']) || (A && clean(A[s + '_elo'])) || '',
+        team: clean(H[S + 'Team']),
+        acc: useA && A[s + '_stats'] && A[s + '_stats'].accuracy,
+      };
     };
     const result = clean(H.Result) || (A && A.result) || '*';
     // the PGN's opening, else the analysis file's, else Lichess's opening book (as AnalysisData.name_opening)
     const known = (n) => clean(n) && n !== 'Unknown';
-    let opening = known(H.Opening) ? { eco: clean(H.ECO), name: H.Opening } : A && known(A.opening_name) ? { eco: A.opening_eco || '', name: A.opening_name } : null;
-    if (!opening && window.Openings && !is960(start.pos)) { try { opening = window.Openings.book().identify(plies.map((p) => p.uci), start.fen); } catch (e) {} }
+    let opening = known(H.Opening)
+      ? { eco: clean(H.ECO), name: H.Opening }
+      : A && known(A.opening_name)
+        ? { eco: A.opening_eco || '', name: A.opening_name }
+        : null;
+    if (!opening && window.Openings && !is960(start.pos)) {
+      try {
+        opening = window.Openings.book().identify(
+          plies.map((p) => p.uci),
+          start.fen,
+        );
+      } catch (e) {}
+    }
     if (!opening) opening = { eco: clean(H.ECO), name: '' };
     const round = clean(H.Round) || (A && clean(A.round_num)) || '';
     return {
-      white: player('w'), black: player('b'),
-      event: clean(H.Event) || (A && A.event) || '', round, site: clean(H.Site) || (A && A.site) || '', date: fmtDate(clean(H.Date) || (A && A.date)), pgnDate: clean(H.Date) || (A && clean(A.date)) || '',
-      eco: opening.eco, opening: opening.name, result, engine, engineName: eng ? eng.name || '' : '',
+      white: player('w'),
+      black: player('b'),
+      event: clean(H.Event) || (A && A.event) || '',
+      round,
+      site: clean(H.Site) || (A && A.site) || '',
+      date: fmtDate(clean(H.Date) || (A && A.date)),
+      pgnDate: clean(H.Date) || (A && clean(A.date)) || '',
+      eco: opening.eco,
+      opening: opening.name,
+      result,
+      engine,
+      engineName: eng ? eng.name || '' : '',
     };
   }
 
   function buildGame(files) {
     const { pgn, analysis, notes } = files;
     const gameIndex = files.gameIndex || 0;
-    let P = null, gameCount = 1;
-    if (pgn) { const games = splitGames(pgn); if (!games.length) throw new Error('The PGN has no games'); gameCount = games.length; P = parsePGN(games[Math.min(gameIndex, games.length - 1)]); }
+    let P = null,
+      gameCount = 1;
+    if (pgn) {
+      const games = splitGames(pgn);
+      if (!games.length) throw new Error('The PGN has no games');
+      gameCount = games.length;
+      P = parsePGN(games[Math.min(gameIndex, games.length - 1)]);
+    }
     const A = analysis ? (typeof analysis === 'string' ? JSON.parse(analysis) : analysis) : null;
     // commentary layers, lowest priority first: bundled sample notes, user's notes file; each source is
     // kept apart too (ply.says, M.says), so withCommentary can show some of them
-    const merge = (ls) => (ls.length ? ls.reduce((acc, n) => ({ ...acc, ...n, plies: { ...acc.plies, ...n.plies } }), { plies: {} }) : null);
+    const merge = (ls) =>
+      ls.length ? ls.reduce((acc, n) => ({ ...acc, ...n, plies: { ...acc.plies, ...n.plies } }), { plies: {} }) : null;
     const NT = merge([files.sampleNotes, notes].filter(Boolean).map(parseNotes));
     const pgnHasEval = !!P && P.plies.some((p) => p.cp != null || p.mate != null);
     const useA = !!A && !(files.evalSource === 'pgn' && pgnHasEval);
     const H = P ? P.headers : {};
     // a PGN's [FEN] header, else the analysis file's start; both are normalised, so equal starts compare equal
     const start = parseFen(H.FEN || (!P && A && A.start_fen) || START_FEN);
-    const ply0 = start.ply0, stdStart = start.fen === START_FEN;
+    const ply0 = start.ply0,
+      stdStart = start.fen === START_FEN;
     const sans = P ? P.plies.map((p) => p.san) : A ? A.moves.map((m) => m.move_san) : [];
     if (!sans.length) throw new Error('No moves found');
-    const firstStd = () => { try { return canon(start.pos, sanToMove(start.pos, sans[0])); } catch (e) { return sans[0]; } };
-    if (A && P && A.moves.length && bare(A.moves[0].move_san) !== bare(sans[0]) && bare(A.moves[0].move_san) !== bare(firstStd())) throw new Error("The analysis file doesn't match this PGN");
+    const firstStd = () => {
+      try {
+        return canon(start.pos, sanToMove(start.pos, sans[0]));
+      } catch (e) {
+        return sans[0];
+      }
+    };
+    if (
+      A &&
+      P &&
+      A.moves.length &&
+      bare(A.moves[0].move_san) !== bare(sans[0]) &&
+      bare(A.moves[0].move_san) !== bare(firstStd())
+    )
+      throw new Error("The analysis file doesn't match this PGN");
     // chess-animator's analysis JSON never has start_fen (its moves come from the PGN's [FEN] board): then the per-ply SAN match and the side to move decide
-    if (A && P && A.start_fen && parseFen(A.start_fen).fen !== start.fen) throw new Error("The analysis file doesn't match this PGN");
-    if (A && P && A.moves.length && typeof A.moves[0].is_white_move === 'boolean' && A.moves[0].is_white_move !== (start.pos.turn === 'w')) throw new Error("The analysis file doesn't match this PGN");
+    if (A && P && A.start_fen && parseFen(A.start_fen).fen !== start.fen)
+      throw new Error("The analysis file doesn't match this PGN");
+    if (
+      A &&
+      P &&
+      A.moves.length &&
+      typeof A.moves[0].is_white_move === 'boolean' &&
+      A.moves[0].is_white_move !== (start.pos.turn === 'w')
+    )
+      throw new Error("The analysis file doesn't match this PGN");
 
     const plies = replay({ sans, start, P, A, useA, NT });
     if (!useA) ratePgnOnly(plies, stdStart);
@@ -661,21 +1103,44 @@
     const first = plies.find((p) => p.cp != null || (p.mate != null && !p.checkmate));
     // the +0.20 first-move edge is the standard start's; a custom start has only its first known eval
     let lastCp = aStart ? A.moves[0].eval_before : stdStart ? 20 : first ? plyCp(first) : 20;
-    const evalStart = lastCp, evalStartKnown = aStart || stdStart;
-    plies.forEach((p) => { if (p.cp == null && p.mate == null) p.cpFill = lastCp; else lastCp = plyCp(p); });
+    const evalStart = lastCp,
+      evalStartKnown = aStart || stdStart;
+    plies.forEach((p) => {
+      if (p.cp == null && p.mate == null) p.cpFill = lastCp;
+      else lastCp = plyCp(p);
+    });
     // the checkmate on the last move is a fact of the game, not an engine eval
     const hasEval = plies.some((p) => p.cp != null || (p.mate != null && !p.checkmate));
     const hasClock = plies.some((p) => p.clk != null);
     // the first period's seconds: 300+2, 40/7200:3600 (40 moves in 7200 s), not a sandclock (*60)
     const tc = (H.TimeControl || '').match(/^(?:\d+\/)?(\d+)/);
-    const clockStart = tc ? +tc[1] : hasClock ? Math.ceil(Math.max(plies[0].clk || 0, (plies[1] && plies[1].clk) || 0) / 60) * 60 : 0;
-    const pgnIntro = unsaid((P && P.intro) || '', NT && NT.intro), n960 = chess960Number(start.fen);
+    const clockStart = tc
+      ? +tc[1]
+      : hasClock
+        ? Math.ceil(Math.max(plies[0].clk || 0, (plies[1] && plies[1].clk) || 0) / 60) * 60
+        : 0;
+    const pgnIntro = unsaid((P && P.intro) || '', NT && NT.intro),
+      n960 = chess960Number(start.fen);
     return {
       ...headersOf({ H, A, useA, pgnHasEval, plies, start }),
-      intro: (NT && NT.intro) || pgnIntro, conclusion: ends(NT).conclusion,
+      intro: (NT && NT.intro) || pgnIntro,
+      conclusion: ends(NT).conclusion,
       says: { pgn: { intro: pgnIntro, conclusion: '' }, notes: ends(NT) },
       ...(isVariant960(H.Variant) ? { chess960: n960 == null ? true : n960 } : {}),
-      start: { fen: start.fen, pos: start.pos }, ply0, plies, evalStart, evalStartKnown, hasEval, hasClock, clockStart, gameCount, hasAnalysis: !!A, hasNotes: !!notes, headers: H, evalSource: useA ? 'analysis' : pgnHasEval ? 'pgn' : 'none', canChooseSource: !!A && pgnHasEval,
+      start: { fen: start.fen, pos: start.pos },
+      ply0,
+      plies,
+      evalStart,
+      evalStartKnown,
+      hasEval,
+      hasClock,
+      clockStart,
+      gameCount,
+      hasAnalysis: !!A,
+      hasNotes: !!notes,
+      headers: H,
+      evalSource: useA ? 'analysis' : pgnHasEval ? 'pgn' : 'none',
+      canChooseSource: !!A && pgnHasEval,
     };
   }
 
@@ -689,20 +1154,42 @@
     let crit = -1;
     if (M.hasEval) {
       let best = 0;
-      M.plies.forEach((p, i) => { const d = Math.abs(winChance(plyCp(p)) - winChance(i ? plyCp(M.plies[i - 1]) : M.evalStart)); if (d > best) { best = d; crit = i; } });
+      M.plies.forEach((p, i) => {
+        const d = Math.abs(winChance(plyCp(p)) - winChance(i ? plyCp(M.plies[i - 1]) : M.evalStart));
+        if (d > best) {
+          best = d;
+          crit = i;
+        }
+      });
     }
-    if (crit < 0) { crit = M.plies.findIndex((p) => p.cls === 'blunder' || p.cls === 'brilliant'); if (crit < 0) crit = Math.floor(N * 0.65); }
-    let cs = Math.max(0, crit - 3), ce = Math.min(N - 1, crit + 5);
+    if (crit < 0) {
+      crit = M.plies.findIndex((p) => p.cls === 'blunder' || p.cls === 'brilliant');
+      if (crit < 0) crit = Math.floor(N * 0.65);
+    }
+    let cs = Math.max(0, crit - 3),
+      ce = Math.min(N - 1, crit + 5);
     const oe = Math.round(cs * 0.45) - 1;
-    return [['Opening', 0, oe], ['Middlegame', oe + 1, cs - 1], ['Critical', cs, ce], ['Endgame', ce + 1, N - 1]];
+    return [
+      ['Opening', 0, oe],
+      ['Middlegame', oe + 1, cs - 1],
+      ['Critical', cs, ce],
+      ['Endgame', ce + 1, N - 1],
+    ];
   }
 
   // Per-ply hold times and the resulting scene list. The only padding is LEAD before the first move (the title card
   // fading out) and TAIL after the last; sections follow one another with no gap, so no move holds longer for ending one.
   const KEY_CLS = ['blunder', 'mistake', 'inaccuracy', 'brilliant', 'good', 'interesting'];
-  const MAX_TOTAL = 300, TITLE = 5, OUTRO = 7, READ_CAP = 6, LEAD = 1.2, TAIL = 2.6;
+  const MAX_TOTAL = 300,
+    TITLE = 5,
+    OUTRO = 7,
+    READ_CAP = 6,
+    LEAD = 1.2,
+    TAIL = 2.6;
   function timing(M, o) {
-    const spm = o.secondsPerMove || 1.6, hold = o.keyHold == null ? 1.5 : o.keyHold, read = o.readSpeed || 22; // characters a second
+    const spm = o.secondsPerMove || 1.6,
+      hold = o.keyHold == null ? 1.5 : o.keyHold,
+      read = o.readSpeed || 22; // characters a second
     const ranges = plan(M);
     let d = M.plies.map((p) => {
       // reading time for the comment and Queen's sentence together, at most READ_CAP s; on a marked move it stands in
@@ -711,20 +1198,41 @@
       if (chars) return Math.max(spm, Math.min(READ_CAP, chars / read));
       return KEY_CLS.includes(p.cls) || p.checkmate ? spm + hold * (p.cls === 'blunder' || p.checkmate ? 1.3 : 1) : spm;
     });
-    if (o.fastOpening) { const [, a, b] = ranges[0]; for (let i = a; i <= b; i++) if (!M.plies[i].comment && !M.plies[i].mark) d[i] *= 0.55; }
+    if (o.fastOpening) {
+      const [, a, b] = ranges[0];
+      for (let i = a; i <= b; i++) if (!M.plies[i].comment && !M.plies[i].mark) d[i] *= 0.55;
+    }
     const live = ranges.filter((r) => r[2] >= r[1]);
-    const lt = (name) => { const gi = live.findIndex((r) => r[0] === name); return gi < 0 ? 0 : (gi === 0 ? LEAD : 0) + (gi === live.length - 1 ? TAIL : 0); };
+    const lt = (name) => {
+      const gi = live.findIndex((r) => r[0] === name);
+      return gi < 0 ? 0 : (gi === 0 ? LEAD : 0) + (gi === live.length - 1 ? TAIL : 0);
+    };
     const fixed = TITLE + OUTRO + ranges.reduce((s, r) => s + (r[2] >= r[1] ? lt(r[0]) : 0.1), 0);
     const sum = d.reduce((s, x) => s + x, 0);
     const capped = fixed + sum > MAX_TOTAL;
-    if (capped) { const k = (MAX_TOTAL - fixed - 0.5) / sum; d = d.map((x) => x * k); }
+    if (capped) {
+      const k = (MAX_TOTAL - fixed - 0.5) / sum;
+      d = d.map((x) => x * k);
+    }
     const mv = (i) => Math.floor(((M.ply0 || 0) + i) / 2) + 1;
-    const DESC = { Opening: 'The opening moves', Middlegame: 'Middlegame moves leading up to the critical moment', Critical: 'The biggest eval swing and the moves around it, with camera push', Endgame: 'The rest of the game to the final move' };
+    const DESC = {
+      Opening: 'The opening moves',
+      Middlegame: 'Middlegame moves leading up to the critical moment',
+      Critical: 'The biggest eval swing and the moves around it, with camera push',
+      Endgame: 'The rest of the game to the final move',
+    };
     const scenes = [{ name: 'Title', dur: TITLE, desc: 'Title card from the PGN headers: players, event, opening' }];
     ranges.forEach(([name, a, b]) => {
       let dur = 0.1;
-      if (b >= a) { dur = lt(name); for (let i = a; i <= b; i++) dur += d[i]; }
-      scenes.push({ name, dur: Math.round(dur * 10) / 10, desc: b >= a ? `${DESC[name]} (moves ${mv(a)}–${mv(b)})` : 'Empty for this game' });
+      if (b >= a) {
+        dur = lt(name);
+        for (let i = a; i <= b; i++) dur += d[i];
+      }
+      scenes.push({
+        name,
+        dur: Math.round(dur * 10) / 10,
+        desc: b >= a ? `${DESC[name]} (moves ${mv(a)}–${mv(b)})` : 'Empty for this game',
+      });
     });
     scenes.push({ name: 'Outro', dur: OUTRO, desc: 'End card: result, accuracy, engine settings, fade out' });
     return { d, scenes, capped, total: scenes.reduce((s, x) => s + x.dur, 0) };
@@ -733,18 +1241,28 @@
   // When each ply plays on the timeline (tp) and how long its move animates (md). CUES is each scene's start time.
   const AFTER = { Opening: 'Middlegame', Middlegame: 'Critical', Critical: 'Endgame', Endgame: 'Outro' };
   function schedule(M, CUES, d) {
-    const N = M.plies.length, tp = new Array(N), groups = [];
+    const N = M.plies.length,
+      tp = new Array(N),
+      groups = [];
     let pendingStart = null;
     plan(M).forEach(([name, a, b]) => {
-      if (b >= a) { groups.push({ a, b, start: pendingStart != null ? pendingStart : CUES[name], end: CUES[AFTER[name]] }); pendingStart = null; }
-      else if (groups.length) groups[groups.length - 1].end = CUES[AFTER[name]];
+      if (b >= a) {
+        groups.push({ a, b, start: pendingStart != null ? pendingStart : CUES[name], end: CUES[AFTER[name]] });
+        pendingStart = null;
+      } else if (groups.length) groups[groups.length - 1].end = CUES[AFTER[name]];
       else if (pendingStart == null) pendingStart = CUES[name];
     });
     groups.forEach((g, gi) => {
-      const lead = gi === 0 ? LEAD : 0, tail = gi === groups.length - 1 ? TAIL : 0;
-      let tot = 0; for (let i = g.a; i <= g.b; i++) tot += d[i];
-      const span = g.end - g.start - lead - tail; let acc = 0;
-      for (let i = g.a; i <= g.b; i++) { tp[i] = g.start + lead + (acc / tot) * span; acc += d[i]; }
+      const lead = gi === 0 ? LEAD : 0,
+        tail = gi === groups.length - 1 ? TAIL : 0;
+      let tot = 0;
+      for (let i = g.a; i <= g.b; i++) tot += d[i];
+      const span = g.end - g.start - lead - tail;
+      let acc = 0;
+      for (let i = g.a; i <= g.b; i++) {
+        tp[i] = g.start + lead + (acc / tot) * span;
+        acc += d[i];
+      }
     });
     const md = tp.map((t, i) => Math.min(0.5, 0.6 * ((i + 1 < N ? tp[i + 1] : t + 1) - t)));
     const blunders = M.plies.map((p, i) => i).filter((i) => M.plies[i].cls === 'blunder');
@@ -752,19 +1270,26 @@
   }
   // the scene start times the stage derives from timing()'s scenes (deriveCues in engine.jsx)
   function cues(scenes) {
-    let start = 0; const table = {};
-    scenes.forEach((s) => { if (!(s.name in table)) table[s.name] = Math.round(start * 1000) / 1000; start += s.dur; });
+    let start = 0;
+    const table = {};
+    scenes.forEach((s) => {
+      if (!(s.name in table)) table[s.name] = Math.round(start * 1000) / 1000;
+      start += s.dur;
+    });
     return table;
   }
   // The time at which ply i has settled on the board (its highlight and badge in place, before the next move starts): what
   // a jump to a move shows. i = -1 is the starting position, just before the first move; the last move holds no later than
   // just before the end card. S: schedule(), CUES: cues()
-  const settledAt = (S, CUES, i) => (i < 0 ? S.tp[0] - 0.3 : i + 1 < S.N ? S.tp[i + 1] - 0.12 : Math.min(S.tp[i] + S.md[i] + 3, CUES.Outro - 0.1));
+  const settledAt = (S, CUES, i) =>
+    i < 0 ? S.tp[0] - 0.3 : i + 1 < S.N ? S.tp[i + 1] - 0.12 : Math.min(S.tp[i] + S.md[i] + 3, CUES.Outro - 0.1);
   // Seconds of the video to export for plies from..to: from -1 starts on the title card, to N ends after the end card.
   // A move's clip starts just before it is played and ends once it has settled, as the player shows it on a jump.
   // Returns a function of (from, to), so that the schedule is worked out once.
   function clipRange(M, TM) {
-    const CUES = cues(TM.scenes), S = schedule(M, CUES, TM.d), N = S.N;
+    const CUES = cues(TM.scenes),
+      S = schedule(M, CUES, TM.d),
+      N = S.N;
     return (from, to) => {
       const start = from < 0 ? 0 : Math.max(0, S.tp[from] - 0.3);
       const end = to >= N ? TM.total : settledAt(S, CUES, to);
@@ -775,28 +1300,51 @@
   // ---------- annotated PGN ----------
   const NB = '\u00a0';
   const NAG_OF = Object.fromEntries(Object.entries(NAG).map(([n, m]) => [m, +n]));
-  const pgnEsc = (t) => String(t).replace(/[{}]/g, (c) => (c === '{' ? '(' : ')')).replace(/\s+/g, ' ').trim();
+  const pgnEsc = (t) =>
+    String(t)
+      .replace(/[{}]/g, (c) => (c === '{' ? '(' : ')'))
+      .replace(/\s+/g, ' ')
+      .trim();
   // a variation as written, on one line: ; comments become { } ones, whitespace collapses (also inside comments)
   function flatVar(raw) {
-    let out = '', i = 0;
+    let out = '',
+      i = 0;
     while (i < raw.length) {
       const ch = raw[i];
-      if (ch === '{') { const j = raw.indexOf('}', i); const e = j < 0 ? raw.length : j; out += '{' + pgnEsc(raw.slice(i + 1, e)) + '}'; i = e + 1; continue; }
-      if (ch === ';') { const j = raw.indexOf('\n', i); const e = j < 0 ? raw.length : j; out += ' {' + pgnEsc(raw.slice(i + 1, e)) + '} '; i = e + 1; continue; }
-      out += /\s/.test(ch) ? ' ' : ch; i++;
+      if (ch === '{') {
+        const j = raw.indexOf('}', i);
+        const e = j < 0 ? raw.length : j;
+        out += '{' + pgnEsc(raw.slice(i + 1, e)) + '}';
+        i = e + 1;
+        continue;
+      }
+      if (ch === ';') {
+        const j = raw.indexOf('\n', i);
+        const e = j < 0 ? raw.length : j;
+        out += ' {' + pgnEsc(raw.slice(i + 1, e)) + '} ';
+        i = e + 1;
+        continue;
+      }
+      out += /\s/.test(ch) ? ' ' : ch;
+      i++;
     }
     return out.replace(/ +/g, ' ').replace(/\( /g, '(').replace(/ \)/g, ')').trim();
   }
   // a length as m:ss (the video's, a clip's, an export's), whole seconds floored: 119.6 s is 1:59, never 1:60
-  const fmtLen = (x) => { const s = Math.max(0, Math.floor(x)); return `${Math.floor(s / 60)}:${String(s % 60).padStart(2, '0')}`; };
+  const fmtLen = (x) => {
+    const s = Math.max(0, Math.floor(x));
+    return `${Math.floor(s / 60)}:${String(s % 60).padStart(2, '0')}`;
+  };
   // clock as h:mm:ss, keeping tenths (Lichess writes them under 10 s)
   const pgnClk = (s) => {
-    const t = Math.round(s * 10) / 10, sec = t % 60;
+    const t = Math.round(s * 10) / 10,
+      sec = t % 60;
     return `${Math.floor(t / 3600)}:${String(Math.floor(t / 60) % 60).padStart(2, '0')}:${Number.isInteger(t) ? String(sec).padStart(2, '0') : sec.toFixed(1).padStart(4, '0')}`;
   };
   // PGN's move number before a move's SAN, the two kept on one line (NB becomes a space once wrapped): "12." before White's
   // move, "12..." before Black's where one is needed (the first move of a line, after a comment or a variation), else ''
-  const pgnMoveNo = (abs, needed) => (abs % 2 === 0 ? Math.floor(abs / 2) + 1 + '.' + NB : needed ? Math.floor(abs / 2) + 1 + '...' + NB : '');
+  const pgnMoveNo = (abs, needed) =>
+    abs % 2 === 0 ? Math.floor(abs / 2) + 1 + '.' + NB : needed ? Math.floor(abs / 2) + 1 + '...' + NB : '';
   // does Black's move after this token need its number again (it closes a comment or a variation)?
   const pgnReopens = (tok) => /[})]$/.test(tok || '');
   // PGN text from tags ([[name, value]]) and movetext tokens (moves, comments, the result): values escaped, the moves
@@ -804,10 +1352,17 @@
   // escape line)
   function pgnText(tags, toks) {
     const head = tags.map(([k, v]) => `[${k} "${String(v).replace(/\\/g, '\\\\').replace(/"/g, '\\"')}"]`).join('\n');
-    const lines = []; let cur = '';
-    toks.join(' ').split(' ').forEach((w) => {
-      if (cur && cur.length + 1 + w.length > 80 && w[0] !== '%') { lines.push(cur); cur = w; } else cur = cur ? cur + ' ' + w : w;
-    });
+    const lines = [];
+    let cur = '';
+    toks
+      .join(' ')
+      .split(' ')
+      .forEach((w) => {
+        if (cur && cur.length + 1 + w.length > 80 && w[0] !== '%') {
+          lines.push(cur);
+          cur = w;
+        } else cur = cur ? cur + ' ' + w : w;
+      });
     if (cur) lines.push(cur);
     return head + '\n\n' + lines.join('\n').replace(/\u00a0/g, ' ') + '\n';
   }
@@ -817,25 +1372,41 @@
   // raw: the tags and the moves alone (no comments, NAGs, evals, clocks or variations)
   function annotatedPgn(M, { raw = false } = {}) {
     const H = { ...(M.headers || {}) };
-    const set = (k, v) => { if (!H[k] && v) H[k] = v; };
-    set('Event', M.event || '?'); set('Site', M.site || '?'); set('Date', String(M.pgnDate || '').replace(/-/g, '.') || '????.??.??'); set('Round', M.round || '?');
-    set('White', M.white.named ? M.white.name : '?'); set('Black', M.black.named ? M.black.name : '?');
-    set('WhiteElo', M.white.elo); set('BlackElo', M.black.elo); set('ECO', M.eco); set('Opening', M.opening);
+    const set = (k, v) => {
+      if (!H[k] && v) H[k] = v;
+    };
+    set('Event', M.event || '?');
+    set('Site', M.site || '?');
+    set('Date', String(M.pgnDate || '').replace(/-/g, '.') || '????.??.??');
+    set('Round', M.round || '?');
+    set('White', M.white.named ? M.white.name : '?');
+    set('Black', M.black.named ? M.black.name : '?');
+    set('WhiteElo', M.white.elo);
+    set('BlackElo', M.black.elo);
+    set('ECO', M.eco);
+    set('Opening', M.opening);
     H.Result = M.result || '*';
-    delete H.SetUp; delete H.FEN;
-    if (M.start && M.start.fen !== START_FEN) { H.SetUp = '1'; H.FEN = M.start.fen; }
+    delete H.SetUp;
+    delete H.FEN;
+    if (M.start && M.start.fen !== START_FEN) {
+      H.SetUp = '1';
+      H.FEN = M.start.fen;
+    }
     const order = ['Event', 'Site', 'Date', 'Round', 'White', 'Black', 'Result'];
     const keys = order.filter((k) => H[k] != null).concat(Object.keys(H).filter((k) => !order.includes(k)));
     const toks = [];
     // the PGN's own words and a notes file's, the PGN's first (the same words once): a note sits beside the PGN's
     // comment, never in its place
-    const both = (pgn, notes, fallback) => (M.says ? [...new Set([pgn, notes].filter(Boolean))] : [fallback].filter(Boolean)).map(pgnEsc);
+    const both = (pgn, notes, fallback) =>
+      (M.says ? [...new Set([pgn, notes].filter(Boolean))] : [fallback].filter(Boolean)).map(pgnEsc);
     const intro = both(M.says && M.says.pgn.intro, M.says && M.says.notes.intro, M.intro);
     if (intro.length && !raw) toks.push(`{${intro.join(' ')}}`);
     M.plies.forEach((p, i) => {
       const abs = (M.ply0 || 0) + i;
       // the mark after the move as it reads (Qb7?!), as Lichess and chess books write it; the other NAGs as $n
-      toks.push(pgnMoveNo(abs, !i || pgnReopens(toks[toks.length - 1])) + p.san + (raw || !NAG_OF[p.mark] ? '' : p.mark));
+      toks.push(
+        pgnMoveNo(abs, !i || pgnReopens(toks[toks.length - 1])) + p.san + (raw || !NAG_OF[p.mark] ? '' : p.mark),
+      );
       if (raw) return;
       (p.nags || []).forEach((g) => toks.push('$' + g));
       const tags = [];
@@ -854,7 +1425,8 @@
         const line = playLine(before, p.best.line);
         const v = line.map((m, j) => pgnMoveNo(abs + j, j === 0) + m.san);
         if (v.length) {
-          toks.push('(' + v.join(' ') + ')'); vars = vars.slice(1);
+          toks.push('(' + v.join(' ') + ')');
+          vars = vars.slice(1);
           // the search's other lines follow, by rank
           (p.best.more || []).forEach((sans) => {
             const o = playLine(before, sans);
@@ -866,7 +1438,10 @@
     });
     if (M.conclusion && !raw) toks.push(`{${pgnEsc(M.conclusion)}}`);
     toks.push(H.Result);
-    return pgnText(keys.map((k) => [k, H[k]]), toks);
+    return pgnText(
+      keys.map((k) => [k, H[k]]),
+      toks,
+    );
   }
 
   // M with deeper searches of its positions in place of the analysis's (Go deeper): at(i) is the search of the position
@@ -881,19 +1456,43 @@
       if (!d) return;
       any = true;
       const ev = decodeEval(d.cp, d.tb);
-      if (!p.checkmate) plies[i] = { ...plies[i], cp: d.cp, mate: ev.mate == null ? null : ev.mate, won: ev.won || null };
+      if (!p.checkmate)
+        plies[i] = { ...plies[i], cp: d.cp, mate: ev.mate == null ? null : ev.mate, won: ev.won || null };
       // several lines (Go deeper with Lines above one) replace the analysis's lines of this position
-      if (d.lines && d.lines.length > 1) plies[i].nextLines = d.lines; else delete plies[i].nextLines;
+      if (d.lines && d.lines.length > 1) plies[i].nextLines = d.lines;
+      else delete plies[i].nextLines;
       const next = M.plies[i + 1];
       if (!next || !d.pv || !d.pv.length) return;
-      if (d.pv[0] === next.uci) { plies[i + 1] = { ...plies[i + 1], best: null }; return; }
+      if (d.pv[0] === next.uci) {
+        plies[i + 1] = { ...plies[i + 1], best: null };
+        return;
+      }
       let pos = p.pos;
       const line = [];
-      for (const u of d.pv.slice(0, 12)) { const s = stepFromUci(pos, u); if (!s) break; line.push(s.san); pos = s.pos; }
+      for (const u of d.pv.slice(0, 12)) {
+        const s = stepFromUci(pos, u);
+        if (!s) break;
+        line.push(s.san);
+        pos = s.pos;
+      }
       if (!line.length) return;
       const best = { uci: d.pv[0], line };
-      const sansOfPv = (pv) => { let q = p.pos; const out = []; for (const u of pv.slice(0, 12)) { const s = stepFromUci(q, u); if (!s) break; out.push(s.san); q = s.pos; } return out; };
-      const more = (d.lines || []).slice(1).filter((l) => l.pv && l.pv[0] && l.pv[0] !== next.uci).map((l) => sansOfPv(l.pv)).filter((l) => l.length);
+      const sansOfPv = (pv) => {
+        let q = p.pos;
+        const out = [];
+        for (const u of pv.slice(0, 12)) {
+          const s = stepFromUci(q, u);
+          if (!s) break;
+          out.push(s.san);
+          q = s.pos;
+        }
+        return out;
+      };
+      const more = (d.lines || [])
+        .slice(1)
+        .filter((l) => l.pv && l.pv[0] && l.pv[0] !== next.uci)
+        .map((l) => sansOfPv(l.pv))
+        .filter((l) => l.length);
       if (more.length) best.more = more;
       plies[i + 1] = { ...plies[i + 1], best };
     });
@@ -904,9 +1503,12 @@
   // the note after ply n, [CONCLUSION], each with its text on its line (a note is one line), so a note that starts like a
   // key ([RESULT], [12]) is never read as one; '' when the game has none
   function notesText(M) {
-    const N = (M.says && M.says.notes) || {}, out = [];
+    const N = (M.says && M.says.notes) || {},
+      out = [];
     if (N.intro) out.push(`[INTRO] ${N.intro}`);
-    M.plies.forEach((p, i) => { if (p.says && p.says.notes) out.push(`[${i + 1}] ${p.says.notes}`); });
+    M.plies.forEach((p, i) => {
+      if (p.says && p.says.notes) out.push(`[${i + 1}] ${p.says.notes}`);
+    });
     if (N.conclusion) out.push(`[CONCLUSION] ${N.conclusion}`);
     return out.length ? out.join('\n\n') + '\n' : '';
   }
@@ -918,10 +1520,20 @@
       const san = String(raw).replace(/^\d+\.+/, '');
       if (!san) continue;
       let mv;
-      try { mv = sanToMove(pos, san); } catch (e) { break; }
+      try {
+        mv = sanToMove(pos, san);
+      } catch (e) {
+        break;
+      }
       pos = applyMove(pos, mv.from, mv.to, mv.promo);
       const check = inCheck(pos.b, pos.turn);
-      out.push({ san, uci: idxSq(mv.from) + idxSq(mv.to) + (mv.promo || ''), board: pos.b.slice(), checkSq: check ? idxSq(kingIdx(pos.b, pos.turn)) : null, pos });
+      out.push({
+        san,
+        uci: idxSq(mv.from) + idxSq(mv.to) + (mv.promo || ''),
+        board: pos.b.slice(),
+        checkSq: check ? idxSq(kingIdx(pos.b, pos.turn)) : null,
+        pos,
+      });
     }
     return out;
   }
@@ -931,8 +1543,16 @@
   // field is kept only where a pawn just moved two squares past it (epFits)
   // (a 960 position's rights read as readFen reads them, with its rooks)
   const posFromFen = (fen) => {
-    const f = fen.split(' '), b = fromFen(fen), turn = f[1] || 'w', ep = /^[a-h][1-8]$/.test(f[3] || '') ? sqIdx(f[3]) : -1;
-    const pos = { b, ep: ep >= 0 && epFits(b, turn, ep) ? ep : -1, turn, castle: f[2] == null ? 'KQkq' : f[2].replace('-', '') };
+    const f = fen.split(' '),
+      b = fromFen(fen),
+      turn = f[1] || 'w',
+      ep = /^[a-h][1-8]$/.test(f[3] || '') ? sqIdx(f[3]) : -1;
+    const pos = {
+      b,
+      ep: ep >= 0 && epFits(b, turn, ep) ? ep : -1,
+      turn,
+      castle: f[2] == null ? 'KQkq' : f[2].replace('-', ''),
+    };
     const rr = f[2] != null && /^[KQkqA-Ha-h]{1,4}$/.test(f[2]) ? readRights(b, f[2]) : null;
     if (!rr) return pos;
     return rr.rooks ? { ...pos, castle: rr.castle, rooks: rr.rooks } : { ...pos, castle: rr.castle };
@@ -942,15 +1562,21 @@
   function legalMove(pos, from, to, promo = 'q') {
     const p = pos.b[from];
     if (!p || colorOf(p) !== pos.turn || from === to) return null;
-    const t = tOf(p), color = pos.turn, opp = color === 'w' ? 'b' : 'w';
+    const t = tOf(p),
+      color = pos.turn,
+      opp = color === 'w' ? 'b' : 'w';
     const alias = castleAlias(pos, from, to);
-    if (alias >= 0) { const mv = legalMove(pos, from, alias); return mv && { ...mv, to: alias }; }
+    if (alias >= 0) {
+      const mv = legalMove(pos, from, alias);
+      return mv && { ...mv, to: alias };
+    }
     if (pos.rooks && castleRight(pos, from, to)) {
       if (!castleOk(pos, from, to)) return null;
     } else if (!pos.rooks && t === 'k' && fy(from) === fy(to) && Math.abs(fx(to) - fx(from)) === 2) {
-      const y = color === 'w' ? 7 : 0, king = fx(to) === 6;
+      const y = color === 'w' ? 7 : 0,
+        king = fx(to) === 6;
       if (fy(from) !== y || fx(from) !== 4 || pos.b[at(king ? 7 : 0, y)] !== (color === 'w' ? 'R' : 'r')) return null;
-      const right = color === 'w' ? (king ? 'K' : 'Q') : (king ? 'k' : 'q');
+      const right = color === 'w' ? (king ? 'K' : 'Q') : king ? 'k' : 'q';
       if (pos.castle != null && !pos.castle.includes(right)) return null;
       if ((king ? [5, 6] : [1, 2, 3]).some((x) => pos.b[at(x, y)])) return null;
       if ([4, king ? 5 : 3, king ? 6 : 2].some((x) => attacked(pos.b, at(x, y), opp))) return null;
@@ -965,8 +1591,18 @@
   // taking it), else -1. A 960 position can look standard once a rook has moved, and its FEN then reads as one
   function castleAlias(pos, from, to) {
     const p = pos.b[from];
-    if (!pos.rooks || !p || tOf(p) !== 'k' || pos.b[to] || fy(from) !== fy(to) || fx(from) !== 4 || Math.abs(fx(to) - fx(from)) !== 2) return -1;
-    const h = fx(to) === 6, rk = castleRook(pos.b, rightOf(colorOf(p), h ? 'h' : 'a'), pos.rooks);
+    if (
+      !pos.rooks ||
+      !p ||
+      tOf(p) !== 'k' ||
+      pos.b[to] ||
+      fy(from) !== fy(to) ||
+      fx(from) !== 4 ||
+      Math.abs(fx(to) - fx(from)) !== 2
+    )
+      return -1;
+    const h = fx(to) === 6,
+      rk = castleRook(pos.b, rightOf(colorOf(p), h ? 'h' : 'a'), pos.rooks);
     return rk >= 0 && fx(rk) === (h ? 7 : 0) ? rk : -1;
   }
   // Whether the king on `from` taking its own rook on `to` is a legal castle in a 960 position (Chess960's rules): the
@@ -976,21 +1612,39 @@
   // move is legalMove's
   function castleOk(pos, from, to) {
     const r = castleRight(pos, from, to);
-    if (!r || colorOf(pos.b[from]) !== pos.turn || !(pos.castle == null ? 'KQkq' : pos.castle).includes(r)) return false;
+    if (!r || colorOf(pos.b[from]) !== pos.turn || !(pos.castle == null ? 'KQkq' : pos.castle).includes(r))
+      return false;
     if (castleRook(pos.b, r, pos.rooks) !== to) return false;
-    const y = fy(from), h = rightSide(r) === 'h', kTo = h ? 6 : 2, rTo = h ? 5 : 3, b = pos.b.slice(), opp = pos.turn === 'w' ? 'b' : 'w';
-    b[from] = null; b[to] = null;
-    const span = (a, z) => { const out = []; for (let x = Math.min(a, z); x <= Math.max(a, z); x++) out.push(at(x, y)); return out; };
-    if (span(fx(from), kTo).concat(span(fx(to), rTo)).some((sq) => b[sq])) return false;
+    const y = fy(from),
+      h = rightSide(r) === 'h',
+      kTo = h ? 6 : 2,
+      rTo = h ? 5 : 3,
+      b = pos.b.slice(),
+      opp = pos.turn === 'w' ? 'b' : 'w';
+    b[from] = null;
+    b[to] = null;
+    const span = (a, z) => {
+      const out = [];
+      for (let x = Math.min(a, z); x <= Math.max(a, z); x++) out.push(at(x, y));
+      return out;
+    };
+    if (
+      span(fx(from), kTo)
+        .concat(span(fx(to), rTo))
+        .some((sq) => b[sq])
+    )
+      return false;
     return !span(fx(from), kTo).some((sq) => attacked(b, sq, opp));
   }
   // the legal castles of the side to move in a 960 position, a-side first: [{ side: 'a' | 'h', step }] (step as userMove's); [] in a standard one
   function castleMoves(pos) {
     if (!pos.rooks) return [];
-    const k = kingIdx(pos.b, pos.turn), out = [];
+    const k = kingIdx(pos.b, pos.turn),
+      out = [];
     if (k < 0) return out;
     for (const side of ['a', 'h']) {
-      const rk = castleRook(pos.b, rightOf(pos.turn, side), pos.rooks), step = rk >= 0 ? userMove(pos, k, rk) : null;
+      const rk = castleRook(pos.b, rightOf(pos.turn, side), pos.rooks),
+        step = rk >= 0 ? userMove(pos, k, rk) : null;
       if (step) out.push({ side, step });
     }
     return out;
@@ -1000,46 +1654,75 @@
   // or more squares away (no king move goes that far), and ask: true from one square away, where a king step could be meant
   function castleTarget(pos, from, to) {
     if (!pos.rooks || from === to || pos.b[from] !== (pos.turn === 'w' ? 'K' : 'k')) return null;
-    const ms = castleMoves(pos), onRook = ms.find((m) => sqIdx(m.step.uci.slice(2, 4)) === to);
+    const ms = castleMoves(pos),
+      onRook = ms.find((m) => sqIdx(m.step.uci.slice(2, 4)) === to);
     if (onRook) return { side: onRook.side, ask: false };
     const onDest = ms.find((m) => at(m.side === 'h' ? 6 : 2, fy(from)) === to);
     return onDest ? { side: onDest.side, ask: Math.abs(fx(from) - fx(to)) === 1 } : null;
   }
-  const legalTargets = (pos, from) => { const out = []; for (let to = 0; to < 64; to++) if (legalMove(pos, from, to)) out.push(to); return out; };
+  const legalTargets = (pos, from) => {
+    const out = [];
+    for (let to = 0; to < 64; to++) if (legalMove(pos, from, to)) out.push(to);
+    return out;
+  };
   function sanOf(pos, mv) {
-    const p = pos.b[mv.from], t = tOf(p), cap = !!pos.b[mv.to] || (t === 'p' && mv.to === pos.ep);
+    const p = pos.b[mv.from],
+      t = tOf(p),
+      cap = !!pos.b[mv.to] || (t === 'p' && mv.to === pos.ep);
     let san;
     const c960 = castleRight(pos, mv.from, mv.to);
     if (c960) san = rightSide(c960) === 'h' ? 'O-O' : 'O-O-O';
-    else if (!pos.rooks && t === 'k' && Math.abs(fx(mv.to) - fx(mv.from)) === 2) san = fx(mv.to) === 6 ? 'O-O' : 'O-O-O';
-    else if (t === 'p') san = (cap ? FILES[fx(mv.from)] + 'x' : '') + idxSq(mv.to) + (mv.promo ? '=' + mv.promo.toUpperCase() : '');
+    else if (!pos.rooks && t === 'k' && Math.abs(fx(mv.to) - fx(mv.from)) === 2)
+      san = fx(mv.to) === 6 ? 'O-O' : 'O-O-O';
+    else if (t === 'p')
+      san = (cap ? FILES[fx(mv.from)] + 'x' : '') + idxSq(mv.to) + (mv.promo ? '=' + mv.promo.toUpperCase() : '');
     else {
       const others = [];
       for (let i = 0; i < 64; i++) if (i !== mv.from && pos.b[i] === p && legalMove(pos, i, mv.to)) others.push(i);
-      const dis = !others.length ? '' : !others.some((i) => fx(i) === fx(mv.from)) ? FILES[fx(mv.from)] : !others.some((i) => fy(i) === fy(mv.from)) ? String(8 - fy(mv.from)) : idxSq(mv.from);
+      const dis = !others.length
+        ? ''
+        : !others.some((i) => fx(i) === fx(mv.from))
+          ? FILES[fx(mv.from)]
+          : !others.some((i) => fy(i) === fy(mv.from))
+            ? String(8 - fy(mv.from))
+            : idxSq(mv.from);
       san = t.toUpperCase() + dis + (cap ? 'x' : '') + idxSq(mv.to);
     }
     if (inCheck(mv.after.b, mv.after.turn)) san += hasLegal(mv.after) ? '+' : '#';
     return san;
   }
   // whether the move from `from` to `to` is legal and promotes, so the viewer picks the piece
-  const isPromotion = (pos, from, to) => { const mv = legalMove(pos, from, to); return !!(mv && mv.promo); };
+  const isPromotion = (pos, from, to) => {
+    const mv = legalMove(pos, from, to);
+    return !!(mv && mv.promo);
+  };
   // The viewer's move as a line step (same shape as playLine's), or null when it isn't legal; promo as legalMove's
   function userMove(pos, from, to, promo) {
     const mv = legalMove(pos, from, to, promo);
     if (!mv) return null;
     const check = inCheck(mv.after.b, mv.after.turn);
-    return { san: sanOf(pos, mv), uci: idxSq(from) + idxSq(mv.to) + (mv.promo || ''), board: mv.after.b.slice(), checkSq: check ? idxSq(kingIdx(mv.after.b, mv.after.turn)) : null, pos: mv.after };
+    return {
+      san: sanOf(pos, mv),
+      uci: idxSq(from) + idxSq(mv.to) + (mv.promo || ''),
+      board: mv.after.b.slice(),
+      checkSq: check ? idxSq(kingIdx(mv.after.b, mv.after.turn)) : null,
+      pos: mv.after,
+    };
   }
 
   // The rook's move in the castle `uci` of the position before it: { from, to } as squares, or null when it isn't one. A
   // king taking its own rook is a Chess960 castle (the king lands on c or g, the rook on d or f, by the rook's side); a
   // king two squares along its rank is a standard one
   function castleRookStep(pos, uci) {
-    const f = uci.slice(0, 2), t = uci.slice(2, 4), p = pos.b[sqIdx(f)], q = pos.b[sqIdx(t)], r = f[1];
+    const f = uci.slice(0, 2),
+      t = uci.slice(2, 4),
+      p = pos.b[sqIdx(f)],
+      q = pos.b[sqIdx(t)],
+      r = f[1];
     if (p !== 'K' && p !== 'k') return null;
     if (q === (p === 'K' ? 'R' : 'r') && t[1] === r) return { from: t, to: (t > f ? 'f' : 'd') + r };
-    if (!q && Math.abs(f.charCodeAt(0) - t.charCodeAt(0)) === 2) return t[0] === 'g' ? { from: 'h' + r, to: 'f' + r } : { from: 'a' + r, to: 'd' + r };
+    if (!q && Math.abs(f.charCodeAt(0) - t.charCodeAt(0)) === 2)
+      return t[0] === 'g' ? { from: 'h' + r, to: 'f' + r } : { from: 'a' + r, to: 'd' + r };
     return null;
   }
 
@@ -1052,7 +1735,9 @@
   function applyUci(pos, uci) {
     const m = /^([a-h][1-8])([a-h][1-8])([qrbn])?$/.exec(uci || '');
     if (!m) return null;
-    const from = sqIdx(m[1]), to = sqIdx(m[2]), mv = legalMove(pos, from, to);
+    const from = sqIdx(m[1]),
+      to = sqIdx(m[2]),
+      mv = legalMove(pos, from, to);
     if (!mv) return null;
     const promo = mv.promo ? m[3] || 'q' : null;
     const full = promo === mv.promo ? mv : { from, to: mv.to, promo, after: applyMove(pos, from, mv.to, promo) };
@@ -1064,20 +1749,30 @@
     const r = applyUci(pos, uci);
     if (!r) return null;
     const check = inCheck(r.pos.b, r.pos.turn);
-    return { san: r.san, uci: r.uci, board: r.pos.b.slice(), checkSq: check ? idxSq(kingIdx(r.pos.b, r.pos.turn)) : null, pos: r.pos };
+    return {
+      san: r.san,
+      uci: r.uci,
+      board: r.pos.b.slice(),
+      checkSq: check ? idxSq(kingIdx(r.pos.b, r.pos.turn)) : null,
+      pos: r.pos,
+    };
   }
 
   // move-number gridlines for the eval plot: multiples of `step` among the absolute move numbers, at their offset in plies from the first move
   function evalTicks(ply0, N) {
-    const step = N > 120 ? 20 : 10, ticks = [];
-    for (let m = step; 2 * m - ply0 <= N; m += step) if (2 * (m - 1) - ply0 >= 0) ticks.push({ m, at: 2 * (m - 1) - ply0 });
+    const step = N > 120 ? 20 : 10,
+      ticks = [];
+    for (let m = step; 2 * m - ply0 <= N; m += step)
+      if (2 * (m - 1) - ply0 >= 0) ticks.push({ m, at: 2 * (m - 1) - ply0 });
     return ticks;
   }
   // A header line cut into text and web links: [{ text, url }], url only on an http(s) address (Lichess and Chess.com put
   // the game's page in Site). Trailing punctuation (.,;:!?) and an unmatched closing bracket stay text
   const links = (text) => {
-    const out = [], re = /https?:\/\/[^\s<>"']+/gi;
-    let at = 0, m;
+    const out = [],
+      re = /https?:\/\/[^\s<>"']+/gi;
+    let at = 0,
+      m;
     while ((m = re.exec(text))) {
       let u = m[0];
       for (;;) {
@@ -1089,10 +1784,84 @@
       if (u.length <= u.indexOf('//') + 2) continue;
       if (m.index > at) out.push({ text: text.slice(at, m.index) });
       out.push({ text: u, url: u });
-      at = m.index + u.length; re.lastIndex = at;
+      at = m.index + u.length;
+      re.lastIndex = at;
     }
     if (at < text.length) out.push({ text: text.slice(at) });
     return out;
   };
-  window.ChessCore = { START_FEN, links, splitGames, fmtDate, fmtLen, hasLegal, inCheck, checkers, evalTicks, sqName: idxSq, CASTLE_HOME, canCastle, castleRook, castleMoves, castleTarget, castleRookStep, is960, isVariant960, stdRights, fenIs960, chess960Fen, chess960Random, chess960Number, readFen, epFits, setupProblems, setupFen, epCapturable, fullFen, parseFen, fenAfter, moveNo, sqIndex: sqIdx, applySan, applyUci, stepFromUci, toFen, playLine, posAt, posFromFen, legalTargets, isPromotion, userMove, buildGame, withCommentary, commentarySources, classifyFile, plan, timing, schedule, cues, settledAt, clipRange, MATE_CP, MATE_STEP, MATE_MIN, mateCp, isMateCp, mateIn, decodeEval, WIN_K, WIN_DROP, winChance, plyCp, MARK_CLASS, pgnClk, pgnMoveNo, pgnReopens, pgnText, annotatedPgn, withSearches, notesText };
+  window.ChessCore = {
+    START_FEN,
+    links,
+    splitGames,
+    fmtDate,
+    fmtLen,
+    hasLegal,
+    inCheck,
+    checkers,
+    evalTicks,
+    sqName: idxSq,
+    CASTLE_HOME,
+    canCastle,
+    castleRook,
+    castleMoves,
+    castleTarget,
+    castleRookStep,
+    is960,
+    isVariant960,
+    stdRights,
+    fenIs960,
+    chess960Fen,
+    chess960Random,
+    chess960Number,
+    readFen,
+    epFits,
+    setupProblems,
+    setupFen,
+    epCapturable,
+    fullFen,
+    parseFen,
+    fenAfter,
+    moveNo,
+    sqIndex: sqIdx,
+    applySan,
+    applyUci,
+    stepFromUci,
+    toFen,
+    playLine,
+    posAt,
+    posFromFen,
+    legalTargets,
+    isPromotion,
+    userMove,
+    buildGame,
+    withCommentary,
+    commentarySources,
+    classifyFile,
+    plan,
+    timing,
+    schedule,
+    cues,
+    settledAt,
+    clipRange,
+    MATE_CP,
+    MATE_STEP,
+    MATE_MIN,
+    mateCp,
+    isMateCp,
+    mateIn,
+    decodeEval,
+    WIN_K,
+    WIN_DROP,
+    winChance,
+    plyCp,
+    MARK_CLASS,
+    pgnClk,
+    pgnMoveNo,
+    pgnReopens,
+    pgnText,
+    annotatedPgn,
+    withSearches,
+    notesText,
+  };
 })();

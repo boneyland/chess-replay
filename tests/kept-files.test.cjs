@@ -11,24 +11,41 @@ globalThis.caches = {
     if (!store.has(name)) store.set(name, new Map());
     const m = store.get(name);
     return {
-      async match(url) { return m.has(url) ? new Response(m.get(url)) : undefined; },
-      async put(url, r) { if (globalThis.putFails) throw globalThis.putFails; m.set(url, new Uint8Array(await r.arrayBuffer())); if (globalThis.onPut) globalThis.onPut(); },
-      async delete(url) { return m.delete(url); },
+      async match(url) {
+        return m.has(url) ? new Response(m.get(url)) : undefined;
+      },
+      async put(url, r) {
+        if (globalThis.putFails) throw globalThis.putFails;
+        m.set(url, new Uint8Array(await r.arrayBuffer()));
+        if (globalThis.onPut) globalThis.onPut();
+      },
+      async delete(url) {
+        return m.delete(url);
+      },
     };
   },
-  async delete(name) { return store.delete(name); },
+  async delete(name) {
+    return store.delete(name);
+  },
 };
 const storage = { quota: 1e9, usage: 0, persisted: 0 };
-Object.defineProperty(navigator, 'storage', { configurable: true, value: {
-  estimate: async () => ({ quota: storage.quota, usage: storage.usage }),
-  persist: async () => { storage.persisted++; return true; },
-} });
+Object.defineProperty(navigator, 'storage', {
+  configurable: true,
+  value: {
+    estimate: async () => ({ quota: storage.quota, usage: storage.usage }),
+    persist: async () => {
+      storage.persisted++;
+      return true;
+    },
+  },
+});
 
 loadUnit('kept-files.js');
 
 const bytes = (n, seed) => Uint8Array.from({ length: n }, (_, i) => (i * 31 + seed) & 255);
 const hex = (b) => crypto.createHash('sha256').update(b).digest('hex');
-const A = bytes(300, 1), B = bytes(5000, 2);
+const A = bytes(300, 1),
+  B = bytes(5000, 2);
 const BASE = 'https://site.test/vision/';
 let served = {};
 const fetched = [];
@@ -37,14 +54,29 @@ globalThis.fetch = async (url, opts = {}) => {
   const b = served[url.slice(BASE.length)];
   if (!b) return new Response('not found', { status: 404 });
   let at = 0;
-  return new Response(new ReadableStream({
-    pull(c) {
-      if (opts.signal && opts.signal.aborted) { c.error(new DOMException('aborted', 'AbortError')); return; }
-      if (globalThis.stallAt != null && at >= globalThis.stallAt) return new Promise((res) => opts.signal.addEventListener('abort', () => { c.error(new DOMException('aborted', 'AbortError')); res(); }));
-      if (at >= b.length) { c.close(); return; }
-      c.enqueue(b.slice(at, at + 1024)); at += 1024;
-    },
-  }));
+  return new Response(
+    new ReadableStream({
+      pull(c) {
+        if (opts.signal && opts.signal.aborted) {
+          c.error(new DOMException('aborted', 'AbortError'));
+          return;
+        }
+        if (globalThis.stallAt != null && at >= globalThis.stallAt)
+          return new Promise((res) =>
+            opts.signal.addEventListener('abort', () => {
+              c.error(new DOMException('aborted', 'AbortError'));
+              res();
+            }),
+          );
+        if (at >= b.length) {
+          c.close();
+          return;
+        }
+        c.enqueue(b.slice(at, at + 1024));
+        at += 1024;
+      },
+    }),
+  );
 };
 
 const files = [
@@ -54,7 +86,14 @@ const files = [
 const K = window.KeptFiles.make({ cache: 'kept-test', base: BASE, files, host: 'the site', what: 'board reader' });
 
 function reset() {
-  store.clear(); fetched.length = 0; storage.quota = 1e9; storage.usage = 0; storage.persisted = 0; globalThis.putFails = null; globalThis.stallAt = null; globalThis.onPut = null;
+  store.clear();
+  fetched.length = 0;
+  storage.quota = 1e9;
+  storage.usage = 0;
+  storage.persisted = 0;
+  globalThis.putFails = null;
+  globalThis.stallAt = null;
+  globalThis.onPut = null;
   K.limits.stallMs = 30000;
   served = { 'a.bin': A, 'b.bin': B };
 }
@@ -115,13 +154,20 @@ test('too little storage (under total x 1.1) stops it before fetching; a refused
 
 test('Cancel during the checksum check or the cache puts keeps nothing and rejects as a cancel', async () => {
   reset();
-  const subtle = globalThis.crypto.subtle, digest = subtle.digest;
+  const subtle = globalThis.crypto.subtle,
+    digest = subtle.digest;
   let ctl = new AbortController();
   // the abort lands while the last file is hashed, after its fetch has finished
-  subtle.digest = async function (...a) { const r = await digest.apply(subtle, a); if (a[1].length === B.length) ctl.abort(); return r; };
+  subtle.digest = async function (...a) {
+    const r = await digest.apply(subtle, a);
+    if (a[1].length === B.length) ctl.abort();
+    return r;
+  };
   try {
     await assert.rejects(K.download({ signal: ctl.signal }), (e) => e.name === 'AbortError');
-  } finally { subtle.digest = digest; }
+  } finally {
+    subtle.digest = digest;
+  }
   assert.equal(await K.present(), false);
   assert.equal(store.has('kept-test') ? store.get('kept-test').size : 0, 0);
   reset();
@@ -149,25 +195,45 @@ test('present is true only with both files; remove empties the cache', async () 
 test('blobUrls: the kept copy as typed Blob URLs; a missing or cut-short file drops the copy', async () => {
   reset();
   await K.download();
-  const made = [], revoked = [], real = { create: URL.createObjectURL, revoke: URL.revokeObjectURL };
-  URL.createObjectURL = (b) => { made.push(b); return 'blob:' + made.length; };
+  const made = [],
+    revoked = [],
+    real = { create: URL.createObjectURL, revoke: URL.revokeObjectURL };
+  URL.createObjectURL = (b) => {
+    made.push(b);
+    return 'blob:' + made.length;
+  };
   URL.revokeObjectURL = (u) => revoked.push(u);
   try {
-    const typed = window.KeptFiles.make({ cache: 'kept-test', base: BASE, files: files.map((f, i) => ({ ...f, type: i ? 'application/wasm' : 'text/javascript' })), host: 'the site', what: 'board reader' });
+    const typed = window.KeptFiles.make({
+      cache: 'kept-test',
+      base: BASE,
+      files: files.map((f, i) => ({ ...f, type: i ? 'application/wasm' : 'text/javascript' })),
+      host: 'the site',
+      what: 'board reader',
+    });
     const k = await typed.blobUrls();
     assert.deepEqual([k.url('a.bin'), k.url('b.bin')], ['blob:1', 'blob:2']);
-    assert.deepEqual(made.map((b) => b.type), ['text/javascript', 'application/wasm']);
+    assert.deepEqual(
+      made.map((b) => b.type),
+      ['text/javascript', 'application/wasm'],
+    );
     assert.deepEqual(new Uint8Array(await made[1].arrayBuffer()), B);
     k.revoke();
     assert.deepEqual(revoked, ['blob:1', 'blob:2']);
     // b.bin cut short: refused, both files dropped, a.bin's Blob URL let go
     revoked.length = 0;
     await (await caches.open('kept-test')).put(BASE + 'b.bin', new Response(B.slice(0, 4000)));
-    await assert.rejects(K.blobUrls(), /^Error: The kept board reader was missing or incomplete, so it was removed: download it again\.$/);
+    await assert.rejects(
+      K.blobUrls(),
+      /^Error: The kept board reader was missing or incomplete, so it was removed: download it again\.$/,
+    );
     assert.equal(store.get('kept-test').size, 0, 'the copy dropped');
     assert.deepEqual(revoked, ['blob:3']);
     await assert.rejects(K.blobUrls(), /missing or incomplete/, 'not kept at all');
-  } finally { URL.createObjectURL = real.create; URL.revokeObjectURL = real.revoke; }
+  } finally {
+    URL.createObjectURL = real.create;
+    URL.revokeObjectURL = real.revoke;
+  }
 });
 
 // the Remove button: onRemove first (whatever holds the files lets them go), and a removal that fails says why and
@@ -175,13 +241,27 @@ test('blobUrls: the kept copy as typed Blob URLs; a missing or cut-short file dr
 test('removeKept: gone, or why not and whether it is still kept; onRemove runs first', async () => {
   reset();
   let told = 0;
-  const R = window.KeptFiles.make({ cache: 'kept-test', base: BASE, files, host: 'the site', what: 'board reader', onRemove: () => told++ });
+  const R = window.KeptFiles.make({
+    cache: 'kept-test',
+    base: BASE,
+    files,
+    host: 'the site',
+    what: 'board reader',
+    onRemove: () => told++,
+  });
   await R.download();
   const real = caches.delete;
-  caches.delete = async () => { throw new Error('The operation is insecure.'); };
+  caches.delete = async () => {
+    throw new Error('The operation is insecure.');
+  };
   try {
-    assert.deepEqual(await R.removeKept(), { kept: true, err: 'The board reader could not be removed: The operation is insecure.' });
-  } finally { caches.delete = real; }
+    assert.deepEqual(await R.removeKept(), {
+      kept: true,
+      err: 'The board reader could not be removed: The operation is insecure.',
+    });
+  } finally {
+    caches.delete = real;
+  }
   assert.deepEqual(await R.removeKept(), { kept: false, err: '' });
   assert.equal(await R.present(), false);
   assert.equal(told, 2);

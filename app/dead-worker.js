@@ -7,20 +7,28 @@ const BUF_LEN = 256;
 let X = null;
 // (with the Worker's own ?v=, the page's deploy: see window.siteFile in build.cjs)
 const ready = fetch('chasolver.wasm' + self.location.search)
-  .then((r) => { if (!r.ok) throw new Error('chasolver.wasm: HTTP ' + r.status); return r.arrayBuffer(); })
+  .then((r) => {
+    if (!r.ok) throw new Error('chasolver.wasm: HTTP ' + r.status);
+    return r.arrayBuffer();
+  })
   .then((b) => WebAssembly.instantiate(b, {}))
-  .then((r) => { X = r.instance.exports; });
+  .then((r) => {
+    X = r.instance.exports;
+  });
 const enc = new TextEncoder();
 
 self.onmessage = (e) => {
   const { id, fen, side } = e.data;
-  ready.then(() => {
-    const bytes = enc.encode(String(fen));
-    let code = 3;
-    if (bytes.length <= BUF_LEN) {
-      new Uint8Array(X.memory.buffer, X.buf(), bytes.length).set(bytes);
-      code = X.solve(bytes.length, side === 'b' ? 1 : 0);
-    }
-    postMessage({ id, verdict: VERDICTS[code] || 'undecided', mb: X.memory.buffer.byteLength / 1048576 });
-  }, () => postMessage({ id, verdict: 'undecided', error: true }));
+  ready.then(
+    () => {
+      const bytes = enc.encode(String(fen));
+      let code = 3;
+      if (bytes.length <= BUF_LEN) {
+        new Uint8Array(X.memory.buffer, X.buf(), bytes.length).set(bytes);
+        code = X.solve(bytes.length, side === 'b' ? 1 : 0);
+      }
+      postMessage({ id, verdict: VERDICTS[code] || 'undecided', mb: X.memory.buffer.byteLength / 1048576 });
+    },
+    () => postMessage({ id, verdict: 'undecided', error: true }),
+  );
 };

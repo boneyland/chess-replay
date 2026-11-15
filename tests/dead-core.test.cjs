@@ -22,7 +22,9 @@ function fakeWorkers(table, { delay = 0, mb = 16 } = {}) {
       const v = table[m.fen + ' ' + m.side];
       if (v) setTimeout(() => !w.terminated && w.onmessage({ data: { id: m.id, verdict: v, mb } }), delay);
     };
-    w.terminate = () => { w.terminated = true; };
+    w.terminate = () => {
+      w.terminated = true;
+    };
     made.push(w);
     return w;
   };
@@ -45,7 +47,10 @@ test('an answer is cached, by position and side, whatever the move counters', as
 });
 
 test('one search at a time, in order', async () => {
-  const f = fakeWorkers({ [KK + ' w']: 'unwinnable', [KK + ' b']: 'unwinnable', [START + ' w']: 'winnable' }, { delay: 5 });
+  const f = fakeWorkers(
+    { [KK + ' w']: 'unwinnable', [KK + ' b']: 'unwinnable', [START + ' w']: 'winnable' },
+    { delay: 5 },
+  );
   const c = D.create({ makeWorker: f.make });
   const order = [];
   const ps = [c.ask(KK, 'w'), c.ask(KK, 'b'), c.ask(START, 'w')].map((p, i) => p.then((v) => order.push(i)));
@@ -83,7 +88,8 @@ test('a queued ask aborted before its turn is never sent', async () => {
   const f = fakeWorkers({ [KK + ' w']: 'unwinnable', [START + ' w']: 'winnable' }, { delay: 5 });
   const c = D.create({ makeWorker: f.make });
   const ctl = new AbortController();
-  const a = c.ask(KK, 'w'), b = c.ask(START, 'w', { signal: ctl.signal });
+  const a = c.ask(KK, 'w'),
+    b = c.ask(START, 'w', { signal: ctl.signal });
   ctl.abort();
   assert.equal(await a, 'unwinnable');
   assert.equal(await b, 'undecided');
@@ -91,8 +97,12 @@ test('a queued ask aborted before its turn is never sent', async () => {
   assert.equal(c.cached(START, 'w'), undefined);
 });
 
-test('a worker that can\'t start, or fails, answers undecided without caching it', async () => {
-  const c = D.create({ makeWorker: () => { throw new Error('no Worker'); } });
+test("a worker that can't start, or fails, answers undecided without caching it", async () => {
+  const c = D.create({
+    makeWorker: () => {
+      throw new Error('no Worker');
+    },
+  });
   assert.equal(await c.ask(KK, 'w'), 'undecided');
   assert.equal(c.cached(KK, 'w'), undefined);
   const f = fakeWorkers({});
@@ -102,16 +112,30 @@ test('a worker that can\'t start, or fails, answers undecided without caching it
   assert.equal(await p, 'undecided');
   assert.equal(c2.cached(KK, 'w'), undefined);
   // the worker's own report of a failed load isn't cached either
-  const w = { postMessage: (m) => setTimeout(() => w.onmessage({ data: { id: m.id, verdict: 'undecided', error: true } })), terminate() {} };
+  const w = {
+    postMessage: (m) => setTimeout(() => w.onmessage({ data: { id: m.id, verdict: 'undecided', error: true } })),
+    terminate() {},
+  };
   const c3 = D.create({ makeWorker: () => w });
   assert.equal(await c3.ask(KK, 'w'), 'undecided');
   assert.equal(c3.cached(KK, 'w'), undefined);
 });
 
 test('after a worker fails to load, asks answer undecided without a new worker until retryMs has passed', async () => {
-  let t = 0, made = 0;
-  const w = () => ({ postMessage: (m) => setTimeout(() => w.cur.onmessage({ data: { id: m.id, verdict: 'undecided', error: true } })), terminate() {} });
-  const c = D.create({ makeWorker: () => { made++; return (w.cur = w()); }, retryMs: 1000, now: () => t });
+  let t = 0,
+    made = 0;
+  const w = () => ({
+    postMessage: (m) => setTimeout(() => w.cur.onmessage({ data: { id: m.id, verdict: 'undecided', error: true } })),
+    terminate() {},
+  });
+  const c = D.create({
+    makeWorker: () => {
+      made++;
+      return (w.cur = w());
+    },
+    retryMs: 1000,
+    now: () => t,
+  });
   assert.equal(await c.ask(KK, 'w'), 'undecided');
   assert.equal(await c.ask(KK, 'b'), 'undecided');
   assert.equal(await D.firstDead([START, KK], c), null);
@@ -121,14 +145,23 @@ test('after a worker fails to load, asks answer undecided without a new worker u
   assert.equal(made, 2, 'tried again after retryMs');
   // the same for a Worker that throws, and one whose load fails with an error event
   let thrown = 0;
-  const c2 = D.create({ makeWorker: () => { thrown++; throw new Error('no Worker'); }, retryMs: 1000, now: () => t });
-  await c2.ask(KK, 'w'); await c2.ask(KK, 'b');
+  const c2 = D.create({
+    makeWorker: () => {
+      thrown++;
+      throw new Error('no Worker');
+    },
+    retryMs: 1000,
+    now: () => t,
+  });
+  await c2.ask(KK, 'w');
+  await c2.ask(KK, 'b');
   assert.equal(thrown, 1);
   const f = fakeWorkers({});
   const c3 = D.create({ makeWorker: f.make, retryMs: 1000, now: () => t });
   const p = c3.ask(KK, 'w');
   f.made[0].onerror({ preventDefault() {} });
-  await p; await c3.ask(KK, 'b');
+  await p;
+  await c3.ask(KK, 'b');
   assert.equal(f.made.length, 1);
   // a search past its time isn't a load failure: the next ask starts a worker at once
   const slow = fakeWorkers({ [START + ' w']: 'winnable' }, { delay: 50 });
@@ -140,12 +173,24 @@ test('after a worker fails to load, asks answer undecided without a new worker u
 });
 
 test('firstDead finds the first position dead for both sides and stops there', async () => {
-  const KR = '8/8/8/4k3/8/8/r7/4K3 w - - 0 1', LATER = '8/8/8/8/8/8/8/1K1k4 b - - 0 2';
-  const f = fakeWorkers({ [START + ' w']: 'winnable', [START + ' b']: 'winnable', [KR + ' w']: 'unwinnable', [KR + ' b']: 'winnable', [KK + ' w']: 'unwinnable', [KK + ' b']: 'unwinnable' });
+  const KR = '8/8/8/4k3/8/8/r7/4K3 w - - 0 1',
+    LATER = '8/8/8/8/8/8/8/1K1k4 b - - 0 2';
+  const f = fakeWorkers({
+    [START + ' w']: 'winnable',
+    [START + ' b']: 'winnable',
+    [KR + ' w']: 'unwinnable',
+    [KR + ' b']: 'winnable',
+    [KK + ' w']: 'unwinnable',
+    [KK + ' b']: 'unwinnable',
+  });
   const c = D.create({ makeWorker: f.make });
   assert.equal(await D.firstDead([START, KR, KK, LATER], c), 2);
   const asked = f.sent().map((m) => m.fen + ' ' + m.side);
-  assert.deepEqual(asked, [START + ' w', KR + ' w', KR + ' b', KK + ' b'], 'a side once unable to mate, and a second side after a winnable first, are not asked');
+  assert.deepEqual(
+    asked,
+    [START + ' w', KR + ' w', KR + ' b', KK + ' b'],
+    'a side once unable to mate, and a second side after a winnable first, are not asked',
+  );
   assert.equal(await D.firstDead([START, KR], c), null);
 });
 
@@ -162,7 +207,8 @@ test('the real worker answers from vendor/chasolver.wasm', async () => {
     parentPort.on('message', (data) => self.onmessage({ data }));
     require(${JSON.stringify(path.join(__dirname, '..', 'app', 'dead-worker.js'))});`;
   const make = () => {
-    const t = new ThreadWorker(shim, { eval: true }), w = { onmessage: null };
+    const t = new ThreadWorker(shim, { eval: true }),
+      w = { onmessage: null };
     t.on('message', (data) => w.onmessage && w.onmessage({ data }));
     w.postMessage = (m) => t.postMessage(m);
     w.terminate = () => t.terminate();
@@ -173,12 +219,15 @@ test('the real worker answers from vendor/chasolver.wasm', async () => {
     assert.deepEqual(await c.both(KK), { w: 'unwinnable', b: 'unwinnable' });
     assert.deepEqual(await c.both(START), { w: 'winnable', b: 'winnable' });
     assert.equal(await c.ask('not a fen', 'w'), 'undecided');
-  } finally { c.close(); }
+  } finally {
+    c.close();
+  }
 });
 
 test('fenFor: castling rights dropped for a 960 position (chasolver refuses X-FEN rights), kept for standard', () => {
   const CC = window.ChessCore;
-  const f960 = CC.parseFen('4k3/8/8/8/8/8/8/R4K1R w HA - 3 9').pos, std = CC.parseFen('4k3/8/8/8/8/8/8/R3K2R w KQ - 3 9').pos;
+  const f960 = CC.parseFen('4k3/8/8/8/8/8/8/R4K1R w HA - 3 9').pos,
+    std = CC.parseFen('4k3/8/8/8/8/8/8/R3K2R w KQ - 3 9').pos;
   assert.equal(D.fenFor(f960), '4k3/8/8/8/8/8/8/R4K1R w - - 0 1');
   assert.equal(D.fenFor(std), '4k3/8/8/8/8/8/8/R3K2R w KQ - 0 1');
 });

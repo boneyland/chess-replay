@@ -1,7 +1,8 @@
 const test = require('node:test');
 const assert = require('node:assert/strict');
 const { loadUnit } = require('./load.cjs');
-loadUnit('chess-core.js'); loadUnit('draw-core.js');
+loadUnit('chess-core.js');
+loadUnit('draw-core.js');
 const D = window.DrawCore;
 
 test('the modifier held picks the brush', () => {
@@ -23,7 +24,8 @@ test('a drag back to its own square is a circle', () => {
 });
 
 test('drawing a shape again removes it, in another colour recolours it', () => {
-  const a = D.shape('e2', 'e4', 'green'), c = D.shape('d5', null, 'green');
+  const a = D.shape('e2', 'e4', 'green'),
+    c = D.shape('d5', null, 'green');
   let s = D.toggle(D.toggle([], a), c);
   assert.deepEqual(s, [a, c]);
   s = D.toggle(s, D.shape('e2', 'e4', 'red'));
