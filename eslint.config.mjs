@@ -90,7 +90,8 @@ const correctness = {
   // the shared names above are declared as globals and also by the file that defines them
   'no-redeclare': ['error', { builtinGlobals: false }],
   'react-hooks/rules-of-hooks': 'error',
-  'react-hooks/exhaustive-deps': 'warn',
+  // an array that leaves a value out on purpose says why: // eslint-disable-next-line react-hooks/exhaustive-deps -- <why>
+  'react-hooks/exhaustive-deps': 'error',
 };
 
 export default [
