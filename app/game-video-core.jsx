@@ -285,7 +285,7 @@ function usePieceSet(chosen) {
     return () => {
       live = false;
     };
-  }, [want]);
+  }, [PS, want]);
   if (PS.ready(want)) last.current = want;
   PIECE_SET = last.current;
   return { shown: last.current, failed: failed === want ? want : null };
@@ -324,7 +324,7 @@ function useBoardLook(theme, adj, exporting) {
     return () => {
       live = false;
     };
-  }, [want, need, exporting]);
+  }, [BT, want, need, exporting]);
   if (!pic) last.current = { ...BT.colours(id, a), src: null, css: 'none' };
   else if (exporting && BT.rendered(id, a))
     last.current = { ...BT.colours(id, a), src: BT.rendered(id, a), css: 'none' };
@@ -3474,7 +3474,7 @@ function useReplayNav({ nav, M, S, c, line, input, goTo, fen, keys = true }) {
       : '';
   React.useEffect(() => {
     if (nav && nav.listen) nav.listen();
-  }, [navSig]);
+  }, [nav, navSig]);
   useKeydown(
     (e) => {
       if (e.shiftKey || hasModifier(e)) return;
@@ -3654,7 +3654,7 @@ function GameVideo({ M, tw, d, probe, queen, nav, scheme, sf, orient }) {
     } catch (e) {
       return null;
     }
-  }, [lineKey, M.start.fen]);
+  }, [lineKey, M.start.fen, M.start.pos]);
   const settled = (i) => window.ChessCore.settledAt(S, CUES, i);
   const goTo = (i) => {
     setVline(null);

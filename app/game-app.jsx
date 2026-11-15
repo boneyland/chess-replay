@@ -439,9 +439,10 @@ function GameApp() {
   // the Keyboard shortcuts dialog
   const [keysOpen, setKeysOpen] = React.useState(false);
   const [analyseOpen, setAnalyseOpen] = React.useState(false); // the Analyse the game dialog (GameAnalysisDialog)
+  const onBoard = !!board;
   React.useEffect(() => {
-    if (board) setAnalyseOpen(false);
-  }, [!!board]); // a loaded game's only
+    if (onBoard) setAnalyseOpen(false);
+  }, [onBoard]); // a loaded game's only
   const [shareOpen, setShareOpen] = React.useState(null); // the Share and export dialog: { fen } of the position it opened on
   // leaving a game in progress asks first: { run } is what waits on the answer
   const [leave, setLeave] = React.useState(null);

@@ -145,7 +145,7 @@ function useExportSettings({
         .map((o) => ({ i: o.i, s: `${o.l} · ${fmtLen(o.t.end)}` }))
         .concat([{ i: NP, s: `End card · ${fmtLen(TM.total)}` }]),
     };
-  }, [MV, TM]);
+  }, [MV, TM, NP, fmtLen]);
   const clipT = clipOpts.at(clipFrom, clipTo),
     clipFromOpts = clipOpts.from,
     clipToOpts = clipOpts.to.filter((o) => o.i >= clipFrom);

@@ -491,9 +491,10 @@ function GameStatus({ board, onChange, down, why, retry, tip, onMove }) {
     sfGame = G.mode === 'stockfish';
   // the question waiting on an answer: 'resign' or 'draw'; another position or result drops it
   const [ask, setAsk] = React.useState(null);
+  const ended = !!G.result;
   React.useEffect(() => {
     setAsk(null);
-  }, [board.steps.length, !!G.result]);
+  }, [board.steps.length, ended]);
   const big = (txt, col) => <span style={{ font: `700 ${headline()}px ${MONO}`, color: col }}>{txt}</span>;
   const small = (txt, col) => (
     <span style={{ font: `600 ${tx(16)}px ${MONO}`, letterSpacing: '0.08em', textTransform: 'uppercase', color: col }}>
@@ -773,9 +774,10 @@ function FreeBoard({ board, onChange, tw, setTweak, onLichess, sf, nav, orient, 
   }, [boardKey]);
   // a board that stops taking moves (a flag fall, a late dead-position answer, Stockfish's turn) drops one half made:
   // its handlers no longer answer, so a drag ghost, a hidden piece or the promotion picker would stay
+  const isStill = !!still;
   React.useEffect(() => {
-    if (still) input.clear();
-  }, [!!still]);
+    if (isStill) input.clear();
+  }, [isStill]);
   // Stockfish rates the move on the board: the positions before and after it (before the first move, both the start); never in a game
   const ev = useMoveEval({
     engine: sf.engine,
@@ -823,11 +825,14 @@ function FreeBoard({ board, onChange, tw, setTweak, onLichess, sf, nav, orient, 
   const [, tick] = React.useState(0);
   const latest = React.useRef(null);
   latest.current = { board, onChange };
+  const deadW = dead && dead.w,
+    deadB = dead && dead.b;
   React.useEffect(() => {
     const { board: b, onChange: set } = latest.current,
       r = P.recheck(b, Date.now());
     if (r !== b) set(r);
-  }, [live, boardKey, dead && dead.w, dead && dead.b]);
+  }, [P, live, boardKey, deadW, deadB]);
+  const clockSince = G && G.clock && G.clock.since;
   React.useEffect(() => {
     if (!running) return;
     const id = setInterval(() => {
@@ -837,7 +842,7 @@ function FreeBoard({ board, onChange, tw, setTweak, onLichess, sf, nav, orient, 
       else tick((x) => x + 1);
     }, 100);
     return () => clearInterval(id);
-  }, [running, G && G.clock && G.clock.since]);
+  }, [P, running, clockSince]);
   const now = Date.now();
   const clockOf = (side) =>
     G && G.clock ? { s: P.timeLeft(board, side, now) / 1000, active: running && gameTurn(board) === side } : null;
@@ -873,7 +878,7 @@ function FreeBoard({ board, onChange, tw, setTweak, onLichess, sf, nav, orient, 
   const navSig = nav && nav.current ? `${nav.current.label}|${upto}|${last}|${live}` : '';
   React.useEffect(() => {
     if (nav && nav.listen) nav.listen();
-  }, [navSig]);
+  }, [nav, navSig]);
   // to a move (-1: the start), where there is one and it isn't the one shown: the keys and the wheel over the board
   const goIf = (to) => {
     if (to >= -1 && to <= last && to !== upto) go(to);
@@ -907,7 +912,8 @@ function FreeBoard({ board, onChange, tw, setTweak, onLichess, sf, nav, orient, 
     : steps.length
       ? P.ending({ pos: steps[last].pos, dead: deadAt != null })
       : null;
-  const S = React.useMemo(() => ({ N: steps.length, tp: steps.map((_, i) => i) }), [steps.length]);
+  const N = steps.length,
+    S = React.useMemo(() => ({ N, tp: Array.from({ length: N }, (_, i) => i) }), [N]);
   const named = std ? boardOpening(board, book) : null;
   const from = window.PlayCore.fromText(board);
   // the free board's Game info (a game's layout has none)
@@ -1586,7 +1592,7 @@ function MyGamesDialog({ games, current, onReplay, onResume, onDelete, onClose }
     if (el) el.focus();
     setFocus(null);
   }, [focus]);
-  const rows = React.useMemo(() => games.map((e) => ({ e, b: G.playable(e) })).filter((r) => r.b), [games]);
+  const rows = React.useMemo(() => games.map((e) => ({ e, b: G.playable(e) })).filter((r) => r.b), [G, games]);
   return (
     <DialogBox label="My games" part="my-games" onClose={onClose}>
       {rows.length ? (

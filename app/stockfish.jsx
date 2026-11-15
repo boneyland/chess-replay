@@ -177,7 +177,7 @@ function useEngine(hashMB, threads, kind = 'lite', onBroken, onHashFail) {
   // a change no panel asks for at once still frees the old engine (the full one holds about 100 MB)
   React.useEffect(() => {
     if (drop()) setStatus('idle');
-  }, [kind]);
+  }, [drop, setStatus, kind]);
   const get = React.useCallback(() => {
     drop();
     if (!ref.current) {
@@ -271,12 +271,12 @@ function useEngine(hashMB, threads, kind = 'lite', onBroken, onHashFail) {
       mine.catch(() => {});
     }
     return ref.current;
-  }, []);
+  }, [drop, setStatus]);
   React.useEffect(() => {
     if (kind !== 'asm') return;
     const id = setTimeout(() => get().catch(() => {}), SF_ASM_EARLY_MS);
     return () => clearTimeout(id);
-  }, [kind]);
+  }, [get, kind]);
   return { get, status, statusNow, why, holdHash };
 }
 
@@ -427,6 +427,7 @@ function writeSfPace(name, threads, f) {
 // getFiles: the loaded files as they are now (notes or commentary may have changed during the run)
 // settings: the engine settings for a game (AnalysisCore.engineSettings().game); a run keeps those it started with
 // tbOn: Settings › Online data › Endgame tablebase: positions of 7 pieces or fewer ask it first (runAnalysis)
+const SF_RUN_IDLE = { state: 'idle', done: 0, total: 0, etaSec: null, err: '', note: '' };
 function useGameAnalysis(M, files, getFiles, commit, engine, settings, tbOn) {
   const A = window.AnalysisCore,
     tb = !!(tbOn && TB),
@@ -438,7 +439,7 @@ function useGameAnalysis(M, files, getFiles, commit, engine, settings, tbOn) {
   const perPos = A.secondsPerPosition(settings, pace);
   // note: what the viewer should know about the run that isn't a failure (Lichess's tablebase lost part-way), kept after it
   // ends until the next run starts
-  const idle = { state: 'idle', done: 0, total: 0, etaSec: null, err: '', note: '' };
+  const idle = SF_RUN_IDLE;
   const [st, setSt] = React.useState(idle);
   const run = React.useRef(null);
   const ucisKey = M.plies.map((p) => p.uci).join(' ');
@@ -470,15 +471,17 @@ function useGameAnalysis(M, files, getFiles, commit, engine, settings, tbOn) {
     for (let k = from; k <= M.plies.length; k++) t += tbAt[k] ? tbSec : perSec;
     return t;
   };
+  const gameIndex = files.gameIndex || 0,
+    isSample = !!files.sample;
   React.useEffect(
     () => () => {
       if (run.current) {
         run.current.ctl.abort();
         run.current = null;
       }
-      setSt(idle);
+      setSt(SF_RUN_IDLE);
     },
-    [files.pgn, files.gameIndex || 0, !!files.sample, files.analysis],
+    [files.pgn, gameIndex, isSample, files.analysis],
   );
   const start = async () => {
     if (run.current) return;
@@ -586,9 +589,10 @@ function useGameAnalysis(M, files, getFiles, commit, engine, settings, tbOn) {
     }
   };
   // the run's hash table goes back to the live searches' once it ends, however it ends
+  const holdHash = engine.holdHash;
   React.useEffect(() => {
-    if (st.state !== 'running' && engine.holdHash) engine.holdHash(null);
-  }, [st.state]);
+    if (st.state !== 'running' && holdHash) holdHash(null);
+  }, [holdHash, st.state]);
   // between positions the estimate counts down by the second
   React.useEffect(() => {
     if (st.state !== 'running') return;

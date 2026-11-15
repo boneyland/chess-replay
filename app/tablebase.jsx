@@ -12,7 +12,8 @@ function useTablebase(boardFen, on) {
   const LC = window.LichessCore;
   const fen = on && TB && boardFen && LC.pieceCount(boardFen) <= LC.TB_MAX_PIECES ? boardFen : null;
   const [st, setSt] = React.useState({ fen: null, tb: null });
-  const hit = fen ? TB.tablebaseCached(fen) : undefined;
+  const hit = fen ? TB.tablebaseCached(fen) : undefined,
+    tbKey = fen && LC.tbKey(fen);
   React.useEffect(() => {
     if (!fen || hit) return;
     const ctl = new AbortController();
@@ -27,7 +28,7 @@ function useTablebase(boardFen, on) {
       clearTimeout(id);
       ctl.abort();
     };
-  }, [fen && LC.tbKey(fen)]);
+  }, [tbKey]);
   if (!fen) return null;
   const tb = hit || (st.fen === fen ? st.tb : undefined);
   const turn = fen.split(' ')[1] === 'b' ? 'b' : 'w';
