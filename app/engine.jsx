@@ -61,7 +61,9 @@ function useKeydown(onKey, { on = true, fields = false, overlay = false } = {}) 
   }, [on, fields, overlay]);
 }
 
-// A menu that closes, while open, on a press outside ref's element or on Esc (an overlay's, so Esc closes only the menu)
+// A menu that closes, while open, on a press outside ref's element, on the focus leaving it (Tab) or on Esc (an
+// overlay's, so Esc closes only the menu). Esc from inside the menu (or with the focus nowhere) puts the focus on the
+// button that opens it, the first [aria-expanded] in ref's element, which stays when the menu goes
 function useDismiss(open, ref, close) {
   const closeRef = React.useRef(close);
   closeRef.current = close;
@@ -69,6 +71,10 @@ function useDismiss(open, ref, close) {
     (e) => {
       if (e.key === 'Escape') {
         e.preventDefault();
+        const a = document.activeElement,
+          el = ref.current,
+          btn = el && el.querySelector('[aria-expanded]');
+        if (btn && (el.contains(a) || !a || a === document.body)) btn.focus();
         close();
       }
     },
@@ -76,12 +82,46 @@ function useDismiss(open, ref, close) {
   );
   React.useEffect(() => {
     if (!open) return;
+    const el = ref.current;
     const away = (e) => {
       if (ref.current && !ref.current.contains(e.target)) closeRef.current();
     };
+    // a press elsewhere moves the focus with no relatedTarget (Safari focuses no button), which pointerdown handles
+    const out = (e) => {
+      if (e.relatedTarget && !el.contains(e.relatedTarget)) closeRef.current();
+    };
     document.addEventListener('pointerdown', away);
-    return () => document.removeEventListener('pointerdown', away);
+    if (el) el.addEventListener('focusout', out);
+    return () => {
+      document.removeEventListener('pointerdown', away);
+      if (el) el.removeEventListener('focusout', out);
+    };
   }, [open, ref]);
+}
+
+// Rendered first inside the element of something that opens over the page (a dialog, Settings): it notes the control
+// that had the focus as that opened (in render, before an effect inside moves it) and, as it closes (a layout effect's
+// cleanup, which runs while that element is still in the page), gives the focus back there. Modal (a dialog), whenever
+// the focus was inside or nowhere (Safari focuses no button on a click; a button disabled while it works drops it), as
+// a native dialog does; else (Settings) only when a keyboard user's focus was inside, so after a click Space still
+// plays. Where that control no longer shows (a menu item, gone with its menu), GameApp hears chess-video:focus-lost
+// and puts the focus on Menu
+function ReturnFocus({ modal = false }) {
+  const [from] = React.useState(() => document.activeElement);
+  const mark = React.useRef(null);
+  React.useLayoutEffect(() => {
+    const box = mark.current.parentElement;
+    return () => {
+      const a = document.activeElement;
+      // not modal (Settings): only a keyboard user's focus (a clicked ✕ holds the focus too, without a ring)
+      if (modal ? !box.contains(a) && a && a !== document.body : !box.contains(a) || !a.matches(':focus-visible'))
+        return;
+      if (from && from !== document.body && from.isConnected && !box.contains(from) && from.getClientRects().length)
+        from.focus();
+      else window.dispatchEvent(new CustomEvent('chess-video:focus-lost'));
+    };
+  }, [modal, from]);
+  return <span ref={mark} hidden />;
 }
 
 // still: a board without a timeline (the free board): no playing, no seeking keys, and a transport bar of moves only
@@ -718,5 +758,6 @@ Object.assign(window, {
   hasModifier,
   useKeydown,
   useDismiss,
+  ReturnFocus,
   stageMargins,
 });

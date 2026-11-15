@@ -925,14 +925,34 @@ function GameApp() {
     seekAfter.current = null;
     window.dispatchEvent(new CustomEvent('chess-video:seek', { detail: { time } }));
   }, [files]);
-  // a dialog closed (Esc, Cancel, Set up, Start game): focus goes back to what opened it, Menu, or the control focusBack
-  // names (a selector) where that is what opened it and it still shows
+  // a dialog or Settings closed (Esc, Cancel, Set up, Start game) with the focus in it, and the control it opened from
+  // is gone (a menu item; ReturnFocus gives the focus back to one that still shows, and says chess-video:focus-lost
+  // otherwise): the focus goes to the control focusBack names (a selector) where that shows, else to Menu
   const newBtn = React.useRef(null),
     menuBtn = React.useRef(null),
     fenWasOpen = React.useRef(false),
-    dialogOpen = !!importOpen || !!playOpen || !!gamesOpen || keysOpen || !!vision;
+    focusLost = React.useRef(false),
+    dialogOpen =
+      !!importOpen ||
+      !!playOpen ||
+      !!gamesOpen ||
+      keysOpen ||
+      !!vision ||
+      !!shareOpen ||
+      analyseOpen ||
+      resetOpen ||
+      !!open960 ||
+      !!leave ||
+      panel;
   React.useEffect(() => {
-    if (fenWasOpen.current && !dialogOpen) {
+    const lost = () => (focusLost.current = true);
+    window.addEventListener('chess-video:focus-lost', lost);
+    return () => window.removeEventListener('chess-video:focus-lost', lost);
+  }, []);
+  React.useEffect(() => {
+    const lost = focusLost.current && (!document.activeElement || document.activeElement === document.body);
+    if (!dialogOpen) focusLost.current = false;
+    if (fenWasOpen.current && !dialogOpen && lost) {
       const back = focusBack.current && document.querySelector(focusBack.current);
       const b = back || (phone ? menuBtn.current : newBtn.current);
       if (b) b.focus();

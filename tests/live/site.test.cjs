@@ -924,6 +924,62 @@ for (const name of BROWSERS)
         },
       );
 
+      // keyboard only: what closes gives the focus back to the control that opened it, or to Menu where that went with
+      // its menu, never to the page (the next Tab would start from the top)
+      await t.test('desktop: closing a dialog, Settings or the menu by keyboard puts the focus back', async () => {
+        const focused = () =>
+          page.evaluate(() => {
+            const a = document.activeElement;
+            return a === document.body ? 'page' : a.getAttribute('aria-label') || a.textContent.trim();
+          });
+        const press = async (name, key = 'Enter') => {
+          await page.getByRole('button', { name, exact: true }).focus();
+          await page.keyboard.press(key);
+        };
+        // a dialog opened from a dock button: back on that button
+        await press('Share and export');
+        const share = page.getByRole('dialog', { name: 'Share and export' });
+        await share.waitFor({ timeout: 3000 });
+        await page.keyboard.press('Escape');
+        await assert.doesNotReject(share.waitFor({ state: 'detached', timeout: 3000 }));
+        assert.equal(await focused(), 'Share and export');
+        // a dialog opened from a menu item: the item went with the menu, so back on Menu
+        await press('Menu');
+        await press('Chess960 position');
+        const c960 = page.getByRole('dialog', { name: 'Chess960 position' });
+        await c960.waitFor({ timeout: 3000 });
+        await page.keyboard.press('Escape');
+        await assert.doesNotReject(c960.waitFor({ state: 'detached', timeout: 3000 }));
+        assert.equal(await focused(), 'Menu');
+        // Settings: Esc from inside the panel, back on its button
+        await press('Settings');
+        const panel = page.locator('.part-settings');
+        await panel.waitFor({ timeout: 3000 });
+        await panel.getByRole('button', { name: 'Close settings' }).focus();
+        await page.keyboard.press('Escape');
+        await assert.doesNotReject(panel.waitFor({ state: 'detached', timeout: 3000 }));
+        assert.equal(await focused(), 'Settings');
+        // and its ✕ by keyboard
+        await press('Settings');
+        await panel.waitFor({ timeout: 3000 });
+        await panel.getByRole('button', { name: 'Close settings' }).focus();
+        await page.keyboard.press('Enter');
+        await assert.doesNotReject(panel.waitFor({ state: 'detached', timeout: 3000 }));
+        assert.equal(await focused(), 'Settings');
+        // the menu: Tab goes into it, Esc closes it with the focus on Menu, and Tab out of it closes it
+        const menu = page.getByRole('button', { name: 'Menu', exact: true });
+        await press('Menu');
+        await page.keyboard.press('Tab');
+        assert.equal(await focused(), 'Starting position');
+        await page.keyboard.press('Escape');
+        assert.equal(await menu.getAttribute('aria-expanded'), 'false');
+        assert.equal(await focused(), 'Menu');
+        await press('Menu');
+        await page.keyboard.press('Shift+Tab');
+        assert.equal(await focused(), 'Import game');
+        assert.equal(await menu.getAttribute('aria-expanded'), 'false', 'Tab out of the menu closes it');
+      });
+
       // an answer from Queen takes 20-33 s: one that lands after another game was loaded draws no arrow on that game
       // (the Space is faked: a slow answer, e2e4 at the start)
       await t.test("desktop: Queen's late answer draws no arrow on a game loaded meanwhile", async () => {
@@ -4348,7 +4404,11 @@ for (const name of BROWSERS)
         }
         await p.keyboard.press('Escape');
         await assert.doesNotReject(dialog.waitFor({ state: 'detached', timeout: 5000 }));
-        assert.equal(await p.evaluate(() => document.activeElement.textContent), 'Menu', 'focus back on Menu');
+        assert.equal(
+          await p.evaluate(() => document.activeElement.textContent),
+          'Import game',
+          'focus back on Import game',
+        );
         await openIt();
         await field.click();
         await field.pressSequentially(
