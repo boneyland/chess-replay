@@ -127,7 +127,9 @@
     const now = performance.now(),
       a = d.pts[0],
       b = d.pts[d.pts.length - 1];
-    if (a && b !== a && now - b.t < 60) {
+    // no glide under reduced motion: the page stops where the pointer let go
+    const calm = window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+    if (!calm && a && b !== a && now - b.t < 60) {
       const cap = (v) => Math.max(-GLIDE_MAX, Math.min(GLIDE_MAX, v));
       flick(d.el, cap(-(b.x - a.x) / (b.t - a.t)), cap(-(b.y - a.y) / (b.t - a.t)), d.k);
     }
