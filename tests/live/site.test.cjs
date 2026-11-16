@@ -4913,6 +4913,9 @@ for (const name of BROWSERS)
           await p.getByRole('button', { name: 'Settings' }).click();
           await p.getByRole('tab', { name: 'Online' }).click();
           await p.getByRole('switch', { name: /Lichess opening explorer/ }).click();
+          await p.getByRole('combobox', { name: 'Database', exact: true }).waitFor({ timeout: 5000 });
+          assert.equal(await p.getByRole('button', { name: 'Sign in with Lichess' }).count(), 0, 'no sign-in offered');
+          assert.equal(await p.getByLabel('Lichess personal token').count(), 0, 'no token field');
           await p.keyboard.press('Escape');
           await p.waitForFunction(() => /Lichess Test Opening/i.test(document.body.innerText), null, {
             timeout: 10000,

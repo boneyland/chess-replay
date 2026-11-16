@@ -38,14 +38,22 @@ function readLiAuth() {
     return null;
   }
 }
-// the signed-in state is shared by the panel and the settings
+// the signed-in state is shared by the panel and the settings; liWanted: Lichess has answered 401 since the page loaded
+// (Settings offers the sign-in only then, or while signed in)
 let liAuth = readLiAuth(),
-  liNote = '';
+  liNote = '',
+  liWanted = false;
 const liSubs = new Set();
+const liState = () => ({ auth: liAuth, note: liNote, wanted: liWanted });
 const liSet = (auth, note = liNote) => {
   liAuth = auth;
   liNote = note;
-  liSubs.forEach((f) => f({ auth: liAuth, note: liNote }));
+  liSubs.forEach((f) => f(liState()));
+};
+const liWant = () => {
+  if (liWanted) return;
+  liWanted = true;
+  liSet(liAuth);
 };
 function liStore(a) {
   try {
@@ -101,10 +109,10 @@ window.addEventListener('storage', (e) => {
 });
 
 function useLichessAuth() {
-  const [v, setV] = React.useState({ auth: liAuth, note: liNote });
+  const [v, setV] = React.useState(liState);
   React.useEffect(() => {
     liSubs.add(setV);
-    setV({ auth: liAuth, note: liNote });
+    setV(liState());
     return () => {
       liSubs.delete(setV);
     };
@@ -112,6 +120,7 @@ function useLichessAuth() {
   return {
     auth: v.auth,
     note: v.note,
+    wanted: v.wanted,
     signIn: liSignIn,
     signOut: liSignOut,
     paste: liPaste,
@@ -135,6 +144,7 @@ function useExplorer(fen, on, filters) {
     const id = setTimeout(
       () =>
         EXPL.explorer(fen, filters, { signal: ctl.signal, token }).then((x) => {
+          if (x && x.auth) liWant();
           if (!ctl.signal.aborted) setSt({ key, x });
         }),
       EXPL_DEBOUNCE_MS,
@@ -432,7 +442,7 @@ function ExplorerSettings({ t, setTweak }) {
       <TweakToggle
         id="tw-explorer"
         label="Lichess opening explorer"
-        info="With this on, the free board’s Opening explorer box lists the moves played from the position with their game counts (explorer.lichess.ovh), in place of the local book. No sign-in needed; if Lichess ever asks for one, sign in or paste a personal token (lichess.org/account/oauth/token, no scopes): it goes only to Lichess, and only when asked. The position goes to Lichess. Off by default."
+        info="With this on, the free board’s Opening explorer box lists the moves played from the position with their game counts (explorer.lichess.ovh), in place of the local book. No sign-in needed; if Lichess ever asks for one, the sign-in shows here and in the box: sign in, or paste a personal token (lichess.org/account/oauth/token, no scopes). The token goes only to Lichess, and only when asked. The position goes to Lichess. Off by default."
         value={on}
         onChange={(v) => setTweak('explorer', v)}
       />
@@ -469,7 +479,7 @@ function ExplorerSettings({ t, setTweak }) {
               label={`Sign out of Lichess${LA.auth.name ? ' (' + LA.auth.name + ')' : ''}`}
               onClick={LA.signOut}
             />
-          ) : (
+          ) : LA.wanted ? (
             <React.Fragment>
               <TweakButton label="Sign in with Lichess" onClick={LA.signIn} />
               <input
@@ -487,7 +497,7 @@ function ExplorerSettings({ t, setTweak }) {
               />
               <TweakButton secondary label="Use this token" onClick={save} />
             </React.Fragment>
-          )}
+          ) : null}
           {LA.note && (
             <div className="twk-note" role="status" onClick={LA.clearNote}>
               {LA.note}
