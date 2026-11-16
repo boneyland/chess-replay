@@ -153,8 +153,12 @@ async function open(browser, viewport, opts) {
   return { ctx, page, errors };
 }
 // the elements reaching past the window's right edge, when the page scrolls sideways (none when it doesn't)
-const wider = (page) =>
-  page.evaluate(() => {
+// every running animation and transition done (dialogs rise, menus fade): a measure taken mid-way reads a scaled, shifted box
+const animationsDone = (page) =>
+  page.evaluate(() => Promise.all(document.getAnimations().map((a) => a.finished.catch(() => {}))).then(() => {}));
+const wider = async (page) => {
+  await animationsDone(page);
+  return page.evaluate(() => {
     if (document.documentElement.scrollWidth <= window.innerWidth) return [];
     const w = window.innerWidth,
       out = [];
@@ -171,6 +175,7 @@ const wider = (page) =>
     }
     return [`scrollWidth ${document.documentElement.scrollWidth} > ${w}`, ...out.slice(0, 8)];
   });
+};
 // elements inside the stage that clip their content (overflow hidden/clip) while it is bigger than the box; boxes that
 // scroll (overflow-y auto) and the SideScroll strips (overflow-x auto) are meant to hold more than they show, but a box
 // that scrolls up and down mustn't scroll sideways. Also the placed boxes (panels, bars, the board) reaching past the
@@ -4030,6 +4035,7 @@ for (const name of BROWSERS)
           await p.mouse.move(corner.x + corner.width - 12, corner.y + corner.height - 12, { steps: 4 });
           await p.mouse.up();
           await assert.doesNotReject(dialog.getByText(HELP).waitFor({ timeout: 5000 }));
+          await animationsDone(p);
           const pulled = await cropBox.locator('rect[style*="move"]').boundingBox();
           await read();
           const redRead = await placement(),
@@ -4041,6 +4047,7 @@ for (const name of BROWSERS)
           await p.getByRole('button', { name: 'Back to crop' }).click();
           await cropBox.waitFor({ timeout: 5000 });
           await assert.doesNotReject(dialog.getByText(HELP).waitFor({ timeout: 5000 }));
+          await animationsDone(p);
           const again = await cropBox.locator('rect[style*="move"]').boundingBox();
           assert.ok(
             Math.abs(again.width - pulled.width) <= 1 && Math.abs(again.height - pulled.height) <= 1,

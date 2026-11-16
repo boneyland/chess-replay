@@ -623,6 +623,46 @@ body:has(.stage:not(.stage-one)) .net-note { top: calc(64px + env(safe-area-inse
 .q-diag { display: flex; flex-direction: column; gap: 6px; }
 .q-diag pre { margin: 0; max-height: 180px; overflow: auto; padding: 8px; border-radius: 3px; background: var(--bg); border: 1px solid var(--line); font: 500 0.8125rem/1.5 var(--mono); color: var(--ink); white-space: pre-wrap; word-break: break-word; }
 @media (prefers-reduced-motion: reduce) { .twk-seg-thumb, .twk-toggle, .twk-toggle i { transition: none; } }
+
+/* Pressed: the control answers the moment a finger or button goes down, not when the action lands (:hover never fires on
+   a touch screen). The Transport bar's own buttons keep their data-press tint above; these are the boxed buttons. */
+.pmenu .dock-btn, .dock-pop .dock-btn, .twk-btn, .frame-btn, .import-game, .vision-tile, .piece-tile, .board-tile,
+.dlg-box button { transition: transform 0.1s ease-out; }
+.pmenu .dock-btn:active:not(:disabled), .dock-pop .dock-btn:active:not(:disabled), .twk-btn:active:not(:disabled),
+.frame-btn:active:not(:disabled), .import-game:active:not(:disabled), .vision-tile:active,
+.board-tile:active, .dlg-box button:active:not(:disabled) { transform: scale(0.97); }
+/* the tint is for the quiet buttons; a filled one (accent, danger) keeps its fill and darkens, as it brightens on hover */
+.pmenu .dock-btn:active:not(:disabled), .dock-pop .dock-btn:active:not(:disabled), .twk-btn.secondary:active:not(:disabled),
+.frame-btn:not(.frame-btn-primary):active:not(:disabled), .import-game:active:not(:disabled), .vision-tile:active,
+.board-tile:active, .dlg-box button:not(.twk-btn):not(.frame-btn-primary):active:not(:disabled) { background-color: var(--btn-hover); }
+.twk-btn:not(.secondary):active:not(:disabled), .frame-btn-primary:active:not(:disabled) { filter: brightness(0.9); }
+.piece-tile:active { transform: scale(0.97); } /* its own light-square background and selected tint stay */
+
+/* Menus grow from the button that opened them; closing is instant (a closing fade would hold display, which also held the
+   unfolded dock buttons on screen for 100 ms when the phone layout first folds them into this menu). */
+.pmenu .dock-items {
+  opacity: 0; transform: scale(0.95); transform-origin: bottom right;
+  transition: opacity 0.1s ease-in, transform 0.1s ease-in;
+}
+.pmenu-open .dock-items { opacity: 1; transform: none; transition-duration: 0.16s; transition-timing-function: ease-out; }
+@starting-style { .pmenu-open .dock-items { opacity: 0; transform: scale(0.95); } }
+
+/* Dialogs fade in over their scrim and rise a little */
+@keyframes dlg-in { from { opacity: 0; } }
+@keyframes dlg-rise { from { opacity: 0; transform: translateY(8px) scale(0.98); } }
+.dlg-scrim { animation: dlg-in 0.16s ease-out; }
+.dlg-box { animation: dlg-rise 0.2s ease-out; }
+
+/* Reduced motion: no scaling, rising or sliding; a short fade says the same. Spinners and the run's progress stay. */
+@media (prefers-reduced-motion: reduce) {
+  .pmenu .dock-items, .pmenu-open .dock-items { transform: none; }
+  @starting-style { .pmenu-open .dock-items { transform: none; } }
+  .pmenu .dock-btn:active:not(:disabled), .dock-pop .dock-btn:active:not(:disabled), .twk-btn:active:not(:disabled),
+  .frame-btn:active:not(:disabled), .import-game:active:not(:disabled), .vision-tile:active, .piece-tile:active,
+  .board-tile:active, .piece-tile:active, .dlg-box button:active:not(:disabled) { transform: none; }
+  .dlg-box { animation-name: dlg-in; }
+  .ptrack-bg, .ptrack-fill, .ptrack-knob { transition: none; }
+}
 </style>
 <div id="root"></div>
 <!-- every script from a CDN is pinned by hash, so a changed file is refused rather than run (the

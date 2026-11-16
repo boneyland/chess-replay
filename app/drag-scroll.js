@@ -23,6 +23,8 @@
     return null;
   };
 
+  const calm = window.matchMedia('(prefers-reduced-motion: reduce)'); // live: a changed setting applies at once
+
   let drag = null,
     glide = 0,
     swallow = false;
@@ -127,7 +129,8 @@
     const now = performance.now(),
       a = d.pts[0],
       b = d.pts[d.pts.length - 1];
-    if (a && b !== a && now - b.t < 60) {
+    // no glide under reduced motion: the page stops where the pointer let go
+    if (!calm.matches && a && b !== a && now - b.t < 60) {
       const cap = (v) => Math.max(-GLIDE_MAX, Math.min(GLIDE_MAX, v));
       flick(d.el, cap(-(b.x - a.x) / (b.t - a.t)), cap(-(b.y - a.y) / (b.t - a.t)), d.k);
     }
