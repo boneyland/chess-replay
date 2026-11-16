@@ -231,6 +231,56 @@ test('player: nothing plays before the first gesture, and nothing queues up to p
   }
 });
 
+test("player: unlocks on a touch lift (iPhone Safari counts no touch pointerdown), on Safari's interrupted state too, and a refused resume doesn't block the next", async () => {
+  const was = window.AudioContext,
+    wasAdd = window.addEventListener,
+    heard = {};
+  const fake = fakeAudio('suspended');
+  let refuse = true; // the first resume(), in a touch's pointerdown, never settles
+  fake.Ctx.prototype.resume = function () {
+    if (refuse) return new Promise(() => {});
+    return Promise.resolve().then(() => {
+      this.state = 'running';
+    });
+  };
+  window.AudioContext = fake.Ctx;
+  window.addEventListener = (ev, fn, capture) => {
+    assert.equal(capture, true);
+    heard[ev] = fn;
+  };
+  try {
+    const p = X.createPlayer(async () => null);
+    for (const ev of ['pointerdown', 'pointerup', 'touchend', 'click', 'keydown'])
+      assert.equal(heard[ev], p.unlock, ev);
+    heard.pointerdown(); // finger down: the context is made, its resume refused
+    refuse = false;
+    heard.pointerup(); // finger up: resumed
+    await new Promise((ok) => setTimeout(ok, 0));
+    assert.equal(fake.made[0].state, 'running');
+    fake.made[0].state = 'interrupted'; // a phone call
+    heard.touchend();
+    await new Promise((ok) => setTimeout(ok, 0));
+    assert.equal(fake.made[0].state, 'running');
+    assert.equal(fake.made.length, 1);
+  } finally {
+    window.AudioContext = was;
+    window.addEventListener = wasAdd;
+  }
+});
+
+test('player: the audio session is playback, so iPhone Safari plays it with the Ring/Silent switch on silent', () => {
+  const desc = Object.getOwnPropertyDescriptor(globalThis, 'navigator');
+  const session = { type: 'auto' };
+  Object.defineProperty(globalThis, 'navigator', { value: { audioSession: session }, configurable: true });
+  try {
+    X.createPlayer(async () => null);
+    assert.equal(session.type, 'playback');
+  } finally {
+    if (desc) Object.defineProperty(globalThis, 'navigator', desc);
+    else delete globalThis.navigator;
+  }
+});
+
 test('player: the chosen set downloads as the page loads, before any gesture, once; a failed file is asked for again', async () => {
   const asked = [];
   let fail = true;
