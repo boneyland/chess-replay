@@ -145,7 +145,8 @@ jobs:
           name: android-screenshots
           path: tests/out/live/
   # tests/live/ios.test.cjs: Apple's own Safari on an iOS Simulator, over WebDriver (safaridriver), for what
-  # Playwright's WebKit for Linux can't show: iOS's bars and safe areas, no element full screen, Apple's codecs
+  # Playwright's WebKit for Linux can't show: iOS's bars and safe areas, no element full screen, Apple's codecs. A required
+  # check (since 2026-11-17)
   ios:
     runs-on: macos-latest
     timeout-minutes: 30
