@@ -329,9 +329,12 @@ body:has(.stage-one) .twk-panel { bottom: calc(51px + var(--safe-b)); max-height
 /* the Download buttons' text a step over the box's 0.875rem, in buttons of the same height */
 .xfer-box :is(.twk-group, .twk-lead) > .twk-btn.secondary, .xfer-row > .twk-btn:not(.xfer-copy) { height: 34px; min-height: 34px; padding-block: 0; font-size: 0.9375rem; }
 .xfer-field { flex: 1; min-width: 0; height: 34px; box-sizing: border-box; padding: 0 10px; border: 1px solid var(--line); border-radius: 4px; background: var(--raise); color: var(--ink); font: 500 0.875rem var(--mono); }
-.xfer-copy { flex: none; display: inline-flex; align-items: center; justify-content: center; width: 38px; min-height: 34px; padding: 0; }
+/* .twk-btn.xfer-copy: .twk-btn's padding, later in the file, otherwise squeezed the icon to 12.5 px in the 38 px button */
+.twk-btn.xfer-copy { flex: none; display: inline-flex; align-items: center; justify-content: center; width: max(38px, 2.75em); min-height: 34px; padding: 0; }
+/* the icon in em, so it follows the Text size and the device tier like the Download buttons' text beside it */
+.xfer-copy svg { flex: none; width: 1.375em; height: 1.375em; }
 .xfer-copy.done { color: var(--accent); }
-@media (pointer: coarse) { .xfer-field { font-size: 16px; height: 40px; } .xfer-copy { width: 44px; min-height: 40px; } .xfer-row > .twk-btn:not(.xfer-copy) { min-height: 40px; } }
+@media (pointer: coarse) { .xfer-field { font-size: 16px; height: 40px; } .twk-btn.xfer-copy { width: max(44px, 2.75em); min-height: 40px; } .xfer-row > .twk-btn:not(.xfer-copy) { min-height: 40px; } }
 .import-box .import-one { grid-template-columns: 1fr; }
 .import-box .pgn-field { height: min(28vh, 200px); }
 .drop.drop-top { z-index: 95; }
