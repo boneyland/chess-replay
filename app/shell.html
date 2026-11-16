@@ -88,6 +88,10 @@ button:focus-visible, select:focus-visible, input:focus-visible, [role="slider"]
 .pbar .dock-glyphed:not(.pmenu .dock-btn) .dock-label { position: absolute; width: 1px; height: 1px; overflow: hidden; clip-path: inset(50%); white-space: nowrap; }
 /* no double-tap zoom anywhere (pinch is the viewport's to allow); the board and the seek bar set their own */
 * { touch-action: manipulation; }
+/* Chrome for Android (and Safari) flash their own tap highlight over a tapped control, on top of the page's pressed look,
+   so a tap showed two states there and one in Firefox for Android, which has none (the user, 2026-11-17). Off now that
+   the controls have a pressed look of their own */
+html { -webkit-tap-highlight-color: transparent; }
 .pnav { touch-action: manipulation; -webkit-touch-callout: none; }
 /* the move name is announced to screen readers only: the board and Moves panel already show it, and the track gets the room */
 .plabel { position: absolute; width: 1px; height: 1px; overflow: hidden; clip-path: inset(50%); white-space: nowrap; }
