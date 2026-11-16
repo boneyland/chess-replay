@@ -3085,13 +3085,21 @@ function EndCard({ M, T, CUES }) {
 // A pointer event's place on the board element el: { x, y } in board pixels and sq, its square through view(). clamp:
 // a point past the edge is on the edge's square (a move's drag); else sq is -1 off the board (the editor's drag off it)
 function boardPoint(el, e, clamp) {
-  const r = el.getBoundingClientRect(),
-    x = ((e.clientX - r.left) / r.width) * BW,
-    y = ((e.clientY - r.top) / r.height) * BW;
+  const r = el.getBoundingClientRect();
+  return boardSquare(((e.clientX - r.left) / r.width) * BW, ((e.clientY - r.top) / r.height) * BW, clamp);
+}
+function boardSquare(x, y, clamp) {
   const on = clamp || (x >= 0 && x < BW && y >= 0 && y < BW);
   if (!on) return { x, y, sq: -1 };
   const [vx, vy] = view(Math.max(0, Math.min(7, Math.floor(x / SQ))), Math.max(0, Math.min(7, Math.floor(y / SQ))));
   return { x, y, sq: vy * 8 + vx };
+}
+// Where a press was let go: the pointerup's point, or where the drag last was when the pointerup says 0,0. On iOS Safari
+// a captured touch's pointerup came at 0,0 (its touchend had the real point; safaridriver, 2026-11-17), so the board read
+// a tap as a drag to the corner and dropped the selection. A mouse's 0,0 is a real point, so it's kept
+function liftPoint(e, d, at, clamp) {
+  if (e.pointerType !== 'mouse' && e.clientX === 0 && e.clientY === 0) return boardSquare(d.x, d.y, clamp);
+  return at(e);
 }
 // A press is a drag once the pointer is DRAG_PX board pixels from where it went down; also asked where it is let go, as
 // the render with the last move's state may not have run yet (a quick flick read as a tap). d: { x0, y0, moved }
@@ -3188,8 +3196,8 @@ function useBoardInput({ pos, onPick, onMiss, onMove }) {
     },
     onUp: (e) => {
       if (!drag) return;
-      const p = boardXY(e),
-        d = drag;
+      const d = drag,
+        p = liftPoint(e, d, boardXY, true);
       setDrag(null);
       // a tap keeps the piece selected (the next tap picks its square); a tap on the piece already selected lets it go
       if (!moved(d, p)) {

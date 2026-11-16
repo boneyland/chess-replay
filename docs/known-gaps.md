@@ -8,7 +8,7 @@ Deferred by the per-plan reviews; each was true when recorded and may since have
 **Drawing on the board** (2026-11-04): Firefox always opens its own context menu on Shift+right-click (the page gets no `contextmenu` event to cancel), so a red shape drawn with Shift there comes with the menu, as on Lichess; Ctrl draws red without it. Not tried with a Mac's Ctrl+click (a right click there).
 
 **iOS Safari** (2026-11-02, the `ios` job: Safari 26.5 on an iPhone 17 Simulator)
-- **Verify** on a real iPhone that tap-tap and drag moves work: in the Simulator, WebDriver's touch taps reach the board's handler and select e2 in its state, but the page never draws the selection and the second tap plays nothing; pointer events dispatched by the page's own script play the move. The job fails on this until it's settled.
+- **Verify** on a real iPhone that tap-tap and drag moves work. In the Simulator a captured touch's pointerup came at 0,0 (its touchend had the real point), so every tap read as a drag to the board's corner and played nothing; the board now lets go where the drag last was there (`liftPoint`, 2026-11-17) and the job passes. Whether a real iPhone does the same, or only safaridriver's input, is unknown.
 - The service worker is slow to take over in the Simulator (often still installing after 60 s, its cache not yet opened); Playwright's WebKit runs the same worker, so this isn't asserted there.
 
 **Free board** (2026-10-19)

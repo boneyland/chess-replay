@@ -381,10 +381,10 @@ try {
     assert.deepEqual(await errors(), []);
   });
 
-  // Runs 1–11: WebDriver's taps reach the board's React handler on the right squares, and its state takes e2, but the page
-  // never draws the selection and e4 plays nothing. So the move is tried three ways, each on a freshly loaded page, to
-  // tell safaridriver's input from the app: WebDriver's quick tap, a slow one (held 250 ms, a second apart), and pointer
-  // events dispatched by the page's own script. Only the first counts; the others say which side the fault is on
+  // Runs 1–11 played nothing: a captured touch's pointerup came at 0,0 (logged 2026-11-17; its touchend had the real
+  // point), so the board read each tap as a drag to its corner. liftPoint (app/game-video-core.jsx) now takes the drag's
+  // last point there. If WebDriver's tap fails again, the slow tap and pointer events dispatched by the page's own script
+  // are tried too, each on a freshly loaded page, with every pointer event logged, to tell safaridriver's input from the app
   await t.test('a tap-tap move gets a Stockfish verdict', { timeout: 240000 }, async () => {
     const played = () => js(() => /your move ·/i.test(document.body.innerText));
     const slowTap = (x, y) =>
@@ -417,6 +417,40 @@ try {
         x,
         y,
       );
+    // every pointer event on the page, with where it says it is, and the board's target dots after each tap
+    const logPointers = () =>
+      js(() => {
+        window.__ptr = [];
+        for (const k of [
+          'pointerdown',
+          'pointermove',
+          'pointerup',
+          'pointercancel',
+          'gotpointercapture',
+          'lostpointercapture',
+          'touchstart',
+          'touchmove',
+          'touchend',
+          'touchcancel',
+        ])
+          document.addEventListener(
+            k,
+            (e) => {
+              const pt = e.changedTouches && e.changedTouches[0];
+              const x = pt ? pt.clientX : e.clientX,
+                y = pt ? pt.clientY : e.clientY;
+              window.__ptr.push(`${k}#${e.pointerId ?? ''}@${Math.round(x)},${Math.round(y)}`);
+            },
+            true,
+          );
+      });
+    const dots = () =>
+      js(
+        () =>
+          [...document.querySelectorAll('[data-no-drag-scroll] > div')].filter(
+            (d) => getComputedStyle(d).pointerEvents === 'none',
+          ).length,
+      );
     const ways = [
       ['WebDriver tap', (x, y) => tap(x, y), 300],
       ['slow WebDriver tap', slowTap, 1000],
@@ -428,10 +462,14 @@ try {
       await loaded();
       await new Promise((r) => setTimeout(r, 1500));
       const b = await boardBox(page);
+      await logPointers();
       for (const sq of ['e2', 'e4']) {
         const p = square(b, sq);
         await how(p.x, p.y);
         await new Promise((r) => setTimeout(r, gap));
+        t.diagnostic(
+          `${name} ${sq} at ${Math.round(p.x)},${Math.round(p.y)}: ${(await js(() => window.__ptr.splice(0))).join(' ')} · ${await dots()} target dots`,
+        );
       }
       got[name] = await browser.waitUntil(played, { timeout: 5000, interval: 250 }).then(
         () => true,
