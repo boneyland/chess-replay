@@ -2318,7 +2318,7 @@ function Commentary({ M, T, S, a, book, line }) {
   // a phone's comments a size smaller
   const ph = L.tier === 'phone' ? 0.88 : 1;
   const size = tx(qtxt ? (txt.length > 90 ? 26 : 30) : txt.length > 140 ? 28 : 34) * ph;
-  const qsize = tx(qtxt.length > 200 ? 20 : 22) * ph;
+  const qsize = tx(qtxt.length > 200 ? 24 : 27) * ph;
   return (
     <Panel
       box={L.comment}
@@ -2359,7 +2359,7 @@ function Commentary({ M, T, S, a, book, line }) {
               </span>
               <span
                 style={{
-                  font: `italic 400 ${qsize}px/1.2 ${SERIF}`,
+                  font: `400 ${qsize}px/1.2 ${SERIF}`,
                   color: C.ink,
                   textWrap: 'pretty',
                   paddingLeft: tx(12),
