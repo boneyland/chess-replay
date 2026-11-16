@@ -155,8 +155,8 @@ body:has(.stage-one) .twk-panel { bottom: calc(51px + var(--safe-b)); max-height
 .stage-short .pdock .dock-btn:not(.dock-pop .dock-btn) { height: 28px; }
 /* Device tiers, the same breakpoints as LayoutCore's (app/layout-core.js): a tablet or foldable (a viewport under 1181 px wide) and
    a phone (under 600 px wide, or under 500 px high held sideways) are tighter than a desktop, not just rearranged. The
-   overlays' text (dock, transport bar, Settings, menus, all in rem) is a size smaller, the stage's padding slimmer and
-   the transport bar's buttons and gaps smaller */
+   overlays' text (dock, transport bar, Settings, menus, all in rem) is a size smaller, 15 px a rem on a tablet and a
+   phone alike (14 px on a phone was too small to read), the stage's padding slimmer and the transport bar's buttons and gaps smaller */
 @media (max-width: 1180px) {
   html { font-size: calc(15px * var(--text, 1)); }
   .stage:not(.stage-one):not(.stage-short) { padding-block: 8px; gap: 8px; padding-left: max(10px, var(--safe-l)); padding-right: max(10px, var(--safe-r)); }
@@ -164,7 +164,7 @@ body:has(.stage-one) .twk-panel { bottom: calc(51px + var(--safe-b)); max-height
   .pdock { gap: 5px; padding-left: 8px; }
 }
 @media (max-width: 599px), (max-height: 499px) {
-  html { font-size: calc(14px * var(--text, 1)); }
+  html { font-size: calc(15px * var(--text, 1)); }
   .pbtn, .dock-iconic { width: 30px; height: 30px; }
   .dock-btn { height: 30px; padding: 0 8px; }
 }
@@ -231,7 +231,7 @@ body:has(.stage-one) .twk-panel { bottom: calc(51px + var(--safe-b)); max-height
 .pmenu .dock-icons { display: flex; justify-content: flex-end; gap: 6px; }
 .pmenu .dock-iconic { width: 40px; height: 40px; padding: 0; }
 .pmenu .dock-icons .dock-queen { flex: 1; text-align: center; }
-.pmenu .dock-menu-status { display: block; max-width: 240px; padding: 2px 4px 4px; font: 500 0.6875rem/1.4 var(--mono); color: var(--dim); white-space: normal; }
+.pmenu .dock-menu-status { display: block; max-width: 240px; padding: 2px 4px 4px; font: 500 0.8125rem/1.4 var(--mono); color: var(--dim); white-space: normal; }
 .pmenu-err .dock-menu-status { color: var(--danger); }
 /* a phone held sideways (under 500 px high, the phone tier's breakpoint): the menu is 560 px wide at most, Import game over Play
    on the left, Explore, More and the last row on the right; a taller landscape window keeps the one-column list (this goes by the viewport,
@@ -278,14 +278,14 @@ body:has(.stage-one) .twk-panel { bottom: calc(51px + var(--safe-b)); max-height
   width: min(560px, 100%); display: flex; flex-direction: column; gap: 12px; padding: 16px 18px 18px; border-radius: 6px;
   background: var(--panel-glass); color: var(--ink); border: 1px solid var(--line); box-shadow: 0 16px 48px var(--shadow), var(--halo);
 }
-.dlg-title { font: 600 0.75rem var(--mono); letter-spacing: 0.12em; text-transform: uppercase; color: var(--dim); }
-.dlg-box .dlg-field { height: 38px; padding: 0 10px; font: 500 0.8125rem var(--mono); }
+.dlg-title { font: 600 0.8125rem var(--mono); letter-spacing: 0.12em; text-transform: uppercase; color: var(--dim); }
+.dlg-box .dlg-field { height: 38px; padding: 0 10px; font: 500 0.875rem var(--mono); }
 .dlg-box .pgn-field { height: min(40vh, 280px); padding: 8px 10px; resize: vertical; line-height: 1.45; }
 .dlg-box .dlg-field::placeholder { color: var(--dim); opacity: 0.7; }
 /* 16px stops a phone's browser zooming in on the field */
 @media (pointer: coarse) { .dlg-box .dlg-field { font-size: 16px; } }
-.dlg-msg { font: 500 0.75rem/1.45 var(--mono); color: var(--danger); }
-.dlg-note { font: 0.75rem/1.45 var(--sans); color: var(--dim); }
+.dlg-msg { font: 500 0.875rem/1.45 var(--mono); color: var(--danger); }
+.dlg-note { font: 0.875rem/1.45 var(--sans); color: var(--dim); }
 .dlg-btns { display: flex; justify-content: flex-end; gap: 8px; }
 .dlg-btns .twk-btn { min-height: 34px; padding: 4px 16px; }
 /* Keyboard shortcuts: groups of keys and what they do, scrolling inside the dialog */
@@ -322,13 +322,13 @@ body:has(.stage-one) .twk-panel { bottom: calc(51px + var(--safe-b)); max-height
 /* Share and export: Settings' controls in sections (FEN, PGN, Export video), scrolling inside the dialog. Its classes are
    xfer-*, never share-*: content blockers' social lists (Fanboy's, in uBlock Origin) hide .share-row, .share-box and the like,
    which hid the whole box in a Firefox with one (2026-11-04) */
-.dlg-box.xfer-box { width: min(520px, 100%); max-height: calc(100dvh - 32px); overflow-y: auto; gap: 18px; font: 0.75rem/1.4 var(--sans); scrollbar-width: thin; }
+.dlg-box.xfer-box { width: min(520px, 100%); max-height: calc(100dvh - 32px); overflow-y: auto; gap: 18px; font: 0.875rem/1.4 var(--sans); scrollbar-width: thin; }
 /* a row: the FEN's field or a Download button, and a square copy button on its right */
 .xfer-row { display: flex; gap: 8px; }
 .xfer-row > .twk-btn:not(.xfer-copy) { flex: 1; min-height: 34px; }
-/* the Download buttons' text larger than Settings' 0.75rem, in buttons of the same height */
-.xfer-box :is(.twk-group, .twk-lead) > .twk-btn.secondary, .xfer-row > .twk-btn:not(.xfer-copy) { height: 34px; min-height: 34px; padding-block: 0; font-size: 0.875rem; }
-.xfer-field { flex: 1; min-width: 0; height: 34px; box-sizing: border-box; padding: 0 10px; border: 1px solid var(--line); border-radius: 4px; background: var(--raise); color: var(--ink); font: 500 0.75rem var(--mono); }
+/* the Download buttons' text a step over the box's 0.875rem, in buttons of the same height */
+.xfer-box :is(.twk-group, .twk-lead) > .twk-btn.secondary, .xfer-row > .twk-btn:not(.xfer-copy) { height: 34px; min-height: 34px; padding-block: 0; font-size: 0.9375rem; }
+.xfer-field { flex: 1; min-width: 0; height: 34px; box-sizing: border-box; padding: 0 10px; border: 1px solid var(--line); border-radius: 4px; background: var(--raise); color: var(--ink); font: 500 0.875rem var(--mono); }
 .xfer-copy { flex: none; display: inline-flex; align-items: center; justify-content: center; width: 38px; min-height: 34px; padding: 0; }
 .xfer-copy.done { color: var(--accent); }
 @media (pointer: coarse) { .xfer-field { font-size: 16px; height: 40px; } .xfer-copy { width: 44px; min-height: 40px; } .xfer-row > .twk-btn:not(.xfer-copy) { min-height: 40px; } }
@@ -337,23 +337,23 @@ body:has(.stage-one) .twk-panel { bottom: calc(51px + var(--safe-b)); max-height
 .drop.drop-top { z-index: 95; }
 /* a Lichess round's or study's games: one button each, the unfinished greyed */
 .import-list { display: flex; flex-direction: column; gap: 4px; max-height: min(52vh, 420px); overflow-y: auto; }
-.import-game { display: flex; align-items: baseline; gap: 10px; padding: 8px 10px; border: 1px solid var(--line); border-radius: 4px; background: var(--raise); color: var(--ink); font: 500 0.875rem var(--sans); text-align: left; cursor: pointer; }
+.import-game { display: flex; align-items: baseline; gap: 10px; padding: 8px 10px; border: 1px solid var(--line); border-radius: 4px; background: var(--raise); color: var(--ink); font: 500 0.9375rem var(--sans); text-align: left; cursor: pointer; }
 @media (hover: hover) { .import-game:not(:disabled):hover { background: var(--btn-hover); border-color: var(--line-strong); } }
 .import-game:disabled { cursor: default; opacity: 0.5; }
-.import-board { flex: none; min-width: 2ch; font: 500 0.75rem var(--mono); color: var(--dim); text-align: right; }
+.import-board { flex: none; min-width: 2ch; font: 500 0.8125rem var(--mono); color: var(--dim); text-align: right; }
 .import-players { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-.import-result { flex: none; font: 600 0.8125rem var(--mono); }
+.import-result { flex: none; font: 600 0.875rem var(--mono); }
 .import-game:disabled .import-result { font-weight: 400; color: var(--dim); }
 /* the opening explorer's Open games switch */
 .expl-open-btn { padding: 2px 8px; border: 1px solid var(--line); border-radius: 2px; background: transparent; color: inherit; font: inherit; cursor: pointer; }
 .expl-open-btn.on { background: var(--raise); color: var(--ink); border-color: var(--line-strong); }
 @media (max-width: 520px) { .import-box .vision-tile { min-height: 96px; font-size: 0.9375rem; } .import-box .vision-tile small { display: none; } }
 .keys-body { display: flex; flex-direction: column; gap: 14px; overflow-y: auto; min-height: 0; }
-.keys-title { margin: 0 0 6px; font: 600 0.6875rem var(--mono); letter-spacing: 0.14em; text-transform: uppercase; color: var(--accent); }
+.keys-title { margin: 0 0 6px; font: 600 0.8125rem var(--mono); letter-spacing: 0.14em; text-transform: uppercase; color: var(--accent); }
 .keys-list { display: grid; grid-template-columns: minmax(max-content, 11rem) 1fr; gap: 6px 14px; margin: 0; align-items: baseline; }
 .keys-list dt { display: flex; flex-wrap: wrap; gap: 4px; margin: 0; }
-.keys-list dd { margin: 0; font: 0.8125rem/1.4 var(--sans); color: var(--ink); }
-.keys-list kbd { padding: 1px 6px; border-radius: 3px; border: 1px solid var(--btn-line); background: var(--btn); color: var(--ink); font: 600 0.6875rem/1.5 var(--mono); }
+.keys-list dd { margin: 0; font: 0.875rem/1.4 var(--sans); color: var(--ink); }
+.keys-list kbd { padding: 1px 6px; border-radius: 3px; border: 1px solid var(--btn-line); background: var(--btn); color: var(--ink); font: 600 0.8125rem/1.5 var(--mono); }
 @media (min-width: 900px) {
   .dlg-box:has(.keys-body) { width: min(900px, 100%); }
   .keys-body { display: block; columns: 2; column-gap: 28px; }
@@ -365,11 +365,11 @@ body:has(.stage-one) .twk-panel { bottom: calc(51px + var(--safe-b)); max-height
 @media (hover: none) and (pointer: coarse) { .pmenu .dock-group-more { display: none; } }
 /* Play vs human's choices: a label over a segmented row */
 .play-row { display: flex; flex-direction: column; gap: 6px; }
-.play-label { font: 500 0.75rem var(--sans); color: var(--dim); }
-.play-row .twk-seg button { min-height: 30px; color: var(--ink); font: 500 0.8125rem var(--sans); }
+.play-label { font: 500 0.875rem var(--sans); color: var(--dim); }
+.play-row .twk-seg button { min-height: 30px; color: var(--ink); font: 500 0.875rem var(--sans); }
 /* Chess960's Random box and Position number field, in one row (wrapping on a narrow dialog) */
 .pick-960-row { display: flex; flex-wrap: wrap; align-items: center; gap: 8px 20px; }
-.pick-960-row label { display: flex; align-items: center; gap: 8px; font: 500 0.8125rem var(--sans); color: var(--ink); cursor: pointer; }
+.pick-960-row label { display: flex; align-items: center; gap: 8px; font: 500 0.875rem var(--sans); color: var(--ink); cursor: pointer; }
 .pick-960-random input { width: 18px; height: 18px; margin: 0; accent-color: var(--accent); cursor: pointer; }
 .pick-960-no .dlg-field { width: 92px; }
 .pick-960-no:has(input:disabled) { color: var(--dim); cursor: default; }
@@ -380,10 +380,10 @@ body:has(.stage-one) .twk-panel { bottom: calc(51px + var(--safe-b)); max-height
 .games-list { list-style: none; margin: 0; padding: 0; max-height: min(56vh, 460px); overflow-y: auto; border-top: 1px solid var(--line); }
 .games-row { display: flex; align-items: center; gap: 12px; padding: 10px 2px; border-bottom: 1px solid var(--line); }
 .games-text { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 3px; }
-.games-head { font: 600 0.875rem var(--sans); color: var(--ink); }
-.games-meta { font: 0.75rem/1.4 var(--sans); color: var(--dim); }
+.games-head { font: 600 0.9375rem var(--sans); color: var(--ink); }
+.games-meta { font: 0.875rem/1.4 var(--sans); color: var(--dim); }
 .games-btns { flex: none; display: flex; align-items: center; gap: 6px; }
-.games-ask { font: 500 0.75rem var(--sans); color: var(--dim); }
+.games-ask { font: 500 0.875rem var(--sans); color: var(--dim); }
 @media (max-width: 480px) { .games-row { flex-wrap: wrap; gap: 8px; } .games-text { flex-basis: 100%; } .games-btns { margin-left: auto; } }
 
 .drop { position: fixed; inset: 0; z-index: 60; display: grid; place-items: center; background: var(--scrim); pointer-events: none; }
@@ -394,9 +394,9 @@ body:has(.stage-one) .twk-panel { bottom: calc(51px + var(--safe-b)); max-height
 .export-title { font: 600 1rem var(--sans); color: var(--ink); }
 .export-bar { height: 6px; border-radius: 2px; background: var(--raise); overflow: hidden; }
 .export-bar div { height: 100%; background: var(--accent); transition: width 0.2s; }
-.export-line { font: 500 0.8125rem var(--mono); color: var(--ink); font-variant-numeric: tabular-nums; }
+.export-line { font: 500 0.875rem var(--mono); color: var(--ink); font-variant-numeric: tabular-nums; }
 .export-err { color: var(--danger); font-family: var(--sans); }
-.export-note { font: 0.8125rem/1.4 var(--sans); color: var(--dim); }
+.export-note { font: 0.875rem/1.4 var(--sans); color: var(--dim); }
 .export-box .twk-btn { align-self: flex-end; }
 .drop-box span { color: var(--dim); font-size: 0.9375rem; }
 
@@ -404,10 +404,10 @@ body:has(.stage-one) .twk-panel { bottom: calc(51px + var(--safe-b)); max-height
   position: fixed; z-index: 70; right: max(16px, env(safe-area-inset-right, 0px)); bottom: calc(16px + var(--safe-b));
   width: min(18.75rem, calc(100% - 32px)); max-height: calc(100% - 72px); display: flex; flex-direction: column; overflow: hidden;
   background: var(--panel-glass); color: var(--ink); border: 1px solid var(--line); border-radius: 6px;
-  box-shadow: 0 16px 48px var(--shadow), var(--halo); font: 0.75rem/1.4 var(--sans);
+  box-shadow: 0 16px 48px var(--shadow), var(--halo); font: 0.875rem/1.4 var(--sans);
 }
 .twk-hd { display: flex; align-items: center; justify-content: space-between; padding: 10px 8px 8px 14px; }
-.twk-hd b { font: 600 0.75rem var(--mono); letter-spacing: 0.12em; text-transform: uppercase; color: var(--dim); }
+.twk-hd b { font: 600 0.8125rem var(--mono); letter-spacing: 0.12em; text-transform: uppercase; color: var(--dim); }
 .twk-x { width: 26px; height: 26px; border: 0; border-radius: 3px; background: transparent; color: var(--dim); cursor: pointer; }
 .twk-x:hover { background: var(--raise); color: var(--ink); }
 .twk-body { display: flex; flex-direction: column; padding: 2px 14px 14px; overflow-y: auto; min-height: 0; scrollbar-width: thin; }
@@ -417,12 +417,12 @@ body:has(.stage-one) .twk-panel { bottom: calc(51px + var(--safe-b)); max-height
 .twk-keep { display: flex; flex-direction: column; gap: 10px; }
 .twk-group, .twk-lead { display: flex; flex-direction: column; gap: 10px; }
 .twk-flow > * + .twk-group { padding-top: 10px; }
-.twk-sect { font: 600 0.75rem var(--mono); letter-spacing: 0.14em; text-transform: uppercase; color: var(--accent); }
+.twk-sect { font: 600 0.8125rem var(--mono); letter-spacing: 0.14em; text-transform: uppercase; color: var(--accent); }
 /* Settings: one size in every layout and on every tab, so a tab reads the same on a phone as on a desktop and switching
    tabs doesn't move the panel; the tabs sit in a fixed grid, three a row when there are five or six */
 .twk-tabbed { width: min(380px, calc(100% - 32px)); height: min(720px, calc(100% - 72px)); }
 .twk-tabs { flex: none; display: grid; grid-template-columns: repeat(var(--twk-tab-cols), 1fr); gap: 2px; margin: 0 14px 12px; padding: 2px; border-radius: 4px; background: var(--raise); }
-.twk-tabs button { min-height: 28px; padding: 4px 6px; border: 0; border-radius: 3px; background: transparent; color: var(--dim); font: 600 0.8125rem var(--sans); cursor: pointer; }
+.twk-tabs button { min-height: 28px; padding: 4px 6px; border: 0; border-radius: 3px; background: transparent; color: var(--dim); font: 600 0.875rem var(--sans); cursor: pointer; }
 .twk-tabs button:hover { color: var(--ink); }
 .twk-tabs button[aria-selected="true"] { color: var(--ink); background: color-mix(in srgb, var(--accent) 22%, transparent); box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--accent) 50%, transparent); }
 .twk-tabs button:focus-visible { outline: 2px solid var(--accent); outline-offset: 1px; }
@@ -468,9 +468,9 @@ body:has(.stage.stage-short) .twk-panel { bottom: calc(44px + var(--safe-b)); ma
 .twk-pair > * { flex: 1; min-width: 0; }
 .twk-row { display: flex; flex-direction: column; gap: 5px; }
 .twk-row-h { flex-direction: row; align-items: center; justify-content: space-between; gap: 10px; }
-/* the panels' controls (Settings, the engine menu, the dialogs): a step over the panels' 0.75rem, never under the box's own size */
-.twk-lbl { display: flex; justify-content: space-between; align-items: baseline; gap: 8px; color: var(--ink); font-weight: 500; font-size: max(0.8125rem, 1em); }
-.twk-val { color: var(--dim); font: 500 0.8125rem var(--mono); font-variant-numeric: tabular-nums; }
+/* the panels' controls (Settings, the engine menu, the dialogs): the panels' 0.875rem, never under the box's own size */
+.twk-lbl { display: flex; justify-content: space-between; align-items: baseline; gap: 8px; color: var(--ink); font-weight: 500; font-size: max(0.875rem, 1em); }
+.twk-val { color: var(--dim); font: 500 0.875rem var(--mono); font-variant-numeric: tabular-nums; }
 .twk-note { color: var(--dim); }
 .twk-err { color: var(--danger); }
 .twk-progress { height: 6px; border-radius: 2px; background: var(--raise); overflow: hidden; }
@@ -486,18 +486,18 @@ body:has(.stage.stage-short) .twk-panel { bottom: calc(44px + var(--safe-b)); ma
 .board-tile i { background-size: 400% auto; background-position: 0 0; }
 .board-tile:hover { border-color: var(--accent); }
 .board-tile[aria-pressed="true"] { border-color: var(--accent); box-shadow: 0 0 0 2px var(--accent); }
-.twk-field { width: 100%; height: 28px; padding: 0 8px; border: 1px solid var(--line); border-radius: 4px; background: var(--raise); color: var(--ink); font: inherit; font-size: max(0.8125rem, 1em); }
+.twk-field { width: 100%; height: 28px; padding: 0 8px; border: 1px solid var(--line); border-radius: 4px; background: var(--raise); color: var(--ink); font: inherit; font-size: max(0.875rem, 1em); }
 .twk-slider { width: 100%; margin: 4px 0; accent-color: var(--accent); }
 .twk-seg { position: relative; display: grid; grid-template-columns: repeat(var(--n), 1fr); padding: 2px; border-radius: 4px; background: var(--raise); }
 .twk-seg-thumb { grid-area: 1 / 1; border-radius: 3px; background: color-mix(in srgb, var(--accent) 22%, transparent); box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--accent) 50%, transparent); width: 100%; min-width: 0; margin-left: calc(var(--i) * 100%); pointer-events: none; transition: margin-left 0.15s; }
-.twk-seg button { position: relative; z-index: 1; grid-row: 1; min-height: 24px; padding: 4px 6px; border: 0; border-radius: 3px; background: transparent; font-weight: 500; font-size: max(0.8125rem, 1em); cursor: pointer; }
+.twk-seg button { position: relative; z-index: 1; grid-row: 1; min-height: 24px; padding: 4px 6px; border: 0; border-radius: 3px; background: transparent; font-weight: 500; font-size: max(0.875rem, 1em); cursor: pointer; }
 /* the knob is a flex item, not absolutely positioned: in Settings' two columns Firefox gave an absolute knob at the top of
    the second column no height after a re-render (dragging Seconds per move), so the switch lost its knob */
 .twk-toggle { position: relative; flex: none; display: flex; align-items: center; width: 34px; height: 20px; padding: 0 3px; border: 0; border-radius: 999px; background: var(--track); cursor: pointer; transition: background 0.15s; }
 .twk-toggle[data-on="1"] { background: var(--ok); }
 .twk-toggle i { flex: none; width: 14px; height: 14px; border-radius: 50%; background: #fff; transition: transform 0.15s; }
 .twk-toggle[data-on="1"] i { transform: translateX(14px); }
-.twk-btn { min-height: 30px; padding: 4px 12px; border: 0; border-radius: 4px; background: var(--accent); color: var(--accent-ink); font-weight: 600; font-size: max(0.8125rem, 1em); cursor: pointer; text-align: center; }
+.twk-btn { min-height: 30px; padding: 4px 12px; border: 0; border-radius: 4px; background: var(--accent); color: var(--accent-ink); font-weight: 600; font-size: max(0.875rem, 1em); cursor: pointer; text-align: center; }
 .twk-btn.secondary { background: var(--raise); color: var(--ink); border: 1px solid var(--line); }
 .twk-btn.danger { background: var(--danger); color: var(--panel); }
 .twk-btn:disabled { opacity: 0.6; cursor: progress; }
@@ -535,32 +535,32 @@ body:has(.stage.stage-short) .twk-panel { bottom: calc(44px + var(--safe-b)); ma
 .q-panel { left: max(16px, env(safe-area-inset-left, 0px)); right: auto; width: min(400px, calc(100% - 32px)); }
 .q-panel .twk-hd b { color: var(--queen); }
 .q-hd { display: flex; align-items: center; gap: 8px; }
-.q-exp { padding: 1px 6px; border-radius: 2px; border: 1px solid color-mix(in srgb, var(--queen) 55%, transparent); color: var(--queen); font: 600 0.625rem var(--mono); letter-spacing: 0.1em; text-transform: uppercase; }
+.q-exp { padding: 1px 6px; border-radius: 2px; border: 1px solid color-mix(in srgb, var(--queen) 55%, transparent); color: var(--queen); font: 600 0.75rem var(--mono); letter-spacing: 0.1em; text-transform: uppercase; }
 .twk-note a, .dlg-note a, .info-link { color: var(--accent); }
-.twk-info { flex: none; width: 15px; height: 15px; margin-left: 6px; padding: 0; vertical-align: 1px; border: 1px solid var(--dim); border-radius: 50%; background: var(--dim); color: var(--panel); font: italic 600 0.6875rem/13px Georgia, serif; cursor: help; }
+.twk-info { flex: none; width: 18px; height: 18px; margin-left: 6px; padding: 0; vertical-align: 0; border: 1px solid var(--dim); border-radius: 50%; background: var(--dim); color: var(--panel); font: italic 600 0.8125rem/16px Georgia, serif; cursor: help; }
 .twk-info:hover, .twk-info[aria-expanded="true"] { background: var(--ink); border-color: var(--ink); }
 .twk-btn-row { display: flex; align-items: center; gap: 4px; }
-.twk-tip { position: fixed; z-index: 100; max-width: min(280px, calc(100vw - 16px)); padding: 7px 10px; border: 1px solid var(--line); border-radius: 4px; background: var(--panel); color: var(--ink); box-shadow: 0 8px 24px var(--shadow), var(--halo); font: 0.75rem/1.4 var(--sans); pointer-events: none; }
+.twk-tip { position: fixed; z-index: 100; max-width: min(280px, calc(100vw - 16px)); padding: 7px 10px; border: 1px solid var(--line); border-radius: 4px; background: var(--panel); color: var(--ink); box-shadow: 0 8px 24px var(--shadow), var(--halo); font: 0.875rem/1.4 var(--sans); pointer-events: none; }
 .twk-btn-row > .twk-btn { flex: 1; min-width: 0; }
 /* the engine settings in the Analysis panel (its ☰ menu): the Settings panel's controls, sized by the Text size setting (rem) like
    the rest of the overlays, in as many columns as fit */
-.an-engine { font: 0.75rem/1.4 var(--sans); color: var(--ink); letter-spacing: normal; text-transform: none; }
+.an-engine { font: 0.875rem/1.4 var(--sans); color: var(--ink); letter-spacing: normal; text-transform: none; }
 .an-engine .twk-flow { display: grid; grid-template-columns: repeat(auto-fill, minmax(230px, 1fr)); gap: 10px 24px; align-items: start; }
 .an-engine .twk-flow > :is(.twk-note, .twk-progress, .twk-pair, .twk-btn, .twk-btn-row) { grid-column: 1 / -1; }
 .q-strong { color: var(--ink); }
 .q-sect { margin-top: 10px; }
-.q-busy { display: flex; align-items: center; gap: 8px; color: var(--ink); font: 500 0.75rem var(--mono); }
+.q-busy { display: flex; align-items: center; gap: 8px; color: var(--ink); font: 500 0.875rem var(--mono); }
 .q-dot { width: 8px; height: 8px; border-radius: 50%; background: var(--queen); animation: q-pulse 1.2s ease-in-out infinite; }
 @keyframes q-pulse { 50% { opacity: 0.25; } }
-.q-stop { margin-left: auto; padding: 2px 8px; border-radius: 3px; border: 1px solid var(--line); background: var(--raise); cursor: pointer; font: 500 0.6875rem var(--mono); }
+.q-stop { margin-left: auto; padding: 2px 8px; border-radius: 3px; border: 1px solid var(--line); background: var(--raise); cursor: pointer; font: 500 0.8125rem var(--mono); }
 .q-result { display: flex; flex-direction: column; gap: 8px; padding: 10px 12px; border-radius: 4px; background: var(--raise); border: 1px solid var(--line); }
-.q-pos { font: 600 0.6875rem var(--mono); letter-spacing: 0.1em; text-transform: uppercase; color: var(--dim); }
-.q-grid { display: grid; grid-template-columns: auto minmax(0, 1fr); gap: 4px 12px; margin: 0; font: 500 0.75rem var(--mono); }
+.q-pos { font: 600 0.8125rem var(--mono); letter-spacing: 0.1em; text-transform: uppercase; color: var(--dim); }
+.q-grid { display: grid; grid-template-columns: auto minmax(0, 1fr); gap: 4px 12px; margin: 0; font: 500 0.875rem var(--mono); }
 .q-grid dt { color: var(--dim); }
 .q-grid dd { margin: 0; min-width: 0; display: flex; flex-wrap: wrap; align-items: center; gap: 6px; }
-.q-queen { color: var(--queen); font-size: 0.875rem; }
+.q-queen { color: var(--queen); font-size: 1rem; }
 .q-line { color: var(--dim); }
-.q-tag { padding: 1px 6px; border-radius: 2px; font: 600 0.6875rem var(--mono); letter-spacing: 0.04em; }
+.q-tag { padding: 1px 6px; border-radius: 2px; font: 600 0.8125rem var(--mono); letter-spacing: 0.04em; }
 .q-tag.q-ok { background: rgba(98, 196, 131, 0.16); }
 .q-tag.q-no { background: rgba(236, 148, 66, 0.16); }
 .q-ok { color: var(--ok); }
@@ -568,22 +568,22 @@ body:has(.stage.stage-short) .twk-panel { bottom: calc(44px + var(--safe-b)); ma
 .q-dim { color: var(--dim); }
 .q-evalbox { display: flex; flex-direction: column; gap: 6px; padding-top: 8px; border-top: 1px solid var(--line); }
 .q-evals { width: 100%; border-collapse: collapse; font: 700 1rem var(--mono); font-variant-numeric: tabular-nums; }
-.q-evals thead th { font: 600 0.6875rem var(--mono); letter-spacing: 0.1em; text-transform: uppercase; color: var(--dim); text-align: right; padding: 0 0 4px 12px; }
-.q-evals tbody th { font: 500 0.6875rem var(--mono); color: var(--dim); text-align: left; padding: 3px 0; white-space: nowrap; }
+.q-evals thead th { font: 600 0.8125rem var(--mono); letter-spacing: 0.1em; text-transform: uppercase; color: var(--dim); text-align: right; padding: 0 0 4px 12px; }
+.q-evals tbody th { font: 500 0.8125rem var(--mono); color: var(--dim); text-align: left; padding: 3px 0; white-space: nowrap; }
 .q-evals td { text-align: right; padding: 3px 0 3px 12px; color: var(--ink); white-space: nowrap; }
 .q-evals td.q-evalv { color: var(--queen); }
-.q-evals tr.q-change th, .q-evals tr.q-change td { border-top: 1px solid var(--line); padding-top: 5px; font-size: 0.8125rem; }
+.q-evals tr.q-change th, .q-evals tr.q-change td { border-top: 1px solid var(--line); padding-top: 5px; font-size: 0.875rem; }
 .q-sr { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); }
-.q-mini { padding: 1px 8px; border-radius: 3px; border: 1px solid color-mix(in srgb, var(--queen) 55%, transparent); background: transparent; color: var(--queen); font: 600 0.6875rem var(--mono); cursor: pointer; }
-.q-evalnote { font: 500 0.6875rem/1.4 var(--mono); color: var(--dim); }
-.q-evaltext span { font: 600 0.6875rem var(--mono); letter-spacing: 0.08em; text-transform: uppercase; font-style: normal; color: var(--dim); }
+.q-mini { padding: 1px 8px; border-radius: 3px; border: 1px solid color-mix(in srgb, var(--queen) 55%, transparent); background: transparent; color: var(--queen); font: 600 0.8125rem var(--mono); cursor: pointer; }
+.q-evalnote { font: 500 0.8125rem/1.4 var(--mono); color: var(--dim); }
+.q-evaltext span { font: 600 0.8125rem var(--mono); letter-spacing: 0.08em; text-transform: uppercase; font-style: normal; color: var(--dim); }
 .q-evalv { color: var(--queen); }
 .q-evalsf { color: var(--ink); }
 .q-evaltext { margin: 0; padding-left: 10px; border-left: 2px solid var(--queen); font: italic 1.0625rem/1.4 "Instrument Serif", Georgia, serif; color: var(--ink); max-width: 65ch; }
 .q-why summary { cursor: pointer; color: var(--ink); font-weight: 500; }
 .q-why p { margin: 8px 0 0; color: var(--ink); font: 0.8125rem/1.5 var(--sans); max-width: 65ch; }
-.q-table { width: 100%; border-collapse: collapse; font: 500 0.75rem var(--mono); font-variant-numeric: tabular-nums; }
-.q-table th { text-align: left; padding: 4px 6px; font: 600 0.6875rem var(--mono); letter-spacing: 0.08em; text-transform: uppercase; color: var(--dim); border-bottom: 1px solid var(--line); }
+.q-table { width: 100%; border-collapse: collapse; font: 500 0.875rem var(--mono); font-variant-numeric: tabular-nums; }
+.q-table th { text-align: left; padding: 4px 6px; font: 600 0.8125rem var(--mono); letter-spacing: 0.08em; text-transform: uppercase; color: var(--dim); border-bottom: 1px solid var(--line); }
 .q-table td { padding: 5px 6px; border-bottom: 1px solid var(--line); white-space: nowrap; }
 .q-table tbody tr { cursor: pointer; }
 .q-table tbody tr:hover, .q-table tr.q-sel { background: rgba(224, 96, 159, 0.1); }
@@ -603,7 +603,7 @@ body:has(.stage.stage-short) .twk-panel { bottom: calc(44px + var(--safe-b)); ma
 .signin-note { position: fixed; z-index: 80; top: calc(56px + env(safe-area-inset-top, 0px)); left: 50%; transform: translateX(-50%); max-width: calc(100% - 32px); display: flex; align-items: center; gap: 10px; padding: 10px 8px 10px 14px; border-radius: 5px; background: var(--panel-glass); border: 1px solid var(--line); box-shadow: 0 10px 30px var(--shadow), var(--halo); font: 500 0.8125rem/1.4 var(--sans); color: var(--ink); }
 /* no connection: a red-tinted tag at the top of the page, above the frame, while it lasts, tinted and lettered as the
    offline note is (--net-tint and --net-line, stronger in the dark theme) */
-.net-chip { flex: none; display: inline-flex; align-items: center; gap: 6px; height: 24px; padding: 0 10px; border-radius: 6px; border: 1px solid color-mix(in srgb, var(--danger) var(--net-line), transparent); background: color-mix(in srgb, var(--danger) var(--net-tint), var(--bg)); font: 600 0.6875rem var(--mono); letter-spacing: 0.06em; color: var(--ink); white-space: nowrap; }
+.net-chip { flex: none; display: inline-flex; align-items: center; gap: 6px; height: 24px; padding: 0 10px; border-radius: 6px; border: 1px solid color-mix(in srgb, var(--danger) var(--net-line), transparent); background: color-mix(in srgb, var(--danger) var(--net-tint), var(--bg)); font: 600 0.8125rem var(--mono); letter-spacing: 0.06em; color: var(--ink); white-space: nowrap; }
 /* the note sits centred from the middle of the page, which would wrap it at half the width: it takes its text's width, up to the page's */
 .net-note { width: max-content; box-sizing: border-box; }
 /* the offline note tinted red (the danger colour), Back online green (the ok one), so each stands out from the page */
@@ -616,9 +616,9 @@ body:has(.stage.stage-short) .twk-panel { bottom: calc(44px + var(--safe-b)); ma
 /* the offline note reads larger on a desktop's full-size page */
 body:has(.stage:not(.stage-one)) .net-note { top: calc(64px + env(safe-area-inset-top, 0px)); gap: 14px; padding: 14px 12px 14px 20px; border-radius: 6px; font-size: 1rem; }
 .net-chip::before { content: ""; width: 7px; height: 7px; border-radius: 50%; background: var(--danger); }
-.q-log pre { margin: 8px 0 0; max-height: 160px; overflow: auto; padding: 8px; border-radius: 3px; background: var(--bg); border: 1px solid var(--line); font: 500 0.6875rem/1.5 var(--mono); color: var(--ink); white-space: pre-wrap; }
+.q-log pre { margin: 8px 0 0; max-height: 160px; overflow: auto; padding: 8px; border-radius: 3px; background: var(--bg); border: 1px solid var(--line); font: 500 0.8125rem/1.5 var(--mono); color: var(--ink); white-space: pre-wrap; }
 .q-diag { display: flex; flex-direction: column; gap: 6px; }
-.q-diag pre { margin: 0; max-height: 180px; overflow: auto; padding: 8px; border-radius: 3px; background: var(--bg); border: 1px solid var(--line); font: 500 0.6875rem/1.5 var(--mono); color: var(--ink); white-space: pre-wrap; word-break: break-word; }
+.q-diag pre { margin: 0; max-height: 180px; overflow: auto; padding: 8px; border-radius: 3px; background: var(--bg); border: 1px solid var(--line); font: 500 0.8125rem/1.5 var(--mono); color: var(--ink); white-space: pre-wrap; word-break: break-word; }
 @media (prefers-reduced-motion: reduce) { .twk-seg-thumb, .twk-toggle, .twk-toggle i { transition: none; } }
 </style>
 <div id="root"></div>
