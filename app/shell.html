@@ -225,7 +225,6 @@ body:has(.stage-one) .twk-panel { bottom: calc(51px + var(--safe-b)); max-height
   width: max-content; max-width: calc(100vw - 32px); padding: 8px; border-radius: 5px;
   background: var(--panel-glass); border: 1px solid var(--line); box-shadow: 0 12px 32px var(--shadow), var(--halo);
 }
-.pmenu:not(.pmenu-open) .dock-items { pointer-events: none; } /* a fading menu takes no taps */
 /* never past the top of the screen: what doesn't fit scrolls */
 .pmenu-open .dock-items { display: flex; max-height: calc(100dvh - 64px); overflow-y: auto; }
 .pmenu .dock-btn { height: auto; padding: 10px 14px; text-align: left; }
@@ -631,14 +630,19 @@ body:has(.stage:not(.stage-one)) .net-note { top: calc(64px + env(safe-area-inse
 .dlg-box button { transition: transform 0.1s ease-out; }
 .pmenu .dock-btn:active:not(:disabled), .dock-pop .dock-btn:active:not(:disabled), .twk-btn:active:not(:disabled),
 .frame-btn:active:not(:disabled), .import-game:active:not(:disabled), .vision-tile:active,
-.board-tile:active, .dlg-box button:active:not(:disabled) { transform: scale(0.97); background-color: var(--btn-hover); }
+.board-tile:active, .dlg-box button:active:not(:disabled) { transform: scale(0.97); }
+/* the tint is for the quiet buttons; a filled one (accent, danger) keeps its fill and darkens, as it brightens on hover */
+.pmenu .dock-btn:active:not(:disabled), .dock-pop .dock-btn:active:not(:disabled), .twk-btn.secondary:active:not(:disabled),
+.frame-btn:not(.frame-btn-primary):active:not(:disabled), .import-game:active:not(:disabled), .vision-tile:active,
+.board-tile:active, .dlg-box button:not(.twk-btn):not(.frame-btn-primary):active:not(:disabled) { background-color: var(--btn-hover); }
+.twk-btn:not(.secondary):active:not(:disabled), .frame-btn-primary:active:not(:disabled) { filter: brightness(0.9); }
 .piece-tile:active { transform: scale(0.97); } /* its own light-square background and selected tint stay */
 
-/* Menus grow from the button that opened them and shrink back to it, the same way both ways: display is part of the
-   transition, so the closing menu stays until it has faded. A new press reverses it from where it is. */
+/* Menus grow from the button that opened them; closing is instant (a closing fade would hold display, which also held the
+   unfolded dock buttons on screen for 100 ms when the phone layout first folds them into this menu). */
 .pmenu .dock-items {
   opacity: 0; transform: scale(0.95); transform-origin: bottom right;
-  transition: opacity 0.1s ease-in, transform 0.1s ease-in, display 0.1s allow-discrete;
+  transition: opacity 0.1s ease-in, transform 0.1s ease-in;
 }
 .pmenu-open .dock-items { opacity: 1; transform: none; transition-duration: 0.16s; transition-timing-function: ease-out; }
 @starting-style { .pmenu-open .dock-items { opacity: 0; transform: scale(0.95); } }
