@@ -587,7 +587,11 @@ function FitOrHide({ style, children }) {
 // a press or drag selects no text here (the board's pieces and coordinates, the eval bar and graph, the panels' hints),
 // nor drags a piece's image out
 const NO_SELECT = { userSelect: 'none', WebkitUserSelect: 'none', WebkitTouchCallout: 'none' };
-function Piece({ p, T, S }) {
+// slide: the board just stepped one move (GameVideo's goTo): a piece that changed square glides there from where it was
+function Piece({ p, T, S, slide }) {
+  const imgRef = React.useRef(null),
+    was = React.useRef(null),
+    glide = React.useRef(null);
   let [x, y] = sqXY(p.home),
     lift = 0;
   for (const mv of p.track) {
@@ -608,6 +612,12 @@ function Piece({ p, T, S }) {
     o = 1 - k;
     if (!CALM) sc = 1 - 0.35 * MOTION.enter(k);
   }
+  React.useLayoutEffect(() => {
+    const w = was.current;
+    was.current = o > 0 ? [x, y] : null;
+    if (slide && w && imgRef.current && (w[0] !== x || w[1] !== y))
+      glide.current = glideFrom(imgRef.current, (w[0] - x) * SQ, (w[1] - y) * SQ, glide.current);
+  });
   if (o <= 0) return null;
   const type = p.promo && T >= S.tp[p.promo.ply] + S.md[p.promo.ply] ? p.promo.type : p.type;
   return (
@@ -624,9 +634,37 @@ function Piece({ p, T, S }) {
         filter: `drop-shadow(0 ${2 + lift * 10}px ${2 + lift * 8}px rgba(0,0,0,${0.25 + lift * 0.2}))`,
       }}
     >
-      <img src={img(p.color, type)} alt="" style={{ width: SQ, height: SQ, display: 'block' }} />
+      <img ref={imgRef} src={img(p.color, type)} alt="" style={{ width: SQ, height: SQ, display: 'block' }} />
     </div>
   );
+}
+
+// A move's glide on a still board (a step, the free board, the computer's reply): a critically damped spring (damping 1,
+// response 0.25 s), as a CSS linear() easing where the browser has one. It runs GLIDE_S, to within 1% of the square
+const GLIDE_W = (2 * Math.PI) / 0.25,
+  GLIDE_S = 7 / GLIDE_W;
+const springAt = (k) => (1 - (1 + GLIDE_W * GLIDE_S * k) * Math.exp(-GLIDE_W * GLIDE_S * k)) / (1 - 8 * Math.exp(-7));
+const GLIDE_EASE =
+  window.CSS && CSS.supports && CSS.supports('transition-timing-function', 'linear(0, 1)')
+    ? `linear(${Array.from({ length: 25 }, (_, i) => +springAt(i / 24).toFixed(4)).join(', ')})`
+    : 'cubic-bezier(0.2, 0.9, 0.3, 1)';
+// Glide el (a piece's image) from dx, dy board pixels off its place to it. prev: the glide this returned last time for the
+// same piece, still running when a new move interrupts it: the new one starts where the piece is drawn, not from its square.
+// Returns the glide's state
+function glideFrom(el, dx, dy, prev) {
+  const now = performance.now();
+  if (prev && prev.anim.playState === 'running') {
+    const r = 1 - springAt(Math.min(1, (now - prev.t0) / (GLIDE_S * 1000)));
+    dx += prev.dx * r;
+    dy += prev.dy * r;
+    prev.anim.cancel();
+  }
+  if (!el.animate) return null;
+  const anim = el.animate([{ transform: `translate(${dx}px, ${dy}px)` }, { transform: 'none' }], {
+    duration: GLIDE_S * 1000,
+    easing: GLIDE_EASE,
+  });
+  return { dx, dy, t0: now, anim };
 }
 
 // thin: a lesser engine line's arrow
@@ -733,10 +771,11 @@ function boardSquares() {
 
 // lines: the engine lines' arrows on the viewer's own line (lineArrows)
 // sel: the square of the piece picked to move (useBoardInput)
-function Board({ M, T, S, a, arrows, pieces, queen, vline, hide, lines, sel, idle }) {
+// slide: a one-move step: the pieces glide (Piece); glide: a line's steps glide (LineBoard)
+function Board({ M, T, S, a, arrows, pieces, queen, vline, hide, lines, sel, idle, slide, glide }) {
   const c = lastPly(T, S);
   const sq = boardSquares();
-  if (vline) return <LineBoard a={a} sq={sq} v={vline} hide={hide} arrows={lines} sel={sel} />;
+  if (vline) return <LineBoard a={a} sq={sq} v={vline} hide={hide} arrows={lines} sel={sel} glide={glide} />;
   const over = [];
   let badge = null,
     best = null;
@@ -848,7 +887,7 @@ function Board({ M, T, S, a, arrows, pieces, queen, vline, hide, lines, sel, idl
       {over}
       {selSquare(sel)}
       {pieces.map((p) => (
-        <Piece key={p.id} p={p} T={T} S={S} />
+        <Piece key={p.id} p={p} T={T} S={S} slide={slide} />
       ))}
       <svg width={BW} height={BW} style={{ position: 'absolute', left: 0, top: 0, zIndex: 6, pointerEvents: 'none' }}>
         {best}
@@ -1251,11 +1290,13 @@ const shownLineNote = (M, vline) => (
   </span>
 );
 // arrows: the engine lines' first moves from the position shown ([{ uci, k }], lineArrows), line 1 the strongest
-function LineBoard({ a, sq, v, hide, arrows, sel }) {
+// glide: a step of one move along the line glides its pieces (useLineGlide)
+function LineBoard({ a, sq, v, hide, arrows, sel, glide }) {
   // the ring around the board says whose line it is; its last move gets the same tint as the game's
   const step = v.upto >= 0 ? v.moves[v.upto] : null,
     accent = v.src === 'queen' ? BOARD.queen : v.src === 'you' ? BOARD.last : BOARD.best;
   const board = step ? step.board : v.base.b;
+  const imgs = useLineGlide(board, v.upto, glide, hide);
   const over = !step
     ? []
     : [step.uci.slice(0, 2), step.uci.slice(2, 4)].map((s, j) => {
@@ -1298,6 +1339,10 @@ function LineBoard({ a, sq, v, hide, arrows, sel }) {
         }}
       >
         <img
+          ref={(el) => {
+            if (el) imgs.current[i] = el;
+            else delete imgs.current[i];
+          }}
           src={img(p === p.toUpperCase() ? 'w' : 'b', p.toLowerCase())}
           alt=""
           style={{ width: SQ, height: SQ, display: 'block' }}
@@ -1347,6 +1392,39 @@ function LineBoard({ a, sq, v, hide, arrows, sel }) {
       )}
     </div>
   );
+}
+
+// A line board's move glide: when the board steps one move along the line (upto ±1, a takeback of one, the computer's
+// reply), the pieces that moved (ChessCore.movedPieces) glide from their old squares. Not a jump, a preview or a piece
+// just dropped by a drag (hide: the square of the piece being dragged), which is already where the pointer left it.
+// Returns the ref of the square → piece image map LineBoard fills
+function useLineGlide(board, upto, glide, hide) {
+  const imgs = React.useRef({}),
+    was = React.useRef(null),
+    glides = React.useRef({}),
+    drag = React.useRef(null);
+  if (hide != null) drag.current = { sq: hide, live: true };
+  else if (drag.current && drag.current.live) drag.current = { sq: drag.current.sq, at: performance.now() };
+  React.useLayoutEffect(() => {
+    const w = was.current;
+    was.current = { board, upto, glide };
+    if (!w || w.board === board) return;
+    const moved =
+      glide && w.glide && Math.abs(upto - w.upto) === 1 ? window.ChessCore.movedPieces(w.board, board) : null;
+    const old = glides.current;
+    glides.current = {};
+    if (!moved) return;
+    const d = drag.current,
+      dropped = (sq) => d && d.sq === sq && (d.live || performance.now() - d.at < 400);
+    moved.forEach(({ from, to }) => {
+      const el = imgs.current[to];
+      if (!el || dropped(from)) return;
+      const [x0, y0] = idxXY(from),
+        [x1, y1] = idxXY(to);
+      glides.current[to] = glideFrom(el, (x0 - x1) * SQ, (y0 - y1) * SQ, old[from]);
+    });
+  });
+  return imgs;
 }
 
 // A dragged piece ('N', 'p'…) at board pixels x, y of el (the board's touch layer), drawn over everything on the page: the
@@ -3692,11 +3770,27 @@ function GameVideo({ M, tw, d, probe, queen, nav, scheme, sf, orient }) {
     }
   }, [lineKey, M.start.fen, M.start.pos]);
   const settled = (i) => window.ChessCore.settledAt(S, CUES, i);
+  // the settled time a step of one move went to, until the board has drawn it: its pieces glide there (Piece's slide)
+  const stepTo = React.useRef(null);
   const goTo = (i) => {
+    const j = Math.max(-1, Math.min(S.N - 1, i));
+    stepTo.current = Math.abs(j - cNow) === 1 && !vline && !pv ? settled(j) : null;
     setVline(null);
     tl.setPlaying(false);
-    tl.setTime(settled(Math.max(-1, Math.min(S.N - 1, i))));
+    tl.setTime(settled(j));
   };
+  const slide = stepTo.current != null && stepTo.current === T && !video && !CALM;
+  React.useLayoutEffect(() => {
+    if (slide) stepTo.current = null;
+  });
+  // a paused playhead left inside a move (the seek bar let go, a seek by keys, a pause) glides out of it (Stage's settle)
+  React.useEffect(() => {
+    if (!tl.snap) return;
+    tl.snap.current = tw.exporting ? null : (t, dir) => window.ChessCore.settleTo(S, CUES, t, dir);
+    return () => {
+      tl.snap.current = null;
+    };
+  }, [tl.snap, S, CUES, tw.exporting]);
   // open on the starting position, paused, with every panel in place
   // (before the first paint, so the title card never flashes); GameApp keys this view on the game, so another game
   // loaded opens the same way, not at the old game's move with its line still shown
@@ -3767,6 +3861,8 @@ function GameVideo({ M, tw, d, probe, queen, nav, scheme, sf, orient }) {
               pieces={pieces}
               queen={queen}
               vline={pv || vline}
+              slide={slide}
+              glide={!pv && !video && !CALM}
               hide={input.drag && input.drag.moved ? input.drag.from : null}
               lines={
                 tw.bestArrows

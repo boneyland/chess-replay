@@ -510,6 +510,7 @@ for (const name of BROWSERS)
                 .sort()
                 .join(';'),
             );
+          await settled(page); // a step's pieces glide in: read where they stop
           const before = await sig();
           await chips.nth(1).hover();
           await page.waitForFunction(

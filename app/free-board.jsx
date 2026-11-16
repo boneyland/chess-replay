@@ -704,6 +704,7 @@ function GameStatus({ board, onChange, down, why, retry, tip, onMove }) {
 }
 
 function FreeBoard({ board, onChange, tw, setTweak, onLichess, sf, nav, orient, book }) {
+  const reduced = useReducedMotion();
   const frame = useFrame();
   // a Chess960 board (its start, whatever the rights are now) has no opening names or explorer content (standard chess
   // only); its Commentary box stays, with the tablebase where it applies
@@ -957,6 +958,7 @@ function FreeBoard({ board, onChange, tw, setTweak, onLichess, sf, nav, orient, 
               : { upto, moves: steps, base: board.start.pos, src: 'you' }
           }
           hide={input.drag && input.drag.moved ? input.drag.from : null}
+          glide={!(pv && pv.length) && !reduced}
           arrows={
             hintMove
               ? [{ uci: had.best, k: 1 }]
