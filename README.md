@@ -23,7 +23,7 @@ A browser app for replaying and playing chess games, at https://chess-replay.onr
 - **Move sounds**: a synthesized Wood set and five of Lichess's sets
 - **Offline**: a service worker keeps the page, the engine and everything they load
 
-https://github.com/user-attachments/assets/f10da682-fd69-4c6c-adec-42d95d294677
+https://github.com/user-attachments/assets/e8a73bd9-de31-40dc-b177-adaddf9142de
 
 ## Lichess data
 
