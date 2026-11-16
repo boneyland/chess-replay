@@ -262,7 +262,7 @@ test("a cloud answer is cached by position and lines; errors aren't; a 429 backs
   assert.ok(f.calls[0].startsWith('https://lichess.org/api/cloud-eval?fen='));
 });
 
-// the explorer: the shape follows Lichess's documentation (no token here to fetch a live answer, 2026-10-28)
+// the explorer: the shape follows Lichess's documentation (2026-10-28; a live answer checked against parseExplorer 2026-11-17)
 const EXPL = fixture('explorer-e4.json');
 const EXFEN = 'rnbqkbnr/pppppppp/8/8/4P3/8/PPPP1PPP/RNBQKBNR b KQkq - 0 1';
 
@@ -305,9 +305,31 @@ test('explorerUrl picks the database and sends the filters for Lichess games onl
   assert.equal(LC.explorerKey(EXFEN, {}), LC.explorerKey(EXFEN.replace(' 0 1', ' 5 9'), {}));
 });
 
-test('explorer sends the token only when given, answers 401 as auth without caching it, and caches answers', async () => {
+test('explorer asks without the token, answers a 401 as auth without caching it, and caches answers', async () => {
   const seen = [];
-  const f = fakeFetch([{ status: 401, body: '' }, EXPL]);
+  const f = fakeFetch([EXPL]);
+  const fn = async (url, opts) => {
+    seen.push(opts.headers.Authorization || null);
+    return f(url, opts);
+  };
+  const c = LC.create({ fetchFn: fn });
+  const e = await c.explorer(EXFEN, {}, { token: 'tok' });
+  assert.equal(e.total, 2500);
+  assert.deepEqual(seen, [null], 'the token stays home while Lichess answers without it');
+  assert.equal((await c.explorer(EXFEN, {}, { token: 'other' })).total, 2500);
+  assert.equal(f.calls.length, 1);
+  assert.equal(c.explorerCached(EXFEN, {}).total, 2500);
+});
+
+test('explorer sends the token only after a 401, and a 401 without one is auth, not cached', async () => {
+  const seen = [];
+  const f = fakeFetch([
+    { status: 401, body: '' },
+    { status: 401, body: '' },
+    EXPL,
+    { status: 401, body: '' },
+    { status: 401, body: '' },
+  ]);
   const fn = async (url, opts) => {
     seen.push(opts.headers.Authorization || null);
     return f(url, opts);
@@ -315,12 +337,12 @@ test('explorer sends the token only when given, answers 401 as auth without cach
   const c = LC.create({ fetchFn: fn });
   assert.deepEqual(await c.explorer(EXFEN, {}), { auth: true });
   assert.equal(c.explorerCached(EXFEN, {}), undefined);
-  const e = await c.explorer(EXFEN, {}, { token: 'tok' });
-  assert.equal(e.total, 2500);
-  assert.deepEqual(seen, [null, 'Bearer tok']);
-  assert.equal((await c.explorer(EXFEN, {}, { token: 'other' })).total, 2500);
-  assert.equal(f.calls.length, 2);
+  assert.equal((await c.explorer(EXFEN, {}, { token: 'tok' })).total, 2500);
+  assert.deepEqual(seen, [null, null, 'Bearer tok']);
   assert.equal(c.explorerCached(EXFEN, {}).total, 2500);
+  // a token Lichess refuses: auth again
+  assert.deepEqual(await c.explorer(EXFEN, { db: 'masters' }, { token: 'bad' }), { auth: true });
+  assert.deepEqual(seen.slice(3), [null, 'Bearer bad']);
 });
 
 test('explorer backs off after a 429 and gives null for an error', async () => {

@@ -326,12 +326,18 @@
       // the cached answer (null: not in the cloud), or undefined when it hasn't been asked
       cloudCached: (fen, lines = 1) => cache.get('cloud ' + cloudKey(fen, lines)),
       // fen's explorer answer (see parseExplorer), { auth: true } when Lichess wants a token (none, or one it refuses; not
-      // cached), or null: offline, an error, a 429 back-off, or aborted. Answers are cached whatever token asked
-      explorer: (fen, o = {}, { signal, token } = {}) =>
-        get('explorer', explorerKey(fen, o), explorerUrl(fen, o), parseExplorer, signal, null, {
-          headers: token ? { Authorization: 'Bearer ' + token } : {},
-          special: { 401: { auth: true } },
-        }),
+      // cached), or null: offline, an error, a 429 back-off, or aborted. Answers are cached whatever token asked.
+      // Asked without the token first: since 2026-11 the explorer answers anyone again, and its CORS preflight no longer
+      // allows an Authorization header, so a browser request with the token fails; the token goes only after a 401
+      explorer: async (fen, o = {}, { signal, token } = {}) => {
+        const ask = (headers) =>
+          get('explorer', explorerKey(fen, o), explorerUrl(fen, o), parseExplorer, signal, null, {
+            headers,
+            special: { 401: { auth: true } },
+          });
+        const x = await ask({});
+        return x && x.auth && token ? ask({ Authorization: 'Bearer ' + token }) : x;
+      },
       explorerCached: (fen, o = {}) => cache.get(explorerKey(fen, o)),
       backedOff: (name) => now() < gate(name).until,
     };
