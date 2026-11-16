@@ -593,20 +593,20 @@ function Piece({ p, T, S }) {
   for (const mv of p.track) {
     const t0 = S.tp[mv.ply];
     if (T < t0) break;
-    const k = cl01((T - t0) / S.md[mv.ply]);
+    const k = cl01((T - t0) / (CALM ? Math.min(S.md[mv.ply], CALM_SLIDE) : S.md[mv.ply]));
     const a = sqXY(mv.from),
       b = sqXY(mv.to),
       e = MOTION.move(k);
     x = lerp(a[0], b[0], e);
     y = lerp(a[1], b[1], e);
-    lift = Math.sin(Math.PI * k);
+    lift = CALM ? 0 : Math.sin(Math.PI * k);
   }
   let o = 1,
     sc = 1;
   if (p.captured >= 0) {
     const k = cl01((T - S.tp[p.captured] - S.md[p.captured] * 0.6) / 0.2);
     o = 1 - k;
-    sc = 1 - 0.35 * MOTION.enter(k);
+    if (!CALM) sc = 1 - 0.35 * MOTION.enter(k);
   }
   if (o <= 0) return null;
   const type = p.promo && T >= S.tp[p.promo.ply] + S.md[p.promo.ply] ? p.promo.type : p.type;
@@ -803,8 +803,8 @@ function Board({ M, T, S, a, arrows, pieces, queen, vline, hide, lines, sel, idl
             font: `700 20px ${MONO}`,
             zIndex: 8,
             boxShadow: '0 4px 14px rgba(0,0,0,0.45)',
-            transform: `scale(${MOTION.pop(kb)})`,
-            opacity: kb > 0 ? 1 : 0,
+            transform: CALM ? 'none' : `scale(${MOTION.pop(kb)})`,
+            opacity: CALM ? kb : kb > 0 ? 1 : 0,
           }}
         >
           {P.checkmate ? '#' : P.mark}
@@ -822,7 +822,7 @@ function Board({ M, T, S, a, arrows, pieces, queen, vline, hide, lines, sel, idl
             to={P.best.uci.slice(2, 4)}
             color={BOARD.best}
             a={al}
-            grow={MOTION.enter(cl01((T - tA) / 0.45))}
+            grow={CALM ? 1 : MOTION.enter(cl01((T - tA) / 0.45))}
           />
         );
     }
@@ -2093,7 +2093,7 @@ function MoveList({ M, T, S, a, paused, onPick, deadAt, end, startAt }) {
   // a flowing list grows up to maxRows lines, then scrolls; a placed one takes all the box's height under its title
   // (LayoutCore's moves.chrome: the panel's padding, title row and borders, tight where the panel is)
   const listH = L.moves.flow ? null : Math.max(ROW, L.moves.h - L.moves.chrome);
-  const k = c >= 0 ? MOTION.move(cl01((T - S.tp[c]) / 0.35)) : 1,
+  const k = c >= 0 && !CALM ? MOTION.move(cl01((T - S.tp[c]) / 0.35)) : 1,
     listRef = React.useRef(null);
   // a new move scrolls the list by whole lines so the move's line keeps one line under it (none in a box of one line,
   // where the move's own line must show), sliding there as the move plays, and leaves it
@@ -2896,7 +2896,7 @@ function TitleCard({ M, T, CUES }) {
   if (out <= 0) return null;
   const st = (d) => {
     const k = MOTION.enter(cl01((T - d) / 0.8));
-    return { opacity: k, transform: `translateY(${(1 - k) * 22}px)` };
+    return { opacity: k, transform: CALM ? 'none' : `translateY(${(1 - k) * 22}px)` };
   };
   const len = M.white.short.length + M.black.short.length;
   // side by side in two columns; one name per line in one
@@ -2985,7 +2985,7 @@ function EndCard({ M, T, CUES }) {
   if (k <= 0) return null;
   const st = (d) => {
     const e = MOTION.enter(cl01((T - CUES.Outro - d) / 0.7));
-    return { opacity: e, transform: `translateY(${(1 - e) * 20}px)` };
+    return { opacity: e, transform: CALM ? 'none' : `translateY(${(1 - e) * 20}px)` };
   };
   const res = M.result.replace('1/2-1/2', '½–½').replace('-', '–');
   const verdict =
@@ -3503,6 +3503,26 @@ function useReplayNav({ nav, M, S, c, line, input, goTo, fen, keys = true }) {
   return step;
 }
 
+// Reduced motion (the system setting, followed live): pieces slide briefly and don't lift, a captured piece fades
+// without shrinking, the mark badge and the best-move arrow appear without growing, the title and end cards fade in
+// without rising, the Moves list jumps to a new move, and there's no camera push or blunder glow. Never in an export:
+// the file is the same whoever makes it. GameVideo sets CALM before its children render, as setLayout does.
+let CALM = false;
+const CALM_MQ = window.matchMedia ? window.matchMedia('(prefers-reduced-motion: reduce)') : null;
+function useReducedMotion() {
+  const [on, setOn] = React.useState(() => !!(CALM_MQ && CALM_MQ.matches));
+  React.useEffect(() => {
+    if (!CALM_MQ || !CALM_MQ.addEventListener) return;
+    const f = () => setOn(CALM_MQ.matches);
+    f();
+    CALM_MQ.addEventListener('change', f);
+    return () => CALM_MQ.removeEventListener('change', f);
+  }, []);
+  return on;
+}
+// a piece's slide under reduced motion, in seconds at most
+const CALM_SLIDE = 0.15;
+
 function GameVideo({ M, tw, d, probe, queen, nav, scheme, sf, orient }) {
   const { T: T0, CUES, authoredTotal, playing: live } = useComposition();
   // the export steps through a paused player; its frames look like playback (no paused-only hints or buttons)
@@ -3510,6 +3530,8 @@ function GameVideo({ M, tw, d, probe, queen, nav, scheme, sf, orient }) {
   const frame = useFrame(),
     video = frame.video;
   setLayout(frame); // before the children render, which read the layout
+  const reduced = useReducedMotion();
+  CALM = reduced && !tw.exporting;
   // a paused one-column page is as tall as its panels; the stage scrolls it
   const flowRef = React.useRef(null);
   useFlowHeight(frame, flowRef);
@@ -3681,7 +3703,7 @@ function GameVideo({ M, tw, d, probe, queen, nav, scheme, sf, orient }) {
   // only while playing or exporting: stepping, exploring and analysing show a still page
   const enter = (i) => (video ? MOTION.enter(cl01((T - (CUES.Opening - 0.5 + i * 0.12)) / 0.7)) : 1);
   let f = 0;
-  if (video && tw.cameraPush)
+  if (video && tw.cameraPush && !CALM)
     S.blunders.forEach((i) => {
       const t0 = S.tp[i] - 0.3,
         t1 = Math.min(S.tp[i] + S.md[i] + 0.8, i + 1 < S.N ? S.tp[i + 1] - 0.5 : CUES.Outro);
@@ -3690,7 +3712,7 @@ function GameVideo({ M, tw, d, probe, queen, nav, scheme, sf, orient }) {
   const c = lastPly(T, S);
   if (probe) probe.current = { S, CUES, c };
   const flash =
-    video && tw.blunderGlow !== false && c >= 0 && (M.plies[c].cls === 'blunder' || M.plies[c].checkmate)
+    video && tw.blunderGlow !== false && !CALM && c >= 0 && (M.plies[c].cls === 'blunder' || M.plies[c].checkmate)
       ? Math.max(0, 1 - Math.abs(T - S.tp[c] - S.md[c] - 0.25) / 0.6)
       : 0;
   const cx = L.board.x + L.board.size / 2,
