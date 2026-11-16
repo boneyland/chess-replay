@@ -1296,7 +1296,7 @@ function LineBoard({ a, sq, v, hide, arrows, sel, glide }) {
   const step = v.upto >= 0 ? v.moves[v.upto] : null,
     accent = v.src === 'queen' ? BOARD.queen : v.src === 'you' ? BOARD.last : BOARD.best;
   const board = step ? step.board : v.base.b;
-  const imgs = useLineGlide(board, v.upto, glide, hide);
+  const imgs = useLineGlide(board, v.upto, glide, hide, v.base);
   const over = !step
     ? []
     : [step.uci.slice(0, 2), step.uci.slice(2, 4)].map((s, j) => {
@@ -1395,10 +1395,11 @@ function LineBoard({ a, sq, v, hide, arrows, sel, glide }) {
 }
 
 // A line board's move glide: when the board steps one move along the line (upto ±1, a takeback of one, the computer's
-// reply), the pieces that moved (ChessCore.movedPieces) glide from their old squares. Not a jump, a preview or a piece
+// reply), the pieces that moved (ChessCore.movedPieces) glide from their old squares. Not a jump, another line or game
+// (base: the line's starting position), a preview or a piece
 // just dropped by a drag (hide: the square of the piece being dragged), which is already where the pointer left it.
 // Returns the ref of the square → piece image map LineBoard fills
-function useLineGlide(board, upto, glide, hide) {
+function useLineGlide(board, upto, glide, hide, base) {
   const imgs = React.useRef({}),
     was = React.useRef(null),
     glides = React.useRef({}),
@@ -1407,10 +1408,12 @@ function useLineGlide(board, upto, glide, hide) {
   else if (drag.current && drag.current.live) drag.current = { sq: drag.current.sq, at: performance.now() };
   React.useLayoutEffect(() => {
     const w = was.current;
-    was.current = { board, upto, glide };
+    was.current = { board, upto, glide, base };
     if (!w || w.board === board) return;
     const moved =
-      glide && w.glide && Math.abs(upto - w.upto) === 1 ? window.ChessCore.movedPieces(w.board, board) : null;
+      glide && w.glide && w.base === base && Math.abs(upto - w.upto) === 1
+        ? window.ChessCore.movedPieces(w.board, board)
+        : null;
     const old = glides.current;
     glides.current = {};
     if (!moved) return;
