@@ -75,6 +75,16 @@ addEventListener('error', (e) => __errs.push('error: ' + e.message + ' ' + (e.fi
 addEventListener('unhandledrejection', (e) => __errs.push('unhandled rejection: ' + (e.reason && (e.reason.stack || e.reason.message) || e.reason)));
 addEventListener('securitypolicyviolation', (e) => __errs.push('CSP: ' + e.violatedDirective + ' ' + e.blockedURI));
 const ce = console.error; console.error = (...a) => { __errs.push(a.map(String).join(' ')); ce.apply(console, a); };
+// every AudioContext the page uses, for the sound test: hooked on its methods (the player decodes its sounds as soon
+// as it makes one), as replacing the constructor stopped the page loading (Safari 26.5 in the Simulator)
+window.__audio = [];
+try {
+  const P = (window.BaseAudioContext || window.AudioContext).prototype;
+  for (const m of ['decodeAudioData', 'createBuffer', 'createGain']) {
+    const f = P[m];
+    P[m] = function (...a) { if (!(window.OfflineAudioContext && this instanceof OfflineAudioContext) && !__audio.includes(this)) __audio.push(this); return f.apply(this, a); };
+  }
+} catch (e) { __errs.push('audio hook: ' + e.message); }
 `,
   );
   const html = fs.readFileSync(path.join(SITE, 'chess-game-video.html'), 'utf8');
@@ -283,6 +293,25 @@ const ce = console.error; console.error = (...a) => { __errs.push(a.map(String).
       Object.values(seen).some((l) => l.some((e) => /^pointerdown/.test(e))),
       'no tap gave a pointerdown',
     );
+  });
+
+  // Safari lets a page start audio only in a user action, and a touch's pointerdown isn't one (its lift is): the move
+  // sounds once unlocked only there, and never started on an iPhone. Nothing here hears the sound: what's checked is
+  // that one tap leaves the audio running
+  await t.test('one tap starts the audio', { timeout: 60000 }, async () => {
+    await browser.url(URL_);
+    await loaded();
+    const b = await boardBox(page),
+      p = square(b, 'e4');
+    assert.deepEqual(await js(() => window.__audio.map((c) => c.state)), [], 'audio made before any tap');
+    await tap(p.x, p.y);
+    const state = () => js(() => window.__audio.map((c) => c.state).join(',') || 'none');
+    await browser
+      .waitUntil(async () => (await state()) === 'running', { timeout: 5000, interval: 250 })
+      .catch(() => {});
+    t.diagnostic(`after one ${ptr} tap: audio ${await state()}`);
+    if (ptr !== 'touch') t.diagnostic('taps arrive as mouse here, whose pointerdown counts: not a touch check');
+    assert.equal(await state(), 'running');
   });
 
   await t.test('the service worker takes over the page', { timeout: 120000 }, async (st) => {

@@ -227,7 +227,10 @@
           ctx = new AC();
           prepare(wanted);
         }
-        if (ctx.state === 'suspended' && !waking) {
+        // 'interrupted': Safari's state after a call or another app took the audio. Asked again on every gesture, not
+        // only while none is settling: Safari refuses a resume() outside one (a touch's pointerdown isn't), and one
+        // refused that way may never settle
+        if (ctx.state === 'suspended' || ctx.state === 'interrupted') {
           const w = (waking = Promise.resolve(ctx.resume()).catch(() => {}));
           w.then(() => {
             if (waking === w) waking = null;
@@ -235,8 +238,12 @@
         }
       } catch (e) {}
     }
+    // the events a browser lets start audio: a touch counts when the finger lifts (pointerup, touchend, click), not
+    // when it lands, and iPhone Safari holds to that; a mouse button and a key count when pressed
     if (typeof window.addEventListener === 'function')
-      ['pointerdown', 'keydown'].forEach((ev) => window.addEventListener(ev, unlock, true));
+      ['pointerdown', 'pointerup', 'touchend', 'click', 'keydown'].forEach((ev) =>
+        window.addEventListener(ev, unlock, true),
+      );
     function start(set, kind, delay, gain) {
       const buf = load(set, kind);
       const go = (b) => {
