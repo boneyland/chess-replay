@@ -67,7 +67,9 @@ button:focus-visible, select:focus-visible, input:focus-visible, [role="slider"]
   flex: none; width: 34px; height: 34px; display: grid; place-items: center; padding: 0; cursor: pointer;
   border-radius: 3px; border: 1px solid var(--btn-line); background: var(--btn); color: var(--ink);
 }
-.pbtn:hover:not(:disabled), .dock-btn:hover:not(:disabled) { background: var(--btn-hover); border-color: var(--line-strong); }
+/* hovers only where there's a mouse: a touch screen keeps :hover on the last thing tapped, so a tapped Menu item, tab
+   or move stayed tinted (found reading the CSS, 2026-11-17). The Transport bar has its own data-mouse gate below. */
+@media (hover: hover) { .pbtn:hover:not(:disabled), .dock-btn:hover:not(:disabled) { background: var(--btn-hover); border-color: var(--line-strong); } }
 .pbtn:disabled { opacity: 0.35; cursor: default; }
 /* the transport bar's own buttons are bare icons: no border or fill (a hover still tints them); the Menu popups' items
    keep theirs. The border stays, transparent, so the buttons keep their size */
@@ -125,7 +127,7 @@ body:has(.stage-one) .twk-panel { bottom: calc(51px + var(--safe-b)); max-height
 /* the landscape bar below 1200 px drops the times, so the seek bar keeps some width */
 @media (max-width: 1199px) { .stage:not(.stage-one) .ptime { display: none; } }
 .dock-primary { border-color: transparent; background: var(--accent); color: var(--accent-ink); }
-.dock-primary:hover:not(:disabled) { background: var(--accent); border-color: transparent; filter: brightness(1.15); }
+@media (hover: hover) { .dock-primary:hover:not(:disabled) { background: var(--accent); border-color: transparent; filter: brightness(1.15); } }
 .dock-items { display: contents; }
 .dock-group { display: contents; }
 .dock-menu-status { display: none; }
@@ -412,7 +414,7 @@ body:has(.stage-one) .twk-panel { bottom: calc(51px + var(--safe-b)); max-height
 .twk-hd { display: flex; align-items: center; justify-content: space-between; padding: 10px 8px 8px 14px; }
 .twk-hd b { font: 600 0.8125rem var(--mono); letter-spacing: 0.12em; text-transform: uppercase; color: var(--dim); }
 .twk-x { width: 26px; height: 26px; border: 0; border-radius: 3px; background: transparent; color: var(--dim); cursor: pointer; }
-.twk-x:hover { background: var(--raise); color: var(--ink); }
+@media (hover: hover) { .twk-x:hover { background: var(--raise); color: var(--ink); } }
 .twk-body { display: flex; flex-direction: column; padding: 2px 14px 14px; overflow-y: auto; min-height: 0; scrollbar-width: thin; }
 .twk-flow { display: flex; flex-direction: column; gap: 10px; }
 /* a scrolling flex column squeezes its children before it scrolls: a wrapped two-line button lost its second line */
@@ -426,7 +428,7 @@ body:has(.stage-one) .twk-panel { bottom: calc(51px + var(--safe-b)); max-height
 .twk-tabbed { width: min(380px, calc(100% - 32px)); height: min(720px, calc(100% - 72px)); }
 .twk-tabs { flex: none; display: grid; grid-template-columns: repeat(var(--twk-tab-cols), 1fr); gap: 2px; margin: 0 14px 12px; padding: 2px; border-radius: 4px; background: var(--raise); }
 .twk-tabs button { min-height: 28px; padding: 4px 6px; border: 0; border-radius: 3px; background: transparent; color: var(--dim); font: 600 0.875rem var(--sans); cursor: pointer; }
-.twk-tabs button:hover { color: var(--ink); }
+@media (hover: hover) { .twk-tabs button:hover { color: var(--ink); } }
 .twk-tabs button[aria-selected="true"] { color: var(--ink); background: color-mix(in srgb, var(--accent) 22%, transparent); box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--accent) 50%, transparent); }
 .twk-tabs button:focus-visible { outline: 2px solid var(--accent); outline-offset: 1px; }
 /* a phone on its side (or a short or wide window): Settings is wide and reaches down to the transport bar, with its title, tabs
@@ -481,13 +483,13 @@ body:has(.stage.stage-short) .twk-panel { bottom: calc(44px + var(--safe-b)); ma
 .piece-picker { display: grid; grid-template-columns: repeat(auto-fill, minmax(42px, 1fr)); gap: 4px; }
 .piece-tile { aspect-ratio: 1; padding: 3px; border: 1px solid var(--line); border-radius: 4px; background: #f0d9b5; cursor: pointer; }
 .piece-tile img { display: block; width: 100%; height: 100%; }
-.piece-tile:hover { border-color: var(--accent); }
+@media (hover: hover) { .piece-tile:hover { border-color: var(--accent); } }
 .piece-tile[aria-pressed="true"] { border-color: var(--accent); box-shadow: inset 0 0 0 2px var(--accent); background: color-mix(in srgb, var(--accent) 30%, #f0d9b5); }
 .board-picker { display: grid; grid-template-columns: repeat(auto-fill, minmax(64px, 1fr)); gap: 6px; }
 .board-tile { aspect-ratio: 2; padding: 0; border: 1px solid var(--line); border-radius: 4px; overflow: hidden; background: none; cursor: pointer; }
 .board-tile img, .board-tile i { display: block; width: 100%; height: 100%; }
 .board-tile i { background-size: 400% auto; background-position: 0 0; }
-.board-tile:hover { border-color: var(--accent); }
+@media (hover: hover) { .board-tile:hover { border-color: var(--accent); } }
 .board-tile[aria-pressed="true"] { border-color: var(--accent); box-shadow: 0 0 0 2px var(--accent); }
 .twk-field { width: 100%; height: 28px; padding: 0 8px; border: 1px solid var(--line); border-radius: 4px; background: var(--raise); color: var(--ink); font: inherit; font-size: max(0.875rem, 1em); }
 .twk-slider { width: 100%; margin: 4px 0; accent-color: var(--accent); }
@@ -506,15 +508,16 @@ body:has(.stage.stage-short) .twk-panel { bottom: calc(44px + var(--safe-b)); ma
 .twk-btn:disabled { opacity: 0.6; cursor: progress; }
 /* nothing to reset yet, not something under way */
 .twk-board-colours .twk-btn:disabled { cursor: default; }
-.expl-row:hover, .expl-row:focus-visible { background: color-mix(in srgb, var(--accent) 12%, transparent); }
-.mv.expl-row:hover { outline: none; }
+.expl-row:focus-visible { background: color-mix(in srgb, var(--accent) 12%, transparent); }
+@media (hover: hover) { .expl-row:hover { background: color-mix(in srgb, var(--accent) 12%, transparent); } }
+@media (hover: hover) { .mv.expl-row:hover { outline: none; } }
 /* an analysis line under the mouse (lineRow in game-video-core.jsx): the shadow carries the tint past the moves without moving them */
 .line-row { border-radius: 4px; }
 .an-lines:not([data-playing]) .line-row[data-hover] { background: color-mix(in srgb, var(--accent) 9%, transparent); box-shadow: 0 0 0 4px color-mix(in srgb, var(--accent) 9%, transparent); }
-.mv:hover { outline: 1px solid color-mix(in srgb, var(--accent) 60%, transparent); }
+@media (hover: hover) { .mv:hover { outline: 1px solid color-mix(in srgb, var(--accent) 60%, transparent); } }
 .mv:focus-visible { outline: 2px solid var(--accent); outline-offset: 1px; }
 .dock-queen { border-color: color-mix(in srgb, var(--queen) 55%, transparent); color: var(--queen); }
-.dock-queen:hover:not(:disabled) { background: color-mix(in srgb, var(--queen) 18%, var(--btn)); border-color: var(--queen); }
+@media (hover: hover) { .dock-queen:hover:not(:disabled) { background: color-mix(in srgb, var(--queen) 18%, var(--btn)); border-color: var(--queen); } }
 /* every other control's hover (buttons, drop-downs, segmented rows, switches, sliders, links), only where there's a mouse
    so a tap doesn't leave one lit. Filled buttons brighten; outlined and bare ones take a tint of their own colour. The
    inline-styled ones (frame-btn, frame-select, tray-piece, expl-game: the board's panels) need !important over their style */
@@ -541,7 +544,8 @@ body:has(.stage.stage-short) .twk-panel { bottom: calc(44px + var(--safe-b)); ma
 .q-exp { padding: 1px 6px; border-radius: 2px; border: 1px solid color-mix(in srgb, var(--queen) 55%, transparent); color: var(--queen); font: 600 0.75rem var(--mono); letter-spacing: 0.1em; text-transform: uppercase; }
 .twk-note a, .dlg-note a, .info-link { color: var(--accent); }
 .twk-info { flex: none; width: 18px; height: 18px; margin-left: 6px; padding: 0; vertical-align: 0; border: 1px solid var(--dim); border-radius: 50%; background: var(--dim); color: var(--panel); font: italic 600 0.8125rem/16px Georgia, serif; cursor: help; }
-.twk-info:hover, .twk-info[aria-expanded="true"] { background: var(--ink); border-color: var(--ink); }
+.twk-info[aria-expanded="true"] { background: var(--ink); border-color: var(--ink); }
+@media (hover: hover) { .twk-info:hover { background: var(--ink); border-color: var(--ink); } }
 .twk-btn-row { display: flex; align-items: center; gap: 4px; }
 .twk-tip { position: fixed; z-index: 100; max-width: min(280px, calc(100vw - 16px)); padding: 7px 10px; border: 1px solid var(--line); border-radius: 4px; background: var(--panel); color: var(--ink); box-shadow: 0 8px 24px var(--shadow), var(--halo); font: 0.875rem/1.4 var(--sans); pointer-events: none; }
 .twk-btn-row > .twk-btn { flex: 1; min-width: 0; }
@@ -589,7 +593,8 @@ body:has(.stage.stage-short) .twk-panel { bottom: calc(44px + var(--safe-b)); ma
 .q-table th { text-align: left; padding: 4px 6px; font: 600 0.8125rem var(--mono); letter-spacing: 0.08em; text-transform: uppercase; color: var(--dim); border-bottom: 1px solid var(--line); }
 .q-table td { padding: 5px 6px; border-bottom: 1px solid var(--line); white-space: nowrap; }
 .q-table tbody tr { cursor: pointer; }
-.q-table tbody tr:hover, .q-table tr.q-sel { background: rgba(224, 96, 159, 0.1); }
+.q-table tr.q-sel { background: rgba(224, 96, 159, 0.1); }
+@media (hover: hover) { .q-table tbody tr:hover { background: rgba(224, 96, 159, 0.1); } }
 .q-table tr:focus-visible { outline: 2px solid var(--accent); outline-offset: -2px; }
 @media (prefers-reduced-motion: reduce) { .q-dot { animation: none; } }
 /* the Analysis title's computer button while the game analysis runs: a rainbow ring turning, under reduced motion too
@@ -624,8 +629,8 @@ body:has(.stage:not(.stage-one)) .net-note { top: calc(64px + env(safe-area-inse
 .q-diag pre { margin: 0; max-height: 180px; overflow: auto; padding: 8px; border-radius: 3px; background: var(--bg); border: 1px solid var(--line); font: 500 0.8125rem/1.5 var(--mono); color: var(--ink); white-space: pre-wrap; word-break: break-word; }
 @media (prefers-reduced-motion: reduce) { .twk-seg-thumb, .twk-toggle, .twk-toggle i { transition: none; } }
 
-/* Pressed: the control answers the moment a finger or button goes down, not when the action lands (:hover never fires on
-   a touch screen). The Transport bar's own buttons keep their data-press tint above; these are the boxed buttons. */
+/* Pressed: the control answers the moment a finger or button goes down, not when the action lands (a hover tint shows
+   only under a mouse, (hover: hover)). The Transport bar's own buttons keep their data-press tint above; these are the boxed buttons. */
 .pmenu .dock-btn, .dock-pop .dock-btn, .twk-btn, .frame-btn, .import-game, .vision-tile, .piece-tile, .board-tile,
 .dlg-box button { transition: transform 0.1s ease-out; }
 .pmenu .dock-btn:active:not(:disabled), .dock-pop .dock-btn:active:not(:disabled), .twk-btn:active:not(:disabled),
@@ -637,6 +642,18 @@ body:has(.stage:not(.stage-one)) .net-note { top: calc(64px + env(safe-area-inse
 .board-tile:active, .dlg-box button:not(.twk-btn):not(.frame-btn-primary):active:not(:disabled) { background-color: var(--btn-hover); }
 .twk-btn:not(.secondary):active:not(:disabled), .frame-btn-primary:active:not(:disabled) { filter: brightness(0.9); }
 .piece-tile:active { transform: scale(0.97); } /* its own light-square background and selected tint stay */
+/* the small and bare controls (tabs, segments, toggles, moves, rows): a tint or ring, no scale, as a shrinking tab or move
+   reads as the layout shifting. Moves are coloured inline, so a ring like their hover and focus */
+.twk-seg button:not([aria-checked="true"]):active, .twk-tabs button:not([aria-selected="true"]):active, .twk-x:active,
+.q-stop:active, .expl-open-btn:not(.on):active { background: color-mix(in srgb, var(--ink) 14%, transparent); color: var(--ink); }
+.twk-toggle:active, .twk-slider:active { filter: brightness(0.9); }
+.twk-info:active { background: var(--ink); border-color: var(--ink); }
+.mv:active { outline: 2px solid color-mix(in srgb, var(--accent) 80%, transparent); outline-offset: 1px; }
+.mv.expl-row:active { outline: none; }
+.expl-row:active { background: color-mix(in srgb, var(--accent) 20%, transparent); }
+.q-mini:active { background: color-mix(in srgb, var(--queen) 24%, transparent); border-color: var(--queen); }
+.q-table tbody tr:active { background: rgba(224, 96, 159, 0.18); }
+.tray-piece:not([aria-pressed="true"]):active { background-color: color-mix(in srgb, var(--ink) 14%, transparent) !important; }
 
 /* Menus grow from the button that opened them; closing is instant (a closing fade would hold display, which also held the
    unfolded dock buttons on screen for 100 ms when the phone layout first folds them into this menu). */
