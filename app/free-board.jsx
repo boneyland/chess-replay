@@ -1322,6 +1322,7 @@ function DialogBox({ label, part, className, onClose, children }) {
           if (!e.target.closest('input, textarea, select, button')) e.preventDefault();
         }}
       >
+        <ReturnFocus modal />
         <div className="dlg-title">{label}</div>
         {children}
       </div>

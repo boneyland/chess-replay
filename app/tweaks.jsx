@@ -61,6 +61,7 @@ function TweaksPanel({ open, onClose, title = 'Settings', tabs, tab, onTab }) {
   };
   return (
     <aside className="twk-panel twk-tabbed part-settings" aria-label={title}>
+      <ReturnFocus />
       <div className="twk-hd">
         <b>{title}</b>
         <button type="button" className="twk-x" aria-label="Close settings" onClick={onClose}>
