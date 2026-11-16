@@ -4846,11 +4846,11 @@ for (const name of BROWSERS)
           await ce.ctx.close();
         },
       );
-      // Lichess's opening explorer (faked: it needs a token, so a route answers 401 without one and a fixed answer with
-      // the pasted one): off, the local book shows and nothing is sent; on and signed out, the panel asks to sign in; a
-      // pasted token brings the moves with their counts, and a click plays one
+      // Lichess's opening explorer (faked): off, the local book shows and nothing is sent; on, the moves come with their
+      // counts and no token, and a click plays one; when Lichess wants a token (a 401, as from 2026-10 until 2026-11) the
+      // panel asks to sign in, and a pasted token goes with the request after the 401
       await t.test(
-        'desktop: the Lichess explorer asks for a token, then lists the moves with counts and plays one',
+        'desktop: the Lichess explorer lists the moves with counts and plays one, and asks for a token only on a 401',
         async () => {
           const ex = await open(browser, { width: 1440, height: 900 });
           const p = ex.page;
@@ -4875,18 +4875,19 @@ for (const name of BROWSERS)
           };
           // The page's own fetch is replaced for the explorer's host: a route can't do it in every browser (Playwright's
           // WebKit doesn't route the CORS preflight that the Authorization header causes, and Firefox hides the header from
-          // routes). It answers 401 until the token is pasted, and records the header it was sent
+          // routes). While __need is set it answers 401 to a request without a token; it records the header it was sent
           await ex.ctx.addInitScript((ans) => {
             const f = window.fetch;
             window.__expl = [];
-            window.__pasted = false;
+            window.__need = false;
             window.fetch = function (u, o) {
               if (!String(u).startsWith('https://explorer.lichess.ovh/')) return f.apply(this, arguments);
-              window.__expl.push((o && o.headers && o.headers.Authorization) || null);
+              const a = (o && o.headers && o.headers.Authorization) || null;
+              window.__expl.push(a);
               return Promise.resolve(
-                window.__pasted
-                  ? new Response(JSON.stringify(ans), { status: 200, headers: { 'Content-Type': 'application/json' } })
-                  : new Response('no', { status: 401 }),
+                window.__need && !a
+                  ? new Response('no', { status: 401 })
+                  : new Response(JSON.stringify(ans), { status: 200, headers: { 'Content-Type': 'application/json' } }),
               );
             };
             // the explorer's game, fetched by Import game (Open games: Here)
@@ -4913,30 +4914,39 @@ for (const name of BROWSERS)
           await p.getByRole('tab', { name: 'Online' }).click();
           await p.getByRole('switch', { name: /Lichess opening explorer/ }).click();
           await p.keyboard.press('Escape');
+          await p.waitForFunction(() => /Lichess Test Opening/i.test(document.body.innerText), null, {
+            timeout: 10000,
+          });
+          assert.ok(
+            (await p.evaluate(() => window.__expl)).every((a) => a === null),
+            'no sign-in, no token sent',
+          );
+          assert.match(await p.evaluate(() => document.body.innerText), /2\.5k games/);
+          await p.screenshot({ path: path.join(OUT, host + '-lichess-explorer.png') });
+          // Lichess wants a token: the next position asks to sign in, and a pasted token goes after the 401
+          await p.evaluate(() => {
+            window.__need = true;
+            window.__expl = [];
+          });
+          await p.locator('.expl-moves .mv', { hasText: 'e5' }).click();
+          await p.waitForFunction(() => /1…\s*e5/.test(document.body.innerText), null, { timeout: 10000 });
           await p.waitForFunction(() => /Sign in to use the explorer/.test(document.body.innerText), null, {
             timeout: 10000,
           });
-          assert.deepEqual(await p.evaluate(() => window.__expl), [], 'no token, no request');
           await p.getByRole('button', { name: 'Settings' }).click();
           await p.getByRole('tab', { name: 'Online' }).click();
           await p.getByLabel('Lichess personal token').fill('lip_testtoken123');
-          await p.evaluate(() => {
-            window.__pasted = true;
-          });
           await p.getByRole('button', { name: 'Use this token' }).click();
           await p.keyboard.press('Escape');
           await p.waitForFunction(() => /Lichess Test Opening/i.test(document.body.innerText), null, {
             timeout: 10000,
           });
           const sent = await p.evaluate(() => window.__expl);
-          assert.ok(
-            sent.length >= 1 && sent.every((a) => a === 'Bearer lip_testtoken123'),
-            'the token goes with every request: ' + JSON.stringify(sent),
+          assert.deepEqual(
+            sent.slice(-2),
+            [null, 'Bearer lip_testtoken123'],
+            'the token after a 401: ' + JSON.stringify(sent),
           );
-          assert.match(await p.evaluate(() => document.body.innerText), /2\.5k games/);
-          await p.screenshot({ path: path.join(OUT, host + '-lichess-explorer.png') });
-          await p.locator('.expl-moves .mv', { hasText: 'e5' }).click();
-          await p.waitForFunction(() => /1…\s*e5/.test(document.body.innerText), null, { timeout: 10000 });
           // its games: On Lichess opens a new tab; Here (the default) opens the game in the replay through Import game
           const game = p.getByRole('link', { name: /Carlsen, M\./ });
           const sw = p.getByRole('radiogroup', { name: 'Open games' });

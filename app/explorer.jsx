@@ -1,7 +1,8 @@
 // ---------- the Lichess opening explorer (Settings › Online) ----------
 // Game counts per move from Lichess's explorer (explorer.lichess.ovh), in the free board's Commentary box in place of the
-// local opening book while the setting is on. Lichess answers only with a token (401 without), so this file also holds the
-// sign-in: OAuth2 code flow with PKCE (no secret, no registration: any client id), or a personal token pasted by the viewer.
+// local opening book while the setting is on. Lichess answers without a token (it wanted one from 2026-10 until 2026-11),
+// so a token goes only after a 401; this file also holds the sign-in for that case: OAuth2 code flow with PKCE (no
+// secret, no registration: any client id), or a personal token pasted by the viewer.
 const EXPL = window.LichessCore ? window.LichessCore.create() : null;
 const EXPL_DEBOUNCE_MS = 300; // after the last position change
 const LI_AUTH_STORE = 'chess-video.lichess-auth.v1',
@@ -119,7 +120,8 @@ function useLichessAuth() {
 }
 
 // The explorer's answer for the position on the board, or null when it isn't asked (off, in a game):
-// { state: 'loading' | 'auth' (no token, or one Lichess refuses) | 'none' (offline, an error, a back-off) | 'ready', x }.
+// { state: 'loading' | 'auth' (Lichess wants a token: none, or one it refuses) | 'none' (offline, an error, a back-off) |
+// 'ready', x }.
 // fen: the position's full FEN; filters: explorerFilters(tweaks)
 function useExplorer(fen, on, filters) {
   const key = fen && on && EXPL ? EXPL_KEY(fen, filters) : null;
@@ -128,7 +130,7 @@ function useExplorer(fen, on, filters) {
   const [st, setSt] = React.useState({ key: null, x: undefined });
   const hit = key ? EXPL.explorerCached(fen, filters) : undefined;
   React.useEffect(() => {
-    if (!key || !token || (hit && !hit.auth)) return; // no token: the panel asks to sign in, and nothing is sent
+    if (!key || (hit && !hit.auth)) return;
     const ctl = new AbortController();
     const id = setTimeout(
       () =>
@@ -141,12 +143,11 @@ function useExplorer(fen, on, filters) {
       clearTimeout(id);
       ctl.abort();
     };
-    // eslint-disable-next-line react-hooks/exhaustive-deps -- key stands for fen and filters; a cached answer that lands later needs no new request
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- key stands for fen and filters; a cached answer that lands later needs no new request; a sign-in asks again
   }, [key, token]);
   if (!key) return null;
   const x = hit || (st.key === key ? st.x : undefined);
   if (x && x.auth) return { state: 'auth', x: null, signedIn: !!token };
-  if (!token && !x) return { state: 'auth', x: null, signedIn: false };
   return x ? { state: 'ready', x } : { state: x === null ? 'none' : 'loading', x: null };
 }
 const EXPL_KEY = (fen, f) => window.LichessCore.explorerKey(fen, f);
@@ -266,7 +267,7 @@ function LichessExplorer({ x, tw, setTweak, onGame, posKey, onPlay, onHover, whi
       <React.Fragment>
         {heading(x.signedIn ? 'Lichess refused the token' : 'Sign in to use the explorer', true)}
         {note(
-          'Lichess’s explorer answers only signed-in requests. Your positions go to explorer.lichess.ovh; the token stays in this browser.',
+          'Lichess’s explorer is answering only signed-in requests. Your positions go to explorer.lichess.ovh; the token stays in this browser.',
         )}
         <button type="button" className="twk-btn" style={{ marginTop: tx(12) }} onClick={LA.signIn}>
           Sign in with Lichess
@@ -431,7 +432,7 @@ function ExplorerSettings({ t, setTweak }) {
       <TweakToggle
         id="tw-explorer"
         label="Lichess opening explorer"
-        info="With this on, the free board’s Opening explorer box lists the moves played from the position with their game counts (explorer.lichess.ovh), in place of the local book. Lichess answers only signed-in requests: sign in, or paste a personal token (lichess.org/account/oauth/token, no scopes). The position goes to Lichess; the token stays in this browser and goes only to Lichess. Off by default."
+        info="With this on, the free board’s Opening explorer box lists the moves played from the position with their game counts (explorer.lichess.ovh), in place of the local book. No sign-in needed; if Lichess ever asks for one, sign in or paste a personal token (lichess.org/account/oauth/token, no scopes): it goes only to Lichess, and only when asked. The position goes to Lichess. Off by default."
         value={on}
         onChange={(v) => setTweak('explorer', v)}
       />
