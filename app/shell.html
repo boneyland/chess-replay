@@ -664,6 +664,12 @@ body:has(.stage:not(.stage-one)) .net-note { top: calc(64px + env(safe-area-inse
 .pmenu-open .dock-items { opacity: 1; transform: none; transition-duration: 0.16s; transition-timing-function: ease-out; }
 @starting-style { .pmenu-open .dock-items { opacity: 0; transform: scale(0.95); } }
 
+/* The Play and Explore menu and the Settings and Queen panels grow from the corner their button is at, as the Menu
+   does; React unmounts them on close, so closing is instant there too */
+@keyframes pop-in { from { opacity: 0; transform: scale(0.95); } }
+.dock-pop, .twk-panel { animation: pop-in 0.16s ease-out; transform-origin: bottom right; }
+.q-panel { transform-origin: bottom left; }
+
 /* Dialogs fade in over their scrim and rise a little */
 @keyframes dlg-in { from { opacity: 0; } }
 @keyframes dlg-rise { from { opacity: 0; transform: translateY(8px) scale(0.98); } }
@@ -676,8 +682,8 @@ body:has(.stage:not(.stage-one)) .net-note { top: calc(64px + env(safe-area-inse
   @starting-style { .pmenu-open .dock-items { transform: none; } }
   .pmenu .dock-btn:active:not(:disabled), .dock-pop .dock-btn:active:not(:disabled), .twk-btn:active:not(:disabled),
   .frame-btn:active:not(:disabled), .import-game:active:not(:disabled), .vision-tile:active, .piece-tile:active,
-  .board-tile:active, .piece-tile:active, .dlg-box button:active:not(:disabled) { transform: none; }
-  .dlg-box { animation-name: dlg-in; }
+  .board-tile:active, .dlg-box button:active:not(:disabled) { transform: none; }
+  .dlg-box, .dock-pop, .twk-panel { animation-name: dlg-in; }
   .ptrack-bg, .ptrack-fill, .ptrack-knob { transition: none; }
 }
 </style>
