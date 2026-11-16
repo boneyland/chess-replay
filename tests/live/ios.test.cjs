@@ -417,10 +417,88 @@ try {
         x,
         y,
       );
+    // the same, but pointerup in a later task than pointerdown, as a real tap's is (React renders between them)
+    const scriptedApart = async (x, y) => {
+      await js(
+        (cx, cy) => {
+          const el = document.elementFromPoint(cx, cy);
+          window.__apart = { el, cx, cy };
+          el.dispatchEvent(
+            new PointerEvent('pointerdown', {
+              bubbles: true,
+              cancelable: true,
+              composed: true,
+              clientX: cx,
+              clientY: cy,
+              pointerId: 7,
+              pointerType: 'touch',
+              isPrimary: true,
+              button: 0,
+              buttons: 1,
+            }),
+          );
+        },
+        x,
+        y,
+      );
+      await new Promise((r) => setTimeout(r, 80));
+      await js(() => {
+        const { el, cx, cy } = window.__apart;
+        el.dispatchEvent(
+          new PointerEvent('pointerup', {
+            bubbles: true,
+            cancelable: true,
+            composed: true,
+            clientX: cx,
+            clientY: cy,
+            pointerId: 7,
+            pointerType: 'touch',
+            isPrimary: true,
+            button: 0,
+            buttons: 0,
+          }),
+        );
+      });
+    };
+    // every pointer event on the page, with where it says it is, and the board's target dots after each tap
+    const logPointers = () =>
+      js(() => {
+        window.__ptr = [];
+        for (const k of [
+          'pointerdown',
+          'pointermove',
+          'pointerup',
+          'pointercancel',
+          'gotpointercapture',
+          'lostpointercapture',
+          'touchstart',
+          'touchmove',
+          'touchend',
+          'touchcancel',
+        ])
+          document.addEventListener(
+            k,
+            (e) => {
+              const pt = e.changedTouches && e.changedTouches[0];
+              const x = pt ? pt.clientX : e.clientX,
+                y = pt ? pt.clientY : e.clientY;
+              window.__ptr.push(`${k}#${e.pointerId ?? ''}@${Math.round(x)},${Math.round(y)}`);
+            },
+            true,
+          );
+      });
+    const dots = () =>
+      js(
+        () =>
+          [...document.querySelectorAll('[data-no-drag-scroll] > div')].filter(
+            (d) => getComputedStyle(d).pointerEvents === 'none',
+          ).length,
+      );
     const ways = [
       ['WebDriver tap', (x, y) => tap(x, y), 300],
       ['slow WebDriver tap', slowTap, 1000],
       ['scripted pointer events', scripted, 300],
+      ['scripted pointer events, up in a later task', scriptedApart, 300],
     ];
     const got = {};
     for (const [name, how, gap] of ways) {
@@ -428,10 +506,14 @@ try {
       await loaded();
       await new Promise((r) => setTimeout(r, 1500));
       const b = await boardBox(page);
+      await logPointers();
       for (const sq of ['e2', 'e4']) {
         const p = square(b, sq);
         await how(p.x, p.y);
         await new Promise((r) => setTimeout(r, gap));
+        t.diagnostic(
+          `${name} ${sq} at ${Math.round(p.x)},${Math.round(p.y)}: ${(await js(() => window.__ptr.splice(0))).join(' ')} · ${await dots()} target dots`,
+        );
       }
       got[name] = await browser.waitUntil(played, { timeout: 5000, interval: 250 }).then(
         () => true,
