@@ -219,12 +219,6 @@
         if (ctx) load(wanted, k);
       });
     };
-    // iPhone Safari keeps Web Audio quiet while the Ring/Silent switch is on silent, unless the page's audio session is
-    // 'playback' (Safari 17+), as a video's is: a move sound is the replay's sound, so it plays like one
-    try {
-      const session = typeof navigator !== 'undefined' && navigator.audioSession;
-      if (session && session.type !== 'playback') session.type = 'playback';
-    } catch (e) {}
     function unlock() {
       try {
         if (!ctx) {

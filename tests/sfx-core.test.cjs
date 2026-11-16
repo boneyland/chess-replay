@@ -268,19 +268,6 @@ test("player: unlocks on a touch lift (iPhone Safari counts no touch pointerdown
   }
 });
 
-test('player: the audio session is playback, so iPhone Safari plays it with the Ring/Silent switch on silent', () => {
-  const desc = Object.getOwnPropertyDescriptor(globalThis, 'navigator');
-  const session = { type: 'auto' };
-  Object.defineProperty(globalThis, 'navigator', { value: { audioSession: session }, configurable: true });
-  try {
-    X.createPlayer(async () => null);
-    assert.equal(session.type, 'playback');
-  } finally {
-    if (desc) Object.defineProperty(globalThis, 'navigator', desc);
-    else delete globalThis.navigator;
-  }
-});
-
 test('player: the chosen set downloads as the page loads, before any gesture, once; a failed file is asked for again', async () => {
   const asked = [];
   let fail = true;
