@@ -195,8 +195,8 @@ function useEditInput({ setup, onChange }) {
     onMove: follow,
     onUp: (e) => {
       if (!drag) return;
-      const p = at(e),
-        d = drag;
+      const d = drag,
+        p = liftPoint(e, d, at, false);
       setDrag(null);
       if (moved(d, p)) onChange(p.sq < 0 ? E.put(setup, d.from, null) : E.move(setup, d.from, p.sq));
     },
@@ -211,8 +211,8 @@ function useEditInput({ setup, onChange }) {
     onPointerMove: follow,
     onPointerUp: (e) => {
       if (!drag) return;
-      const p = at(e),
-        d = drag;
+      const d = drag,
+        p = liftPoint(e, d, at, false);
       setDrag(null);
       if (!moved(d, p)) return;
       dragged.current = true;

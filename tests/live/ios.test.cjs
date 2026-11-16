@@ -381,10 +381,10 @@ try {
     assert.deepEqual(await errors(), []);
   });
 
-  // Runs 1–11: WebDriver's taps reach the board's React handler on the right squares, and its state takes e2, but the page
-  // never draws the selection and e4 plays nothing. So the move is tried three ways, each on a freshly loaded page, to
-  // tell safaridriver's input from the app: WebDriver's quick tap, a slow one (held 250 ms, a second apart), and pointer
-  // events dispatched by the page's own script. Only the first counts; the others say which side the fault is on
+  // Runs 1–11 played nothing: a captured touch's pointerup came at 0,0 (logged 2026-11-17; its touchend had the real
+  // point), so the board read each tap as a drag to its corner. liftPoint (app/game-video-core.jsx) now takes the drag's
+  // last point there. If WebDriver's tap fails again, the slow tap and pointer events dispatched by the page's own script
+  // are tried too, each on a freshly loaded page, with every pointer event logged, to tell safaridriver's input from the app
   await t.test('a tap-tap move gets a Stockfish verdict', { timeout: 240000 }, async () => {
     const played = () => js(() => /your move ·/i.test(document.body.innerText));
     const slowTap = (x, y) =>
@@ -417,49 +417,6 @@ try {
         x,
         y,
       );
-    // the same, but pointerup in a later task than pointerdown, as a real tap's is (React renders between them)
-    const scriptedApart = async (x, y) => {
-      await js(
-        (cx, cy) => {
-          const el = document.elementFromPoint(cx, cy);
-          window.__apart = { el, cx, cy };
-          el.dispatchEvent(
-            new PointerEvent('pointerdown', {
-              bubbles: true,
-              cancelable: true,
-              composed: true,
-              clientX: cx,
-              clientY: cy,
-              pointerId: 7,
-              pointerType: 'touch',
-              isPrimary: true,
-              button: 0,
-              buttons: 1,
-            }),
-          );
-        },
-        x,
-        y,
-      );
-      await new Promise((r) => setTimeout(r, 80));
-      await js(() => {
-        const { el, cx, cy } = window.__apart;
-        el.dispatchEvent(
-          new PointerEvent('pointerup', {
-            bubbles: true,
-            cancelable: true,
-            composed: true,
-            clientX: cx,
-            clientY: cy,
-            pointerId: 7,
-            pointerType: 'touch',
-            isPrimary: true,
-            button: 0,
-            buttons: 0,
-          }),
-        );
-      });
-    };
     // every pointer event on the page, with where it says it is, and the board's target dots after each tap
     const logPointers = () =>
       js(() => {
@@ -498,7 +455,6 @@ try {
       ['WebDriver tap', (x, y) => tap(x, y), 300],
       ['slow WebDriver tap', slowTap, 1000],
       ['scripted pointer events', scripted, 300],
-      ['scripted pointer events, up in a later task', scriptedApart, 300],
     ];
     const got = {};
     for (const [name, how, gap] of ways) {
