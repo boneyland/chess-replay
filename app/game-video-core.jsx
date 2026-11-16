@@ -1789,7 +1789,7 @@ function EvalBarView({ cp, txt, a }) {
     top = inWhite === flip; // the number sits in the part of the bar it favours
   if (!L.eval) return null;
   const H = L.board.size,
-    ef = Math.round(L.eval.w * (L.tier === 'phone' ? 0.69 : 0.75) * 10) / 10; // the number, sized to the bar's width: its digits a little over half of it (less on a phone's thin bar)
+    ef = Math.round(L.eval.w * (L.tier === 'phone' ? 0.85 : 0.75) * 10) / 10; // the number, sized to the bar's width: its digits a little over half of it (more on a phone's thin bar, where 0.75 left it under 11 px)
   return (
     <div
       className="part-eval-bar"
@@ -2238,7 +2238,7 @@ function MoveList({ M, T, S, a, paused, onPick, deadAt, end, startAt }) {
         }}
       >
         <span style={{ color: C.ink, font: `700 ${tx(16)}px ${MONO}` }}>{end.score}</span>
-        <span style={{ color: C.dim, font: `500 ${tx(14)}px ${MONO}` }}>{end.why}</span>
+        <span style={{ color: C.dim, font: `500 ${tx(16)}px ${MONO}` }}>{end.why}</span>
       </span>,
     );
   }
