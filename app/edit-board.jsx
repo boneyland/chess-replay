@@ -164,7 +164,8 @@ function useEditInput({ setup, onChange }) {
   const [cursor, setCursor] = React.useState(36); // the keyboard's square (a board index), e4 to begin with
   const [carry, setCarry] = React.useState(null); // the square of the piece picked up by keyboard, to put down
   const carrying = carry != null && setup.b[carry] ? carry : null; // (gone if the piece was moved some other way)
-  const [drag, setDrag] = React.useState(null); // { piece, from (a square, or null from the tray), x, y, x0, y0, moved }
+  // { piece, from (a square, or null from the tray), x, y, x0, y0, ox, oy (grabOffset), moved }
+  const [drag, setDrag] = React.useState(null);
   const boardEl = React.useRef(null),
     dragged = React.useRef(false);
   const at = (e) => boardPoint(boardEl.current, e, false); // off the board is sq -1
@@ -173,7 +174,17 @@ function useEditInput({ setup, onChange }) {
     try {
       e.currentTarget.setPointerCapture(e.pointerId);
     } catch (err) {}
-    setDrag({ piece, from, x: p.x, y: p.y, x0: p.x, y0: p.y, moved: false });
+    // a piece picked up from the board is held where it was grabbed; one from the tray by its centre
+    setDrag({
+      piece,
+      from,
+      x: p.x,
+      y: p.y,
+      x0: p.x,
+      y0: p.y,
+      ...(from != null ? grabOffset(from, p) : null),
+      moved: false,
+    });
   };
   const moved = dragMoved;
   const follow = (e) => {
@@ -198,7 +209,8 @@ function useEditInput({ setup, onChange }) {
       const d = drag,
         p = liftPoint(e, d, at, false);
       setDrag(null);
-      if (moved(d, p)) onChange(p.sq < 0 ? E.put(setup, d.from, null) : E.move(setup, d.from, p.sq));
+      const to = dropSquare(d, p, false);
+      if (moved(d, p)) onChange(to < 0 ? E.put(setup, d.from, null) : E.move(setup, d.from, to));
     },
     onCancel: () => setDrag(null),
   };
@@ -490,7 +502,9 @@ function EditBoard({
               : ''}
           </span>
         </div>
-        {drag && drag.moved && <DragGhost el={input.boardEl.current} piece={drag.piece} x={drag.x} y={drag.y} />}
+        {drag && drag.moved && (
+          <DragGhost el={input.boardEl.current} piece={drag.piece} x={drag.x} y={drag.y} ox={drag.ox} oy={drag.oy} />
+        )}
         {image && oneCol && showPic && (
           <div
             style={{

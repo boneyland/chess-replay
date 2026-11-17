@@ -1463,8 +1463,10 @@ function useLineGlide(board, prev, upto, glide, hide) {
 // stage clips what is inside it, so the dock, bars and panels would cover it there. Its own compositing layer: drawn in the
 // scaled board, its shadow left trails Epiphany (WebKitGTK) never repainted. back: the square (0 = a8) it springs back to
 // from x, y after a drop that played nothing, on the line glide's spring, settling to the piece's size there; onBack()
-// runs when it lands (or at once, without the Web Animations API)
-function DragGhost({ el, piece, x, y, back, onBack }) {
+// runs when it lands (or at once, without the Web Animations API). ox, oy: where it was grabbed, from the piece's centre
+// (grabOffset), kept under the pointer as the piece is lifted
+function DragGhost({ el, piece, x, y, ox = 0, oy = 0, back, onBack }) {
+  const [cx, cy] = liftedAt(x, y, ox, oy);
   const ref = React.useRef(null),
     latest = React.useRef(onBack);
   latest.current = onBack;
@@ -1482,18 +1484,18 @@ function DragGhost({ el, piece, x, y, back, onBack }) {
       [
         { transform: 'translateZ(0)' },
         {
-          transform: `translate3d(${((vx + 0.5) * SQ - x) * k}px, ${((vy + 0.5) * SQ - y) * k}px, 0) scale(${1 / 1.1})`,
+          transform: `translate3d(${((vx + 0.5) * SQ - cx) * k}px, ${((vy + 0.5) * SQ - cy) * k}px, 0) scale(${1 / LIFT})`,
         },
       ],
       { duration: GLIDE_S * 1000, easing: GLIDE_EASE, fill: 'forwards' },
     );
     anim.addEventListener('finish', home);
     return () => anim.cancel();
-  }, [back, el, x, y]);
+  }, [back, el, cx, cy]);
   if (!el) return null;
   const r = el.getBoundingClientRect(),
     k = r.width / BW,
-    s = SQ * 1.1 * k;
+    s = SQ * LIFT * k;
   return ReactDOM.createPortal(
     <img
       ref={ref}
@@ -1501,8 +1503,8 @@ function DragGhost({ el, piece, x, y, back, onBack }) {
       alt=""
       style={{
         position: 'fixed',
-        left: r.left + x * k - s / 2,
-        top: r.top + y * k - s / 2,
+        left: r.left + cx * k - s / 2,
+        top: r.top + cy * k - s / 2,
         width: s,
         height: s,
         pointerEvents: 'none',
@@ -1671,6 +1673,8 @@ function BoardTouch({ pos, targets, drag, promo, castle, onCastle, onDown, onMov
           piece={dragged}
           x={drag.x}
           y={drag.y}
+          ox={drag.ox}
+          oy={drag.oy}
           back={drag.back ? drag.from : null}
           onBack={onBack}
         />
@@ -3252,6 +3256,16 @@ function liftPoint(e, d, at, clamp) {
 // the render with the last move's state may not have run yet (a quick flick read as a tap). d: { x0, y0, moved }
 const DRAG_PX = 14;
 const dragMoved = (d, p) => d.moved || Math.hypot(p.x - d.x0, p.y - d.y0) > DRAG_PX;
+// A dragged piece is drawn LIFT times its size, held where it was grabbed: grabOffset is that point from the centre of the
+// piece's square (board pixels; sq as the board shows it, through view()), liftedAt the lifted piece's centre with the
+// pointer at x, y, and dropSquare the square under that centre, where it lands (clamp: as boardSquare's)
+const LIFT = 1.1;
+function grabOffset(sq, p) {
+  const [vx, vy] = idxXY(sq);
+  return { ox: p.x - (vx + 0.5) * SQ, oy: p.y - (vy + 0.5) * SQ };
+}
+const liftedAt = (x, y, ox = 0, oy = 0) => [x - LIFT * ox, y - LIFT * oy];
+const dropSquare = (d, p, clamp) => boardSquare(...liftedAt(p.x, p.y, d.ox, d.oy), clamp).sq;
 
 // The board's pointer input: tap-tap and drag moves, the promotion picker, and in a Chess960 position the castle-or-move
 // question. pos is the position on the board; onPick() runs when a piece of the side to move is picked up, onMiss() after
@@ -3259,7 +3273,7 @@ const dragMoved = (d, p) => d.moved || Math.hypot(p.x - d.x0, p.y - d.y0) > DRAG
 function useBoardInput({ pos, onPick, onMiss, onMove }) {
   const CC = window.ChessCore;
   const [sel, setSel] = React.useState(null); // selected square (0 = a8)
-  // { from, x, y, x0, y0, moved, again (pressed on the selected piece), back (let go: springing back to from), piece (the
+  // { from, x, y, x0, y0, ox, oy (grabOffset), moved, again (pressed on the selected piece), back (let go: springing back to from), piece (the
   // one springing back) } in board pixels. A drop that plays nothing keeps the drag, back set, until its piece is home
   // (handlers.onBack); its square stays hidden till then. A new press starts a new drag at once
   const [drag, setDrag] = React.useState(null);
@@ -3333,7 +3347,16 @@ function useBoardInput({ pos, onPick, onMiss, onMove }) {
         } catch (err) {}
         onPick();
         setSel(p.sq);
-        setDrag({ from: p.sq, x: p.x, y: p.y, x0: p.x, y0: p.y, moved: false, again: sel === p.sq });
+        setDrag({
+          from: p.sq,
+          x: p.x,
+          y: p.y,
+          x0: p.x,
+          y0: p.y,
+          ...grabOffset(p.sq, p),
+          moved: false,
+          again: sel === p.sq,
+        });
       } else {
         setSel(null);
         onMiss();
@@ -3354,7 +3377,8 @@ function useBoardInput({ pos, onPick, onMiss, onMove }) {
         if (d.again) setSel(null);
         return;
       }
-      if (p.sq !== d.from && playMove(d.from, p.sq)) setSel(null);
+      const to = dropSquare(d, p, true);
+      if (to !== d.from && playMove(d.from, to)) setSel(null);
       else {
         // the piece springs back from where it was let go, and onMiss runs once it's home (it can close the line, whose
         // board is the one that hides the square); reduced motion: it's home at once
