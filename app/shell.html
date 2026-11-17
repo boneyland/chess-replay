@@ -619,6 +619,8 @@ body:has(.stage.stage-short) .twk-panel { bottom: calc(44px + var(--safe-b)); ma
    (the phone), a touch target. The margin lets them stand a little past the title row instead of doubling its height */
 .an-icon-btn { width: 3.2em; height: 3.2em; margin: -0.5em 0; }
 .stage-one .an-icon-btn { width: max(44px, 3.2em); height: max(44px, 3.2em); }
+/* side by side with no gap (the title row's gap is tx(12), 0.75em): their own room round the icons parts them */
+.an-icon-btn + .an-icon-btn { margin-left: -0.75em; }
 /* the Analysis title's computer button while the game analysis runs: a rainbow ring turning, under reduced motion too
    (a small status indicator, the one sign a run goes on) */
 .an-spin { width: 82%; height: 82%; border-radius: 50%; background: conic-gradient(#e4553f, #ec9442, #e3c25b, #62c483, #4aa3df, #8a6fdf, #e0609f, #e4553f);
