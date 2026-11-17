@@ -713,13 +713,21 @@ body:has(.stage:not(.stage-one)) .net-note { top: calc(64px + env(safe-area-inse
 @supports (backdrop-filter: blur(1px)) or (-webkit-backdrop-filter: blur(1px)) {
   .pmenu .dock-items, .dock-pop, .twk-panel {
     background: color-mix(in srgb, var(--panel-glass) var(--glass), transparent);
-    -webkit-backdrop-filter: blur(16px) saturate(1.6); backdrop-filter: blur(16px) saturate(1.6);
+    -webkit-backdrop-filter: blur(8px) saturate(1.6); backdrop-filter: blur(8px) saturate(1.6);
   }
+  /* the menus are thinner (--glass-menu): what's on them is buttons (opaque) and a little text, which is drawn in ink, as
+     the board showing through takes grey or gold under 4.5:1 there, and so is the focus ring (3:1). The panels carry
+     coloured text (links, errors, Queen's marks), which keeps 4.5:1 only on their thicker glass */
+  .pmenu .dock-items, .dock-pop { background: color-mix(in srgb, var(--panel-glass) var(--glass-menu), transparent); --dim: var(--ink); }
+  .pmenu .dock-items .dock-menu-label, .dock-pop .dock-menu-label { color: var(--ink); }
+  .pmenu .dock-items :focus-visible, .dock-pop :focus-visible { outline-color: var(--ink); }
 }
 /* opaque again for a viewer who asked for less transparency or more contrast, or whose system forces its colours: the
    glass above, the Transport bar's tint and the drop box */
 @media (prefers-reduced-transparency: reduce), (prefers-contrast: more), (forced-colors: active) {
-  .pmenu .dock-items, .dock-pop, .twk-panel { background: var(--panel-glass); -webkit-backdrop-filter: none; backdrop-filter: none; }
+  .pmenu .dock-items, .dock-pop, .twk-panel { background: var(--panel-glass); -webkit-backdrop-filter: none; backdrop-filter: none; --dim: unset; }
+  .pmenu .dock-items .dock-menu-label, .dock-pop .dock-menu-label { color: var(--accent); }
+  .pmenu .dock-items :focus-visible, .dock-pop :focus-visible { outline-color: var(--accent); }
   .pbar::before { background: color-mix(in srgb, var(--accent) 24%, var(--panel)); -webkit-backdrop-filter: none; backdrop-filter: none; }
   .drop-box { background: var(--panel); -webkit-backdrop-filter: none; backdrop-filter: none; }
 }

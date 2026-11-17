@@ -27,7 +27,10 @@ window.THEME = {
     btnLine: 'var(--line)',
     btnHover: '#ddd2c0',
     panelGlass: '#fbf7f1',
-    glass: '85%', // how opaque the frosted glass is (shell.html's materials): secondary text keeps 4.5:1 over the board
+    // how opaque the frosted glass is (shell.html's materials): the Settings and Queen panels', where coloured text keeps
+    // 4.5:1 over the board, and the menus', as thin as their text, drawn in ink there, keeps 4.5:1 (measured 2026-11-17)
+    glass: '85%',
+    glassMenu: '45%',
     netTint: '22%',
     netLine: '60%',
     scrim: 'rgba(242, 236, 227, 0.86)',
@@ -54,6 +57,7 @@ window.THEME = {
     btnHover: '#5a4d44',
     panelGlass: '#1b1715',
     glass: '92%',
+    glassMenu: '65%',
     netTint: '26%',
     netLine: '65%',
     scrim: 'rgba(19, 16, 15, 0.82)',
