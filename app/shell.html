@@ -712,7 +712,7 @@ body:has(.stage:not(.stage-one)) .net-note { top: calc(64px + env(safe-area-inse
    trap. Dialogs stay opaque: their scrim already hides the page */
 @supports (backdrop-filter: blur(1px)) or (-webkit-backdrop-filter: blur(1px)) {
   .pmenu .dock-items, .dock-pop, .twk-panel {
-    background: color-mix(in srgb, var(--panel-glass) 76%, transparent);
+    background: color-mix(in srgb, var(--panel-glass) var(--glass), transparent);
     -webkit-backdrop-filter: blur(16px) saturate(1.6); backdrop-filter: blur(16px) saturate(1.6);
   }
 }
@@ -727,11 +727,10 @@ body:has(.stage:not(.stage-one)) .net-note { top: calc(64px + env(safe-area-inse
   .pbar::before { box-shadow: inset 0 1px 0 var(--line-strong); }
 }
 /* Forced colours (Windows' contrast themes; Firefox's colour override, which by default follows the system's high
-   contrast): the system's colours replace the page's, inline styles too. The board, its tiles, the eval bar and graph
-   and the picture read from keep their own colours, which say which square is which; and every state that showed as a
-   tint or a shadow alone (the open tab, the picked choice, a switch, the current move) gets the system's highlight */
+   contrast): the system's colours replace the page's, inline styles too. The board, its tiles and the eval bar and graph keep
+   their own colours, which say which square is which; and every state that showed as a tint or a shadow alone (the open tab, the picked choice, a switch, the current move) gets the system's highlight */
 @media (forced-colors: active) {
-  .part-board, .part-eval-bar, .part-eval-graph, .part-piece-tray, .board-tile, .piece-tile, .vision-zone { forced-color-adjust: none; }
+  .part-board, .part-eval-bar, .part-eval-graph, .part-piece-tray, .board-tile, .piece-tile { forced-color-adjust: none; }
   .twk-tabs button[aria-selected="true"], .twk-seg button[aria-checked="true"], .expl-open-btn.on, .q-table tr.q-sel {
     forced-color-adjust: none; background: Highlight; color: HighlightText; }
   .twk-btn { border: 1px solid ButtonText; }
