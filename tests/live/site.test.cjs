@@ -3897,10 +3897,31 @@ for (const name of BROWSERS)
           const unsureLine = p.getByText(/squares? to check \(outlined\)/);
           // where the crop box opens: within 3 px of a box in fractions of the picture (VisionGrid's test pictures' cases)
           const cases = require('../fixtures/vision-grid/cases.json');
+          // the canvas and the box read in one frame, once two reads agree: read one call apart, the dialog still
+          // settling as it grew for the picture put Firefox's y0 out (main, 2026-11-17)
           const boxAt = async (want, what) => {
-            const c = await cropBox.locator('canvas').boundingBox(),
-              r = await cropBox.locator('rect[style*="move"]').boundingBox();
-            const got = { x0: r.x - c.x, y0: r.y - c.y, x1: r.x + r.width - c.x, y1: r.y + r.height - c.y };
+            const read1 = () =>
+              cropBox.evaluate((g) => {
+                const c = g.querySelector('canvas').getBoundingClientRect(),
+                  r = g.querySelector('rect[style*="move"]').getBoundingClientRect();
+                return {
+                  x0: r.left - c.left,
+                  y0: r.top - c.top,
+                  x1: r.right - c.left,
+                  y1: r.bottom - c.top,
+                  w: c.width,
+                  h: c.height,
+                };
+              });
+            let got = await read1();
+            for (let i = 0; i < 20; i++) {
+              await p.waitForTimeout(50);
+              const next = await read1();
+              const same = JSON.stringify(next) === JSON.stringify(got);
+              got = next;
+              if (same) break;
+            }
+            const c = { width: got.w, height: got.h };
             for (const k of ['x0', 'y0', 'x1', 'y1'])
               assert.ok(
                 Math.abs(got[k] - want[k] * (k[0] === 'x' ? c.width : c.height)) <= 3,
