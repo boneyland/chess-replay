@@ -705,13 +705,13 @@ body:has(.stage:not(.stage-one)) .net-note { top: calc(64px + env(safe-area-inse
   .ptrack-bg, .ptrack-fill, .ptrack-knob, .pbar .ptime { transition: none; }
 }
 
-/* Materials: the Menu, the Play and Explore menu and the Settings and Queen panels are frosted glass over the board,
+/* Materials: the Menu, the Play and Explore menu, the Settings and Queen panels and the dialogs are frosted glass over the board,
    where the browser blurs (translucent without the blur reads badly over pieces). The filter is on the element itself,
    not a ::before layer: their open animation fades them, and an ancestor fading cuts a layer's blur off from what's
    behind; nothing fixed renders inside them (tooltips and the drag ghost portal to the body), which the filter would
-   trap. Dialogs stay opaque: their scrim already hides the page */
+   trap. Dialogs are glass as the panels are, over their scrim */
 @supports (backdrop-filter: blur(1px)) or (-webkit-backdrop-filter: blur(1px)) {
-  .pmenu .dock-items, .dock-pop, .twk-panel {
+  .pmenu .dock-items, .dock-pop, .twk-panel, .dlg-box {
     background: color-mix(in srgb, var(--panel-glass) var(--glass), transparent);
     -webkit-backdrop-filter: blur(8px) saturate(1.6); backdrop-filter: blur(8px) saturate(1.6);
   }
@@ -732,7 +732,7 @@ body:has(.stage:not(.stage-one)) .net-note { top: calc(64px + env(safe-area-inse
 /* opaque again for a viewer who asked for less transparency or more contrast, or whose system forces its colours: the
    glass above, the Transport bar's tint and the drop box */
 @media (prefers-reduced-transparency: reduce), (prefers-contrast: more), (forced-colors: active) {
-  .pmenu .dock-items, .dock-pop, .twk-panel { background: var(--panel-glass); -webkit-backdrop-filter: none; backdrop-filter: none; --dim: unset; }
+  .pmenu .dock-items, .dock-pop, .twk-panel, .dlg-box { background: var(--panel-glass); -webkit-backdrop-filter: none; backdrop-filter: none; --dim: unset; }
   .pmenu .dock-items .dock-menu-label, .dock-pop .dock-menu-label { color: var(--accent); }
   .pmenu .dock-items :focus-visible, .dock-pop :focus-visible { outline-color: var(--accent); }
   .pmenu .dock-items .dock-btn, .dock-pop .dock-btn { background-color: var(--btn); }
