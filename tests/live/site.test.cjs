@@ -378,6 +378,16 @@ for (const name of BROWSERS)
       const browser = await LAUNCH[name]();
       t.after(() => browser.close());
       const { ctx, page, errors } = await open(browser, { width: 1440, height: 900 });
+      // a subtest's own contexts close after it, failed or not: one that threw before its ctx.close() left its page
+      // running (a Stockfish search with it) for the rest of the run, and Firefox's later 3 s waits timed out (CI, 2026-11-17)
+      t.afterEach(() =>
+        Promise.all(
+          browser
+            .contexts()
+            .filter((c) => c !== ctx)
+            .map((c) => c.close().catch(() => {})),
+        ),
+      );
       // requests go through the page (same origin), so they take the browser's network path and proxy
       const get = (p) =>
         page.evaluate(async (u) => {
