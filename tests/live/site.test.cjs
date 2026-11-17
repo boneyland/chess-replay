@@ -1371,10 +1371,16 @@ for (const name of BROWSERS)
           await loadedOn(p);
           const bar = p.locator('.part-transport-bar');
           const fs = bar.getByRole('button', { name: 'Full screen', exact: true });
-          assert.ok(await fs.isVisible(), `${w}x${h}: on the bar`);
-          assert.equal(await bar.getByRole('button', { name: /^Back to start/ }).isVisible(), ends, `${w}x${h}`);
-          assert.equal(await bar.getByRole('button', { name: /^Last move/ }).isVisible(), ends, `${w}x${h}`);
+          // where the browser has no full screen (Playwright's WebKit) there's no button, nor room taken for it
+          const can = await p.evaluate(() => !!(document.fullscreenEnabled || document.webkitFullscreenEnabled));
+          assert.equal(await fs.isVisible(), can, `${w}x${h}: on the bar where the browser has full screen`);
+          for (const name of [/^Back to start/, /^Last move/])
+            assert.equal(await bar.getByRole('button', { name }).isVisible(), ends || !can, `${w}x${h}`);
           assert.deepEqual(await overflowing(p), [], `${w}x${h}: nothing cut off`);
+          if (!can) {
+            await ph.ctx.close();
+            continue;
+          }
           const r = await fs.boundingBox();
           await p.mouse.click(r.x + r.width / 2, r.y + r.height / 2);
           await p.waitForFunction(() => document.documentElement === document.fullscreenElement, null, {
