@@ -104,7 +104,8 @@ const scripts = units
     return `<script>\n// ${name}\n(function () {\n${code}\n})();\n</script>`;
   })
   .join('\n');
-const page = read(path.join(app, 'shell.html')).replace(/\/\*THEME:(light|dark)\*\//g, (_, m) => THEME.css(m));
+// (an unknown mark's name throws: THEME.css reads THEME[name])
+const page = read(path.join(app, 'shell.html')).replace(/\/\*THEME:(\w+)\*\//g, (_, m) => THEME.css(m));
 const out = page.replace('<!--SCRIPTS-->', () => scripts); // a function, so $' or $& in the code stay as they are
 fs.mkdirSync(path.join(dir, 'out', 'site'), { recursive: true });
 // what a shared link and the browser tab show

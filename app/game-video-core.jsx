@@ -70,7 +70,8 @@ const CLASS_LABEL = {
 };
 const clsColor = (cls) => C[cls] || C.ink;
 // The board looks the same in both themes: what's drawn on it (highlights, badges, arrows, check glow) uses these
-const BOARD = PALETTES.dark;
+// Queen's arrow keeps the pink it had before the theme's was made lighter for text (a shape on the squares, not text)
+const BOARD = { ...PALETTES.dark, queen: '#e0609f' };
 const boardCls = (cls) => BOARD[cls] || BOARD.last;
 // A move's SAN chip, light for White's moves and dark for Black's in both themes (like the board's squares): the move
 // list's and a line's at 16 px; rowChip, the explorers' rows, at 17 px and one width, so their columns line up. extra
@@ -1870,6 +1871,7 @@ function LineChips({ name, nameColor, accent, moves, ply0, c, legal, sel, onPick
             <span
               className={ok ? 'mv' : undefined}
               role={ok ? 'button' : undefined}
+              aria-current={on ? 'true' : undefined}
               title={ok ? `Show ${what} on the board up to ${m}` : 'Not a legal move in this line'}
               onClick={
                 ok
@@ -2346,6 +2348,7 @@ function MoveList({ M, T, S, a, paused, onPick, deadAt, end, startAt }) {
           className="mv"
           role="button"
           data-ply={i}
+          aria-current={cur ? 'true' : undefined}
           tabIndex={i === focusPly ? 0 : -1}
           title={`Go to ${label(M, i)}`}
           onClick={(e) => {
@@ -2976,18 +2979,28 @@ function EvalPlot({ M, T, S, a, paused, onPick }) {
             <rect x="0" y={mid} width={W} height={mid + 10} />
           </clipPath>
         </defs>
-        <line x1="0" x2={W} y1={mid} y2={mid} stroke={C.line} strokeWidth="2" />
+        <line className="eg-rule" x1="0" x2={W} y1={mid} y2={mid} stroke={C.line} strokeWidth="2" />
         {ticks.map(({ m, at }) => (
           <g key={m}>
-            <line x1={px(at)} x2={px(at)} y1="0" y2={H} stroke={C.line} strokeWidth="1" />
-            <text x={px(at) + 6} y={H + 12} fill={C.dim} style={{ font: `500 ${tx(15)}px ${MONO}` }}>
+            <line className="eg-rule" x1={px(at)} x2={px(at)} y1="0" y2={H} stroke={C.line} strokeWidth="1" />
+            <text className="eg-ink" x={px(at) + 6} y={H + 12} fill={C.dim} style={{ font: `500 ${tx(15)}px ${MONO}` }}>
               {m}
             </text>
           </g>
         ))}
         {M.hasEval ? (
           <g>
-            {full && <path d={full} fill="none" stroke={C.dim} strokeWidth="1.5" strokeDasharray="4 4" opacity="0.6" />}
+            {full && (
+              <path
+                className="eg-rule"
+                d={full}
+                fill="none"
+                stroke={C.dim}
+                strokeWidth="1.5"
+                strokeDasharray="4 4"
+                opacity="0.6"
+              />
+            )}
             <path d={area} fill={C.best} opacity="0.16" clipPath="url(#cp-up)" />
             <path d={area} fill={C.blunder} opacity="0.16" clipPath="url(#cp-dn)" />
             <path d={line} fill="none" stroke={C.best} strokeWidth="2.5" clipPath="url(#cp-up)" />
@@ -2997,18 +3010,37 @@ function EvalPlot({ M, T, S, a, paused, onPick }) {
                 <circle key={j} cx={px(j + 1)} cy={py(cpOf(M, j))} r="5" fill={clsColor(p.cls)} />
               ) : null,
             )}
-            <circle cx={last[0]} cy={last[1]} r="6" fill={C.ink} />
+            <circle className="eg-ink" cx={last[0]} cy={last[1]} r="6" fill={C.ink} />
           </g>
         ) : (
-          <text x={W / 2} y={mid + 5} textAnchor="middle" fill={C.dim} style={{ font: `500 ${tx(16)}px ${MONO}` }}>
+          <text
+            className="eg-ink"
+            x={W / 2}
+            y={mid + 5}
+            textAnchor="middle"
+            fill={C.dim}
+            style={{ font: `500 ${tx(16)}px ${MONO}` }}
+          >
             No evaluation data
           </text>
         )}
         {/* under the hover label, which would otherwise sit behind WHITE */}
-        <text x="4" y="12" fill={C.dim} style={{ font: `600 ${tx(15)}px ${MONO}`, letterSpacing: '0.1em' }}>
+        <text
+          className="eg-ink"
+          x="4"
+          y="12"
+          fill={C.dim}
+          style={{ font: `600 ${tx(15)}px ${MONO}`, letterSpacing: '0.1em' }}
+        >
           WHITE
         </text>
-        <text x="4" y={H - 4} fill={C.dim} style={{ font: `600 ${tx(15)}px ${MONO}`, letterSpacing: '0.1em' }}>
+        <text
+          className="eg-ink"
+          x="4"
+          y={H - 4}
+          fill={C.dim}
+          style={{ font: `600 ${tx(15)}px ${MONO}`, letterSpacing: '0.1em' }}
+        >
           BLACK
         </text>
         {hover != null &&
@@ -3019,9 +3051,20 @@ function EvalPlot({ M, T, S, a, paused, onPick }) {
             const bx = Math.min(Math.max(x - w / 2, 0), W - w);
             return (
               <g style={{ pointerEvents: 'none' }}>
-                <line x1={x} x2={x} y1="0" y2={H} stroke={C.last} strokeWidth="2" opacity="0.8" />
-                <rect x={bx} y={-6} width={w} height={22} rx="4" fill={C.bg} stroke={C.last} strokeWidth="1" />
+                <line className="eg-mark" x1={x} x2={x} y1="0" y2={H} stroke={C.last} strokeWidth="2" opacity="0.8" />
+                <rect
+                  className="eg-tip"
+                  x={bx}
+                  y={-6}
+                  width={w}
+                  height={22}
+                  rx="4"
+                  fill={C.bg}
+                  stroke={C.last}
+                  strokeWidth="1"
+                />
                 <text
+                  className="eg-ink"
                   x={bx + w / 2}
                   y={10}
                   textAnchor="middle"
