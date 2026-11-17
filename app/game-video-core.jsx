@@ -1008,12 +1008,12 @@ const headCtl = () => ({
   color: C.ink,
   letterSpacing: 0,
 }); // C changes with the colour scheme; ctlLine stands out more than the panels' line
-// the title row's icon buttons (Analyse the game, Engine settings): bare icons, no border, bigger than the boxed
-// controls; the negative margin keeps the row's height
+// the title row's icon buttons (Analyse the game, Engine settings, class an-icon-btn): bare icons, no border, sized
+// in shell.html (44 px at least on the phone, a touch target); headCtl's height and margin left to that CSS
 const iconCtl = {
-  width: '2.4em',
-  height: '2.4em',
-  margin: '-0.7em 0',
+  width: undefined,
+  height: undefined,
+  margin: undefined,
   padding: 0,
   display: 'grid',
   placeItems: 'center',
@@ -1134,7 +1134,7 @@ function AnalysisPanel({ box, a, depth, deep, paused, style, children }) {
         {live && E.analyse && (
           <button
             type="button"
-            className="frame-btn"
+            className="frame-btn an-icon-btn"
             aria-label={
               E.run ? `Analyse the game: analysing, ${E.run.done} of ${E.run.total} positions` : 'Analyse the game'
             }
@@ -1155,8 +1155,8 @@ function AnalysisPanel({ box, a, depth, deep, paused, style, children }) {
             ) : (
               <svg
                 viewBox="0 0 16 16"
-                width="80%"
-                height="80%"
+                width="68%"
+                height="68%"
                 aria-hidden="true"
                 fill="none"
                 stroke="currentColor"
@@ -1173,7 +1173,7 @@ function AnalysisPanel({ box, a, depth, deep, paused, style, children }) {
         {live && (
           <button
             type="button"
-            className="frame-btn"
+            className="frame-btn an-icon-btn"
             aria-label="Engine options"
             aria-expanded={shown}
             title="Engine settings"
@@ -1188,7 +1188,7 @@ function AnalysisPanel({ box, a, depth, deep, paused, style, children }) {
               color: shown ? C.best : C.dim,
             }}
           >
-            <svg viewBox="0 0 16 16" width="70%" height="70%" aria-hidden="true">
+            <svg viewBox="0 0 16 16" width="62%" height="62%" aria-hidden="true">
               <path d="M2 3.5h12M2 8h12M2 12.5h12" stroke="currentColor" strokeWidth="2" strokeLinecap="round" />
             </svg>
           </button>
