@@ -13,6 +13,11 @@ const Easing = {
   },
 };
 const clamp = (v, min, max) => Math.max(min, Math.min(max, v));
+// How far a seek bar dragged d px past its end stretches: Apple's rubber band, (1 − 1 / (0.55 d / D + 1)) · D, which
+// follows the pointer at about half its pace at first and never passes D (px): small, as the time beside the bar moves
+// along (the bar sits --pgap from it)
+const RUBBER_D = 10;
+const rubberBand = (d) => (1 - 1 / ((0.55 * d) / RUBBER_D + 1)) * RUBBER_D;
 // the longest glide of a paused playhead out of a move (Stage's settle), and the reduced-motion setting, which jumps instead
 const GLIDE_MS = 300;
 const REDUCED_MQ = window.matchMedia ? window.matchMedia('(prefers-reduced-motion: reduce)') : null;
@@ -544,10 +549,23 @@ function PlaybackBar({ time, duration, playing, nav, menu, still, dock, onPlayPa
       nav.listen = null;
     };
   }, [nav]);
+  // a drag past either end stretches the bar that way with less and less give, the time on that side moving with it
+  // (over: px, < 0 past the start; w: the track's width), and it springs back on letting go
+  const [over, setOver] = React.useState({ px: 0, w: 1, side: 1 });
   const timeAt = (e) => {
-    const r = trackRef.current.getBoundingClientRect();
-    return clamp((e.clientX - r.left) / r.width, 0, 1) * duration;
+    const r = trackRef.current.getBoundingClientRect(),
+      f = (e.clientX - r.left) / r.width;
+    let past = f < 0 ? f * r.width : f > 1 ? (f - 1) * r.width : 0;
+    const side = past < 0 ? trackRef.current.previousElementSibling : trackRef.current.nextElementSibling;
+    // only where the time sits beside the bar to move along: elsewhere (a phone) a button does, which the knob would cover
+    if (!(side && side.classList.contains('ptime') && side.getClientRects().length)) past = 0;
+    const px = Math.sign(past) * rubberBand(Math.abs(past));
+    setOver((o) => (o.px === px && o.w === r.width ? o : { px, w: r.width, side: px ? Math.sign(px) : o.side }));
+    return clamp(f, 0, 1) * duration;
   };
+  const letGo = () => setOver((o) => (o.px ? { ...o, px: 0 } : o));
+  const stretch = over.px ? { transform: `scaleX(${(over.w + Math.abs(over.px)) / over.w})` } : { transform: 'none' };
+  stretch.transformOrigin = over.side < 0 ? 'right' : 'left';
   const pct = duration > 0 ? (time / duration) * 100 : 0;
   // spoken: "1 minute 5 seconds"
   const say = (t) => {
@@ -659,7 +677,9 @@ function PlaybackBar({ time, duration, playing, nav, menu, still, dock, onPlayPa
         <span className="pspacer" />
       ) : (
         <React.Fragment>
-          <span className="ptime">{fmt(time)}</span>
+          <span className="ptime" style={{ translate: `${Math.min(0, over.px)}px 0` }}>
+            {fmt(time)}
+          </span>
           <div
             ref={trackRef}
             className="ptrack"
@@ -707,18 +727,23 @@ function PlaybackBar({ time, duration, playing, nav, menu, still, dock, onPlayPa
               // dragged to, not the pointerup's place (iOS has given a touch's at 0,0)
               if (dragging.current) onSettle(dragT.current, 0);
               dragging.current = false;
+              letGo();
             }}
             onPointerCancel={() => {
               // the browser took the touch over (a scroll): settle as a let-go would
               if (dragging.current) onSettle(dragT.current, 0);
               dragging.current = false;
+              letGo();
             }}
+            data-stretch={over.px ? '1' : undefined}
           >
-            <div className="ptrack-bg" />
-            <div className="ptrack-fill" style={{ width: `${pct}%` }} />
-            <div className="ptrack-knob" style={{ left: `${pct}%` }} />
+            <div className="ptrack-bg" style={stretch} />
+            <div className="ptrack-fill" style={{ width: `${pct}%`, ...stretch }} />
+            <div className="ptrack-knob" style={{ left: `${pct}%`, translate: `${over.px}px 0` }} />
           </div>
-          <span className="ptime ptime-total">{fmt(duration)}</span>
+          <span className="ptime ptime-total" style={{ translate: `${Math.max(0, over.px)}px 0` }}>
+            {fmt(duration)}
+          </span>
         </React.Fragment>
       )}
       {menu}
