@@ -325,3 +325,28 @@ test('player: the chosen set downloads as the page loads, before any gesture, on
   p.prepare('Wood');
   assert.deepEqual(asked, [], 'Wood is made here');
 });
+
+test('buzz: a tick for a move, a firmer one for a capture, a double pulse for a miss; nothing without vibrate', () => {
+  const S = window.Sfx;
+  const calls = [];
+  const nav = { vibrate: (p) => (calls.push(p), true) };
+  assert.equal(S.hapticKind('Nf3'), 'move');
+  assert.equal(S.hapticKind('exd5'), 'capture');
+  assert.equal(S.hapticKind('Qxf7#'), 'capture');
+  assert.equal(S.buzz('move', nav), true);
+  assert.equal(S.buzz('capture', nav), true);
+  assert.equal(S.buzz('miss', nav), true);
+  assert.deepEqual(calls, [S.HAPTIC.move, S.HAPTIC.capture, S.HAPTIC.miss]);
+  assert.ok(S.HAPTIC.capture > S.HAPTIC.move);
+  assert.equal(S.buzz('move', {}), false, 'Firefox for Android: no vibrate');
+  assert.equal(S.buzz('move', null), false);
+  assert.equal(S.buzz('nope', nav), false);
+  assert.equal(
+    S.buzz('move', {
+      vibrate: () => {
+        throw new Error('blocked');
+      },
+    }),
+    false,
+  );
+});

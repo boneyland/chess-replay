@@ -3338,8 +3338,10 @@ function useBoardInput({ pos, onPick, onMiss, onMove }) {
     const ct = !piece && CC.castleTarget(pos, from, to);
     if (ct) {
       const m = CC.castleMoves(pos).find((x) => x.side === ct.side);
-      if (!ct.ask) onMove(m.step);
-      else setCastle({ from, to, side: ct.side, step: m.step, alsoMove: CC.userMove(pos, from, to) });
+      if (!ct.ask) {
+        window.Sfx.buzz('move');
+        onMove(m.step);
+      } else setCastle({ from, to, side: ct.side, step: m.step, alsoMove: CC.userMove(pos, from, to) });
       return true;
     }
     if (!piece && CC.isPromotion(pos, from, to)) {
@@ -3348,6 +3350,7 @@ function useBoardInput({ pos, onPick, onMiss, onMove }) {
     }
     const step = CC.userMove(pos, from, to, piece);
     if (!step) return false;
+    window.Sfx.buzz(window.Sfx.hapticKind(step.san));
     onMove(step);
     return true;
   };
@@ -3365,8 +3368,10 @@ function useBoardInput({ pos, onPick, onMiss, onMove }) {
       m = ct && ct.side === c.side && CC.castleMoves(pos).find((x) => x.side === c.side);
     const step =
       choice === 'castle' ? m && m.step : choice === 'move' && c.alsoMove ? CC.userMove(pos, c.from, c.to) : null;
-    if (step) onMove(step);
-    else onMiss();
+    if (step) {
+      window.Sfx.buzz(window.Sfx.hapticKind(step.san));
+      onMove(step);
+    } else onMiss();
   };
   const boardXY = (e) => boardPoint(e.currentTarget, e, true),
     moved = dragMoved;
@@ -3435,6 +3440,7 @@ function useBoardInput({ pos, onPick, onMiss, onMove }) {
         // the piece springs back from where it was let go, and onMiss runs once it's home (it can close the line, whose
         // board is the one that hides the square); reduced motion: it's home at once
         setSel(null);
+        if (to !== d.from) window.Sfx.buzz('miss'); // put back on its own square: no buzz
         if (CALM_MQ && CALM_MQ.matches) onMiss();
         else setDrag({ ...d, x: p.x, y: p.y, moved: true, back: true, piece: pos.b[d.from] });
       }

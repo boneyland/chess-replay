@@ -299,6 +299,20 @@
     return { play, prepare, unlock };
   }
 
+  // Haptics, on Android Chrome (Firefox for Android and Safari have no navigator.vibrate): a tick as the viewer's own
+  // move lands on the board, a firmer one for a capture, a double pulse for a drop that plays nothing. Only for the
+  // viewer's touch on the board, called in its handler (Chrome vibrates only after a tap), never in playback
+  const HAPTIC = { move: 12, capture: 22, miss: [14, 50, 14] };
+  const hapticKind = (san) => (/x/.test(san || '') ? 'capture' : 'move');
+  function buzz(kind, nav = typeof navigator !== 'undefined' ? navigator : null) {
+    if (!nav || !('vibrate' in nav) || !HAPTIC[kind]) return false;
+    try {
+      return nav.vibrate(HAPTIC[kind]);
+    } catch (e) {
+      return false;
+    }
+  }
+
   window.Sfx = {
     SETS,
     SET_DIR,
@@ -316,5 +330,8 @@
     synth,
     renderTrack,
     createPlayer,
+    HAPTIC,
+    hapticKind,
+    buzz,
   };
 })();
