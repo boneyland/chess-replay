@@ -105,8 +105,12 @@ html { -webkit-tap-highlight-color: transparent; }
 .ptrack-knob { position: absolute; top: 8px; width: 12px; height: 12px; margin-left: -6px; border-radius: 50%; background: var(--ink); box-shadow: 0 2px 4px rgba(0, 0, 0, 0.5); }
 /* hovered under a mouse (the bar's data-mouse: a touch screen keeps :hover after a tap), or focused from the keyboard: a
    thicker track and a bigger knob */
-.ptrack-bg, .ptrack-fill { transition: top 0.12s, height 0.12s; }
-.ptrack-knob { transition: transform 0.12s; }
+.ptrack-bg, .ptrack-fill { transition: top 0.12s, height 0.12s, transform 0.3s cubic-bezier(0.2, 0.9, 0.3, 1); }
+.ptrack-knob { transition: transform 0.12s, translate 0.3s cubic-bezier(0.2, 0.9, 0.3, 1); }
+/* dragged past an end, the stretch follows the pointer, the time beside it too; let go, it springs back */
+.pbar .ptime { transition: translate 0.3s cubic-bezier(0.2, 0.9, 0.3, 1); }
+.ptrack[data-stretch] .ptrack-bg, .ptrack[data-stretch] .ptrack-fill, .ptrack[data-stretch] .ptrack-knob,
+.pbar:has(.ptrack[data-stretch]) .ptime { transition: none; }
 .pbar[data-mouse] .ptrack:hover .ptrack-bg, .pbar[data-mouse] .ptrack:hover .ptrack-fill, .ptrack:focus-visible .ptrack-bg, .ptrack:focus-visible .ptrack-fill { top: 11px; height: 6px; border-radius: 3px; }
 .pbar[data-mouse] .ptrack:hover .ptrack-knob, .ptrack:focus-visible .ptrack-knob { transform: scale(1.33); }
 .pbar[data-mouse] .ptrack:hover .ptrack-bg { background: var(--line-strong); }
@@ -688,7 +692,7 @@ body:has(.stage:not(.stage-one)) .net-note { top: calc(64px + env(safe-area-inse
   .frame-btn:active:not(:disabled), .import-game:active:not(:disabled), .vision-tile:active, .piece-tile:active,
   .board-tile:active, .dlg-box button:active:not(:disabled) { transform: none; }
   .dlg-box, .dock-pop, .twk-panel { animation-name: dlg-in; }
-  .ptrack-bg, .ptrack-fill, .ptrack-knob { transition: none; }
+  .ptrack-bg, .ptrack-fill, .ptrack-knob, .pbar .ptime { transition: none; }
 }
 </style>
 <div id="root"></div>
