@@ -2,28 +2,34 @@
 const sfxPlayer = window.Sfx.createPlayer(window.Sfx.fetchSound);
 
 // A sound when a piece lands: in playback, stepping through the game, and on the moves of a line shown on the board.
-// Silent while exporting (the export steps through the player) and when a new game loads.
+// Silent while exporting (the export steps through the player) and when a new game loads. A seek into the middle of
+// a move sounds when the board is still again (Sfx.hold).
 function useMoveSounds(M, T, S, tw, playing, vline) {
   const on = tw.sound !== false && !tw.exporting;
   const ply = window.Sfx.landed(T, S);
+  const flight = window.Sfx.flying(T, S, ply);
   const step = vline && vline.upto >= 0 ? vline.moves[vline.upto] : null;
   const lineKey = step ? `${vline.at}:${vline.upto}:${step.uci}` : null;
-  const prev = React.useRef({ M, ply, lineKey });
+  const prev = React.useRef({ M, ply, held: null, lineKey });
   React.useEffect(() => {
     sfxPlayer.prepare(tw.soundSet);
   }, [tw.soundSet]);
   React.useEffect(() => {
     const p = prev.current;
-    prev.current = { M, ply, lineKey };
-    if (!on || p.M !== M) return;
+    const { next, from } = window.Sfx.hold(p, ply, flight);
+    prev.current = { M, lineKey, ...next };
+    if (!on || p.M !== M) {
+      prev.current.held = null;
+      return;
+    }
     if (lineKey) {
       if (lineKey !== p.lineKey) sfxPlayer.play(tw.soundSet, window.Sfx.kinds(step.san), tw.soundVolume);
       return;
     }
-    const c = window.Sfx.cue(M, p.ply, ply, playing);
+    const c = from === null ? null : window.Sfx.cue(M, from, ply, playing);
     if (c) sfxPlayer.play(tw.soundSet, c.kinds, tw.soundVolume, c.end);
-    // eslint-disable-next-line react-hooks/exhaustive-deps -- a sound only when a piece lands (a new ply or line move); the settings and playing are read as they are then
-  }, [M, ply, lineKey]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- a sound only when a piece lands (a new ply or line move, or the board still again after a seek into a move); the settings and playing are read as they are then
+  }, [M, ply, flight, lineKey]);
 }
 
 // the speaker in the transport bar (in the folded menu when the bar is in the sidebar): move sounds on or off

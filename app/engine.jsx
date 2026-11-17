@@ -13,6 +13,9 @@ const Easing = {
   },
 };
 const clamp = (v, min, max) => Math.max(min, Math.min(max, v));
+// the longest glide of a paused playhead out of a move (Stage's settle), and the reduced-motion setting, which jumps instead
+const GLIDE_MS = 300;
+const REDUCED_MQ = window.matchMedia ? window.matchMedia('(prefers-reduced-motion: reduce)') : null;
 
 const TimelineContext = React.createContext({ time: 0, duration: 10, playing: false });
 const useTimeline = () => React.useContext(TimelineContext);
@@ -163,15 +166,65 @@ function Stage({
   timeRef.current = time;
   playingRef.current = playing;
   if (clock) clock.current = { time };
-  const setStart = React.useCallback((t) => {
+  // A glide of the paused playhead to a settled frame (settle), cancelled by anything else that moves it: seek is the
+  // setTime for those (the timeline's own, as views see it)
+  const glideRef = React.useRef(null);
+  const stopGlide = () => {
+    if (glideRef.current) cancelAnimationFrame(glideRef.current);
+    glideRef.current = null;
+  };
+  React.useEffect(() => stopGlide, []);
+  const seek = React.useCallback((t) => {
+    stopGlide();
     setTime(t);
-    freshRef.current = t;
   }, []);
+  // the views' play/pause (a tap on the board, a line picked): it stops a glide too, which would otherwise carry the
+  // playhead on past a move's start and undo what the view just opened there
+  const play = React.useCallback((p) => {
+    stopGlide();
+    setPlaying(p);
+  }, []);
+  const setStart = React.useCallback(
+    (t) => {
+      seek(t);
+      freshRef.current = t;
+    },
+    [seek],
+  );
+  // the view's snap(T, dir): the settled time a paused playhead at T should glide to, or null (settleTo in chess-core.js)
+  const snapRef = React.useRef(null);
+  // after the viewer lets go of the seek bar, seeks by keys or pauses: a playhead left inside a move glides out of it,
+  // eased over at most GLIDE_MS; reduced motion jumps. Never in an export or while playing
+  const settle = (t, dir) => {
+    const to = !playingRef.current && !forceVideo && snapRef.current ? snapRef.current(t, dir) : null;
+    if (to == null) return;
+    stopGlide();
+    const d = to - t;
+    if (REDUCED_MQ && REDUCED_MQ.matches) {
+      setTime(to);
+      return;
+    }
+    const ms = clamp(Math.abs(d) * 500, 120, GLIDE_MS);
+    let t0 = null;
+    const tick = (ts) => {
+      if (t0 == null) t0 = ts;
+      const k = Math.min(1, (ts - t0) / ms);
+      setTime(k >= 1 ? to : t + d * Easing.easeOutCubic(k));
+      glideRef.current = k >= 1 ? null : requestAnimationFrame(tick);
+    };
+    glideRef.current = requestAnimationFrame(tick);
+  };
   const togglePlay = () => {
+    stopGlide();
     if (!playingRef.current && freshRef.current != null && Math.abs(timeRef.current - freshRef.current) < 1e-6)
       setTime(0);
     freshRef.current = null;
-    setPlaying((p) => !p);
+    // paused mid-move, the piece finishes its move
+    if (playingRef.current) {
+      playingRef.current = false;
+      setPlaying(false);
+      settle(timeRef.current, 1);
+    } else setPlaying(true);
   };
   const [area, setArea] = React.useState({ w: 1440, h: 900, cols: 2, sh: 900, vw: 1440, vh: 900 });
   const [contentH, setContentH] = React.useState(0);
@@ -308,13 +361,17 @@ function Stage({
       if (e.code === 'Space') {
         e.preventDefault();
         togglePlay();
-      } else if (e.code === 'ArrowLeft' && e.shiftKey) setTime((t) => clamp(t - 1, 0, duration));
-      else if (e.code === 'ArrowRight' && e.shiftKey) setTime((t) => clamp(t + 1, 0, duration));
-      else if (e.key === '0' || e.code === 'Home') setTime(0);
+      } else if ((e.code === 'ArrowLeft' || e.code === 'ArrowRight') && e.shiftKey) {
+        const d = e.code === 'ArrowRight' ? 1 : -1,
+          t = clamp(timeRef.current + d, 0, duration);
+        seek(t);
+        settle(t, d);
+      } else if (e.key === '0' || e.code === 'Home') seek(0);
       else if (e.key === ',' || e.key === '.') {
         e.preventDefault();
         const d = e.key === '.' ? 1 : -1;
         setPlaying(false);
+        stopGlide();
         setTime((t) =>
           clamp((d > 0 ? Math.floor(t * fps + 1e-6) + 1 : Math.ceil(t * fps - 1e-6) - 1) / fps, 0, duration),
         );
@@ -328,23 +385,23 @@ function Stage({
   React.useEffect(() => {
     const onSeek = (e) => {
       const go = () => {
-        setPlaying(false);
-        if (e.detail && isFinite(e.detail.time)) setTime(clamp(e.detail.time, 0, duration));
+        play(false);
+        if (e.detail && isFinite(e.detail.time)) seek(clamp(e.detail.time, 0, duration));
       };
       if (e.detail && e.detail.sync) ReactDOM.flushSync(go);
       else go();
     };
     window.addEventListener('chess-video:seek', onSeek);
     return () => window.removeEventListener('chess-video:seek', onSeek);
-  }, [duration]);
+  }, [duration, seek, play]);
 
   const frame = React.useMemo(
     () => ({ w, h, cols, video, text, dock: short, vw: area.vw, vh: area.vh, setContentH }),
     [w, h, cols, video, text, short, area.vw, area.vh],
   );
   const ctx = React.useMemo(
-    () => ({ time, duration, playing, setTime, setPlaying, setStart }),
-    [time, duration, playing, setStart],
+    () => ({ time, duration, playing, setTime: seek, setPlaying: play, setStart, snap: snapRef }),
+    [time, duration, playing, seek, play, setStart],
   );
   // a video fills the area; so does a two-column page; a paused one-column page is as tall as its content (the area scrolls)
   const scrolls = !video && cols === 1;
@@ -380,8 +437,9 @@ function Stage({
         still={still}
         dock={dock && dockBox(dock, area)}
         onPlayPause={togglePlay}
-        onReset={() => setTime(0)}
-        onSeek={(t) => setTime(t)}
+        onReset={() => seek(0)}
+        onSeek={seek}
+        onSettle={settle}
       />
     </div>
   );
@@ -472,9 +530,11 @@ function dockBox(dock, area) {
   return { left, top, width, height, '--dock-er': `${width - dock.w}px`, narrow: dock.w < 340 };
 }
 // dock: where the bar sits in the stage when it is in the sidebar (else it runs under the page)
-function PlaybackBar({ time, duration, playing, nav, menu, still, dock, onPlayPause, onReset, onSeek }) {
+function PlaybackBar({ time, duration, playing, nav, menu, still, dock, onPlayPause, onReset, onSeek, onSettle }) {
   const trackRef = React.useRef(null);
   const dragging = React.useRef(false);
+  // the time last dragged to: a pointerup can come before the render of the last pointermove, so the prop may lag
+  const dragT = React.useRef(0);
   // the video calls nav.listen when its move label changes while the playhead is still (stepping through a line)
   const [, redraw] = React.useState(0);
   React.useEffect(() => {
@@ -627,21 +687,30 @@ function PlaybackBar({ time, duration, playing, nav, menu, still, dock, onPlayPa
               e.preventDefault();
               e.stopPropagation();
               onSeek(clamp(to, 0, duration));
+              if (step != null) onSettle(clamp(to, 0, duration), Math.sign(step));
             }}
             onPointerDown={(e) => {
               dragging.current = true;
               try {
                 e.currentTarget.setPointerCapture(e.pointerId);
               } catch (err) {}
-              onSeek(timeAt(e));
+              dragT.current = timeAt(e);
+              onSeek(dragT.current);
             }}
             onPointerMove={(e) => {
-              if (dragging.current) onSeek(timeAt(e));
+              if (!dragging.current) return;
+              dragT.current = timeAt(e);
+              onSeek(dragT.current);
             }}
             onPointerUp={() => {
+              // let go inside a move: on or back, whichever side of its slide's middle the piece is. From the time last
+              // dragged to, not the pointerup's place (iOS has given a touch's at 0,0)
+              if (dragging.current) onSettle(dragT.current, 0);
               dragging.current = false;
             }}
             onPointerCancel={() => {
+              // the browser took the touch over (a scroll): settle as a let-go would
+              if (dragging.current) onSettle(dragT.current, 0);
               dragging.current = false;
             }}
           >

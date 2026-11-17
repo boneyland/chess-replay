@@ -1283,6 +1283,66 @@
   // just before the end card. S: schedule(), CUES: cues()
   const settledAt = (S, CUES, i) =>
     i < 0 ? S.tp[0] - 0.3 : i + 1 < S.N ? S.tp[i + 1] - 0.12 : Math.min(S.tp[i] + S.md[i] + 3, CUES.Outro - 0.1);
+  // A paused playhead inside a move (its piece sliding, its badge popping or its best-move arrow growing: the 0.9 s after
+  // it lands) shows a frame that is neither move. settleTo gives the time to glide to, or null where T already shows a
+  // settled board: back to the previous move's settled time, or on to the first moment this move is still, which keeps
+  // the rest of its hold for Play. dir: 1 on, -1 back, 0 whichever side of its slide's middle the piece is
+  const SETTLE_AFTER = 0.9;
+  function settleTo(S, CUES, T, dir = 0) {
+    let c = -1;
+    for (let i = 0; i < S.N && T >= S.tp[i]; i++) c = i;
+    if (c < 0) return null;
+    const still = Math.min(S.tp[c] + S.md[c] + SETTLE_AFTER, settledAt(S, CUES, c));
+    if (T >= still - 1e-6) return null;
+    const on = dir > 0 || (dir === 0 && T - S.tp[c] >= S.md[c] / 2);
+    return on ? still : settledAt(S, CUES, c - 1);
+  }
+  // The pieces that moved between two boards one move apart (64 squares, 'N'/'p'/null): [{ from, to }] square indexes,
+  // matched by letter, so castles (the rook too, a 960 king-takes-rook one included) and en passant come out right and a
+  // promoted pawn moves to its new piece. null when more than one move's worth of squares changed (a jump, a new game)
+  function movedPieces(a, b) {
+    const changed = [];
+    for (let i = 0; i < 64; i++) if (a[i] !== b[i]) changed.push(i);
+    if (!changed.length || changed.length > 4) return null;
+    const left = changed.filter((i) => a[i]),
+      used = new Set(),
+      out = [];
+    const near = (d, ok) =>
+      left
+        .filter((s) => s !== d && !used.has(s) && ok(a[s]))
+        .sort(
+          (x, y) =>
+            Math.abs((x >> 3) - (d >> 3)) +
+            Math.abs((x & 7) - (d & 7)) -
+            Math.abs((y >> 3) - (d >> 3)) -
+            Math.abs((y & 7) - (d & 7)),
+        )[0];
+    const arrived = changed.filter((d) => b[d]);
+    // same letter first, then a promotion's pawn (or, stepping back, the pawn it was)
+    for (const pass of [
+      (d) => (p) => p === b[d],
+      (d) => (p) =>
+        (p === 'P' || p === 'p') !== (b[d] === 'P' || b[d] === 'p') &&
+        (p === p.toUpperCase()) === (b[d] === b[d].toUpperCase()),
+    ])
+      arrived.forEach((d) => {
+        if (out.some((m) => m.to === d)) return;
+        const s = near(d, pass(d));
+        if (s == null) return;
+        used.add(s);
+        out.push({ from: s, to: d });
+      });
+    return out.length ? out : null;
+  }
+  // Whether a line board that showed was ({ board, prev, upto }: the board, the one a move before it or null, its index in
+  // the line) and now shows now took one step along one line: now's board one move on from was's, or back. Checked by
+  // the boards themselves, so another line from the same move, a jump or another game is no step
+  const sameBoard = (a, b) => a === b || (!!a && !!b && a.every((p, i) => p === b[i]));
+  function lineStep(was, now) {
+    if (now.upto === was.upto + 1) return sameBoard(now.prev, was.board);
+    if (now.upto === was.upto - 1) return sameBoard(now.board, was.prev);
+    return false;
+  }
   // Seconds of the video to export for plies from..to: from -1 starts on the title card, to N ends after the end card.
   // A move's clip starts just before it is played and ends once it has settled, as the player shows it on a jump.
   // Returns a function of (from, to), so that the schedule is worked out once.
@@ -1843,6 +1903,9 @@
     schedule,
     cues,
     settledAt,
+    settleTo,
+    movedPieces,
+    lineStep,
     clipRange,
     MATE_CP,
     MATE_STEP,

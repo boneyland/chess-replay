@@ -31,6 +31,44 @@ test('landed: the last ply whose piece has reached its square', () => {
   assert.equal(X.landed(9, S), 2);
 });
 
+test('flying: the ply on its way, or -1 on a still board', () => {
+  assert.equal(X.flying(0, S), -1);
+  assert.equal(X.flying(1.2, S), 0);
+  assert.equal(X.flying(1.7, S), -1);
+  assert.equal(X.flying(2, S), 1);
+  assert.equal(X.flying(9, S), -1);
+});
+
+test('hold: a seek into a move sounds once, when the board is still again', () => {
+  // run a sequence of playheads through hold, collecting the cue each still board gets ([from, to])
+  const run = (p0, ...Ts) => {
+    let p = { ply: X.landed(p0, S), held: null };
+    const out = [];
+    for (const T of Ts) {
+      const ply = X.landed(T, S);
+      const { next, from } = X.hold(p, ply, X.flying(T, S));
+      if (from !== null && X.cue({ plies: [{}, {}, {}] }, from, ply, false)) out.push([from, ply]);
+      p = next;
+    }
+    return out;
+  };
+  // still after ply 1, a click inside ply 1, the settle forward: one sound, ply 1's
+  assert.deepEqual(run(2.9, 2.2, 2.4, 2.6), [[0, 1]]);
+  // still after ply 0, a click inside ply 1, the settle forward: ply 1's
+  assert.deepEqual(run(1.9, 2.2, 2.6), [[0, 1]]);
+  // still after ply 0, a click inside ply 1, the settle back home: silent
+  assert.deepEqual(run(1.9, 2.2, 1.9), []);
+  // still after ply 1, a click inside ply 1, the settle back: ply 0's (a step back)
+  assert.deepEqual(run(2.9, 2.2, 1.9), [[1, 0]]);
+  // playback through two moves: each on landing
+  assert.deepEqual(run(0.9, 1.2, 1.6, 2.2, 2.6), [
+    [-1, 0],
+    [0, 1],
+  ]);
+  // a drag from inside ply 0 to inside ply 2, then still after it: from where it started
+  assert.deepEqual(run(0.9, 1.2, 3.2, 3.6), [[-1, 2]]);
+});
+
 const M = { result: '1-0', plies: [{ san: 'e4' }, { san: 'exd5' }, { san: 'Qh5#' }] };
 test('cue: the sound of the move now on the board, and the end of the game when playback reaches it', () => {
   assert.equal(X.cue(M, 0, 0, true), null);

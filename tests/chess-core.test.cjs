@@ -1284,3 +1284,112 @@ test('a 960 castle is no capture', () => {
   assert.equal(M.plies[0].capture, false);
   assert.equal(M.chess960, true);
 });
+
+test('settleTo: a paused playhead inside a move glides to a settled frame; a settled one stays', () => {
+  const fx = (f) => require('fs').readFileSync(require('path').join(__dirname, 'fixtures', f), 'utf8');
+  const M = CC.buildGame({ pgn: fx('byrne-fischer.pgn'), analysis: fx('byrne-fischer_analysis.json') });
+  const TM = CC.timing(M, { secondsPerMove: 1.6, keyHold: 1.5 });
+  const CUES = CC.cues(TM.scenes),
+    S = CC.schedule(M, CUES, TM.d),
+    N = S.N;
+  const at = (i) => CC.settledAt(S, CUES, i);
+  const i = 5,
+    early = S.tp[i] + S.md[i] * 0.2,
+    late = S.tp[i] + S.md[i] * 0.8,
+    still = Math.min(S.tp[i] + S.md[i] + 0.9, at(i));
+  // nothing to settle: before the first move, on a settled frame, after the last move's hold
+  assert.equal(CC.settleTo(S, CUES, 0), null);
+  assert.equal(CC.settleTo(S, CUES, at(-1)), null);
+  for (let j = 0; j < N; j++) assert.equal(CC.settleTo(S, CUES, at(j)), null, `ply ${j} settled`);
+  assert.equal(CC.settleTo(S, CUES, still), null);
+  assert.equal(CC.settleTo(S, CUES, CUES.Outro + 1), null);
+  // let go: whichever side of the slide's middle the piece is on
+  assert.equal(CC.settleTo(S, CUES, early), at(i - 1));
+  assert.equal(CC.settleTo(S, CUES, late), still);
+  // on: the first still frame of the move, not the end of its hold; back: the move before
+  assert.equal(CC.settleTo(S, CUES, early, 1), still);
+  assert.ok(still < at(i), 'the hold after a settle on is kept');
+  assert.equal(CC.settleTo(S, CUES, late, -1), at(i - 1));
+  // the badge and arrow still animating after the piece landed count as inside the move
+  assert.equal(CC.settleTo(S, CUES, S.tp[i] + S.md[i] + 0.3), still);
+  // the first move goes back to the starting position
+  assert.equal(CC.settleTo(S, CUES, S.tp[0] + 0.01), at(-1));
+});
+
+test('lineStep: a line board stepped one move along one line, not to another line, a jump or another game', () => {
+  const start = CC.parseFen('rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1').pos;
+  // a line's boards from start: [base, after move 1, after move 2…]
+  const line = (...ucis) => {
+    const out = [start.b];
+    let pos = start;
+    for (const u of ucis) {
+      pos = CC.applyUci(pos, u).pos;
+      out.push(pos.b);
+    }
+    return out;
+  };
+  // what a LineBoard shows at upto (-1: the base)
+  const at = (boards, upto) => ({ board: boards[upto + 1], prev: upto >= 0 ? boards[upto] : null, upto });
+  const a = line('e2e4', 'e7e5', 'g1f3'),
+    b = line('d2d4', 'd7d5');
+  // one step on and back along one line, the base included
+  assert.equal(CC.lineStep(at(a, -1), at(a, 0)), true);
+  assert.equal(CC.lineStep(at(a, 0), at(a, 1)), true);
+  assert.equal(CC.lineStep(at(a, 2), at(a, 1)), true);
+  assert.equal(CC.lineStep(at(a, 0), at(a, -1)), true);
+  // the same boards rebuilt (new arrays, the same pieces) are the same line
+  const a2 = line('e2e4', 'e7e5', 'g1f3');
+  assert.equal(CC.lineStep(at(a, 0), at(a2, 1)), true);
+  // a jump of two, or no step
+  assert.equal(CC.lineStep(at(a, -1), at(a, 1)), false);
+  assert.equal(CC.lineStep(at(a, 2), at(a, 0)), false);
+  assert.equal(CC.lineStep(at(a, 1), at(a, 1)), false);
+  // another line from the same move, upto one apart (an own line, then an engine line picked): no glide
+  assert.equal(CC.lineStep(at(a, 0), at(b, 1)), false);
+  assert.equal(CC.lineStep(at(b, 1), at(a, 0)), false);
+  // another game: the same upto steps but another starting position
+  const other = CC.parseFen('4k3/8/8/8/8/8/8/4K2R w K - 0 1').pos;
+  const c = [other.b, CC.applyUci(other, 'e1g1').pos.b];
+  assert.equal(CC.lineStep(at(a, -1), at(c, 0)), false);
+});
+
+test('movedPieces: the pieces one move took from square to square', () => {
+  const B = (fen) => CC.parseFen(fen).pos.b;
+  const after = (fen, uci) => CC.applyUci(CC.parseFen(fen).pos, uci).pos.b;
+  const sq = (s) => (8 - +s[1]) * 8 + s.charCodeAt(0) - 97;
+  const moves = (fen, uci) =>
+    CC.movedPieces(B(fen), after(fen, uci))
+      .map((m) => [m.from, m.to])
+      .sort((x, y) => x[0] - y[0]);
+  const start = 'rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1';
+  assert.deepEqual(moves(start, 'e2e4'), [[sq('e2'), sq('e4')]]);
+  // stepping back is the same move the other way
+  const e4 = 'rnbqkbnr/pppppppp/8/8/4P3/8/PPPP1PPP/RNBQKBNR b KQkq - 0 1';
+  assert.deepEqual(
+    CC.movedPieces(B(e4), B(start)).map((m) => [m.from, m.to]),
+    [[sq('e4'), sq('e2')]],
+  );
+  // a capture: the taker moves, the taken piece just goes
+  assert.deepEqual(moves('4k3/8/8/3p4/4P3/8/8/4K3 w - - 0 1', 'e4d5'), [[sq('e4'), sq('d5')]]);
+  // castling: king and rook
+  assert.deepEqual(moves('4k3/8/8/8/8/8/8/4K2R w K - 0 1', 'e1g1'), [
+    [sq('e1'), sq('g1')],
+    [sq('h1'), sq('f1')],
+  ]);
+  // a 960 castle where the king and rook swap squares (king f1, rook g1; king-takes-rook UCI)
+  const c960 = CC.movedPieces(B('4k3/8/8/8/8/8/8/5KR1 w - - 0 1'), B('4k3/8/8/8/8/8/8/5RK1 b - - 1 1'))
+    .map((m) => [m.from, m.to])
+    .sort((x, y) => x[0] - y[0]);
+  assert.deepEqual(c960, [
+    [sq('f1'), sq('g1')],
+    [sq('g1'), sq('f1')],
+  ]);
+  // en passant: the pawn moves, the passed pawn goes
+  assert.deepEqual(moves('4k3/8/8/3pP3/8/8/8/4K3 w - d6 0 1', 'e5d6'), [[sq('e5'), sq('d6')]]);
+  // a promotion (a capturing one too): the pawn moves to the new piece's square
+  assert.deepEqual(moves('8/4P3/8/8/8/8/8/k3K3 w - - 0 1', 'e7e8q'), [[sq('e7'), sq('e8')]]);
+  assert.deepEqual(moves('3r4/4P3/8/8/8/8/8/k3K3 w - - 0 1', 'e7d8n'), [[sq('e7'), sq('d8')]]);
+  // no change, or more than one move apart: nothing to glide
+  assert.equal(CC.movedPieces(B(start), B(start)), null);
+  assert.equal(CC.movedPieces(B(start), B('rnbqkbnr/pp1ppppp/8/2p5/4P3/5N2/PPPP1PPP/RNBQKB1R b KQkq - 1 2')), null);
+});
