@@ -315,6 +315,11 @@ try {
   });
 
   await t.test('the service worker takes over the page', { timeout: 120000 }, async (st) => {
+    // the polling below stops at a deadline from the test's start, not after a count: on a slow Simulator the steps
+    // before it and each poll's WebDriver calls took the test past its timeout (2026-11-17, PR 257), though it asserts
+    // nothing about the worker
+    const start = Date.now(),
+      left = () => 90000 - (Date.now() - start);
     const reg = () =>
       browser.executeAsync((done) =>
         navigator.serviceWorker.getRegistration().then(
@@ -368,12 +373,14 @@ try {
       );
     let ok = false;
     // runs 2, 5 and 6: still installing 30–50 s after the reload, its cache not yet opened
-    for (let i = 0; i < 6 && !ok; i++) {
+    const reloaded = Date.now();
+    while (!ok && left() > 0) {
       ok = await js(() => !!navigator.serviceWorker.controller);
-      if (!ok) {
-        t.diagnostic(`${i * 10} s after the reload: ${await reg()} · ${await cached()}`);
-        await new Promise((r) => setTimeout(r, 10000));
-      }
+      if (ok) break;
+      t.diagnostic(
+        `${Math.round((Date.now() - reloaded) / 1000)} s after the reload: ${await reg()} · ${await cached()}`,
+      );
+      await new Promise((r) => setTimeout(r, Math.max(0, Math.min(10000, left()))));
     }
     // not asserted: on GitHub's Simulator the worker stayed installing for 3 minutes without opening its cache (run 7),
     // while Playwright's WebKit runs the same worker; what it reaches is said instead
