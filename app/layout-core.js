@@ -464,5 +464,16 @@
   // the export's canvas size on one side: the page's CSS size at that scale, rounded down to even (video wants even sides)
   const exportPx = (v, scale) => Math.max(2, 2 * Math.floor((v * scale) / 2));
 
-  window.LayoutCore = { TEXT_SIZES, textScale, columns, pickColumns, compute, exportScale, exportPx };
+  // DOCK_FULL_H: under this stage height a docked bar (a phone held sideways, its browser's bars showing) also carries
+  // the Full screen button (GameApp)
+  window.LayoutCore = {
+    TEXT_SIZES,
+    textScale,
+    columns,
+    pickColumns,
+    compute,
+    exportScale,
+    exportPx,
+    DOCK_FULL_H: PHONE_DOCK.minH,
+  };
 })();

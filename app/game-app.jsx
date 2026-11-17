@@ -406,11 +406,13 @@ function GameApp() {
   // short: a phone held sideways, whose transport bar sits in the sidebar; its sound toggle moves into the menu
   const [phone, setPhone] = React.useState(false),
     [frameW, setFrameW] = React.useState(1920),
-    [short, setShort] = React.useState(false);
-  const onLayout = React.useCallback((isPhone, w, isShort) => {
+    [short, setShort] = React.useState(false),
+    [tiny, setTiny] = React.useState(false);
+  const onLayout = React.useCallback((isPhone, w, isShort, isTiny) => {
     setPhone(isPhone);
     setFrameW(w);
     setShort(!!isShort);
+    setTiny(!!isTiny);
   }, []);
   const [menu, setMenu] = React.useState(false);
   React.useEffect(() => {
@@ -1325,6 +1327,20 @@ function GameApp() {
     </div>
   ));
   const fsLabel = fullscreen.on ? 'Exit full screen' : 'Full screen';
+  const fsIcon = (
+    <svg className="dock-icon" width="28" height="28" viewBox="0 0 16 16" fill="none" aria-hidden="true">
+      <path
+        d={fullscreen.on ? 'M6 2v4H2M10 2v4h4M14 10h-4v4M2 10h4v4' : 'M2 6V2h4M10 2h4v4M14 10v4h-4M6 14H2v-4'}
+        stroke="currentColor"
+        strokeWidth="1.8"
+        strokeLinecap="round"
+        strokeLinejoin="round"
+      />
+    </svg>
+  );
+  // a phone held sideways with its browser's bars showing (tiny) has Full screen on the transport bar too, by the menu:
+  // the bars cost the page a third of its height there (863×286 in Firefox for Android), so the way out of them is one tap
+  const fsOnBar = fullscreen.ok && phone && short && tiny;
   const dockItems = (
     <div id="dock-items" className="dock-items part-dock">
       {phone && <span className="dock-menu-status">{shownErr || status}</span>}
@@ -1428,15 +1444,7 @@ function GameApp() {
               fullscreen.toggle();
             }}
           >
-            <svg className="dock-icon" width="28" height="28" viewBox="0 0 16 16" fill="none" aria-hidden="true">
-              <path
-                d={fullscreen.on ? 'M6 2v4H2M10 2v4h4M14 10h-4v4M2 10h4v4' : 'M2 6V2h4M10 2h4v4M14 10v4h-4M6 14H2v-4'}
-                stroke="currentColor"
-                strokeWidth="1.8"
-                strokeLinecap="round"
-                strokeLinejoin="round"
-              />
-            </svg>
+            {fsIcon}
           </button>
         )}
       </div>
@@ -1499,9 +1507,24 @@ function GameApp() {
           menu={
             <React.Fragment>
               {!(phone && short) && <SoundButton on={t.sound !== false} onChange={(v) => setTweak('sound', v)} />}
+              {fsOnBar && (
+                <button
+                  type="button"
+                  className="pbtn pbtn-fs"
+                  aria-label={fsLabel}
+                  title={fsLabel}
+                  onClick={() => {
+                    setMenu(false);
+                    fullscreen.toggle();
+                  }}
+                >
+                  {fsIcon}
+                </button>
+              )}
               {phone ? menuEl : deskDock}
             </React.Fragment>
           }
+          dockExtra={fsOnBar ? 40 : 0}
           onLayout={onLayout}
           scenes={scenes}
           playback={PLAYBACK}

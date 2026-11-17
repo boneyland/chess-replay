@@ -144,8 +144,11 @@ const stageMargins = (area) => {
 
 // top: an optional line above the frame (the page's Offline tag); the page lays out at the size of the room left
 // fps: the export's frame rate, the step of the , and . keys
+// dockExtra: the width of the buttons GameApp adds to the docked bar (menu), which it takes from the room the first and
+// last move buttons need
 function Stage({
   menu,
+  dockExtra = 0,
   top,
   onLayout,
   duration,
@@ -300,17 +303,19 @@ function Stage({
   const dock = short
     ? LayoutCore.compute({ w, h, text, video, cols, dock: true, vw: area.vw, vh: area.vh }).dock
     : null;
+  // tiny: a short window under the full-screen height (LayoutCore.DOCK_FULL_H), its browser's bars showing
+  const tiny = short && h < LayoutCore.DOCK_FULL_H;
   // the export's pixel width: the viewport's width at the device's pixel ratio, held to 1920 on its longer side (the
   // frame's height and the page's margins above and below it, export.jsx)
   const exportW = LayoutCore.exportPx(
     area.vw,
     LayoutCore.exportScale(area.vw, h + (area.my || 0), window.devicePixelRatio),
   );
-  // onLayout(true, w, short): a phone layout (one column, under 900 px wide, or the bar in the sidebar), where the page folds its buttons into a
-  // menu; w is the export's width; short: the transport bar is in the sidebar
+  // onLayout(true, w, short, tiny): a phone layout (one column, under 900 px wide, or the bar in the sidebar), where the page folds its buttons into a
+  // menu; w is the export's width; short: the transport bar is in the sidebar; tiny: and the stage is under DOCK_FULL_H
   React.useLayoutEffect(() => {
-    if (onLayout) onLayout(phone, exportW, short);
-  }, [onLayout, phone, exportW, short]);
+    if (onLayout) onLayout(phone, exportW, short, tiny);
+  }, [onLayout, phone, exportW, short, tiny]);
 
   React.useEffect(() => {
     if (!playing) {
@@ -440,7 +445,7 @@ function Stage({
         nav={nav}
         menu={menu}
         still={still}
-        dock={dock && dockBox(dock, area)}
+        dock={dock && dockBox(dock, area, dockExtra)}
         onPlayPause={togglePlay}
         onReset={() => seek(0)}
         onSeek={seek}
@@ -526,13 +531,14 @@ const markPointer = (e) => {
 
 // the bar's box in the sidebar (the stage's coordinates): from the layout's L.dock out to the stage's right and bottom
 // edges, the screen's, its glass running under the stage's padding and the safe area there; --dock-er (shell.html) pads
-// its items in from the right, clear of a cut-out. narrow: L.dock's own width
-function dockBox(dock, area) {
+// its items in from the right, clear of a cut-out. narrow: L.dock's own width under what the bar's buttons need, extra
+// (px) more where GameApp adds buttons to it
+function dockBox(dock, area, extra = 0) {
   const left = (area.ox || 0) + dock.x,
     top = (area.oy || 0) + dock.y;
   const width = Math.max(dock.w, (area.sw || 0) - left),
     height = Math.max(dock.h, (area.sh || 0) - top);
-  return { left, top, width, height, '--dock-er': `${width - dock.w}px`, narrow: dock.w < 340 };
+  return { left, top, width, height, '--dock-er': `${width - dock.w}px`, narrow: dock.w < 340 + extra };
 }
 // dock: where the bar sits in the stage when it is in the sidebar (else it runs under the page)
 function PlaybackBar({ time, duration, playing, nav, menu, still, dock, onPlayPause, onReset, onSeek, onSettle }) {
@@ -798,6 +804,7 @@ function CompositionClock({ derived, children }) {
 
 function CompositionStage({
   menu,
+  dockExtra,
   top,
   onLayout,
   scenes,
@@ -824,6 +831,7 @@ function CompositionStage({
   return (
     <Stage
       menu={menu}
+      dockExtra={dockExtra}
       top={top}
       onLayout={onLayout}
       duration={derived.total}
