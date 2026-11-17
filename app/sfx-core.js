@@ -37,6 +37,19 @@
     }
     return k;
   };
+  // the ply whose piece is on its way at T (between S.tp[i] and its landing), or -1 when the board is still
+  const flying = (T, S, k = landed(T, S)) => (k + 1 < S.N && T >= S.tp[k + 1] ? k + 1 : -1);
+  // A seek into the middle of a move holds its sound until the board is still again (the playhead settles out of it,
+  // or the seek bar is dragged on), so a click that lands in a move and glides on sounds once, not on the click too.
+  // p is { ply, held }: the landed ply last seen and, while held, { from: the ply before the hold, flight }. Returns
+  // the next p and the ply to cue from (null: silent). A piece that glides back onto the square it had left sounds
+  // again; one that glides back home without landing doesn't.
+  function hold(p, ply, flight) {
+    if (flight >= 0) return { next: { ply, held: { from: p.held ? p.held.from : p.ply, flight } }, from: null };
+    if (!p.held) return { next: { ply, held: null }, from: p.ply };
+    const { from } = p.held;
+    return { next: { ply, held: null }, from: ply === from && ply === p.held.flight ? ply - 1 : from };
+  }
   // what to play when the board's landed ply goes from `from` to `to`; the end sound only when playback reaches it
   function cue(M, from, to, playing) {
     if (to === from || to < 0 || to >= M.plies.length) return null;
@@ -296,6 +309,8 @@
     kinds,
     endKind,
     landed,
+    flying,
+    hold,
     cue,
     track,
     synth,
