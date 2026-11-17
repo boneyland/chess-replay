@@ -1461,14 +1461,42 @@ function useLineGlide(board, prev, upto, glide, hide) {
 
 // A dragged piece ('N', 'p'…) at board pixels x, y of el (the board's touch layer), drawn over everything on the page: the
 // stage clips what is inside it, so the dock, bars and panels would cover it there. Its own compositing layer: drawn in the
-// scaled board, its shadow left trails Epiphany (WebKitGTK) never repainted
-function DragGhost({ el, piece, x, y }) {
+// scaled board, its shadow left trails Epiphany (WebKitGTK) never repainted. back: the square (0 = a8) it springs back to
+// from x, y after a drop that played nothing, on the line glide's spring, settling to the piece's size there; onBack()
+// runs when it lands (or at once, without the Web Animations API)
+function DragGhost({ el, piece, x, y, back, onBack }) {
+  const ref = React.useRef(null),
+    latest = React.useRef(onBack);
+  latest.current = onBack;
+  const home = () => latest.current && latest.current();
+  React.useLayoutEffect(() => {
+    if (back == null) return;
+    const g = ref.current;
+    if (!el || !g || !g.animate) {
+      home();
+      return;
+    }
+    const k = el.getBoundingClientRect().width / BW,
+      [vx, vy] = idxXY(back);
+    const anim = g.animate(
+      [
+        { transform: 'translateZ(0)' },
+        {
+          transform: `translate3d(${((vx + 0.5) * SQ - x) * k}px, ${((vy + 0.5) * SQ - y) * k}px, 0) scale(${1 / 1.1})`,
+        },
+      ],
+      { duration: GLIDE_S * 1000, easing: GLIDE_EASE, fill: 'forwards' },
+    );
+    anim.addEventListener('finish', home);
+    return () => anim.cancel();
+  }, [back, el, x, y]);
   if (!el) return null;
   const r = el.getBoundingClientRect(),
     k = r.width / BW,
     s = SQ * 1.1 * k;
   return ReactDOM.createPortal(
     <img
+      ref={ref}
       src={img(piece === piece.toUpperCase() ? 'w' : 'b', piece.toLowerCase())}
       alt=""
       style={{
@@ -1583,8 +1611,8 @@ function CastleButtons({ pos, onMove, style }) {
     </div>
   );
 }
-function BoardTouch({ pos, targets, drag, promo, castle, onCastle, onDown, onMove, onUp, onCancel }) {
-  const dragged = drag && drag.moved ? pos.b[drag.from] : null,
+function BoardTouch({ pos, targets, drag, promo, castle, onCastle, onDown, onMove, onUp, onCancel, onBack }) {
+  const dragged = drag && drag.moved ? drag.piece || pos.b[drag.from] : null,
     el = React.useRef(null);
   return (
     <div
@@ -1603,7 +1631,7 @@ function BoardTouch({ pos, targets, drag, promo, castle, onCastle, onDown, onMov
         top: 0,
         width: BW,
         height: BW,
-        cursor: drag && drag.moved ? 'grabbing' : 'grab',
+        cursor: drag && drag.moved && !drag.back ? 'grabbing' : 'grab',
         touchAction: 'none',
       }}
     >
@@ -1637,7 +1665,16 @@ function BoardTouch({ pos, targets, drag, promo, castle, onCastle, onDown, onMov
           )}
         </div>
       ))}
-      {dragged && <DragGhost el={el.current} piece={dragged} x={drag.x} y={drag.y} />}
+      {dragged && (
+        <DragGhost
+          el={el.current}
+          piece={dragged}
+          x={drag.x}
+          y={drag.y}
+          back={drag.back ? drag.from : null}
+          onBack={onBack}
+        />
+      )}
       {promo && (
         <div
           style={{
@@ -3222,7 +3259,10 @@ const dragMoved = (d, p) => d.moved || Math.hypot(p.x - d.x0, p.y - d.y0) > DRAG
 function useBoardInput({ pos, onPick, onMiss, onMove }) {
   const CC = window.ChessCore;
   const [sel, setSel] = React.useState(null); // selected square (0 = a8)
-  const [drag, setDrag] = React.useState(null); // { from, x, y, x0, y0, moved, again (pressed on the selected piece) } in board pixels
+  // { from, x, y, x0, y0, moved, again (pressed on the selected piece), back (let go: springing back to from), piece (the
+  // one springing back) } in board pixels. A drop that plays nothing keeps the drag, back set, until its piece is home
+  // (handlers.onBack); its square stays hidden till then. A new press starts a new drag at once
+  const [drag, setDrag] = React.useState(null);
   const [promo, setPromo] = React.useState(null); // { from, to, white }: a pawn move waiting for its piece
   // { from, to, side, step, alsoMove }: a 960 king dropped one square from c or g, waiting for castle or king move
   const [castle, setCastle] = React.useState(null);
@@ -3300,12 +3340,12 @@ function useBoardInput({ pos, onPick, onMiss, onMove }) {
       }
     },
     onMove: (e) => {
-      if (!drag) return;
+      if (!drag || drag.back) return;
       const p = boardXY(e);
       setDrag((d) => d && { ...d, x: p.x, y: p.y, moved: moved(d, p) });
     },
     onUp: (e) => {
-      if (!drag) return;
+      if (!drag || drag.back) return;
       const d = drag,
         p = liftPoint(e, d, boardXY, true);
       setDrag(null);
@@ -3316,20 +3356,29 @@ function useBoardInput({ pos, onPick, onMiss, onMove }) {
       }
       if (p.sq !== d.from && playMove(d.from, p.sq)) setSel(null);
       else {
+        // the piece springs back from where it was let go, and onMiss runs once it's home (it can close the line, whose
+        // board is the one that hides the square); reduced motion: it's home at once
         setSel(null);
-        onMiss();
+        if (CALM_MQ && CALM_MQ.matches) onMiss();
+        else setDrag({ ...d, x: p.x, y: p.y, moved: true, back: true, piece: pos.b[d.from] });
       }
     },
-    onCancel: () => setDrag(null),
+    onCancel: () => setDrag((d) => (d && d.back ? d : null)),
+    onBack: () => {
+      if (!drag || !drag.back) return;
+      setDrag(null);
+      onMiss();
+    },
   };
   // Esc: the promotion picker or the castle question goes, playing nothing
   const cancelPromo = () => {
     setPromo(null);
     setCastle(null);
   };
+  // a piece springing back isn't a half-made move: it goes on landing (a miss can close the line it was picked up on)
   const clear = () => {
     setSel(null);
-    setDrag(null);
+    setDrag((d) => (d && d.back ? d : null));
     setPromo(null);
     setCastle(null);
   };
