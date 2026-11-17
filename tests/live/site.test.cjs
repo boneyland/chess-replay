@@ -1147,6 +1147,19 @@ for (const name of BROWSERS)
             return +m * 60 + +x;
           };
           const now = async () => secs(await page.locator('.ptime').first().textContent());
+          // the playhead's time once it has held still for 0.8 s: WebKit in CI draws a frame only every 0.3 s or so, so the
+          // drag shows late and the glide takes several of them
+          const steady = async () => {
+            let last = await now(),
+              since = Date.now();
+            for (const end = Date.now() + 8000; Date.now() < end; ) {
+              await page.waitForTimeout(100);
+              const t = await now();
+              if (t !== last) [last, since] = [t, Date.now()];
+              else if (Date.now() - since >= 800) break;
+            }
+            return last;
+          };
           const head = page.getByRole('slider', { name: 'Playhead' });
           await head.focus();
           await page.keyboard.press('Home');
@@ -1154,8 +1167,7 @@ for (const name of BROWSERS)
           // two moves on: the playhead at a settled time, just before the third move starts (0.12 s on)
           await page.keyboard.press('ArrowRight');
           await page.keyboard.press('ArrowRight');
-          await page.waitForTimeout(400);
-          const t0 = await now();
+          const t0 = await steady();
           // drag from t0 into the third move's slide (0.35 s on) and let go, both in one task: the last move isn't drawn yet
           const drag = (cancel) =>
             page.evaluate(
@@ -1173,6 +1185,13 @@ for (const name of BROWSERS)
                   bubbles: true,
                   cancelable: true,
                 });
+                // every time the playhead shows from here on: the settle is checked once the drag has been drawn
+                window.__shown = [];
+                if (!window.__shownObs) {
+                  const time = document.querySelector('.ptime');
+                  window.__shownObs = new MutationObserver(() => window.__shown.push(time.textContent));
+                  window.__shownObs.observe(time, { childList: true, characterData: true, subtree: true });
+                }
                 el.dispatchEvent(new PointerEvent('pointerdown', { ...at(t0), button: 0, buttons: 1 }));
                 el.dispatchEvent(new PointerEvent('pointermove', { ...at(t0 + 0.35), buttons: 1 }));
                 // a cancel comes once the drag has drawn (the browser taking a touch over); a let-go at once
@@ -1183,7 +1202,26 @@ for (const name of BROWSERS)
             );
           for (const cancel of [false, true]) {
             await drag(cancel);
-            await page.waitForTimeout(600);
+            // settled: back at t0, or past the move's landing and badge; only after the playhead has shown the drag (a
+            // let-go before the drag is drawn reads t0 at first). WebKit in CI, with Stockfish running, draws a frame
+            // only every 0.3 s or more, so the glide's few frames can take a second
+            await page
+              .waitForFunction(
+                (t0) => {
+                  const secs = (s) => {
+                    const [m, x] = s.split(':');
+                    return +m * 60 + +x;
+                  };
+                  const t = secs(document.querySelector('.ptime').textContent);
+                  return (
+                    window.__shown.some((s) => Math.abs(secs(s) - t0) > 0.02) &&
+                    (Math.abs(t - t0) < 0.02 || t > t0 + 0.6)
+                  );
+                },
+                t0,
+                { timeout: 8000, polling: 100 },
+              )
+              .catch(() => {});
             const t1 = await now();
             // inside the move is t0 + 0.12 up to its landing and badge (0.9 s after); settled is t0 or past that
             assert.ok(
@@ -1192,7 +1230,7 @@ for (const name of BROWSERS)
             );
             await page.keyboard.press('ArrowLeft');
             await page.keyboard.press('ArrowRight');
-            await page.waitForTimeout(400);
+            await steady();
           }
           // a step glides its pieces; Play straight after stops the glide (as an export starting does: no glide in a video)
           const glides = () =>
