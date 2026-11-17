@@ -21,6 +21,16 @@
   /*THEME:dark*/
   color-scheme: dark;
 }
+/* the system's "more contrast" (GNOME's High Contrast, macOS's Increase contrast, Windows' contrast themes): stronger
+   lines and secondary text over either theme, in the same three cases. Windows' contrast themes and Firefox's colour
+   override also force the system's colours (forced-colors, at the end of this sheet) */
+@media (prefers-contrast: more) {
+  :root { /*THEME:lightMore*/ }
+  :root[data-scheme="dark"] { /*THEME:darkMore*/ }
+}
+@media (prefers-contrast: more) and (prefers-color-scheme: dark) {
+  :root:not([data-scheme="light"]) { /*THEME:darkMore*/ }
+}
 html { height: 100%; box-sizing: border-box; font-size: calc(16px * var(--text, 1)); }
 /* a phone in full screen keeps the page clear of the camera: upright, the page's own top padding (the safe-area inset,
    in build.cjs) is the cut-out's strip (the status bar's height, 37–41 px; a big or low camera needs all of it), held
@@ -693,6 +703,49 @@ body:has(.stage:not(.stage-one)) .net-note { top: calc(64px + env(safe-area-inse
   .board-tile:active, .dlg-box button:active:not(:disabled) { transform: none; }
   .dlg-box, .dock-pop, .twk-panel { animation-name: dlg-in; }
   .ptrack-bg, .ptrack-fill, .ptrack-knob, .pbar .ptime { transition: none; }
+}
+
+/* Materials: the Menu, the Play and Explore menu and the Settings and Queen panels are frosted glass over the board,
+   where the browser blurs (translucent without the blur reads badly over pieces). The filter is on the element itself,
+   not a ::before layer: their open animation fades them, and an ancestor fading cuts a layer's blur off from what's
+   behind; nothing fixed renders inside them (tooltips and the drag ghost portal to the body), which the filter would
+   trap. Dialogs stay opaque: their scrim already hides the page */
+@supports (backdrop-filter: blur(1px)) or (-webkit-backdrop-filter: blur(1px)) {
+  .pmenu .dock-items, .dock-pop, .twk-panel {
+    background: color-mix(in srgb, var(--panel-glass) 76%, transparent);
+    -webkit-backdrop-filter: blur(16px) saturate(1.6); backdrop-filter: blur(16px) saturate(1.6);
+  }
+}
+/* opaque again for a viewer who asked for less transparency or more contrast, or whose system forces its colours: the
+   glass above, the Transport bar's tint and the drop box */
+@media (prefers-reduced-transparency: reduce), (prefers-contrast: more), (forced-colors: active) {
+  .pmenu .dock-items, .dock-pop, .twk-panel { background: var(--panel-glass); -webkit-backdrop-filter: none; backdrop-filter: none; }
+  .pbar::before { background: color-mix(in srgb, var(--accent) 24%, var(--panel)); -webkit-backdrop-filter: none; backdrop-filter: none; }
+  .drop-box { background: var(--panel); -webkit-backdrop-filter: none; backdrop-filter: none; }
+}
+@media (prefers-contrast: more) {
+  .pbar::before { box-shadow: inset 0 1px 0 var(--line-strong); }
+}
+/* Forced colours (Windows' contrast themes; Firefox's colour override, which by default follows the system's high
+   contrast): the system's colours replace the page's, inline styles too. The board, its tiles, the eval bar and graph
+   and the picture read from keep their own colours, which say which square is which; and every state that showed as a
+   tint or a shadow alone (the open tab, the picked choice, a switch, the current move) gets the system's highlight */
+@media (forced-colors: active) {
+  .part-board, .part-eval-bar, .part-eval-graph, .part-piece-tray, .board-tile, .piece-tile, .vision-zone { forced-color-adjust: none; }
+  .twk-tabs button[aria-selected="true"], .twk-seg button[aria-checked="true"], .expl-open-btn.on, .q-table tr.q-sel {
+    forced-color-adjust: none; background: Highlight; color: HighlightText; }
+  .twk-btn { border: 1px solid ButtonText; }
+  /* the seek bar: the track's edge, the played part and the knob in the system's colours */
+  .ptrack-bg { background: Canvas; box-shadow: inset 0 0 0 1px CanvasText; forced-color-adjust: none; }
+  .ptrack-fill { background: Highlight; forced-color-adjust: none; }
+  .ptrack-knob { background: CanvasText; forced-color-adjust: none; box-shadow: none; }
+  .twk-seg-thumb { display: none; }
+  .twk-toggle { forced-color-adjust: none; background: Canvas; box-shadow: inset 0 0 0 1px ButtonText; }
+  .twk-toggle i { background: ButtonText; }
+  .twk-toggle[data-on="1"] { background: Highlight; }
+  .twk-toggle[data-on="1"] i { background: HighlightText; }
+  .mv[aria-current] { outline: 3px solid Highlight; outline-offset: 1px; }
+  .pbar::before { box-shadow: none; border-top: 1px solid CanvasText; }
 }
 </style>
 <div id="root"></div>

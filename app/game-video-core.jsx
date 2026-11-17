@@ -1870,6 +1870,7 @@ function LineChips({ name, nameColor, accent, moves, ply0, c, legal, sel, onPick
             <span
               className={ok ? 'mv' : undefined}
               role={ok ? 'button' : undefined}
+              aria-current={on ? 'true' : undefined}
               title={ok ? `Show ${what} on the board up to ${m}` : 'Not a legal move in this line'}
               onClick={
                 ok
@@ -2346,6 +2347,7 @@ function MoveList({ M, T, S, a, paused, onPick, deadAt, end, startAt }) {
           className="mv"
           role="button"
           data-ply={i}
+          aria-current={cur ? 'true' : undefined}
           tabIndex={i === focusPly ? 0 : -1}
           title={`Go to ${label(M, i)}`}
           onClick={(e) => {
