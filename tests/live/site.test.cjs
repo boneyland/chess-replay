@@ -1742,6 +1742,7 @@ for (const name of BROWSERS)
               }),
           { b },
         );
+        await settled(p); // the line's move glides in: read where it stops
         const shown = await piecesOn(p, b, true);
         if (dest) {
           assert.ok(lit.includes(dest), `${san} lights ${dest} as seen flipped: ${lit.join(' ')}`);
