@@ -142,6 +142,22 @@ try {
     }
   }
   undo.push(() => browser.deleteSession());
+  // safaridriver now and then drops one request (ECONNRESET), in a different test each time, while the session goes on:
+  // the tests after it pass (PR 257's runs, 2026-11-17). A script run is tried again then, twice at most, a second apart;
+  // only scripts (they read the page, or dispatch events a test checks for), never actions, whose tap may have landed.
+  // The session's own retries stay off (connectionRetryCount: 0), as the loop above retries starting it its own way
+  for (const cmd of ['execute', 'executeAsync'])
+    browser.overwriteCommand(cmd, async (run, ...args) => {
+      for (let i = 0; ; i++) {
+        try {
+          return await run(...args);
+        } catch (e) {
+          if (i >= 2 || !/ECONNRESET/.test(`${e && e.code} ${e && e.message}`)) throw e;
+          t.diagnostic(`${cmd}: the connection to safaridriver was reset, trying again`);
+          await new Promise((r) => setTimeout(r, 1000));
+        }
+      }
+    });
   t.diagnostic(`Safari ${browser.capabilities.browserVersion}`);
   await browser.setTimeout({ script: 15000 });
 
