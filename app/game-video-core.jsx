@@ -794,11 +794,13 @@ function boardSquares() {
 
 // lines: the engine lines' arrows on the viewer's own line (lineArrows)
 // sel: the square of the piece picked to move (useBoardInput)
-// slide: a one-move step: the pieces glide (Piece); glide: a line's steps glide (LineBoard)
-function Board({ M, T, S, a, arrows, pieces, queen, vline, hide, lines, sel, idle, slide, glide }) {
+// slide: a one-move step: the pieces glide (Piece); glide: a line's steps glide (LineBoard); preview: vline is a line
+// hovered in a panel (LineBoard)
+function Board({ M, T, S, a, arrows, pieces, queen, vline, hide, lines, sel, idle, slide, glide, preview }) {
   const c = lastPly(T, S);
   const sq = boardSquares();
-  if (vline) return <LineBoard a={a} sq={sq} v={vline} hide={hide} arrows={lines} sel={sel} glide={glide} />;
+  if (vline)
+    return <LineBoard a={a} sq={sq} v={vline} hide={hide} arrows={lines} sel={sel} glide={glide} preview={preview} />;
   const over = [];
   let badge = null,
     best = null;
@@ -1314,14 +1316,14 @@ const shownLineNote = (M, vline) => (
 );
 // arrows: the engine lines' first moves from the position shown ([{ uci, k }], lineArrows), line 1 the strongest
 // glide: a step of one move along the line glides its pieces (useLineGlide)
-function LineBoard({ a, sq, v, hide, arrows, sel, glide }) {
+function LineBoard({ a, sq, v, hide, arrows, sel, glide, preview }) {
   // the ring around the board says whose line it is; its last move gets the same tint as the game's
   const step = v.upto >= 0 ? v.moves[v.upto] : null,
     accent = v.src === 'queen' ? BOARD.queen : v.src === 'you' ? BOARD.last : BOARD.best;
   const board = step ? step.board : v.base.b;
   // the board one move before the one shown (none at the line's start)
   const prev = v.upto > 0 ? v.moves[v.upto - 1].board : v.upto === 0 ? v.base.b : null;
-  const imgs = useLineGlide(board, prev, v.upto, glide, hide);
+  const imgs = useLineGlide(board, prev, v.upto, glide, hide, preview);
   const over = !step
     ? []
     : [step.uci.slice(0, 2), step.uci.slice(2, 4)].map((s, j) => {
@@ -1422,10 +1424,11 @@ function LineBoard({ a, sq, v, hide, arrows, sel, glide }) {
 // A line board's move glide: when the board steps one move along the line (upto ±1, a takeback of one, the computer's
 // reply), the pieces that moved (ChessCore.movedPieces) glide from their old squares. Only a step along one line: the board
 // left must be the one before the new board (prev), or the new board the one before it, so not a jump, another line from
-// the same move or another game. Not a preview or a piece just dropped by a drag (hide: the square of the piece being
-// dragged), which is already where the pointer left it. A running glide stops when glide turns off or the board flips.
-// Returns the ref of the square → piece image map LineBoard fills
-function useLineGlide(board, prev, upto, glide, hide) {
+// the same move or another game. Not a piece just dropped by a drag (hide: the square of the piece being dragged), which
+// is already where the pointer left it. A preview (a line hovered in a panel) glides its last move in from the board before
+// it whenever it isn't such a step: as it appears, and on a jump to another of its moves. A running glide stops when glide
+// turns off or the board flips. Returns the ref of the square → piece image map LineBoard fills
+function useLineGlide(board, prev, upto, glide, hide, preview) {
   const imgs = React.useRef({}),
     was = React.useRef(null),
     glides = React.useRef({}),
@@ -1439,9 +1442,14 @@ function useLineGlide(board, prev, upto, glide, hide) {
       Object.values(glides.current).forEach((g) => g && g.anim.cancel());
       glides.current = {};
     }
-    if (!w || w.board === board) return;
-    const step = glide && w.glide && w.orient === ORIENT && window.ChessCore.lineStep(w, { board, prev, upto });
-    const moved = step ? window.ChessCore.movedPieces(w.board, board) : null;
+    if (w ? w.board === board : !preview) return;
+    const CC = window.ChessCore,
+      step = glide && w && w.glide && w.orient === ORIENT && CC.lineStep(w, { board, prev, upto });
+    const moved = step
+      ? CC.movedPieces(w.board, board)
+      : glide && preview && prev && (!w || w.orient === ORIENT)
+        ? CC.movedPieces(prev, board)
+        : null;
     const old = glides.current;
     glides.current = {};
     const d = drag.current,
@@ -3420,8 +3428,9 @@ function useBoardInput({ pos, onPick, onMiss, onMove }) {
         if (d.again) setSel(null);
         return;
       }
-      const to = dropSquare(d, p, true);
-      if (to !== d.from && playMove(d.from, to)) setSel(null);
+      // a piece let go off the board (its lifted centre outside it) plays nothing: it springs back
+      const to = dropSquare(d, p, false);
+      if (to >= 0 && to !== d.from && playMove(d.from, to)) setSel(null);
       else {
         // the piece springs back from where it was let go, and onMiss runs once it's home (it can close the line, whose
         // board is the one that hides the square); reduced motion: it's home at once
@@ -4011,7 +4020,8 @@ function GameVideo({ M, tw, d, probe, queen, nav, scheme, sf, orient }) {
               queen={queen}
               vline={pv || vline}
               slide={slide}
-              glide={!pv && !video && !CALM}
+              glide={!video && !CALM}
+              preview={!!pv}
               hide={input.drag && input.drag.moved ? input.drag.from : null}
               lines={
                 tw.bestArrows

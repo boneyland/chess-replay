@@ -1720,7 +1720,23 @@ for (const name of BROWSERS)
         const san = (await chips.first().innerText()).trim(),
           dest = (san.match(/[a-h][1-8]/g) || []).pop();
         b = await boardBox(p);
+        await settled(p);
+        // where the board's pieces are drawn, to see the preview arrive
+        const before = await p.evaluate(() => {
+          window.__imgsAt = () =>
+            [...document.querySelectorAll('img')]
+              .map((i) => i.getBoundingClientRect())
+              .filter((r) => r.width > 10)
+              .map((r) => Math.round(r.left) + ',' + Math.round(r.top))
+              .sort()
+              .join(';');
+          return window.__imgsAt();
+        });
         await chips.first().hover();
+        // the preview is on the board (its pieces differ from the game's) and its move has glided in; until then the
+        // game's own last move is what's lit
+        await p.waitForFunction((was) => window.__imgsAt() !== was, before, { timeout: 5000 });
+        await settled(p);
         // the line's move lights its two squares, the last one its destination
         await p.waitForFunction(
           () =>

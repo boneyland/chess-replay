@@ -958,7 +958,8 @@ function FreeBoard({ board, onChange, tw, setTweak, onLichess, sf, nav, orient, 
               : { upto, moves: steps, base: board.start.pos, src: 'you' }
           }
           hide={input.drag && input.drag.moved ? input.drag.from : null}
-          glide={!(pv && pv.length) && !reduced}
+          glide={!reduced}
+          preview={!!(pv && pv.length)}
           arrows={
             hintMove
               ? [{ uci: had.best, k: 1 }]
