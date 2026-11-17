@@ -84,8 +84,13 @@
   // a phone held sideways (docked) with the room of full screen (minH: the stage at least that high) also hugs the player
   // bars to the board (1 px, as upright) and widens the eval bar to 18 px, whose number grows with it: the 14 px bar
   // squeezed it (Firefox for Android full screen, 863×407, 2026-11-18). Shorter (the browser's bars showing, 863×286)
-  // keeps the plain dock layout, which wants the player bars beside the board instead (docs/roadmap.md)
+  // puts the player bars beside the board instead (SIDE_COL, below)
   const PHONE_DOCK = { evalW: 18, barGap: 1, minH: 340 };
+  // shorter than that (the browser's bars showing, 863×286 in Firefox for Android: the bars over and under the board took
+  // 66 px of it), the player bars stand in a column between the board and the sidebar (SIDE_COL wide, times text), the
+  // top one level with the board's top, the bottom one with its foot, and the board takes the whole height; only where
+  // that makes the board bigger and leaves the sidebar its minimum (not a 568×320 phone, held by its width)
+  const SIDE_COL = 124;
   const ONE_COL = { comment: 200, analysis: 260, panel: 260 }; // paused heights, times text (Moves: its five lines)
   const VIDEO_PREF = [96, 120, 96],
     PANEL_FLOOR = 48; // comment, analysis, moves under a video's board, times text
@@ -198,7 +203,16 @@
     return m;
   }
 
-  function twoColumns({ w, h, text, view, dock, vw }) {
+  // the board with the player bars in a column beside it (SIDE_COL): the whole height, where the width leaves room for it
+  // and the sidebar's minimum and that beats size, the board with them over and under it; else 0
+  function sideBoard({ w, h, text, size }) {
+    const evalTotal = PHONE_DOCK.evalW + EVAL_GAP,
+      col = SIDE_COL * text;
+    const s = Math.min(boardMax, h - 2 * MARGIN);
+    return s > size + 1 && s <= w - 2 * MARGIN - evalTotal - col - 2 * GAP - SIDEBAR_MIN * text ? s : 0;
+  }
+
+  function twoColumns({ w, h, text, view, dock, vw, sideOk }) {
     if (dock) MARGIN = DOCK_MARGIN;
     const hasEval = view === 'replay' || view === 'free';
     const { square, plotBelow, plotH, hLimit } = under({ w, h, text, view, dock, cap: boardMax, vw });
@@ -206,10 +220,17 @@
     // the sidebar's share (sideW); the left column (board plus its eval bar) is what is left
     const wLimit = w - 2 * MARGIN - GAP - sideW(w, text);
     // 200 px at least by width; a window too short for that (a video in a phone held sideways at its smallest) shrinks the board to the height
-    const size = Math.max(40, Math.min(Math.max(BOARD_MIN, Math.min(boardMax, wLimit - EVAL_TOTAL)), hLimit));
-    const left = size + EVAL_TOTAL; // same sidebar position whether or not the view draws an eval bar
-    const boardX = hasEval ? MARGIN + EVAL_TOTAL : MARGIN + (left - size) / 2;
-    const boardY = MARGIN + bar + BAR_GAP;
+    const plain = Math.max(40, Math.min(Math.max(BOARD_MIN, Math.min(boardMax, wLimit - EVAL_TOTAL)), hLimit));
+    const sideSize = dock && sideOk && view !== 'edit' ? sideBoard({ w, h, text, size: plain }) : 0;
+    if (sideSize) {
+      EVAL_W = PHONE_DOCK.evalW;
+      EVAL_TOTAL = EVAL_W + EVAL_GAP;
+    }
+    const size = sideSize || plain,
+      col = sideSize ? SIDE_COL * text + GAP : 0;
+    const left = size + EVAL_TOTAL + col; // same sidebar position whether or not the view draws an eval bar
+    const boardX = hasEval ? MARGIN + EVAL_TOTAL : MARGIN + (left - col - size) / 2;
+    const boardY = sideSize ? MARGIN : MARGIN + bar + BAR_GAP;
     const sx = MARGIN + left + GAP,
       sw = w - MARGIN - sx;
     const top = MARGIN;
@@ -222,7 +243,10 @@
       h,
       board: { x: boardX, y: boardY, size },
       eval: hasEval ? { x: MARGIN, w: EVAL_W } : null,
-      bars: { h: bar, gap: BAR_GAP },
+      // side: the player bars' column beside the board (x, w; each bar half the board's height, less half a gap)
+      bars: sideSize
+        ? { h: (size - GAP) / 2, gap: GAP, side: { x: boardX + size + GAP, w: SIDE_COL * text } }
+        : { h: bar, gap: BAR_GAP },
       header: null,
       moves: null,
       comment: null,
@@ -427,6 +451,7 @@
         view,
         video,
         dock: c === 2 && dock,
+        sideOk: tierOf(vw, vh) === 'phone' && h < PHONE_DOCK.minH,
         vw,
         phone: tierOf(vw, vh) === 'phone',
       }),
@@ -439,5 +464,16 @@
   // the export's canvas size on one side: the page's CSS size at that scale, rounded down to even (video wants even sides)
   const exportPx = (v, scale) => Math.max(2, 2 * Math.floor((v * scale) / 2));
 
-  window.LayoutCore = { TEXT_SIZES, textScale, columns, pickColumns, compute, exportScale, exportPx };
+  // DOCK_FULL_H: under this stage height a docked bar (a phone held sideways, its browser's bars showing) also carries
+  // the Full screen button (GameApp)
+  window.LayoutCore = {
+    TEXT_SIZES,
+    textScale,
+    columns,
+    pickColumns,
+    compute,
+    exportScale,
+    exportPx,
+    DOCK_FULL_H: PHONE_DOCK.minH,
+  };
 })();

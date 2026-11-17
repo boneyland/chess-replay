@@ -1358,6 +1358,43 @@ for (const name of BROWSERS)
         assert.equal(await off.page.getByRole('button', { name: /full screen/i }).count(), 0);
         await off.ctx.close();
       });
+      // a phone held sideways with its browser's bars showing (the stage under 340 px high): Full screen is on the
+      // transport bar itself, by the menu; where the bar is narrow (640 wide) the first and last move buttons make room
+      await t.test('phone sideways, very short: Full screen is on the transport bar', async () => {
+        for (const [w, h, ends] of [
+          [863, 286, true],
+          [640, 320, false],
+        ]) {
+          const ph = await open(browser, { width: w, height: h }, phone({ hasTouch: true }));
+          const p = ph.page;
+          await p.goto(base, { waitUntil: 'load' });
+          await loadedOn(p);
+          const bar = p.locator('.part-transport-bar');
+          const fs = bar.getByRole('button', { name: 'Full screen', exact: true });
+          // where the browser has no full screen (Playwright's WebKit) there's no button, nor room taken for it
+          const can = await p.evaluate(() => !!(document.fullscreenEnabled || document.webkitFullscreenEnabled));
+          assert.equal(await fs.isVisible(), can, `${w}x${h}: on the bar where the browser has full screen`);
+          for (const name of [/^Back to start/, /^Last move/])
+            assert.equal(await bar.getByRole('button', { name }).isVisible(), ends || !can, `${w}x${h}`);
+          assert.deepEqual(await overflowing(p), [], `${w}x${h}: nothing cut off`);
+          if (!can) {
+            await ph.ctx.close();
+            continue;
+          }
+          const r = await fs.boundingBox();
+          await p.mouse.click(r.x + r.width / 2, r.y + r.height / 2);
+          await p.waitForFunction(() => document.documentElement === document.fullscreenElement, null, {
+            timeout: 3000,
+          });
+          await ph.ctx.close();
+        }
+        // with room for full screen's height, it stays in the menu only
+        const tall = await open(browser, { width: 863, height: 407 }, phone({ hasTouch: true }));
+        await tall.page.goto(base, { waitUntil: 'load' });
+        await loadedOn(tall.page);
+        assert.equal(await tall.page.locator('.part-transport-bar .pbtn-fs').count(), 0);
+        await tall.ctx.close();
+      });
 
       await t.test('the web app manifest and its icons are served', async () => {
         const m = await get('manifest.webmanifest');

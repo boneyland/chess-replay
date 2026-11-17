@@ -2028,8 +2028,21 @@ function clockOf(M, color, T, S) {
 
 // a player bar's place: above or below the board (the side at the bottom below it), as wide as the board
 // a player bar runs from the eval bar's left edge (the board's, where there's none) to the board's right edge
+// (or, in a very short window, L.bars.side: in a column beside the board, the top one from the board's top down, the
+// bottom one from its foot up)
 const barLeft = () => (L.eval ? L.eval.x : L.board.x),
   barWidth = () => L.board.x + L.board.size - barLeft();
+const sidePlace = (side) => ({
+  position: 'absolute',
+  left: L.bars.side.x,
+  width: L.bars.side.w,
+  height: L.bars.h,
+  top: side === ORIENT ? L.board.y + L.board.size - L.bars.h : L.board.y,
+  display: 'flex',
+  flexDirection: 'column',
+  justifyContent: side === ORIENT ? 'flex-end' : 'flex-start',
+  overflow: 'hidden',
+});
 const barPlace = (side) => ({
   position: 'absolute',
   left: barLeft(),
@@ -2101,6 +2114,7 @@ function SideBar({ side, a, name, rating, taken, pts, clock }) {
         />,
       );
   });
+  if (L.bars.side) return <StackedBar {...{ side, a, name, rating, shown, pts, clock }} />;
   const capsW = shown.length
     ? tx(6) +
       tx(30) +
@@ -2149,24 +2163,92 @@ function SideBar({ side, a, name, rating, taken, pts, clock }) {
       {caps && pts > 0 && (
         <span style={{ font: `600 ${tx(16)}px ${MONO}`, color: C.dim, marginLeft: tx(8) }}>+{pts}</span>
       )}
-      {clock && (
+      {clock && <Clock clock={clock} style={{ marginLeft: 'auto' }} />}
+    </div>
+  );
+}
+
+// a player bar's clock ({ s, active }): lit while it runs, red under a minute
+function Clock({ clock, style }) {
+  return (
+    <span
+      className="game-clock"
+      style={{
+        minWidth: tx(72),
+        textAlign: 'center',
+        padding: `${tx(1)}px ${tx(7)}px`,
+        borderRadius: 3,
+        font: `600 ${tx(17)}px ${MONO}`,
+        background: clock.active ? (clock.s < 60 ? C.blunder : 'rgb(251, 247, 241)') : C.off,
+        color: clock.active ? '#15100d' : C.dim,
+        boxShadow: clock.active ? `0 0 0 1px ${C.line}` : 'none',
+        ...style,
+      }}
+    >
+      {fmtClock(clock.s)}
+    </span>
+  );
+}
+
+// SideBar in the column beside the board (L.bars.side): stacked, mirrored so both clocks sit toward the middle: the top
+// bar the name (two lines at most, then an ellipsis) and rating, the captures, then the clock; the bottom one the clock,
+// the captures, then the name and rating. shown: the captured pieces' images, drawn smaller here
+function StackedBar({ side, a, name, rating, shown, pts, clock }) {
+  const bottom = side === ORIENT;
+  const who = (
+    <span key="who" style={{ display: 'flex', flexDirection: 'column', gap: tx(2), minWidth: 0 }}>
+      <span style={{ display: 'flex', alignItems: 'flex-start', gap: tx(8), minWidth: 0 }}>
         <span
-          className="game-clock"
           style={{
-            marginLeft: 'auto',
-            minWidth: tx(72),
-            textAlign: 'center',
-            padding: `${tx(1)}px ${tx(7)}px`,
-            borderRadius: 3,
-            font: `600 ${tx(17)}px ${MONO}`,
-            background: clock.active ? (clock.s < 60 ? C.blunder : 'rgb(251, 247, 241)') : C.off,
-            color: clock.active ? '#15100d' : C.dim,
-            boxShadow: clock.active ? `0 0 0 1px ${C.line}` : 'none',
+            width: tx(12),
+            height: tx(12),
+            marginTop: tx(4),
+            borderRadius: 2,
+            background: side === 'w' ? '#fff' : '#1c1613',
+            border: `1.5px solid ${C.dim}`,
+            flex: 'none',
+          }}
+        />
+        <span
+          title={name}
+          style={{
+            font: `600 ${tx(17)}px/1.2 ${SANS}`,
+            color: C.ink,
+            overflowWrap: 'anywhere',
+            display: '-webkit-box',
+            WebkitBoxOrient: 'vertical',
+            WebkitLineClamp: 2,
+            overflow: 'hidden',
+            minWidth: 0,
           }}
         >
-          {fmtClock(clock.s)}
+          {name}
+        </span>
+      </span>
+      {rating && (
+        <span style={{ font: `500 ${tx(14)}px ${MONO}`, color: C.dim, paddingLeft: tx(20), whiteSpace: 'nowrap' }}>
+          {rating}
         </span>
       )}
+    </span>
+  );
+  const caps = shown.length ? (
+    <span key="caps" style={{ display: 'flex', alignItems: 'center', flexWrap: 'wrap', rowGap: tx(2) }}>
+      {shown.map((im, i) =>
+        React.cloneElement(im, {
+          style: { ...im.props.style, width: tx(22), height: tx(22), marginLeft: i ? -tx(7) : 0 },
+        }),
+      )}
+      {pts > 0 && <span style={{ font: `600 ${tx(14)}px ${MONO}`, color: C.dim, marginLeft: tx(6) }}>+{pts}</span>}
+    </span>
+  ) : null;
+  const clk = clock ? <Clock key="clock" clock={clock} style={{ alignSelf: 'flex-start' }} /> : null;
+  return (
+    <div
+      className={'part-player-bar ' + (bottom ? 'bottom' : 'top')}
+      style={{ ...sidePlace(side), gap: tx(6), opacity: a }}
+    >
+      {bottom ? [clk, caps, who] : [who, caps, clk]}
     </div>
   );
 }
