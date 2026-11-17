@@ -587,8 +587,9 @@ function FitOrHide({ style, children }) {
 // a press or drag selects no text here (the board's pieces and coordinates, the eval bar and graph, the panels' hints),
 // nor drags a piece's image out
 const NO_SELECT = { userSelect: 'none', WebkitUserSelect: 'none', WebkitTouchCallout: 'none' };
-// slide: the board just stepped one move (GameVideo's goTo): a piece that changed square glides there from where it was
-function Piece({ p, T, S, slide }) {
+// slide: the board just stepped one move (GameVideo's goTo): a piece that changed square glides there from where it was;
+// glides: glides may run (not in a video): a running one is cancelled when it turns off, and when the board flips
+function Piece({ p, T, S, slide, glides }) {
   const imgRef = React.useRef(null),
     was = React.useRef(null),
     glide = React.useRef(null);
@@ -614,8 +615,12 @@ function Piece({ p, T, S, slide }) {
   }
   React.useLayoutEffect(() => {
     const w = was.current;
-    was.current = o > 0 ? [x, y] : null;
-    if (slide && w && imgRef.current && (w[0] !== x || w[1] !== y))
+    was.current = o > 0 ? [x, y, ORIENT] : null;
+    if (glide.current && (!glides || glide.current.orient !== ORIENT)) {
+      glide.current.anim.cancel();
+      glide.current = null;
+    }
+    if (slide && glides && w && w[2] === ORIENT && imgRef.current && (w[0] !== x || w[1] !== y))
       glide.current = glideFrom(imgRef.current, (w[0] - x) * SQ, (w[1] - y) * SQ, glide.current);
   });
   if (o <= 0) return null;
@@ -629,7 +634,7 @@ function Piece({ p, T, S, slide }) {
         width: SQ,
         height: SQ,
         opacity: o,
-        zIndex: lift > 0 ? 5 : 2,
+        zIndex: lift > 0 ? 5 : GLIDE_Z,
         transform: `translateY(${-lift * 10}px) scale(${sc * (1 + lift * 0.08)})`,
         filter: `drop-shadow(0 ${2 + lift * 10}px ${2 + lift * 8}px rgba(0,0,0,${0.25 + lift * 0.2}))`,
       }}
@@ -648,9 +653,13 @@ const GLIDE_EASE =
   window.CSS && CSS.supports && CSS.supports('transition-timing-function', 'linear(0, 1)')
     ? `linear(${Array.from({ length: 25 }, (_, i) => +springAt(i / 24).toFixed(4)).join(', ')})`
     : 'cubic-bezier(0.2, 0.9, 0.3, 1)';
+// A resting piece's z-index: 2, or a lifted piece's 5 while it glides (over the pieces it passes), set by glideFrom as a
+// custom property React never writes, so a render during the glide doesn't undo it
+const GLIDE_Z = 'var(--glide-z, 2)';
+const RAISED = new WeakMap(); // a raised piece's box → the glide that raised it
 // Glide el (a piece's image) from dx, dy board pixels off its place to it. prev: the glide this returned last time for the
 // same piece, still running when a new move interrupts it: the new one starts where the piece is drawn, not from its square.
-// Returns the glide's state
+// Returns the glide's state (orient: the board's orientation it was worked out in)
 function glideFrom(el, dx, dy, prev) {
   const now = performance.now();
   if (prev && prev.anim.playState === 'running') {
@@ -664,7 +673,20 @@ function glideFrom(el, dx, dy, prev) {
     duration: GLIDE_S * 1000,
     easing: GLIDE_EASE,
   });
-  return { dx, dy, t0: now, anim };
+  const box = el.parentElement;
+  if (box) {
+    box.style.setProperty('--glide-z', '5');
+    RAISED.set(box, anim);
+    // a cancelled glide's event comes after the next one has started: only the latest lowers the piece
+    const done = () => {
+      if (RAISED.get(box) !== anim) return;
+      RAISED.delete(box);
+      box.style.removeProperty('--glide-z');
+    };
+    anim.addEventListener('finish', done);
+    anim.addEventListener('cancel', done);
+  }
+  return { dx, dy, t0: now, anim, orient: ORIENT };
 }
 
 // thin: a lesser engine line's arrow
@@ -887,7 +909,7 @@ function Board({ M, T, S, a, arrows, pieces, queen, vline, hide, lines, sel, idl
       {over}
       {selSquare(sel)}
       {pieces.map((p) => (
-        <Piece key={p.id} p={p} T={T} S={S} slide={slide} />
+        <Piece key={p.id} p={p} T={T} S={S} slide={slide} glides={glide} />
       ))}
       <svg width={BW} height={BW} style={{ position: 'absolute', left: 0, top: 0, zIndex: 6, pointerEvents: 'none' }}>
         {best}
@@ -1296,7 +1318,9 @@ function LineBoard({ a, sq, v, hide, arrows, sel, glide }) {
   const step = v.upto >= 0 ? v.moves[v.upto] : null,
     accent = v.src === 'queen' ? BOARD.queen : v.src === 'you' ? BOARD.last : BOARD.best;
   const board = step ? step.board : v.base.b;
-  const imgs = useLineGlide(board, v.upto, glide, hide, v.base);
+  // the board one move before the one shown (none at the line's start)
+  const prev = v.upto > 0 ? v.moves[v.upto - 1].board : v.upto === 0 ? v.base.b : null;
+  const imgs = useLineGlide(board, prev, v.upto, glide, hide);
   const over = !step
     ? []
     : [step.uci.slice(0, 2), step.uci.slice(2, 4)].map((s, j) => {
@@ -1334,7 +1358,7 @@ function LineBoard({ a, sq, v, hide, arrows, sel, glide }) {
           top: idxXY(i)[1] * SQ,
           width: SQ,
           height: SQ,
-          zIndex: 2,
+          zIndex: GLIDE_Z,
           filter: 'drop-shadow(0 2px 2px rgba(0,0,0,0.25))',
         }}
       >
@@ -1394,12 +1418,14 @@ function LineBoard({ a, sq, v, hide, arrows, sel, glide }) {
   );
 }
 
+const sameBoard = (a, b) => a === b || (!!a && !!b && a.every((p, i) => p === b[i]));
 // A line board's move glide: when the board steps one move along the line (upto ±1, a takeback of one, the computer's
-// reply), the pieces that moved (ChessCore.movedPieces) glide from their old squares. Not a jump, another line or game
-// (base: the line's starting position), a preview or a piece
-// just dropped by a drag (hide: the square of the piece being dragged), which is already where the pointer left it.
+// reply), the pieces that moved (ChessCore.movedPieces) glide from their old squares. Only a step along one line: the board
+// left must be the one before the new board (prev), or the new board the one before it, so not a jump, another line from
+// the same move or another game. Not a preview or a piece just dropped by a drag (hide: the square of the piece being
+// dragged), which is already where the pointer left it. A running glide stops when glide turns off or the board flips.
 // Returns the ref of the square → piece image map LineBoard fills
-function useLineGlide(board, upto, glide, hide, base) {
+function useLineGlide(board, prev, upto, glide, hide) {
   const imgs = React.useRef({}),
     was = React.useRef(null),
     glides = React.useRef({}),
@@ -1408,24 +1434,32 @@ function useLineGlide(board, upto, glide, hide, base) {
   else if (drag.current && drag.current.live) drag.current = { sq: drag.current.sq, at: performance.now() };
   React.useLayoutEffect(() => {
     const w = was.current;
-    was.current = { board, upto, glide, base };
+    was.current = { board, prev, upto, glide, orient: ORIENT };
+    if (!glide || (w && w.orient !== ORIENT)) {
+      Object.values(glides.current).forEach((g) => g && g.anim.cancel());
+      glides.current = {};
+    }
     if (!w || w.board === board) return;
-    const moved =
-      glide && w.glide && w.base === base && Math.abs(upto - w.upto) === 1
-        ? window.ChessCore.movedPieces(w.board, board)
-        : null;
+    const step =
+      glide &&
+      w.glide &&
+      w.orient === ORIENT &&
+      ((upto === w.upto + 1 && sameBoard(prev, w.board)) || (upto === w.upto - 1 && sameBoard(board, w.prev)));
+    const moved = step ? window.ChessCore.movedPieces(w.board, board) : null;
     const old = glides.current;
     glides.current = {};
-    if (!moved) return;
     const d = drag.current,
       dropped = (sq) => d && d.sq === sq && (d.live || performance.now() - d.at < 400);
-    moved.forEach(({ from, to }) => {
+    (moved || []).forEach(({ from, to }) => {
       const el = imgs.current[to];
       if (!el || dropped(from)) return;
       const [x0, y0] = idxXY(from),
         [x1, y1] = idxXY(to);
       glides.current[to] = glideFrom(el, (x0 - x1) * SQ, (y0 - y1) * SQ, old[from]);
+      delete old[from];
     });
+    // a glide not carried on by this move (a jump, another line) stops: its square may hold another piece now
+    Object.values(old).forEach((g) => g && g.anim.cancel());
   });
   return imgs;
 }
@@ -3783,8 +3817,9 @@ function GameVideo({ M, tw, d, probe, queen, nav, scheme, sf, orient }) {
     tl.setTime(settled(j));
   };
   const slide = stepTo.current != null && stepTo.current === T && !video && !CALM;
+  // cleared once drawn, glide or not (reduced motion), so no later arrival at that time glides
   React.useLayoutEffect(() => {
-    if (slide) stepTo.current = null;
+    if (stepTo.current === T) stepTo.current = null;
   });
   // a paused playhead left inside a move (the seek bar let go, a seek by keys, a pause) glides out of it (Stage's settle)
   React.useEffect(() => {
