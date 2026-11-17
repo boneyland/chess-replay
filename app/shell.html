@@ -705,15 +705,15 @@ body:has(.stage:not(.stage-one)) .net-note { top: calc(64px + env(safe-area-inse
   .ptrack-bg, .ptrack-fill, .ptrack-knob, .pbar .ptime { transition: none; }
 }
 
-/* Materials: the Menu, the Play and Explore menu and the Settings and Queen panels are frosted glass over the board,
+/* Materials: the Menu, the Play and Explore menu, the Settings and Queen panels and the dialogs are frosted glass over the board,
    where the browser blurs (translucent without the blur reads badly over pieces). The filter is on the element itself,
    not a ::before layer: their open animation fades them, and an ancestor fading cuts a layer's blur off from what's
    behind; nothing fixed renders inside them (tooltips and the drag ghost portal to the body), which the filter would
-   trap. Dialogs stay opaque: their scrim already hides the page */
+   trap. Dialogs are glass as the panels are, over their scrim */
 @supports (backdrop-filter: blur(1px)) or (-webkit-backdrop-filter: blur(1px)) {
-  .pmenu .dock-items, .dock-pop, .twk-panel {
+  .pmenu .dock-items, .dock-pop, .twk-panel, .dlg-box {
     background: color-mix(in srgb, var(--panel-glass) var(--glass), transparent);
-    -webkit-backdrop-filter: blur(8px) saturate(1.6); backdrop-filter: blur(8px) saturate(1.6);
+    -webkit-backdrop-filter: blur(12px) saturate(1.6); backdrop-filter: blur(12px) saturate(1.6);
   }
   /* the menus are thinner (--glass-menu): what's on them is buttons (opaque) and a little text, which is drawn in ink, as
      the board showing through takes grey or gold under 4.5:1 there, and so is the focus ring (3:1). The panels carry
@@ -721,6 +721,16 @@ body:has(.stage:not(.stage-one)) .net-note { top: calc(64px + env(safe-area-inse
   .pmenu .dock-items, .dock-pop { background: color-mix(in srgb, var(--panel-glass) var(--glass-menu), transparent); --dim: var(--ink); }
   .pmenu .dock-items .dock-menu-label, .dock-pop .dock-menu-label { color: var(--ink); }
   .pmenu .dock-items :focus-visible, .dock-pop :focus-visible { outline-color: var(--ink); }
+  /* a dialog's scrim is clear where its box is glass, so the page shows through the box; it still takes a press outside
+     the box (which closes the dialog) and keeps it off the board. Over the board unveiled the box's grey, gold and red
+     text fell to 3.9–4.4:1, so in the box they're mixed a quarter of the way to the ink (5.2:1 or more, measured
+     2026-11-17); the scrim keeps the theme's own (-0) for the box to mix from */
+  .dlg-scrim { background: transparent; --dim-0: var(--dim); --accent-0: var(--accent); --danger-0: var(--danger); --ok-0: var(--ok); --warn-0: var(--warn); }
+  .dlg-box {
+    --dim: color-mix(in srgb, var(--dim-0) 75%, var(--ink)); --accent: color-mix(in srgb, var(--accent-0) 75%, var(--ink));
+    --danger: color-mix(in srgb, var(--danger-0) 75%, var(--ink)); --ok: color-mix(in srgb, var(--ok-0) 75%, var(--ink));
+    --warn: color-mix(in srgb, var(--warn-0) 75%, var(--ink));
+  }
   /* their buttons are glass too, thicker (--glass-btn, --glass-btn-primary); hovered or pressed they fill as before */
   .pmenu .dock-items .dock-btn, .dock-pop .dock-btn { background-color: color-mix(in srgb, var(--btn) var(--glass-btn), transparent); }
   .pmenu .dock-items .dock-primary, .dock-pop .dock-primary { background-color: color-mix(in srgb, var(--accent) var(--glass-btn-primary), transparent); }
@@ -732,10 +742,12 @@ body:has(.stage:not(.stage-one)) .net-note { top: calc(64px + env(safe-area-inse
 /* opaque again for a viewer who asked for less transparency or more contrast, or whose system forces its colours: the
    glass above, the Transport bar's tint and the drop box */
 @media (prefers-reduced-transparency: reduce), (prefers-contrast: more), (forced-colors: active) {
-  .pmenu .dock-items, .dock-pop, .twk-panel { background: var(--panel-glass); -webkit-backdrop-filter: none; backdrop-filter: none; --dim: unset; }
+  .pmenu .dock-items, .dock-pop, .twk-panel, .dlg-box { background: var(--panel-glass); -webkit-backdrop-filter: none; backdrop-filter: none; --dim: unset; }
   .pmenu .dock-items .dock-menu-label, .dock-pop .dock-menu-label { color: var(--accent); }
   .pmenu .dock-items :focus-visible, .dock-pop :focus-visible { outline-color: var(--accent); }
   .pmenu .dock-items .dock-btn, .dock-pop .dock-btn { background-color: var(--btn); }
+  .dlg-scrim { background: var(--scrim); }
+  .dlg-box { --dim: unset; --accent: unset; --danger: unset; --ok: unset; --warn: unset; }
   .pmenu .dock-items .dock-primary, .dock-pop .dock-primary { background-color: var(--accent); }
   .pbar::before { background: color-mix(in srgb, var(--accent) 24%, var(--panel)); -webkit-backdrop-filter: none; backdrop-filter: none; }
   .drop-box { background: var(--panel); -webkit-backdrop-filter: none; backdrop-filter: none; }
