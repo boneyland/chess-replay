@@ -1316,6 +1316,43 @@ test('settleTo: a paused playhead inside a move glides to a settled frame; a set
   assert.equal(CC.settleTo(S, CUES, S.tp[0] + 0.01), at(-1));
 });
 
+test('lineStep: a line board stepped one move along one line, not to another line, a jump or another game', () => {
+  const start = CC.parseFen('rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1').pos;
+  // a line's boards from start: [base, after move 1, after move 2…]
+  const line = (...ucis) => {
+    const out = [start.b];
+    let pos = start;
+    for (const u of ucis) {
+      pos = CC.applyUci(pos, u).pos;
+      out.push(pos.b);
+    }
+    return out;
+  };
+  // what a LineBoard shows at upto (-1: the base)
+  const at = (boards, upto) => ({ board: boards[upto + 1], prev: upto >= 0 ? boards[upto] : null, upto });
+  const a = line('e2e4', 'e7e5', 'g1f3'),
+    b = line('d2d4', 'd7d5');
+  // one step on and back along one line, the base included
+  assert.equal(CC.lineStep(at(a, -1), at(a, 0)), true);
+  assert.equal(CC.lineStep(at(a, 0), at(a, 1)), true);
+  assert.equal(CC.lineStep(at(a, 2), at(a, 1)), true);
+  assert.equal(CC.lineStep(at(a, 0), at(a, -1)), true);
+  // the same boards rebuilt (new arrays, the same pieces) are the same line
+  const a2 = line('e2e4', 'e7e5', 'g1f3');
+  assert.equal(CC.lineStep(at(a, 0), at(a2, 1)), true);
+  // a jump of two, or no step
+  assert.equal(CC.lineStep(at(a, -1), at(a, 1)), false);
+  assert.equal(CC.lineStep(at(a, 2), at(a, 0)), false);
+  assert.equal(CC.lineStep(at(a, 1), at(a, 1)), false);
+  // another line from the same move, upto one apart (an own line, then an engine line picked): no glide
+  assert.equal(CC.lineStep(at(a, 0), at(b, 1)), false);
+  assert.equal(CC.lineStep(at(b, 1), at(a, 0)), false);
+  // another game: the same upto steps but another starting position
+  const other = CC.parseFen('4k3/8/8/8/8/8/8/4K2R w K - 0 1').pos;
+  const c = [other.b, CC.applyUci(other, 'e1g1').pos.b];
+  assert.equal(CC.lineStep(at(a, -1), at(c, 0)), false);
+});
+
 test('movedPieces: the pieces one move took from square to square', () => {
   const B = (fen) => CC.parseFen(fen).pos.b;
   const after = (fen, uci) => CC.applyUci(CC.parseFen(fen).pos, uci).pos.b;

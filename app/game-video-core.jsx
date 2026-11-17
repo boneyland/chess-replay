@@ -1418,7 +1418,6 @@ function LineBoard({ a, sq, v, hide, arrows, sel, glide }) {
   );
 }
 
-const sameBoard = (a, b) => a === b || (!!a && !!b && a.every((p, i) => p === b[i]));
 // A line board's move glide: when the board steps one move along the line (upto ±1, a takeback of one, the computer's
 // reply), the pieces that moved (ChessCore.movedPieces) glide from their old squares. Only a step along one line: the board
 // left must be the one before the new board (prev), or the new board the one before it, so not a jump, another line from
@@ -1440,11 +1439,7 @@ function useLineGlide(board, prev, upto, glide, hide) {
       glides.current = {};
     }
     if (!w || w.board === board) return;
-    const step =
-      glide &&
-      w.glide &&
-      w.orient === ORIENT &&
-      ((upto === w.upto + 1 && sameBoard(prev, w.board)) || (upto === w.upto - 1 && sameBoard(board, w.prev)));
+    const step = glide && w.glide && w.orient === ORIENT && window.ChessCore.lineStep(w, { board, prev, upto });
     const moved = step ? window.ChessCore.movedPieces(w.board, board) : null;
     const old = glides.current;
     glides.current = {};

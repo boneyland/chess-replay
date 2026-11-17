@@ -1136,6 +1136,83 @@ for (const name of BROWSERS)
         await page.keyboard.press('Home');
       });
 
+      // A paused playhead left inside a move glides out of it (Stage's settle). The pointer events here are made by
+      // script, not page.mouse: the let-go must come before React has drawn the last drag (it settles from the time
+      // last dragged to, not the one drawn), and a desktop mouse can't make the browser cancel a drag
+      await t.test(
+        'desktop: the playhead settles from where it was dragged, a cancelled drag too, and Play stops a glide',
+        async () => {
+          const secs = (s) => {
+            const [m, x] = s.split(':');
+            return +m * 60 + +x;
+          };
+          const now = async () => secs(await page.locator('.ptime').first().textContent());
+          const head = page.getByRole('slider', { name: 'Playhead' });
+          await head.focus();
+          await page.keyboard.press('Home');
+          await page.evaluate(() => document.activeElement.blur());
+          // two moves on: the playhead at a settled time, just before the third move starts (0.12 s on)
+          await page.keyboard.press('ArrowRight');
+          await page.keyboard.press('ArrowRight');
+          await page.waitForTimeout(400);
+          const t0 = await now();
+          // drag from t0 into the third move's slide (0.35 s on) and let go, both in one task: the last move isn't drawn yet
+          const drag = (cancel) =>
+            page.evaluate(
+              async ({ t0, cancel }) => {
+                const el = document.querySelector('[role="slider"][aria-label="Playhead"]'),
+                  r = el.getBoundingClientRect(),
+                  total = document.querySelector('.ptime-total').textContent.split(':'),
+                  d = +total[0] * 60 + +total[1];
+                const at = (t) => ({
+                  clientX: r.left + (t / d) * r.width,
+                  clientY: r.top + r.height / 2,
+                  pointerId: 7,
+                  pointerType: 'mouse',
+                  isPrimary: true,
+                  bubbles: true,
+                  cancelable: true,
+                });
+                el.dispatchEvent(new PointerEvent('pointerdown', { ...at(t0), button: 0, buttons: 1 }));
+                el.dispatchEvent(new PointerEvent('pointermove', { ...at(t0 + 0.35), buttons: 1 }));
+                // a cancel comes once the drag has drawn (the browser taking a touch over); a let-go at once
+                if (cancel) await new Promise((ok) => requestAnimationFrame(() => requestAnimationFrame(ok)));
+                el.dispatchEvent(new PointerEvent(cancel ? 'pointercancel' : 'pointerup', at(t0 + 0.35)));
+              },
+              { t0, cancel },
+            );
+          for (const cancel of [false, true]) {
+            await drag(cancel);
+            await page.waitForTimeout(600);
+            const t1 = await now();
+            // inside the move is t0 + 0.12 up to its landing and badge (0.9 s after); settled is t0 or past that
+            assert.ok(
+              Math.abs(t1 - t0) < 0.02 || t1 > t0 + 0.6,
+              `${cancel ? 'a cancelled drag' : 'a let-go'} at ${(t0 + 0.35).toFixed(2)} s left the playhead at ${t1} s, inside the move (settled: ${t0} s)`,
+            );
+            await page.keyboard.press('ArrowLeft');
+            await page.keyboard.press('ArrowRight');
+            await page.waitForTimeout(400);
+          }
+          // a step glides its pieces; Play straight after stops the glide (as an export starting does: no glide in a video)
+          const glides = () =>
+            page.evaluate(
+              () =>
+                document
+                  .getAnimations()
+                  .filter((a) => a.playState === 'running' && a.effect && a.effect.target instanceof HTMLImageElement)
+                  .length,
+            );
+          await page.keyboard.press('ArrowRight');
+          assert.ok((await glides()) > 0, 'the step glides');
+          await page.keyboard.press('Space');
+          assert.equal(await glides(), 0, 'Play stopped the glide');
+          await page.keyboard.press('Space');
+          await head.focus();
+          await page.keyboard.press('Home');
+        },
+      );
+
       // the Moves panel scrolls like the opening explorer: a mouse drag scrolls it, selects nothing and picks no move
       await t.test('desktop: the Moves panel scrolls with the wheel and a mouse drag', async () => {
         const list = page.locator('.moves-list'),

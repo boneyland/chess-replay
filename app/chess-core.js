@@ -1334,6 +1334,15 @@
       });
     return out.length ? out : null;
   }
+  // Whether a line board that showed was ({ board, prev, upto }: the board, the one a move before it or null, its index in
+  // the line) and now shows now took one step along one line: now's board one move on from was's, or back. Checked by
+  // the boards themselves, so another line from the same move, a jump or another game is no step
+  const sameBoard = (a, b) => a === b || (!!a && !!b && a.every((p, i) => p === b[i]));
+  function lineStep(was, now) {
+    if (now.upto === was.upto + 1) return sameBoard(now.prev, was.board);
+    if (now.upto === was.upto - 1) return sameBoard(now.board, was.prev);
+    return false;
+  }
   // Seconds of the video to export for plies from..to: from -1 starts on the title card, to N ends after the end card.
   // A move's clip starts just before it is played and ends once it has settled, as the player shows it on a jump.
   // Returns a function of (from, to), so that the schedule is worked out once.
@@ -1896,6 +1905,7 @@
     settledAt,
     settleTo,
     movedPieces,
+    lineStep,
     clipRange,
     MATE_CP,
     MATE_STEP,
