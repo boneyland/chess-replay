@@ -424,9 +424,49 @@ test('a phone held sideways at full screen hugs the player bars to the board and
     assert.equal(plain.eval.w, 14, `${w}x${h}: undocked keeps the phone's bar`);
     assert.ok(L.board.y + L.board.size + L.bars.gap + L.bars.h <= h - 4 + 1e-6, `${w}x${h}: fits`);
   }
-  const bars = LC.compute({ w: 863, h: 286, dock: true });
-  assert.deepEqual([bars.eval.w, bars.bars.gap], [14, 4], 'not with the browser bars showing');
+  assert.equal(LC.compute({ w: 863, h: 286, dock: true }).bars.side.w > 0, true, 'shorter: the bars beside the board');
   assert.equal(LC.compute({ w: 1440, h: 818, dock: true }).eval.w, 24, 'not on a desktop');
+});
+
+test('a very short phone held sideways puts the player bars in a column beside the board', () => {
+  for (const text of [1, 1.3]) {
+    for (const [w, h] of text > 1
+      ? [[863, 286]]
+      : [
+          [863, 286],
+          [740, 300],
+          [844, 300],
+        ]) {
+      const at = `${w}x${h} text ${text}`,
+        L = LC.compute({ w, h, text, dock: true }),
+        plain = LC.compute({ w, h, text });
+      const b = L.board,
+        side = L.bars.side;
+      assert.ok(side, at);
+      assert.equal(L.eval.w, 18, at);
+      assert.ok(b.size > plain.board.size, `${at}: the board grows`);
+      assert.ok(Math.abs(b.y - 4) < 1e-6 && Math.abs(b.y + b.size - (h - 4)) < 1e-6, `${at}: the whole height`);
+      assert.ok(side.x >= b.x + b.size && side.x + side.w < L.moves.x, `${at}: the column between board and sidebar`);
+      assert.ok(L.moves.w >= 320 * L.text - 1e-6, `${at}: the sidebar keeps its minimum`);
+      assert.ok(Math.abs(L.dock.y + L.dock.h - (b.y + b.size)) < 1e-6, `${at}: the dock's foot level with the board's`);
+      assert.ok(2 * L.bars.h + L.bars.gap <= b.size + 1e-6, at);
+    }
+  }
+  // held by its width (a small phone), or not docked, or tall enough: the bars stay over and under the board
+  for (const [w, h, dock] of [
+    [568, 320, true],
+    [667, 300, true],
+    [863, 286, false],
+    [863, 407, true],
+  ])
+    assert.equal(LC.compute({ w, h, dock }).bars.side, undefined, `${w}x${h}`);
+  assert.equal(LC.compute({ w: 863, h: 286, dock: true, view: 'edit' }).bars.side, undefined, 'not in Edit position');
+  assert.equal(LC.compute({ w: 740, h: 300, text: 1.3, dock: true }).bars.side, undefined, '740 wide at Larger text');
+  assert.equal(
+    LC.compute({ w: 844, h: 300, text: 1.3, dock: true }).bars.side,
+    undefined,
+    'no room for the whole height',
+  );
 });
 
 test('a square-ish window keeps two columns, Analysis under the board, while it shrinks in height', () => {
