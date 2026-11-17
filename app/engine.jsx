@@ -178,6 +178,12 @@ function Stage({
     stopGlide();
     setTime(t);
   }, []);
+  // the views' play/pause (a tap on the board, a line picked): it stops a glide too, which would otherwise carry the
+  // playhead on past a move's start and undo what the view just opened there
+  const play = React.useCallback((p) => {
+    stopGlide();
+    setPlaying(p);
+  }, []);
   const setStart = React.useCallback(
     (t) => {
       seek(t);
@@ -379,7 +385,7 @@ function Stage({
   React.useEffect(() => {
     const onSeek = (e) => {
       const go = () => {
-        setPlaying(false);
+        play(false);
         if (e.detail && isFinite(e.detail.time)) seek(clamp(e.detail.time, 0, duration));
       };
       if (e.detail && e.detail.sync) ReactDOM.flushSync(go);
@@ -387,15 +393,15 @@ function Stage({
     };
     window.addEventListener('chess-video:seek', onSeek);
     return () => window.removeEventListener('chess-video:seek', onSeek);
-  }, [duration, seek]);
+  }, [duration, seek, play]);
 
   const frame = React.useMemo(
     () => ({ w, h, cols, video, text, dock: short, vw: area.vw, vh: area.vh, setContentH }),
     [w, h, cols, video, text, short, area.vw, area.vh],
   );
   const ctx = React.useMemo(
-    () => ({ time, duration, playing, setTime: seek, setPlaying, setStart, snap: snapRef }),
-    [time, duration, playing, seek, setStart],
+    () => ({ time, duration, playing, setTime: seek, setPlaying: play, setStart, snap: snapRef }),
+    [time, duration, playing, seek, play, setStart],
   );
   // a video fills the area; so does a two-column page; a paused one-column page is as tall as its content (the area scrolls)
   const scrolls = !video && cols === 1;
@@ -527,6 +533,8 @@ function dockBox(dock, area) {
 function PlaybackBar({ time, duration, playing, nav, menu, still, dock, onPlayPause, onReset, onSeek, onSettle }) {
   const trackRef = React.useRef(null);
   const dragging = React.useRef(false);
+  // the time last dragged to: a pointerup can come before the render of the last pointermove, so the prop may lag
+  const dragT = React.useRef(0);
   // the video calls nav.listen when its move label changes while the playhead is still (stepping through a line)
   const [, redraw] = React.useState(0);
   React.useEffect(() => {
@@ -686,18 +694,23 @@ function PlaybackBar({ time, duration, playing, nav, menu, still, dock, onPlayPa
               try {
                 e.currentTarget.setPointerCapture(e.pointerId);
               } catch (err) {}
-              onSeek(timeAt(e));
+              dragT.current = timeAt(e);
+              onSeek(dragT.current);
             }}
             onPointerMove={(e) => {
-              if (dragging.current) onSeek(timeAt(e));
+              if (!dragging.current) return;
+              dragT.current = timeAt(e);
+              onSeek(dragT.current);
             }}
             onPointerUp={() => {
               // let go inside a move: on or back, whichever side of its slide's middle the piece is. From the time last
               // dragged to, not the pointerup's place (iOS has given a touch's at 0,0)
-              if (dragging.current) onSettle(time, 0);
+              if (dragging.current) onSettle(dragT.current, 0);
               dragging.current = false;
             }}
             onPointerCancel={() => {
+              // the browser took the touch over (a scroll): settle as a let-go would
+              if (dragging.current) onSettle(dragT.current, 0);
               dragging.current = false;
             }}
           >
