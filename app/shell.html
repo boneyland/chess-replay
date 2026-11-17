@@ -727,10 +727,18 @@ body:has(.stage:not(.stage-one)) .net-note { top: calc(64px + env(safe-area-inse
   .pbar::before { box-shadow: inset 0 1px 0 var(--line-strong); }
 }
 /* Forced colours (Windows' contrast themes; Firefox's colour override, which by default follows the system's high
-   contrast): the system's colours replace the page's, inline styles too. The board, its tiles and the eval bar and graph keep
+   contrast): the system's colours replace the page's, inline styles too. The board, its tiles and the eval bar keep
    their own colours, which say which square is which; and every state that showed as a tint or a shadow alone (the open tab, the picked choice, a switch, the current move) gets the system's highlight */
 @media (forced-colors: active) {
-  .part-board, .part-eval-bar, .part-eval-graph, .part-piece-tray, .board-tile, .piece-tile { forced-color-adjust: none; }
+  .part-board, .part-eval-bar, .part-piece-tray, .board-tile, .piece-tile { forced-color-adjust: none; }
+  /* the eval graph is a panel: its box takes the system's colours, its plot keeps White's green and Black's red, and
+     what the theme coloured (rules, labels, the playhead's dot, the hover tag) takes the system's colours too, else a
+     page set to Dark drew it dark in a light contrast theme */
+  .part-eval-graph svg { forced-color-adjust: none; }
+  .part-eval-graph .eg-rule { stroke: GrayText; }
+  .part-eval-graph .eg-ink { fill: CanvasText; }
+  .part-eval-graph .eg-mark { stroke: Highlight; }
+  .part-eval-graph .eg-tip { fill: Canvas; stroke: Highlight; }
   .twk-tabs button[aria-selected="true"], .twk-seg button[aria-checked="true"], .expl-open-btn.on, .q-table tr.q-sel {
     forced-color-adjust: none; background: Highlight; color: HighlightText; }
   .twk-btn { border: 1px solid ButtonText; }
