@@ -70,7 +70,8 @@ const CLASS_LABEL = {
 };
 const clsColor = (cls) => C[cls] || C.ink;
 // The board looks the same in both themes: what's drawn on it (highlights, badges, arrows, check glow) uses these
-const BOARD = PALETTES.dark;
+// Queen's arrow keeps the pink it had before the theme's was made lighter for text (a shape on the squares, not text)
+const BOARD = { ...PALETTES.dark, queen: '#e0609f' };
 const boardCls = (cls) => BOARD[cls] || BOARD.last;
 // A move's SAN chip, light for White's moves and dark for Black's in both themes (like the board's squares): the move
 // list's and a line's at 16 px; rowChip, the explorers' rows, at 17 px and one width, so their columns line up. extra

@@ -21,7 +21,7 @@ window.THEME = {
     danger: '#c0392b',
     ok: '#237a46',
     warn: '#b05616',
-    queen: '#c03f7c',
+    queen: '#952660', // Queen's text, as dark's: at least 5:1 on any panel, button or glass (2026-11-17; was #c03f7c, 3.3:1)
     track: 'rgba(60, 40, 20, 0.16)',
     btn: 'var(--raise)',
     btnLine: 'var(--line)',
@@ -53,7 +53,7 @@ window.THEME = {
     danger: '#e4553f',
     ok: '#62c483',
     warn: '#ec9442',
-    queen: '#e0609f',
+    queen: '#f08cbc', // was #e0609f, 3.7:1 on a button over the board
     track: 'rgba(255, 236, 214, 0.16)',
     btn: '#3a312c',
     btnLine: 'rgba(255, 236, 214, 0.28)',
