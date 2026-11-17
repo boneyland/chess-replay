@@ -232,7 +232,7 @@ body:has(.stage-one) .twk-panel { bottom: calc(51px + var(--safe-b)); max-height
   background: linear-gradient(to bottom, rgba(255, 255, 255, 0.1), rgba(255, 255, 255, 0) 55%),
     color-mix(in srgb, color-mix(in srgb, var(--accent) 24%, var(--panel)) 60%, transparent);
   -webkit-backdrop-filter: blur(2px); backdrop-filter: blur(2px);
-  box-shadow: inset 0 1px 0 var(--line-strong), 0 0 4px 1px color-mix(in srgb, var(--accent) 25%, transparent);
+  box-shadow: inset 0 1px 0 var(--line-strong), inset 0 2px 0 var(--rim-soft), 0 0 4px 1px color-mix(in srgb, var(--accent) 25%, transparent);
 }
 /* a page that scrolls (Stage's stage-under: paused, one column) runs on under the glass: the area reaches down behind
    the bar (41 px: the one-column bar's --pbar-h 36 px and --pbar-pb 5 px) and as much padding at its foot lets the end of
@@ -715,6 +715,10 @@ body:has(.stage:not(.stage-one)) .net-note { top: calc(64px + env(safe-area-inse
     background: color-mix(in srgb, var(--panel-glass) var(--glass), transparent);
     -webkit-backdrop-filter: blur(12px) saturate(1.6); backdrop-filter: blur(12px) saturate(1.6);
   }
+  /* the glass's edge: its top catches the light (--rim) and a fainter line runs round inside the border (--rim-soft),
+     which reads as the thickness of the pane. Each keeps its own drop shadow and halo */
+  .pmenu .dock-items, .dock-pop { box-shadow: inset 0 1px 0 var(--rim), inset 0 0 0 1px var(--rim-soft), 0 12px 32px var(--shadow), var(--halo); }
+  .twk-panel, .dlg-box { box-shadow: inset 0 1px 0 var(--rim), inset 0 0 0 1px var(--rim-soft), 0 16px 48px var(--shadow), var(--halo); }
   /* the menus are thinner (--glass-menu): what's on them is buttons (opaque) and a little text, which is drawn in ink, as
      the board showing through takes grey or gold under 4.5:1 there, and so is the focus ring (3:1). The panels carry
      coloured text (links, errors, Queen's marks), which keeps 4.5:1 only on their thicker glass */
