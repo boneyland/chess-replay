@@ -39,6 +39,9 @@ window.THEME = {
     scrim: 'rgba(242, 236, 227, 0.86)',
     shadow: 'rgba(60, 40, 20, 0.18)',
     halo: '0 0 0 transparent',
+    // the glass's edge catching the light (shell.html's materials): a bright line along its top, and a fainter one all round
+    rim: 'rgba(255, 255, 255, 0.8)',
+    rimSoft: 'rgba(255, 255, 255, 0.35)',
   },
   dark: {
     bg: '#13100f',
@@ -68,6 +71,8 @@ window.THEME = {
     scrim: 'rgba(19, 16, 15, 0.82)',
     shadow: 'rgba(0, 0, 0, 0.45)',
     halo: '0 0 3px rgba(255, 236, 214, 0.3), 0 0 14px rgba(255, 236, 214, 0.14), 0 0 36px rgba(255, 236, 214, 0.1), 0 10px 40px rgba(255, 236, 214, 0.07)',
+    rim: 'rgba(255, 236, 214, 0.22)',
+    rimSoft: 'rgba(255, 236, 214, 0.07)',
   },
   // the system's "more contrast" (prefers-contrast: more), over each theme: lines and edges you can see, secondary text
   // nearer the ink, the scrim nearly solid, no glow. The panels are opaque then too (shell.html's materials fallback)
