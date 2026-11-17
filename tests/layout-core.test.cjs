@@ -412,6 +412,23 @@ test('a short window docks the transport bar at the foot of the sidebar', () => 
   assert.equal(LC.compute({ w: 1440, h: 818 }).dock, null);
 });
 
+test('a phone held sideways at full screen hugs the player bars to the board and widens the eval bar', () => {
+  for (const [w, h] of [
+    [863, 407],
+    [844, 390],
+  ]) {
+    const L = LC.compute({ w, h, dock: true }),
+      plain = LC.compute({ w, h });
+    assert.equal(L.bars.gap, 1, `${w}x${h}`);
+    assert.equal(L.eval.w, 18, `${w}x${h}`);
+    assert.equal(plain.eval.w, 14, `${w}x${h}: undocked keeps the phone's bar`);
+    assert.ok(L.board.y + L.board.size + L.bars.gap + L.bars.h <= h - 4 + 1e-6, `${w}x${h}: fits`);
+  }
+  const bars = LC.compute({ w: 863, h: 286, dock: true });
+  assert.deepEqual([bars.eval.w, bars.bars.gap], [14, 4], 'not with the browser bars showing');
+  assert.equal(LC.compute({ w: 1440, h: 818, dock: true }).eval.w, 24, 'not on a desktop');
+});
+
 test('a square-ish window keeps two columns, Analysis under the board, while it shrinks in height', () => {
   // 760 px wide windows from 770 down to 642 px high once went to one column part of the way (the room under the board
   // was judged as if the eval graph went there)

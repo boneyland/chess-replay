@@ -81,6 +81,11 @@
   // DOCK_H is the bar's height (shell.html's .pbar-dock: 28 px buttons, 2 px padding and a border)
   const DOCK_H = 34,
     DOCK_MARGIN = 4;
+  // a phone held sideways (docked) with the room of full screen (minH: the stage at least that high) also hugs the player
+  // bars to the board (1 px, as upright) and widens the eval bar to 18 px, whose number grows with it: the 14 px bar
+  // squeezed it (Firefox for Android full screen, 863×407, 2026-11-18). Shorter (the browser's bars showing, 863×286)
+  // keeps the plain dock layout, which wants the player bars beside the board instead (docs/roadmap.md)
+  const PHONE_DOCK = { evalW: 18, barGap: 1, minH: 340 };
   const ONE_COL = { comment: 200, analysis: 260, panel: 260 }; // paused heights, times text (Moves: its five lines)
   const VIDEO_PREF = [96, 120, 96],
     PANEL_FLOOR = 48; // comment, analysis, moves under a video's board, times text
@@ -409,6 +414,10 @@
       PAD = [PAD[0], PHONE_ONE.padX];
       BAR_K = PHONE_ONE.barK;
       BAR_GAP = PHONE_ONE.barGap;
+    } else if (c === 2 && dock && tierOf(vw, vh) === 'phone' && h >= PHONE_DOCK.minH) {
+      EVAL_W = PHONE_DOCK.evalW;
+      EVAL_TOTAL = EVAL_W + EVAL_GAP;
+      BAR_GAP = PHONE_DOCK.barGap;
     }
     return Object.assign(
       (c === 1 ? oneColumn : twoColumns)({

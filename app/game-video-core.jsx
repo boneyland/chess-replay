@@ -1953,7 +1953,10 @@ function EvalBarView({ cp, txt, a }) {
     top = inWhite === flip; // the number sits in the part of the bar it favours
   if (!L.eval) return null;
   const H = L.board.size,
-    ef = Math.round(L.eval.w * (L.tier === 'phone' ? 0.85 : 0.75) * 10) / 10; // the number, sized to the bar's width: its digits a little over half of it (more on a phone's thin bar, where 0.75 left it under 11 px)
+    // the number, sized to the bar's width: its digits a little over half of it (more on a phone's thin bar, where 0.75
+    // left it under 11 px), and on a phone at most 14 px: turned, its text box is about 1.3 em wide in Firefox, whatever
+    // the line height, so 15.3 px spilled out of the sideways phone's 18 px bar (CI, 2026-11-18)
+    ef = Math.round((L.tier === 'phone' ? Math.min(14, L.eval.w * 0.85) : L.eval.w * 0.75) * 10) / 10;
   return (
     <div
       className="part-eval-bar"
@@ -1998,8 +2001,9 @@ function EvalBarView({ cp, txt, a }) {
           color: inWhite ? '#2a2320' : '#f1ebe1',
         }}
       >
-        {/* a rotated line rather than writing-mode, which the video export's html2canvas lays out wrongly */}
-        <span style={{ flex: 'none', whiteSpace: 'nowrap', transform: 'rotate(-90deg)' }}>{txt}</span>
+        {/* a rotated line rather than writing-mode, which the video export's html2canvas lays out wrongly; line-height 1
+            keeps its box, turned, inside a thin bar in Chromium */}
+        <span style={{ flex: 'none', whiteSpace: 'nowrap', lineHeight: 1, transform: 'rotate(-90deg)' }}>{txt}</span>
       </div>
     </div>
   );
