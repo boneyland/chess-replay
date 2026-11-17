@@ -655,10 +655,12 @@ body:has(.stage:not(.stage-one)) .net-note { top: calc(64px + env(safe-area-inse
 .frame-btn:active:not(:disabled), .import-game:active:not(:disabled), .vision-tile:active,
 .board-tile:active, .dlg-box button:active:not(:disabled) { transform: scale(0.97); }
 /* the tint is for the quiet buttons; a filled one (accent, danger) keeps its fill and darkens, as it brightens on hover */
-.pmenu .dock-btn:active:not(:disabled), .dock-pop .dock-btn:active:not(:disabled), .twk-btn.secondary:active:not(:disabled),
+.pmenu .dock-btn:not(.dock-primary):active:not(:disabled), .dock-pop .dock-btn:not(.dock-primary):active:not(:disabled), .twk-btn.secondary:active:not(:disabled),
 .frame-btn:not(.frame-btn-primary):active:not(:disabled), .import-game:active:not(:disabled), .vision-tile:active,
 .board-tile:active, .dlg-box button:not(.twk-btn):not(.frame-btn-primary):active:not(:disabled) { background-color: var(--btn-hover); }
-.twk-btn:not(.secondary):active:not(:disabled), .frame-btn-primary:active:not(:disabled) { filter: brightness(0.9); }
+/* the accent buttons (Import game in the folded menu among them) keep their colour pressed, a shade darker */
+.twk-btn:not(.secondary):active:not(:disabled), .frame-btn-primary:active:not(:disabled),
+.pmenu .dock-primary:active:not(:disabled), .dock-pop .dock-primary:active:not(:disabled) { filter: brightness(0.9); }
 .piece-tile:active { transform: scale(0.97); } /* its own light-square background and selected tint stay */
 /* the small and bare controls (tabs, segments, toggles, moves, rows): a tint or ring, no scale, as a shrinking tab or move
    reads as the layout shifting. Moves are coloured inline, so a ring like their hover and focus */
@@ -741,7 +743,7 @@ body:has(.stage:not(.stage-one)) .net-note { top: calc(64px + env(safe-area-inse
   @media (hover: hover) {
     .pmenu .dock-items .dock-btn:hover:not(:disabled):not(.dock-primary), .dock-pop .dock-btn:hover:not(:disabled):not(.dock-primary) { background-color: var(--btn-hover); }
   }
-  .pmenu .dock-items .dock-btn:active:not(:disabled), .dock-pop .dock-btn:active:not(:disabled) { background-color: var(--btn-hover); }
+  .pmenu .dock-items .dock-btn:not(.dock-primary):active:not(:disabled), .dock-pop .dock-btn:not(.dock-primary):active:not(:disabled) { background-color: var(--btn-hover); }
 }
 /* opaque again for a viewer who asked for less transparency or more contrast, or whose system forces its colours: the
    glass above, the Transport bar's tint and the drop box */

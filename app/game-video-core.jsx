@@ -1008,6 +1008,17 @@ const headCtl = () => ({
   color: C.ink,
   letterSpacing: 0,
 }); // C changes with the colour scheme; ctlLine stands out more than the panels' line
+// the title row's icon buttons (Analyse the game, Engine settings): bare icons, no border, bigger than the boxed
+// controls; the negative margin keeps the row's height
+const iconCtl = {
+  width: '2.4em',
+  height: '2.4em',
+  margin: '-0.7em 0',
+  padding: 0,
+  display: 'grid',
+  placeItems: 'center',
+  borderColor: 'transparent',
+};
 const stopHere = (e) => e.stopPropagation();
 // The Analysis panel's title row (on the right: the Stockfish switch, the engine, the game analysis's computer button,
 // the engine menu) and, while the menu is open, the engine settings in place of the panel's contents. Only a paused
@@ -1135,12 +1146,8 @@ function AnalysisPanel({ box, a, depth, deep, paused, style, children }) {
             onPointerDown={stopHere}
             style={{
               ...headCtl(),
-              width: '1.8em',
-              padding: 0,
-              display: 'grid',
-              placeItems: 'center',
+              ...iconCtl,
               color: C.dim,
-              borderColor: E.run ? 'transparent' : C.ctlLine,
             }}
           >
             {E.run ? (
@@ -1148,8 +1155,8 @@ function AnalysisPanel({ box, a, depth, deep, paused, style, children }) {
             ) : (
               <svg
                 viewBox="0 0 16 16"
-                width="70%"
-                height="70%"
+                width="80%"
+                height="80%"
                 aria-hidden="true"
                 fill="none"
                 stroke="currentColor"
@@ -1177,15 +1184,11 @@ function AnalysisPanel({ box, a, depth, deep, paused, style, children }) {
             onPointerDown={stopHere}
             style={{
               ...headCtl(),
-              width: '1.8em',
-              padding: 0,
-              display: 'grid',
-              placeItems: 'center',
+              ...iconCtl,
               color: shown ? C.best : C.dim,
-              borderColor: shown ? C.best : C.ctlLine,
             }}
           >
-            <svg viewBox="0 0 16 16" width="60%" height="60%" aria-hidden="true">
+            <svg viewBox="0 0 16 16" width="70%" height="70%" aria-hidden="true">
               <path d="M2 3.5h12M2 8h12M2 12.5h12" stroke="currentColor" strokeWidth="2" strokeLinecap="round" />
             </svg>
           </button>
