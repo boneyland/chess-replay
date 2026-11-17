@@ -31,6 +31,9 @@ window.THEME = {
     // 4.5:1 over the board, and the menus', as thin as their text, drawn in ink there, keeps 4.5:1 (measured 2026-11-17)
     glass: '85%',
     glassMenu: '45%',
+    // the menus' buttons over that glass: their ink text keeps 8:1 at 70%; Import game's gold keeps 4.5:1 only opaque in light
+    glassBtn: '70%',
+    glassBtnPrimary: '100%',
     netTint: '22%',
     netLine: '60%',
     scrim: 'rgba(242, 236, 227, 0.86)',
@@ -58,6 +61,8 @@ window.THEME = {
     panelGlass: '#1b1715',
     glass: '92%',
     glassMenu: '65%',
+    glassBtn: '70%',
+    glassBtnPrimary: '70%',
     netTint: '26%',
     netLine: '65%',
     scrim: 'rgba(19, 16, 15, 0.82)',
