@@ -132,7 +132,9 @@ const setLayout = (frame, view = 'replay') => {
     dock: frame.dock,
     vw: frame.vw,
     vh: frame.vh,
+    pinned: !!frame.pinned && view !== 'edit',
   });
+  L.scrolled = !!frame.scrolled; // a paused one-column page scrolled at all (BoardGroup's fading bar copies)
   TEXT = L.text;
   TX = 0.8 * TEXT; // the viewer's text size, times the device tier's (smaller on phones and tablets)
 };
@@ -172,7 +174,11 @@ const flowStyle = () =>
 function useFlowHeight(frame, ref) {
   const flow = !!L.flow,
     h = L.h,
-    bottom = L.flow ? L.flow.bottom : 0;
+    bottom = L.flow ? L.flow.bottom : 0,
+    pinAt = L.flow ? L.flow.pinAt : null;
+  React.useLayoutEffect(() => {
+    frame.setPinAt(pinAt);
+  }, [frame, pinAt]);
   React.useLayoutEffect(() => {
     const el = ref.current;
     if (!flow || !el) {
@@ -190,6 +196,200 @@ function useFlowHeight(frame, ref) {
     for (const c of el.children) ro.observe(c);
     return () => ro.disconnect();
   });
+}
+// The paused one-column page's shrink toward the pinned strip (L.flow.strip), while scrolled less than L.flow.pinAt:
+// BoardGroup sets --pin-t (0 at the top, 1 at pinAt) as the page scrolls, and the group scales by it so the full board
+// lands on the strip's board; the parts that change otherwise (the eval bar's place, width and number, the player bars
+// fading out) read it in calc(). null where there's no strip, or it's pinned (L.pin). k: the scale at --pin-t
+const pinMorph = () => {
+  const st = L.flow && !L.pin ? L.flow.strip : null;
+  if (!st) return null;
+  const k1 = st.board.size / L.board.size;
+  return {
+    st,
+    x: st.board.x - k1 * L.board.x,
+    y: st.board.y - k1 * L.board.y,
+    k1,
+    k: `(1 - var(--pin-t, 0) * ${1 - k1})`,
+  };
+};
+// a length in the group's own (scaled) space that is from px at --pin-t 0 to to px at 1 on screen, less the group's
+// shift (shift px at 1) for a place
+const pinLen = (m, from, to, shift = 0) => `calc((${from}px + var(--pin-t, 0) * ${to - from - shift}px) / ${m.k})`;
+// The board, eval bar and player bars, as one element so the page can pin them without remounting the board. Pinned
+// (L.pin) it is the strip stuck to the top of the scrolling area, its parts placed in it (LayoutCore's strip boxes), over
+// the panels scrolling under it. With a strip to shrink to (pinMorph) it is stuck to the top from the start, with no box
+// of its own (its parts placed as in the page), and scales toward the strip as the page scrolls. Else it is out of the
+// way. Its margins cancel its place in the flow, so the panels don't move
+const SETTLE_MS = 120,
+  SETTLE_GLIDE = 250;
+function BoardGroup({ children, overlay }) {
+  const el = React.useRef(null);
+  const pin = L.pin,
+    f = L.flow,
+    m = pinMorph(),
+    pinAt = m ? f.pinAt : null;
+  React.useEffect(() => {
+    const node = el.current,
+      area = node && node.closest('.stage-area');
+    if (!node || !area || pinAt == null) return;
+    const on = () => {
+      const t = Math.max(0, Math.min(1, area.scrollTop / Math.max(1, pinAt)));
+      node.style.setProperty('--pin-t', String(t));
+      if (t > 0) node.dataset.pinning = '';
+      else delete node.dataset.pinning;
+    };
+    on();
+    area.addEventListener('scroll', on, { passive: true });
+    return () => {
+      area.removeEventListener('scroll', on);
+      node.style.removeProperty('--pin-t');
+      delete node.dataset.pinning;
+    };
+  }, [pinAt]);
+  // A scroll that ends part-way through the shrink (no finger or mouse button still on the page, any momentum spent)
+  // settles on the nearer layout, full or pinned (just past pinAt, so it pins), by scrolling there, which drives the
+  // shrink as a scroll does: eased out over SETTLE_GLIDE ms at most (by the distance; the browser's own smooth scroll
+  // took 500-700 ms), at once under reduced motion, and dropped the moment the page is touched again. Where the page
+  // can't scroll that far it's left where it is. On scrollend, or a pause of SETTLE_MS in the scroll events (Firefox
+  // fired no scrollend for a wheel's scroll, 2026-11-19)
+  const settleAt = f && f.strip ? f.pinAt : null;
+  React.useEffect(() => {
+    const area = el.current && el.current.closest('.stage-area');
+    if (!area || settleAt == null) return;
+    let held = false,
+      timer = null,
+      raf = 0;
+    const stop = () => {
+      cancelAnimationFrame(raf);
+      raf = 0;
+    };
+    const settle = () => {
+      clearTimeout(timer);
+      if (held || raf) return;
+      const from = area.scrollTop,
+        end = settleAt + 1;
+      if (from <= 0.5 || from >= end - 0.5 || area.scrollHeight - area.clientHeight < end) return;
+      const to = from < settleAt / 2 ? 0 : end;
+      if (CALM_MQ && CALM_MQ.matches) {
+        area.scrollTop = to;
+        return;
+      }
+      const ms = Math.min(SETTLE_GLIDE, 120 + (130 * Math.abs(to - from)) / Math.max(1, settleAt / 2)),
+        t0 = performance.now();
+      const step = (now) => {
+        const k = Math.min(1, (now - t0) / ms);
+        area.scrollTop = from + (to - from) * (1 - Math.pow(1 - k, 3)); // ease out
+        raf = k < 1 ? requestAnimationFrame(step) : 0;
+      };
+      raf = requestAnimationFrame(step);
+    };
+    const onScroll = () => {
+      if (raf) return;
+      clearTimeout(timer);
+      timer = setTimeout(settle, SETTLE_MS);
+    };
+    // a finger by its touch events (a touch that turns into a scroll fires pointercancel while the finger is still
+    // down), a mouse button by its pointer events
+    let touches = 0,
+      button = false;
+    const hold = () => {
+      held = touches > 0 || button;
+      if (held) {
+        clearTimeout(timer);
+        stop();
+      } else timer = setTimeout(settle, SETTLE_MS); // a fling's momentum goes on: its scrollend (or the pause) settles it
+    };
+    const touchDown = (e) => {
+      touches = e.touches.length;
+      hold();
+    };
+    const touchUp = (e) => {
+      if (!touches) return;
+      touches = e.touches.length;
+      hold();
+    };
+    const mouseDown = (e) => {
+      if (e.pointerType === 'touch') return;
+      button = true;
+      hold();
+    };
+    const mouseUp = (e) => {
+      if (e.pointerType === 'touch' || !button) return;
+      button = false;
+      hold();
+    };
+    area.addEventListener('scroll', onScroll, { passive: true });
+    area.addEventListener('scrollend', settle);
+    area.addEventListener('pointerdown', mouseDown, { passive: true });
+    area.addEventListener('touchstart', touchDown, { passive: true });
+    window.addEventListener('pointerup', mouseUp);
+    window.addEventListener('touchend', touchUp);
+    window.addEventListener('touchcancel', touchUp);
+    // a wheel turned during the glide takes over too
+    area.addEventListener('wheel', stop, { passive: true });
+    return () => {
+      clearTimeout(timer);
+      stop();
+      area.removeEventListener('wheel', stop);
+      area.removeEventListener('scroll', onScroll);
+      area.removeEventListener('scrollend', settle);
+      area.removeEventListener('pointerdown', mouseDown);
+      area.removeEventListener('touchstart', touchDown);
+      window.removeEventListener('pointerup', mouseUp);
+      window.removeEventListener('touchend', touchUp);
+      window.removeEventListener('touchcancel', touchUp);
+    };
+  }, [settleAt]);
+  const style = pin
+    ? {
+        position: 'sticky',
+        top: 0,
+        zIndex: 3,
+        flex: 'none',
+        height: pin.h,
+        margin: `${-f.top}px ${-f.x}px ${f.top - pin.h - f.gap}px`,
+        background: C.bg,
+        '--pin-edge': C.line, // its edge, drawn by its backdrop (shell.html)
+      }
+    : m
+      ? {
+          position: 'sticky',
+          top: 0,
+          zIndex: 3,
+          flex: 'none',
+          height: 0,
+          margin: `${-f.top}px ${-f.x}px ${f.top - f.gap}px`,
+          // the parts' scale (.pin-scale): shell.html applies it while scrolled ([data-pinning]), so the page at the top
+          // has no transform
+          '--pin-tf': `translate(calc(var(--pin-t) * ${m.x}px), calc(var(--pin-t) * ${m.y}px)) scale(calc${m.k})`,
+        }
+      : { position: 'static', flex: 'none', height: 0, marginBottom: f ? -f.gap : 0 };
+  return (
+    <div ref={el} className={pin ? 'part-pinned-board' : undefined} style={style}>
+      {/* the parts, scaled while shrinking (shell.html's [data-pinning]); always there, so the board never remounts */}
+      <div className="pin-scale" style={{ height: 0 }}>
+        {children}
+      </div>
+      {/* the stacked bars' fading copies, only while scrolled, clipped to the page (they slide in from past its edge) */}
+      {m && L.scrolled && overlay && (
+        <div
+          className="pin-ghosts"
+          style={{
+            position: 'absolute',
+            left: 0,
+            top: 0,
+            width: L.w,
+            height: L.board.y + L.board.size,
+            overflow: 'clip',
+            pointerEvents: 'none',
+          }}
+        >
+          {overlay}
+        </div>
+      )}
+    </div>
+  );
 }
 // The board's own 768 px space, scaled to L.board: the board, its touch layer, arrows and badges position from 0,0 in it
 // onStep(±1), where there are moves to step through: the wheel over the board steps them (BoardCore.wheel). The listener
@@ -2059,16 +2259,20 @@ function EvalBarView({ cp, txt, a }) {
     // the number, sized to the bar's width: its digits a little over half of it (more on a phone's thin bar, where 0.75
     // left it under 11 px), and on a phone at most 14 px: turned, its text box is about 1.3 em wide in Firefox, whatever
     // the line height, so 15.3 px spilled out of the sideways phone's 18 px bar (CI, 2026-11-18)
-    ef = Math.round((L.tier === 'phone' ? Math.min(14, L.eval.w * 0.85) : L.eval.w * 0.75) * 10) / 10;
+    // (the pinned strip's bar sizes it the phone's way on every device)
+    ef = Math.round((L.tier === 'phone' || L.pin ? Math.min(14, L.eval.w * 0.85) : L.eval.w * 0.75) * 10) / 10;
+  // shrinking toward the pinned strip: its place, width and number go to the strip's (the phone's number size there)
+  const m = pinMorph(),
+    se = m && m.st.eval;
   return (
     <div
       className="part-eval-bar"
       style={{
         ...NO_SELECT,
         position: 'absolute',
-        left: L.eval.x,
+        left: se ? pinLen(m, L.eval.x, se.x, m.x) : L.eval.x,
         top: L.board.y,
-        width: L.eval.w,
+        width: se ? pinLen(m, L.eval.w, se.w) : L.eval.w,
         height: H,
         borderRadius: 2,
         overflow: 'hidden',
@@ -2095,12 +2299,12 @@ function EvalBarView({ cp, txt, a }) {
           position: 'absolute',
           left: 0,
           right: 0,
-          [top ? 'top' : 'bottom']: ef / 2,
-          height: ef * 5,
+          [top ? 'top' : 'bottom']: '0.5em',
+          height: '5em',
           display: 'flex',
           alignItems: 'center',
           justifyContent: 'center',
-          font: `700 ${ef}px ${MONO}`,
+          font: `700 ${se ? pinLen(m, ef, Math.min(14, se.w * 0.85)) : ef + 'px'} ${MONO}`,
           color: inWhite ? '#2a2320' : '#f1ebe1',
         }}
       >
@@ -2135,12 +2339,12 @@ function clockOf(M, color, T, S) {
 // bottom one from its foot up)
 const barLeft = () => (L.eval ? L.eval.x : L.board.x),
   barWidth = () => L.board.x + L.board.size - barLeft();
-const sidePlace = (side) => ({
+const sidePlace = (side, lay = L) => ({
   position: 'absolute',
-  left: L.bars.side.x,
-  width: L.bars.side.w,
-  height: L.bars.h,
-  top: side === ORIENT ? L.board.y + L.board.size - L.bars.h : L.board.y,
+  left: lay.bars.side.x,
+  width: lay.bars.side.w,
+  height: lay.bars.h,
+  top: side === ORIENT ? lay.board.y + lay.board.size - lay.bars.h : lay.board.y,
   display: 'flex',
   flexDirection: 'column',
   justifyContent: side === ORIENT ? 'flex-end' : 'flex-start',
@@ -2170,7 +2374,7 @@ function materialOf(side, left) {
 }
 // A game's player bar: the captures and material edge from the pieces on the board at time T (taken off as they are
 // captured, a pawn counted as its new piece once it has promoted, as the board draws them), the clock from the PGN's clocks
-function PlayerBar({ M, T, S, side, a, pieces }) {
+function PlayerBar({ M, T, S, side, a, pieces, strip }) {
   const P = side === 'w' ? M.white : M.black;
   const count = { w: {}, b: {} };
   pieces.forEach((p) => {
@@ -2188,6 +2392,7 @@ function PlayerBar({ M, T, S, side, a, pieces }) {
       taken={taken}
       pts={pts}
       clock={M.hasClock ? clockOf(M, side, T, S) : null}
+      strip={strip}
     />
   );
 }
@@ -2196,7 +2401,9 @@ function PlayerBar({ M, T, S, side, a, pieces }) {
 // a count by type, more of the opponent's than of its own; none drawn where it's less) and its material edge pts, and
 // the clock ({ s, active }, or null) at the right. The full name, title and rating always; where the bar is too narrow
 // (a phone's) their text gets smaller, down to 0.6 of its size, then the captures go, then the name ends in an ellipsis
-function SideBar({ side, a, name, rating, taken, pts, clock }) {
+// strip: the copy stacked in the pinned strip's column (L.flow.strip) while the board shrinks toward it (BoardGroup's
+// overlay), fading in over the shrink's second half so the names are there before the board lands
+function SideBar({ side, a, name, rating, taken, pts, clock, strip }) {
   const opp = side === 'w' ? 'b' : 'w',
     shown = [];
   ['q', 'r', 'b', 'n', 'p'].forEach((t) => {
@@ -2217,6 +2424,30 @@ function SideBar({ side, a, name, rating, taken, pts, clock }) {
         />,
       );
   });
+  if (strip) {
+    // riding the shrinking board's right edge (top level with its top, bottom with its foot) at the strip column's width,
+    // so the names slide in from the right, off the page at first (BoardGroup clips them to it), wrapped as they end up
+    const b = L.board,
+      sb = strip.board,
+      t = 'var(--pin-t, 0)',
+      x1 = strip.bars.side.x,
+      gap = x1 - (sb.x + sb.size),
+      x0 = b.x + b.size + gap,
+      y0 = side === ORIENT ? b.y + b.size - strip.bars.h : b.y,
+      y1 = side === ORIENT ? sb.y + sb.size - strip.bars.h : sb.y;
+    return (
+      <StackedBar
+        {...{ side, name, rating, shown, pts, clock }}
+        a={`calc(${a} * max(0, ${t} * 2 - 1))`}
+        lay={strip}
+        place={{
+          left: `calc(${x0}px + ${t} * ${x1 - x0}px)`,
+          top: `calc(${y0}px + ${t} * ${y1 - y0}px)`,
+        }}
+        ghost
+      />
+    );
+  }
   if (L.bars.side) return <StackedBar {...{ side, a, name, rating, shown, pts, clock }} />;
   const capsW = shown.length
     ? tx(6) +
@@ -2235,7 +2466,12 @@ function SideBar({ side, a, name, rating, taken, pts, clock }) {
   return (
     <div
       className={'part-player-bar ' + (side === ORIENT ? 'bottom' : 'top')}
-      style={{ ...barPlace(side), gap: tx(14), opacity: a }}
+      // fading out as the board shrinks toward the pinned strip, whose bars are stacked beside it
+      style={{
+        ...barPlace(side),
+        gap: tx(14),
+        opacity: pinMorph() ? `calc(${a} * max(0, 1 - var(--pin-t, 0) * 1.6))` : a,
+      }}
     >
       <span
         style={{
@@ -2272,10 +2508,11 @@ function SideBar({ side, a, name, rating, taken, pts, clock }) {
 }
 
 // a player bar's clock ({ s, active }): lit while it runs, red under a minute
-function Clock({ clock, style }) {
+// ghost: a fading copy's (StackedBar's), not one of the page's clocks
+function Clock({ clock, style, ghost = false }) {
   return (
     <span
-      className="game-clock"
+      className={ghost ? undefined : 'game-clock'}
       style={{
         minWidth: tx(72),
         textAlign: 'center',
@@ -2296,16 +2533,55 @@ function Clock({ clock, style }) {
 // SideBar in the column beside the board (L.bars.side): stacked, mirrored so both clocks sit toward the middle: the top
 // bar the name (two lines at most, then an ellipsis) and rating, the captures, then the clock; the bottom one the clock,
 // the captures, then the name and rating. shown: the captured pieces' images, drawn smaller here
-function StackedBar({ side, a, name, rating, shown, pts, clock }) {
+// lay: the layout it's placed in (L, or the pinned strip's boxes); ghost: BoardGroup's fading copy, hidden from screen
+// readers and the page's parts (the real bars are the ones above and below the board)
+function StackedBar({ side, a, name, rating, shown, pts, clock, lay = L, ghost = false, place = null }) {
   const bottom = side === ORIENT;
+  // squeezed where its contents are taller than its box (half the board, a long name on two lines at a large text size,
+  // or with captures): 1, the name on one line (ending in an ellipsis); 2, the captures go too. Measured after each
+  // layout, from 0 again whenever the name or the box changes
+  const box = React.useRef(null);
+  const fitKey = `${name}|${rating}|${shown.length}|${lay.bars.h}|${lay.bars.side.w}|${TX}`;
+  const [fitAt, setFitAt] = React.useState({ key: fitKey, sq: 0 });
+  const sq = fitAt.key === fitKey ? fitAt.sq : 0;
+  React.useLayoutEffect(() => {
+    const el = box.current;
+    if (!el || sq >= 2 || !el.children.length) return;
+    // the children's own extent, as the bottom bar (aligned to the board's foot) overflows upward, which scrollHeight
+    // doesn't count
+    const kids = [...el.children].map((c) => c.getBoundingClientRect());
+    const tall = Math.max(...kids.map((r) => r.bottom)) - Math.min(...kids.map((r) => r.top));
+    if (tall > el.clientHeight + 1) setFitAt({ key: fitKey, sq: sq + 1 });
+  }, [sq, fitKey]);
+  // the pinned strip's column takes the name and rating at the player bars' sizes (more room across, the strip shorter)
+  const k = lay.bars.pinned
+    ? { mark: 14, top: 3, name: 20, rating: 16, indent: 22 }
+    : { mark: 12, top: 4, name: 17, rating: 14, indent: 20 };
+  // there, the name a little smaller (to 0.75 of it) where its longest word would otherwise break mid-word
+  const nameFs = lay.bars.pinned
+    ? tx(k.name) *
+      Math.max(
+        0.75,
+        Math.min(
+          1,
+          (lay.bars.side.w - tx(k.indent)) /
+            Math.max(
+              1,
+              ...String(name)
+                .split(/\s+/)
+                .map((wd) => textWidth(wd, `600 ${tx(k.name)}px ${SANS}`)),
+            ),
+        ),
+      )
+    : tx(k.name);
   const who = (
     <span key="who" style={{ display: 'flex', flexDirection: 'column', gap: tx(2), minWidth: 0 }}>
       <span style={{ display: 'flex', alignItems: 'flex-start', gap: tx(8), minWidth: 0 }}>
         <span
           style={{
-            width: tx(12),
-            height: tx(12),
-            marginTop: tx(4),
+            width: tx(k.mark),
+            height: tx(k.mark),
+            marginTop: tx(k.top),
             borderRadius: 2,
             background: side === 'w' ? '#fff' : '#1c1613',
             border: `1.5px solid ${C.dim}`,
@@ -2315,41 +2591,52 @@ function StackedBar({ side, a, name, rating, shown, pts, clock }) {
         <span
           title={name}
           style={{
-            font: `600 ${tx(17)}px/1.2 ${SANS}`,
+            // 1.3 in the pinned column, whose two-line names had their descenders clipped at 1.2
+            font: `600 ${nameFs}px/${lay.bars.pinned ? 1.3 : 1.2} ${SANS}`,
             color: C.ink,
-            overflowWrap: 'anywhere',
-            display: '-webkit-box',
-            WebkitBoxOrient: 'vertical',
-            WebkitLineClamp: 2,
             overflow: 'hidden',
             minWidth: 0,
+            // two lines at most (then an ellipsis); squeezed, one line ending in an ellipsis
+            ...(sq
+              ? { whiteSpace: 'nowrap', textOverflow: 'ellipsis' }
+              : { overflowWrap: 'anywhere', display: '-webkit-box', WebkitBoxOrient: 'vertical', WebkitLineClamp: 2 }),
           }}
         >
           {name}
         </span>
       </span>
       {rating && (
-        <span style={{ font: `500 ${tx(14)}px ${MONO}`, color: C.dim, paddingLeft: tx(20), whiteSpace: 'nowrap' }}>
+        <span
+          style={{
+            font: `500 ${tx(k.rating)}px ${MONO}`,
+            color: C.dim,
+            paddingLeft: tx(k.indent),
+            whiteSpace: 'nowrap',
+          }}
+        >
           {rating}
         </span>
       )}
     </span>
   );
-  const caps = shown.length ? (
-    <span key="caps" style={{ display: 'flex', alignItems: 'center', flexWrap: 'wrap', rowGap: tx(2) }}>
-      {shown.map((im, i) =>
-        React.cloneElement(im, {
-          style: { ...im.props.style, width: tx(22), height: tx(22), marginLeft: i ? -tx(7) : 0 },
-        }),
-      )}
-      {pts > 0 && <span style={{ font: `600 ${tx(14)}px ${MONO}`, color: C.dim, marginLeft: tx(6) }}>+{pts}</span>}
-    </span>
-  ) : null;
-  const clk = clock ? <Clock key="clock" clock={clock} style={{ alignSelf: 'flex-start' }} /> : null;
+  const caps =
+    shown.length && sq < 2 ? (
+      <span key="caps" style={{ display: 'flex', alignItems: 'center', flexWrap: 'wrap', rowGap: tx(2) }}>
+        {shown.map((im, i) =>
+          React.cloneElement(im, {
+            style: { ...im.props.style, width: tx(22), height: tx(22), marginLeft: i ? -tx(7) : 0 },
+          }),
+        )}
+        {pts > 0 && <span style={{ font: `600 ${tx(14)}px ${MONO}`, color: C.dim, marginLeft: tx(6) }}>+{pts}</span>}
+      </span>
+    ) : null;
+  const clk = clock ? <Clock key="clock" clock={clock} style={{ alignSelf: 'flex-start' }} ghost={ghost} /> : null;
   return (
     <div
-      className={'part-player-bar ' + (bottom ? 'bottom' : 'top')}
-      style={{ ...sidePlace(side), gap: tx(6), opacity: a }}
+      ref={box}
+      className={ghost ? 'pin-ghost-bar' : 'part-player-bar ' + (bottom ? 'bottom' : 'top')}
+      aria-hidden={ghost || undefined}
+      style={{ ...sidePlace(side, lay), ...place, gap: tx(6), opacity: a, ...(ghost && { pointerEvents: 'none' }) }}
     >
       {bottom ? [clk, caps, who] : [who, caps, clk]}
     </div>
@@ -4278,58 +4565,69 @@ function GameVideo({ M, tw, d, probe, queen, nav, scheme, sf, orient }) {
               !tw.exporting && { transform: `translate(${cx}px,${cy}px) scale(${sc}) translate(${-cx}px,${-cy}px)` }),
           }}
         >
-          <EvalBar
-            M={M}
-            T={T}
-            S={S}
-            a={enter(1)}
-            tb={tbBar(tb)}
-            dead={deadBar(dead)}
-            deep={!playing && liveAfter && liveAfter.cp != null ? liveAfter.cp : null}
-          />
-          <PlayerBar M={M} T={T} S={S} side="b" a={enter(1)} pieces={pieces} />
-          <BoardSpace onStep={tw.exporting ? null : stepBy}>
-            <Board
+          <BoardGroup
+            overlay={
+              pinMorph() && (
+                <>
+                  <PlayerBar M={M} T={T} S={S} side="b" a={1} pieces={pieces} strip={L.flow.strip} />
+                  <PlayerBar M={M} T={T} S={S} side="w" a={1} pieces={pieces} strip={L.flow.strip} />
+                </>
+              )
+            }
+          >
+            <EvalBar
               M={M}
               T={T}
               S={S}
-              a={enter(0)}
-              arrows={tw.bestArrows}
-              pieces={pieces}
-              queen={queen}
-              vline={pv || vline}
-              slide={slide}
-              glide={!video && !CALM}
-              preview={!!pv}
-              hide={input.drag && input.drag.moved ? input.drag.from : null}
-              lines={
-                tw.bestArrows
-                  ? own
-                    ? lineArrows(own.after)
-                    : !playing && !pv && !vline && cNow >= 0
-                      ? moveEval
-                        ? lineArrows(moveEval.after)
-                        : nextArrows(M, cNow, liveAfter)
-                      : null
-                  : null
-              }
-              idle={!playing && !pv && !vline}
-              sel={input.sel}
+              a={enter(1)}
+              tb={tbBar(tb)}
+              dead={deadBar(dead)}
+              deep={!playing && liveAfter && liveAfter.cp != null ? liveAfter.cp : null}
             />
-            <BoardDraw draw={draw} hidden={playing || !!pv}>
-              <BoardTouch
-                pos={touchPos}
-                targets={input.targets}
-                drag={input.drag}
-                promo={input.promo}
-                castle={input.castle}
-                onCastle={input.pickCastle}
-                {...input.handlers}
-                keys={playing ? null : input.keys}
+            <PlayerBar M={M} T={T} S={S} side="b" a={enter(1)} pieces={pieces} />
+            <BoardSpace onStep={tw.exporting ? null : stepBy}>
+              <Board
+                M={M}
+                T={T}
+                S={S}
+                a={enter(0)}
+                arrows={tw.bestArrows}
+                pieces={pieces}
+                queen={queen}
+                vline={pv || vline}
+                slide={slide}
+                glide={!video && !CALM}
+                preview={!!pv}
+                hide={input.drag && input.drag.moved ? input.drag.from : null}
+                lines={
+                  tw.bestArrows
+                    ? own
+                      ? lineArrows(own.after)
+                      : !playing && !pv && !vline && cNow >= 0
+                        ? moveEval
+                          ? lineArrows(moveEval.after)
+                          : nextArrows(M, cNow, liveAfter)
+                        : null
+                    : null
+                }
+                idle={!playing && !pv && !vline}
+                sel={input.sel}
               />
-            </BoardDraw>
-          </BoardSpace>
-          <PlayerBar M={M} T={T} S={S} side="w" a={enter(1)} pieces={pieces} />
+              <BoardDraw draw={draw} hidden={playing || !!pv}>
+                <BoardTouch
+                  pos={touchPos}
+                  targets={input.targets}
+                  drag={input.drag}
+                  promo={input.promo}
+                  castle={input.castle}
+                  onCastle={input.pickCastle}
+                  {...input.handlers}
+                  keys={playing ? null : input.keys}
+                />
+              </BoardDraw>
+            </BoardSpace>
+            <PlayerBar M={M} T={T} S={S} side="w" a={enter(1)} pieces={pieces} />
+          </BoardGroup>
           {L.header && <Header M={M} a={enter(2)} />}
           <MoveList M={M} T={T} S={S} a={enter(3)} paused={!playing} onPick={goTo} deadAt={deadAt} end={end} />
           <Commentary

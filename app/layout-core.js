@@ -91,6 +91,23 @@
   // top one level with the board's top, the bottom one with its foot, and the board takes the whole height; only where
   // that makes the board bigger and leaves the sidebar its minimum (not a 568×320 phone, held by its width)
   const SIDE_COL = 124;
+  // The paused one-column page, scrolled past its board, pins a smaller board at the top of the screen (L.pin): the eval
+  // bar at its left (18 px, as a phone's sideways bar, from the screen's edge on a phone and the panels' edge elsewhere),
+  // the player bars stacked in a column at its right (as SIDE_COL's), board 200 px on a phone and 400 px elsewhere, less
+  // where the column would be under colMin (times text) or the strip over maxH of the height; none under minBoard. From
+  // the first pixel of scroll the board stays at the top and shrinks toward the strip (L.flow.strip, its boxes), reaching
+  // it at L.flow.pinAt, where the page pins it (Stage's call); the panels' column keeps its place, so the page doesn't move
+  const PIN = {
+    pad: 6,
+    evalW: 18,
+    evalGap: 4,
+    colGap: 12,
+    colMin: 140,
+    phone: 200,
+    other: 400,
+    minBoard: 150,
+    maxH: 0.45,
+  };
   const ONE_COL = { comment: 200, analysis: 260, panel: 260 }; // paused heights, times text (Moves: its five lines)
   const VIDEO_PREF = [96, 120, 96],
     PANEL_FLOOR = 48; // comment, analysis, moves under a video's board, times text
@@ -295,7 +312,30 @@
     return L;
   }
 
-  function oneColumn({ w, h, text, view, video, phone }) {
+  // the pinned strip's boxes (PIN), in the strip's own space (its top at 0), or null where the board would be too small
+  function pinStrip({ w, h, text, px, phone, hasEval }) {
+    const evalX = phone ? 0 : px,
+      boardX = hasEval ? evalX + PIN.evalW + PIN.evalGap : evalX;
+    const size = Math.floor(
+      Math.min(
+        phone ? PIN.phone : PIN.other,
+        w - px - boardX - PIN.colGap - PIN.colMin * text,
+        PIN.maxH * h - 2 * PIN.pad,
+      ),
+    );
+    if (size < PIN.minBoard) return null;
+    const colX = boardX + size + PIN.colGap;
+    return {
+      h: size + 2 * PIN.pad,
+      boxes: {
+        board: { x: boardX, y: PIN.pad, size },
+        eval: hasEval ? { x: evalX, w: PIN.evalW } : null,
+        bars: { h: (size - GAP) / 2, gap: GAP, side: { x: colX, w: w - px - colX }, pinned: true },
+      },
+    };
+  }
+
+  function oneColumn({ w, h, text, view, video, phone, pinned }) {
     const hasEval = view === 'replay' || view === 'free';
     const ev = hasEval ? EVAL_TOTAL : 0;
     const bar = barH(text),
@@ -388,7 +428,13 @@
     // A paused page flows: the panels stack under the board in a column, each as tall as its contents (Moves up to
     // MOVE_LINES_ONE lines, then it scrolls), and the page scrolls. The boxes keep their order and width; the heights here are
     // only the paused defaults, which the views don't use. L.flow says where the column starts
-    if (!video) L.flow = { top: y, x: px, w: pw, gap: GAP, bottom: MARGIN };
+    if (!video) L.flow = { top: y, x: px, w: pw, gap: GAP, bottom: MARGIN, pinAt: null };
+    const strip = !video && view !== 'edit' ? pinStrip({ w, h, text, px, phone, hasEval }) : null;
+    if (strip) {
+      L.flow.pinAt = y - GAP - strip.h;
+      L.flow.strip = { h: strip.h, ...strip.boxes }; // where the board shrinks to, scrolling from 0 to pinAt
+      if (pinned) Object.assign(L, strip.boxes, { pin: { h: strip.h } });
+    }
     if (fixed) {
       L.tray = box(px, y, pw, trayH);
       y += trayH + GAP;
@@ -413,6 +459,8 @@
   // at text 1 (the views scale it with their text); L.tight: the panels pack tighter (TIGHT).
   // vw, vh: the viewport's size (the stage area's when not given), which caps the board and sets the device tier.
   // dock: a short two-column window whose transport bar sits in the sidebar (L.dock is its box)
+  // pinned: the paused one-column page is scrolled past its board (Stage, by L.flow.pinAt): the board, eval bar and player
+  // bars take the strip's boxes (PIN), L.pin its height; the panels keep theirs
   function compute({
     w,
     h,
@@ -424,6 +472,7 @@
     vw = w,
     vh = h,
     dock = false,
+    pinned = false,
   }) {
     const c = cols || columns({ w, h, text, prevCols, video, vw, vh });
     boardMax = Math.max(BOARD_MIN, Math.min(BOARD_MAX, 0.5 * Math.max(vw, vh)));
@@ -454,6 +503,7 @@
         sideOk: tierOf(vw, vh) === 'phone' && h < PHONE_DOCK.minH,
         vw,
         phone: tierOf(vw, vh) === 'phone',
+        pinned,
       }),
       { text: t, tier: tierOf(vw, vh), pad: PAD, tight: TIGHT },
     );

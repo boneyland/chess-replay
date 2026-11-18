@@ -189,7 +189,11 @@ const overflowing = (page) =>
       `${el.tagName.toLowerCase()}${el.className && typeof el.className === 'string' ? '.' + el.className.trim().split(/\s+/).join('.') : ''} "${(el.value || el.textContent || '').trim().slice(0, 30)}"`;
     const scrolls = (cs) =>
       cs.overflowY === 'auto' || cs.overflowY === 'scroll' || cs.overflowX === 'auto' || cs.overflowX === 'scroll';
+    // the pinned board's fading name copies (.pin-ghosts) slide in from past the page's edge on purpose, clipped to it,
+    // and screen readers don't see them; the real player bars, pinned ones included, are still checked
+    const ghost = (el) => !!el.closest('.pin-ghosts');
     for (const el of document.querySelectorAll('.stage-frame, .stage-frame *')) {
+      if (ghost(el)) continue;
       const cs = getComputedStyle(el);
       // a box that scrolls up and down (a panel) scrolling sideways too: something in it is wider than the panel
       if (
@@ -215,7 +219,7 @@ const overflowing = (page) =>
     }
     // absolutely placed boxes not inside a box that scrolls (whose contents may be scrolled out of it on purpose)
     for (const el of frame.querySelectorAll('*')) {
-      if (getComputedStyle(el).position !== 'absolute') continue;
+      if (ghost(el) || getComputedStyle(el).position !== 'absolute') continue;
       let a = el.parentElement,
         inScroll = false;
       for (; a && a !== frame; a = a.parentElement)
