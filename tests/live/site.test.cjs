@@ -192,6 +192,12 @@ const overflowing = (page) =>
     // the pinned board's fading name copies (.pin-ghosts) slide in from past the page's edge on purpose, clipped to it,
     // and screen readers don't see them; the real player bars, pinned ones included, are still checked
     const ghost = (el) => !!el.closest('.pin-ghosts');
+    // the pinned strip's backdrop (.part-pinned-board::before) reaches into the area's side padding on purpose, past the
+    // frame, which lets it out (overflow-clip-margin); Firefox counts it in the frame's and .stage-view's scrollWidth
+    // (4 px at 320 px wide), so it is hidden while they are measured
+    const hide = document.createElement('style');
+    hide.textContent = '.part-pinned-board::before { display: none !important; }';
+    document.head.append(hide);
     for (const el of document.querySelectorAll('.stage-frame, .stage-frame *')) {
       if (ghost(el)) continue;
       const cs = getComputedStyle(el);
@@ -235,6 +241,7 @@ const overflowing = (page) =>
           `${name(el)} ${Math.round(r.left - fr.left)},${Math.round(r.top - fr.top)} ${Math.round(r.width)}x${Math.round(r.height)} past the frame ${Math.round(fr.width)}x${Math.round(fr.height)}`,
         );
     }
+    hide.remove();
     return out.slice(0, 8);
   });
 // the player bars' names matching re, top first: the leaf text over the board's own column (the header's names sit in
@@ -2216,6 +2223,15 @@ for (const name of BROWSERS)
               await p.waitForTimeout(300);
               const at = `${w}x${h} ${view} ${text}`;
               for (const o of await overflowing(p)) fails.push(`${at}: ${o}`);
+              // and scrolled to its end, where a one-column page that scrolls far enough has its board pinned (picking the
+              // move leaves it at the top or pinned, by where the scroll to it settled)
+              if (await p.locator('.stage-area').evaluate((a) => a.scrollHeight > a.clientHeight + 1)) {
+                await p.locator('.stage-area').evaluate((a) => {
+                  a.scrollTop = a.scrollHeight;
+                });
+                await p.waitForTimeout(300);
+                for (const o of await overflowing(p)) fails.push(`${at} scrolled: ${o}`);
+              }
               const vp = { w, h };
               const inside = async (loc, what) => {
                 const r = await loc.boundingBox();
