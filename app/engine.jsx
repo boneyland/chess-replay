@@ -411,20 +411,25 @@ function Stage({
   // the paused one-column page pins a smaller board at the top once scrolled past pinAt (LayoutCore's L.flow.pinAt, which
   // the view reports through setPinAt); only the crossing re-renders
   const [pinAt, setPinAt] = React.useState(null);
-  const [past, setPast] = React.useState(false);
+  const [past, setPast] = React.useState(false),
+    [moved, setMoved] = React.useState(false);
   const pinnable = !video && cols === 1 && pinAt != null;
   React.useEffect(() => {
     const el = areaRef.current;
     if (!pinnable || !el) return;
-    const check = () => setPast(el.scrollTop > pinAt);
+    const check = () => {
+      setPast(el.scrollTop > pinAt);
+      setMoved(el.scrollTop > 0);
+    };
     check();
     el.addEventListener('scroll', check, { passive: true });
     return () => el.removeEventListener('scroll', check);
   }, [pinnable, pinAt]);
-  const pinned = pinnable && past;
+  const pinned = pinnable && past,
+    scrolled = pinnable && moved;
   const frame = React.useMemo(
-    () => ({ w, h, cols, video, text, dock: short, vw: area.vw, vh: area.vh, pinned, setContentH, setPinAt }),
-    [w, h, cols, video, text, short, area.vw, area.vh, pinned],
+    () => ({ w, h, cols, video, text, dock: short, vw: area.vw, vh: area.vh, pinned, scrolled, setContentH, setPinAt }),
+    [w, h, cols, video, text, short, area.vw, area.vh, pinned, scrolled],
   );
   const ctx = React.useMemo(
     () => ({ time, duration, playing, setTime: seek, setPlaying: play, setStart, snap: snapRef }),

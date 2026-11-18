@@ -134,6 +134,7 @@ const setLayout = (frame, view = 'replay') => {
     vh: frame.vh,
     pinned: !!frame.pinned && view !== 'edit',
   });
+  L.scrolled = !!frame.scrolled; // a paused one-column page scrolled at all (BoardGroup's fading bar copies)
   TEXT = L.text;
   TX = 0.8 * TEXT; // the viewer's text size, times the device tier's (smaller on phones and tablets)
 };
@@ -271,10 +272,11 @@ function BoardGroup({ children, overlay }) {
   return (
     <div ref={el} className={pin ? 'part-pinned-board' : undefined} style={style}>
       {/* the parts, scaled while shrinking (shell.html's [data-pinning]); always there, so the board never remounts */}
-      <div className="pin-scale" style={{ height: 0, transformOrigin: '0 0' }}>
+      <div className="pin-scale" style={{ height: 0 }}>
         {children}
       </div>
-      {m && overlay}
+      {/* the stacked bars' fading copies, only while scrolled */}
+      {m && L.scrolled && overlay}
     </div>
   );
 }
@@ -2312,24 +2314,24 @@ function SideBar({ side, a, name, rating, taken, pts, clock, strip }) {
       );
   });
   if (strip) {
-    // riding along the shrinking board's right edge (top level with its top, bottom with its foot) at the strip column's
-    // width, sliding in from the right as the board shrinks (narrowed, the names re-wrapped as they faded in)
+    // at the strip's column from the start (top level with the shrinking board's top, bottom with its foot), shown from
+    // the left only as far as the board has uncovered it: never past the page, and the names wrapped as they end up
     const b = L.board,
       sb = strip.board,
       t = 'var(--pin-t, 0)',
-      gap = strip.bars.side.x - (sb.x + sb.size),
-      x0 = b.x + b.size + gap,
+      x1 = strip.bars.side.x,
+      gap = x1 - (sb.x + sb.size),
+      cover0 = b.x + b.size + gap - x1, // how far the full board's edge reaches into the column
       y0 = side === ORIENT ? b.y + b.size - strip.bars.h : b.y,
-      y1 = side === ORIENT ? sb.y + sb.size - strip.bars.h : sb.y,
-      left = `(${x0}px + ${t} * ${strip.bars.side.x - x0}px)`;
+      y1 = side === ORIENT ? sb.y + sb.size - strip.bars.h : sb.y;
     return (
       <StackedBar
         {...{ side, name, rating, shown, pts, clock }}
         a={`calc(${a} * max(0, ${t} * 2 - 1))`}
         lay={strip}
         place={{
-          left: `calc${left}`,
           top: `calc(${y0}px + ${t} * ${y1 - y0}px)`,
+          clipPath: `inset(0 0 0 max(0px, calc(${cover0}px - ${t} * ${cover0}px)))`,
         }}
         ghost
       />
@@ -2395,10 +2397,11 @@ function SideBar({ side, a, name, rating, taken, pts, clock, strip }) {
 }
 
 // a player bar's clock ({ s, active }): lit while it runs, red under a minute
-function Clock({ clock, style }) {
+// ghost: a fading copy's (StackedBar's), not one of the page's clocks
+function Clock({ clock, style, ghost = false }) {
   return (
     <span
-      className="game-clock"
+      className={ghost ? undefined : 'game-clock'}
       style={{
         minWidth: tx(72),
         textAlign: 'center',
@@ -2461,7 +2464,8 @@ function StackedBar({ side, a, name, rating, shown, pts, clock, lay = L, ghost =
         <span
           title={name}
           style={{
-            font: `600 ${nameFs}px/1.2 ${SANS}`,
+            // 1.3 in the pinned column, whose two-line names had their descenders clipped at 1.2
+            font: `600 ${nameFs}px/${lay.bars.pinned ? 1.3 : 1.2} ${SANS}`,
             color: C.ink,
             overflowWrap: 'anywhere',
             display: '-webkit-box',
@@ -2498,7 +2502,7 @@ function StackedBar({ side, a, name, rating, shown, pts, clock, lay = L, ghost =
       {pts > 0 && <span style={{ font: `600 ${tx(14)}px ${MONO}`, color: C.dim, marginLeft: tx(6) }}>+{pts}</span>}
     </span>
   ) : null;
-  const clk = clock ? <Clock key="clock" clock={clock} style={{ alignSelf: 'flex-start' }} /> : null;
+  const clk = clock ? <Clock key="clock" clock={clock} style={{ alignSelf: 'flex-start' }} ghost={ghost} /> : null;
   return (
     <div
       className={ghost ? 'pin-ghost-bar' : 'part-player-bar ' + (bottom ? 'bottom' : 'top')}
