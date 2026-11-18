@@ -1,6 +1,6 @@
 {
   "schemaVersion": 2,
-  "generatedAt": "2026-11-18T05:42:10.559849+00:00",
+  "generatedAt": "2026-11-18T07:26:00.830643+00:00",
   "title": "Design System: Chess Replay",
   "extensions": {
     "colorMeta": {
@@ -257,6 +257,10 @@
       "dialog-title": {
         "displayName": "Dialog title",
         "purpose": "A dialog's heading."
+      },
+      "info-mark": {
+        "displayName": "Info mark",
+        "purpose": "The \"i\" in the ⓘ buttons: Instrument Serif italic 400, 16 px."
       }
     },
     "shadows": [
@@ -398,7 +402,7 @@
       },
       {
         "name": "The Verdict Rule",
-        "body": "Green, amber, red and plum mean best, mistake, blunder and Queen, and nothing else. Never use them for branding, status chrome or emphasis.",
+        "body": "Green, amber, red and plum mean best, mistake, blunder and Queen, and nothing else. Never use them for branding, status chrome or emphasis. One exception: the analysis spinner (the Analysis title's computer button while a game analysis runs) is a turning rainbow of the night verdict hues plus a yellow, blue and violet of its own, read as \"working\", not as any verdict.",
         "section": "colors"
       },
       {
