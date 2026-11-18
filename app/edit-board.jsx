@@ -4,23 +4,10 @@
 // portrait frame under it, the piece tray right under the board). GameApp holds the setup and the FEN field's text.
 
 const TRAY = ['P', 'N', 'B', 'R', 'Q', 'K', 'p', 'n', 'b', 'r', 'q', 'k'];
-const PIECE_NAME = { p: 'pawn', n: 'knight', b: 'bishop', r: 'rook', q: 'queen', k: 'king' };
-const trayLabel = (p) => `${p === p.toUpperCase() ? 'White' : 'Black'} ${PIECE_NAME[p.toLowerCase()]}`;
+const trayLabel = pieceLabel; // PIECE_NAME, squareName, squareSay, cursorStep and SR_ONLY are game-video-core.jsx's
 const EDIT_HINT = 'Drag pieces from the tray, or tap one and then tap squares.';
 const EDIT_KEYS =
   'Arrows move the square; Enter places the tray piece, or picks up a piece and puts it down; Delete takes it away; K, Q, R, B, N, P place White pieces, k, q, r, b, n, p Black ones.';
-const squareName = (i) => window.ChessCore.sqName(i);
-// the text a screen reader says for the keyboard's square
-const squareSay = (b, i) => `${squareName(i)}, ${b[i] ? trayLabel(b[i]).toLowerCase() : 'empty'}`;
-// the text a screen reader can read without showing it
-const SR_ONLY = {
-  position: 'absolute',
-  width: 1,
-  height: 1,
-  overflow: 'hidden',
-  clip: 'rect(0 0 0 0)',
-  whiteSpace: 'nowrap',
-};
 
 function TrayPiece({ p, size, held, handlers }) {
   return (
@@ -244,12 +231,9 @@ function useEditInput({ setup, onChange }) {
   });
   const onKeyDown = (e) => {
     if (e.ctrlKey || e.metaKey || e.altKey) return;
-    const step = { ArrowLeft: [-1, 0], ArrowRight: [1, 0], ArrowUp: [0, -1], ArrowDown: [0, 1] }[e.key];
-    if (step) {
-      const [x, y] = idxXY(cursor),
-        [fx, fy] = view(Math.min(7, Math.max(0, x + step[0])), Math.min(7, Math.max(0, y + step[1])));
-      setCursor(fy * 8 + fx);
-    } else if (e.key === 'Enter' || e.key === ' ') {
+    const to = cursorStep(cursor, e.key);
+    if (to != null) setCursor(to);
+    else if (e.key === 'Enter' || e.key === ' ') {
       if (held) onChange(E.put(setup, cursor, setup.b[cursor] === held ? null : held));
       else if (carrying != null) {
         onChange(E.move(setup, carrying, cursor));

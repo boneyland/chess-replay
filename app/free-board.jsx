@@ -978,6 +978,7 @@ function FreeBoard({ board, onChange, tw, setTweak, onLichess, sf, nav, orient, 
             {...(still ? stillInput : input.handlers)}
             // a piece springing back lands even if the board went still meanwhile (a step back in a game)
             onBack={input.handlers.onBack}
+            keys={still ? null : input.keys}
           />
         </BoardDraw>
       </BoardSpace>
@@ -1721,6 +1722,16 @@ const SHORTCUTS = [
       ['Home  End', 'First position, last position'],
       ['Esc', 'Cancel a promotion'],
       ['F', 'Flip the board (not in a game)'],
+    ],
+  },
+  {
+    title: 'On the board',
+    rows: [
+      ['Tab', 'Reach the board (not while the video plays)'],
+      ['Arrows', 'Move the square'],
+      ['Enter  Space', 'Pick up a piece, then play it on the square you choose (the replay pauses to try it)'],
+      ['Esc', 'Put the piece down'],
+      ['Q R B N', 'Choose the promotion piece'],
     ],
   },
   {

@@ -241,6 +241,29 @@ const setOrient = (o) => {
 const view = (x, y) => (ORIENT === 'b' ? [7 - x, 7 - y] : [x, y]);
 const sqXY = (sq) => view(sq.charCodeAt(0) - 97, 8 - +sq[1]);
 const idxXY = (i) => view(i % 8, Math.floor(i / 8));
+// The board by keyboard (the replay's, the free board's and Edit position's): the square the arrows move, as the
+// viewer sees the board (flipped too), and what a screen reader says for it
+const PIECE_NAME = { p: 'pawn', n: 'knight', b: 'bishop', r: 'rook', q: 'queen', k: 'king' };
+const pieceLabel = (p) => `${p === p.toUpperCase() ? 'White' : 'Black'} ${PIECE_NAME[p.toLowerCase()]}`;
+const squareName = (i) => window.ChessCore.sqName(i);
+const squareSay = (b, i) => `${squareName(i)}, ${b[i] ? pieceLabel(b[i]).toLowerCase() : 'empty'}`;
+// the square an arrow key moves the cursor to (null: not an arrow); the edge stops it
+const cursorStep = (cursor, key) => {
+  const step = { ArrowLeft: [-1, 0], ArrowRight: [1, 0], ArrowUp: [0, -1], ArrowDown: [0, 1] }[key];
+  if (!step) return null;
+  const [x, y] = idxXY(cursor),
+    [fx, fy] = view(Math.min(7, Math.max(0, x + step[0])), Math.min(7, Math.max(0, y + step[1])));
+  return fy * 8 + fx;
+};
+// the text a screen reader can read without showing it
+const SR_ONLY = {
+  position: 'absolute',
+  width: 1,
+  height: 1,
+  overflow: 'hidden',
+  clip: 'rect(0 0 0 0)',
+  whiteSpace: 'nowrap',
+};
 const sqC = (sq) => {
   const [x, y] = sqXY(sq);
   return [x * SQ + SQ / 2, y * SQ + SQ / 2];
@@ -1532,13 +1555,16 @@ function DragGhost({ el, piece, x, y, ox = 0, oy = 0, back, onBack }) {
 
 // The pieces a pawn can become, in the picker's order, and where each sits: a column on the promotion square's file
 const PROMO_PIECES = ['q', 'n', 'r', 'b'];
+// the board's keys, for a screen reader (BoardTouch) and the Keyboard shortcuts dialog (SHORTCUTS)
+const BOARD_KEYS =
+  'Arrows move the square; Enter or Space picks up a piece, then plays it on the square you choose; Esc puts it down; Q, R, B or N chooses a promotion.';
 const promoPieces = (pr) => PROMO_PIECES.map((t, k) => ({ t, sq: pr.to + (pr.white ? 8 : -8) * k }));
 // A 960 castle's side as the page names it: 'Castle a-side' / 'Castle h-side'
 const castleName = (side) => `Castle ${side}-side`;
 // The castle-or-move question over the board (BoardTouch, castle: useBoardInput's): Castle a-side/h-side, and Move the
 // king to g1 when that king step is legal too. A press anywhere else reaches BoardTouch, which lets it go (the king stays);
 // its buttons take their own presses. In board pixels, so it scales with the board
-function CastleAsk({ castle, onPick }) {
+function CastleAsk({ castle, onPick, focus }) {
   const btn = (primary) => ({
     font: `600 28px ${MONO}`,
     letterSpacing: '0.02em',
@@ -1586,7 +1612,7 @@ function CastleAsk({ castle, onPick }) {
           boxShadow: '0 8px 30px rgba(0,0,0,0.55)',
         }}
       >
-        <button type="button" style={btn(true)} {...press('castle')}>
+        <button type="button" style={btn(true)} autoFocus={!!focus} {...press('castle')}>
           {castleName(castle.side)}
         </button>
         {castle.alsoMove && (
@@ -1625,14 +1651,32 @@ function CastleButtons({ pos, onMove, style }) {
     </div>
   );
 }
-function BoardTouch({ pos, targets, drag, promo, castle, onCastle, onDown, onMove, onUp, onCancel, onBack }) {
+// keys: useBoardInput's keyboard (null: the board takes no keys, e.g. while the video plays or the free board is still).
+// The board is then a Tab stop that acts on keys only while it has the keyboard's focus (focused by Tab, not by a
+// press, so a press on a piece leaves Space and the arrows to the page's shortcuts), with the cursor outlined
+function BoardTouch({ pos, targets, drag, promo, castle, onCastle, onDown, onMove, onUp, onCancel, onBack, keys }) {
   const dragged = drag && drag.moved ? drag.piece || pos.b[drag.from] : null,
-    el = React.useRef(null);
+    own = React.useRef(null),
+    el = keys ? keys.boardEl : own;
+  const [kbFocus, setKbFocus] = React.useState(false);
+  const ring = keys && kbFocus;
   return (
     <div
       ref={el}
       data-no-drag-scroll
-      onPointerDown={onDown}
+      {...(keys && {
+        tabIndex: 0,
+        role: 'application',
+        'aria-label': 'Board',
+        'aria-describedby': 'board-keys',
+        onKeyDown: (e) => kbFocus && keys.onKeyDown(e),
+        onFocus: (e) => setKbFocus(e.currentTarget.matches(':focus-visible')),
+        onBlur: () => setKbFocus(false),
+      })}
+      onPointerDown={(e) => {
+        setKbFocus(false);
+        onDown(e);
+      }}
       onPointerMove={onMove}
       onPointerUp={onUp}
       onPointerCancel={onCancel}
@@ -1647,8 +1691,33 @@ function BoardTouch({ pos, targets, drag, promo, castle, onCastle, onDown, onMov
         height: BW,
         cursor: drag && drag.moved && !drag.back ? 'grabbing' : 'grab',
         touchAction: 'none',
+        outline: 'none',
       }}
     >
+      {ring && (
+        <div
+          style={{
+            position: 'absolute',
+            left: idxXY(keys.cursor)[0] * SQ,
+            top: idxXY(keys.cursor)[1] * SQ,
+            width: SQ,
+            height: SQ,
+            boxShadow: `inset 0 0 0 5px ${C.ink}`,
+            pointerEvents: 'none',
+            zIndex: 3,
+          }}
+        />
+      )}
+      {keys && (
+        <>
+          <span id="board-keys" style={SR_ONLY}>
+            {BOARD_KEYS}
+          </span>
+          <span aria-live="polite" translate="no" style={SR_ONLY}>
+            {kbFocus ? keys.say : ''}
+          </span>
+        </>
+      )}
       {targets.map((t) => (
         <div
           key={t}
@@ -1738,7 +1807,7 @@ function BoardTouch({ pos, targets, drag, promo, castle, onCastle, onDown, onMov
           }}
         />
       )}
-      {castle && <CastleAsk castle={castle} onPick={onCastle} />}
+      {castle && <CastleAsk castle={castle} onPick={onCastle} focus={castle.keys} />}
     </div>
   );
 }
@@ -3420,6 +3489,13 @@ function useBoardInput({ pos, onPick, onMiss, onMove }) {
   const [promo, setPromo] = React.useState(null); // { from, to, white }: a pawn move waiting for its piece
   // { from, to, side, step, alsoMove }: a 960 king dropped one square from c or g, waiting for castle or king move
   const [castle, setCastle] = React.useState(null);
+  // the keyboard's square (a board index, e4 to begin with), what a screen reader hears after a move, the board's
+  // element (focused again once the castle question, opened from a key, is answered) and whether the move being made
+  // came from a key (the castle question then puts the focus on its first button)
+  const [cursor, setCursor] = React.useState(36);
+  const [played, setPlayed] = React.useState(null);
+  const boardEl = React.useRef(null);
+  const byKey = React.useRef(false);
   // a promotion first shows the picker, and plays once a piece is picked. A 960 king dropped where castling is legal
   // (CC.castleTarget) castles at once from two or more squares away or on its own rook, and asks from one square away,
   // where a king step could be meant; a standard position never gets here (castleTarget is null)
@@ -3429,8 +3505,10 @@ function useBoardInput({ pos, onPick, onMiss, onMove }) {
       const m = CC.castleMoves(pos).find((x) => x.side === ct.side);
       if (!ct.ask) {
         window.Sfx.buzz('move');
+        setPlayed(m.step.san);
         onMove(m.step);
-      } else setCastle({ from, to, side: ct.side, step: m.step, alsoMove: CC.userMove(pos, from, to) });
+      } else
+        setCastle({ from, to, side: ct.side, step: m.step, alsoMove: CC.userMove(pos, from, to), keys: byKey.current });
       return true;
     }
     if (!piece && CC.isPromotion(pos, from, to)) {
@@ -3440,6 +3518,7 @@ function useBoardInput({ pos, onPick, onMiss, onMove }) {
     const step = CC.userMove(pos, from, to, piece);
     if (!step) return false;
     window.Sfx.buzz(window.Sfx.hapticKind(step.san));
+    setPlayed(step.san);
     onMove(step);
     return true;
   };
@@ -3459,8 +3538,11 @@ function useBoardInput({ pos, onPick, onMiss, onMove }) {
       choice === 'castle' ? m && m.step : choice === 'move' && c.alsoMove ? CC.userMove(pos, c.from, c.to) : null;
     if (step) {
       window.Sfx.buzz(window.Sfx.hapticKind(step.san));
+      setPlayed(step.san);
       onMove(step);
     } else onMiss();
+    // answered from the keyboard: its buttons go, so the focus goes back to the board
+    if (c.keys && boardEl.current) boardEl.current.focus();
   };
   const boardXY = (e) => boardPoint(e.currentTarget, e, true),
     moved = dragMoved;
@@ -3553,7 +3635,58 @@ function useBoardInput({ pos, onPick, onMiss, onMove }) {
     setPromo(null);
     setCastle(null);
   };
-  return { sel, drag, promo, castle, pickCastle, targets, handlers, cancelPromo, clear };
+  // The keys while the board has the keyboard's focus (BoardTouch passes them only then): the arrows move the cursor,
+  // Enter or Space does what a tap on its square does (picks up a piece of the side to move, plays the picked piece
+  // there, or puts it down), Esc puts a picked piece down; with the promotion picker up, Q R B N (or Enter, a queen)
+  // choose the piece. A key it doesn't use goes on to the page's shortcuts (Esc with the picker up: the view's)
+  const onKeyDown = (e) => {
+    if (e.ctrlKey || e.metaKey || e.altKey || e.target !== e.currentTarget || castle) return;
+    const k = e.key.length === 1 ? e.key.toLowerCase() : e.key;
+    const to = cursorStep(cursor, e.key);
+    if (promo) {
+      const t = { Enter: 'q', ' ': 'q', q: 'q', r: 'r', b: 'b', n: 'n' }[k];
+      if (!t) return;
+      setPromo(null);
+      playMove(promo.from, promo.to, t);
+    } else if (to != null) {
+      setCursor(to);
+      setPlayed(null);
+    } else if (e.key === 'Enter' || e.key === ' ') {
+      const sq = cursor,
+        pc = pos.b[sq];
+      byKey.current = true;
+      if (sel != null && sel !== sq && targets.includes(sq)) {
+        playMove(sel, sq);
+        setSel(null);
+      } else if (sel === sq) setSel(null);
+      else if (pc && (pc === pc.toUpperCase() ? 'w' : 'b') === pos.turn) {
+        onPick();
+        setSel(sq);
+        setPlayed(null);
+      } else {
+        setSel(null);
+        onMiss();
+      }
+      byKey.current = false;
+    } else if (e.key === 'Escape' && sel != null) setSel(null);
+    else return;
+    e.preventDefault();
+    e.stopPropagation();
+  };
+  // what a screen reader hears for the cursor: the square and its piece, whether it's the picked piece or a square it
+  // can go to, or the move just played; the picker's choice while it's up
+  const say = promo
+    ? 'Promote to: Q queen, R rook, B bishop, N knight'
+    : played
+      ? `Played ${played}`
+      : squareSay(pos.b, cursor) +
+        (sel === cursor
+          ? ', picked up'
+          : sel != null && targets.includes(cursor)
+            ? `, the ${pieceLabel(pos.b[sel]).toLowerCase()} can go here`
+            : '');
+  const keys = { cursor, onKeyDown, say, boardEl };
+  return { sel, drag, promo, castle, pickCastle, targets, handlers, keys, cancelPromo, clear };
 }
 
 // When the schedule changes (a Queen answer lengthens a move's hold, a commentary source is turned off), keep the board
@@ -4141,6 +4274,7 @@ function GameVideo({ M, tw, d, probe, queen, nav, scheme, sf, orient }) {
                 castle={input.castle}
                 onCastle={input.pickCastle}
                 {...input.handlers}
+                keys={playing ? null : input.keys}
               />
             </BoardDraw>
           </BoardSpace>
