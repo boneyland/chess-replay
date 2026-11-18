@@ -221,6 +221,8 @@ const pinLen = (m, from, to, shift = 0) => `calc((${from}px + var(--pin-t, 0) * 
 // the panels scrolling under it. With a strip to shrink to (pinMorph) it is stuck to the top from the start, with no box
 // of its own (its parts placed as in the page), and scales toward the strip as the page scrolls. Else it is out of the
 // way. Its margins cancel its place in the flow, so the panels don't move
+const SETTLE_MS = 120,
+  SETTLE_GLIDE = 250;
 function BoardGroup({ children, overlay }) {
   const el = React.useRef(null);
   const pin = L.pin,
@@ -245,6 +247,100 @@ function BoardGroup({ children, overlay }) {
       delete node.dataset.pinning;
     };
   }, [pinAt]);
+  // A scroll that ends part-way through the shrink (no finger or mouse button still on the page, any momentum spent)
+  // settles on the nearer layout, full or pinned (just past pinAt, so it pins), by scrolling there, which drives the
+  // shrink as a scroll does: eased out over SETTLE_GLIDE ms at most (by the distance; the browser's own smooth scroll
+  // took 500-700 ms), at once under reduced motion, and dropped the moment the page is touched again. Where the page
+  // can't scroll that far it's left where it is. On scrollend, or a pause of SETTLE_MS in the scroll events (Firefox
+  // fired no scrollend for a wheel's scroll, 2026-11-19)
+  const settleAt = f && f.strip ? f.pinAt : null;
+  React.useEffect(() => {
+    const area = el.current && el.current.closest('.stage-area');
+    if (!area || settleAt == null) return;
+    let held = false,
+      timer = null,
+      raf = 0;
+    const stop = () => {
+      cancelAnimationFrame(raf);
+      raf = 0;
+    };
+    const settle = () => {
+      clearTimeout(timer);
+      if (held || raf) return;
+      const from = area.scrollTop,
+        end = settleAt + 1;
+      if (from <= 0.5 || from >= end - 0.5 || area.scrollHeight - area.clientHeight < end) return;
+      const to = from < settleAt / 2 ? 0 : end;
+      if (CALM_MQ && CALM_MQ.matches) {
+        area.scrollTop = to;
+        return;
+      }
+      const ms = Math.min(SETTLE_GLIDE, 120 + (130 * Math.abs(to - from)) / Math.max(1, settleAt / 2)),
+        t0 = performance.now();
+      const step = (now) => {
+        const k = Math.min(1, (now - t0) / ms);
+        area.scrollTop = from + (to - from) * (1 - Math.pow(1 - k, 3)); // ease out
+        raf = k < 1 ? requestAnimationFrame(step) : 0;
+      };
+      raf = requestAnimationFrame(step);
+    };
+    const onScroll = () => {
+      if (raf) return;
+      clearTimeout(timer);
+      timer = setTimeout(settle, SETTLE_MS);
+    };
+    // a finger by its touch events (a touch that turns into a scroll fires pointercancel while the finger is still
+    // down), a mouse button by its pointer events
+    let touches = 0,
+      button = false;
+    const hold = () => {
+      held = touches > 0 || button;
+      if (held) {
+        clearTimeout(timer);
+        stop();
+      } else timer = setTimeout(settle, SETTLE_MS); // a fling's momentum goes on: its scrollend (or the pause) settles it
+    };
+    const touchDown = (e) => {
+      touches = e.touches.length;
+      hold();
+    };
+    const touchUp = (e) => {
+      if (!touches) return;
+      touches = e.touches.length;
+      hold();
+    };
+    const mouseDown = (e) => {
+      if (e.pointerType === 'touch') return;
+      button = true;
+      hold();
+    };
+    const mouseUp = (e) => {
+      if (e.pointerType === 'touch' || !button) return;
+      button = false;
+      hold();
+    };
+    area.addEventListener('scroll', onScroll, { passive: true });
+    area.addEventListener('scrollend', settle);
+    area.addEventListener('pointerdown', mouseDown, { passive: true });
+    area.addEventListener('touchstart', touchDown, { passive: true });
+    window.addEventListener('pointerup', mouseUp);
+    window.addEventListener('touchend', touchUp);
+    window.addEventListener('touchcancel', touchUp);
+    // a wheel turned during the glide takes over too
+    area.addEventListener('wheel', stop, { passive: true });
+    return () => {
+      clearTimeout(timer);
+      stop();
+      area.removeEventListener('wheel', stop);
+      area.removeEventListener('scroll', onScroll);
+      area.removeEventListener('scrollend', settle);
+      area.removeEventListener('pointerdown', mouseDown);
+      area.removeEventListener('touchstart', touchDown);
+      window.removeEventListener('pointerup', mouseUp);
+      window.removeEventListener('touchend', touchUp);
+      window.removeEventListener('touchcancel', touchUp);
+    };
+  }, [settleAt]);
   const style = pin
     ? {
         position: 'sticky',
