@@ -132,6 +132,7 @@ const setLayout = (frame, view = 'replay') => {
     dock: frame.dock,
     vw: frame.vw,
     vh: frame.vh,
+    pinned: !!frame.pinned && view !== 'edit',
   });
   TEXT = L.text;
   TX = 0.8 * TEXT; // the viewer's text size, times the device tier's (smaller on phones and tablets)
@@ -172,7 +173,11 @@ const flowStyle = () =>
 function useFlowHeight(frame, ref) {
   const flow = !!L.flow,
     h = L.h,
-    bottom = L.flow ? L.flow.bottom : 0;
+    bottom = L.flow ? L.flow.bottom : 0,
+    pinAt = L.flow ? L.flow.pinAt : null;
+  React.useLayoutEffect(() => {
+    frame.setPinAt(pinAt);
+  }, [frame, pinAt]);
   React.useLayoutEffect(() => {
     const el = ref.current;
     if (!flow || !el) {
@@ -190,6 +195,31 @@ function useFlowHeight(frame, ref) {
     for (const c of el.children) ro.observe(c);
     return () => ro.disconnect();
   });
+}
+// The board, eval bar and player bars, as one element so the page can pin them (L.pin) without remounting the board:
+// unpinned it is out of the way (no box, nothing in the flow; its parts place themselves in the view's container, its
+// own position static); pinned it is a strip stuck to the top of the scrolling area, its parts placed in it (LayoutCore's
+// strip boxes), over the panels scrolling under it. Its margins cancel its place in the flow, so the panels don't move
+function BoardGroup({ children }) {
+  const pin = L.pin,
+    f = L.flow;
+  const style = pin
+    ? {
+        position: 'sticky',
+        top: 0,
+        zIndex: 3,
+        flex: 'none',
+        height: pin.h,
+        margin: `${-f.top}px ${-f.x}px ${f.top - pin.h - f.gap}px`,
+        background: C.bg,
+        '--pin-edge': C.line, // its edge, drawn by its backdrop (shell.html)
+      }
+    : { position: 'static', flex: 'none', height: 0, marginBottom: f ? -f.gap : 0 };
+  return (
+    <div className={pin ? 'part-pinned-board' : undefined} style={style}>
+      {children}
+    </div>
+  );
 }
 // The board's own 768 px space, scaled to L.board: the board, its touch layer, arrows and badges position from 0,0 in it
 // onStep(±1), where there are moves to step through: the wheel over the board steps them (BoardCore.wheel). The listener
@@ -2059,7 +2089,8 @@ function EvalBarView({ cp, txt, a }) {
     // the number, sized to the bar's width: its digits a little over half of it (more on a phone's thin bar, where 0.75
     // left it under 11 px), and on a phone at most 14 px: turned, its text box is about 1.3 em wide in Firefox, whatever
     // the line height, so 15.3 px spilled out of the sideways phone's 18 px bar (CI, 2026-11-18)
-    ef = Math.round((L.tier === 'phone' ? Math.min(14, L.eval.w * 0.85) : L.eval.w * 0.75) * 10) / 10;
+    // (the pinned strip's bar sizes it the phone's way on every device)
+    ef = Math.round((L.tier === 'phone' || L.pin ? Math.min(14, L.eval.w * 0.85) : L.eval.w * 0.75) * 10) / 10;
   return (
     <div
       className="part-eval-bar"
@@ -2298,14 +2329,35 @@ function Clock({ clock, style }) {
 // the captures, then the name and rating. shown: the captured pieces' images, drawn smaller here
 function StackedBar({ side, a, name, rating, shown, pts, clock }) {
   const bottom = side === ORIENT;
+  // the pinned strip's column takes the name and rating at the player bars' sizes (more room across, the strip shorter)
+  const k = L.bars.pinned
+    ? { mark: 14, top: 3, name: 20, rating: 16, indent: 22 }
+    : { mark: 12, top: 4, name: 17, rating: 14, indent: 20 };
+  // there, the name a little smaller (to 0.75 of it) where its longest word would otherwise break mid-word
+  const nameFs = L.bars.pinned
+    ? tx(k.name) *
+      Math.max(
+        0.75,
+        Math.min(
+          1,
+          (L.bars.side.w - tx(k.indent)) /
+            Math.max(
+              1,
+              ...String(name)
+                .split(/\s+/)
+                .map((wd) => textWidth(wd, `600 ${tx(k.name)}px ${SANS}`)),
+            ),
+        ),
+      )
+    : tx(k.name);
   const who = (
     <span key="who" style={{ display: 'flex', flexDirection: 'column', gap: tx(2), minWidth: 0 }}>
       <span style={{ display: 'flex', alignItems: 'flex-start', gap: tx(8), minWidth: 0 }}>
         <span
           style={{
-            width: tx(12),
-            height: tx(12),
-            marginTop: tx(4),
+            width: tx(k.mark),
+            height: tx(k.mark),
+            marginTop: tx(k.top),
             borderRadius: 2,
             background: side === 'w' ? '#fff' : '#1c1613',
             border: `1.5px solid ${C.dim}`,
@@ -2315,7 +2367,7 @@ function StackedBar({ side, a, name, rating, shown, pts, clock }) {
         <span
           title={name}
           style={{
-            font: `600 ${tx(17)}px/1.2 ${SANS}`,
+            font: `600 ${nameFs}px/1.2 ${SANS}`,
             color: C.ink,
             overflowWrap: 'anywhere',
             display: '-webkit-box',
@@ -2329,7 +2381,14 @@ function StackedBar({ side, a, name, rating, shown, pts, clock }) {
         </span>
       </span>
       {rating && (
-        <span style={{ font: `500 ${tx(14)}px ${MONO}`, color: C.dim, paddingLeft: tx(20), whiteSpace: 'nowrap' }}>
+        <span
+          style={{
+            font: `500 ${tx(k.rating)}px ${MONO}`,
+            color: C.dim,
+            paddingLeft: tx(k.indent),
+            whiteSpace: 'nowrap',
+          }}
+        >
           {rating}
         </span>
       )}
@@ -4278,58 +4337,60 @@ function GameVideo({ M, tw, d, probe, queen, nav, scheme, sf, orient }) {
               !tw.exporting && { transform: `translate(${cx}px,${cy}px) scale(${sc}) translate(${-cx}px,${-cy}px)` }),
           }}
         >
-          <EvalBar
-            M={M}
-            T={T}
-            S={S}
-            a={enter(1)}
-            tb={tbBar(tb)}
-            dead={deadBar(dead)}
-            deep={!playing && liveAfter && liveAfter.cp != null ? liveAfter.cp : null}
-          />
-          <PlayerBar M={M} T={T} S={S} side="b" a={enter(1)} pieces={pieces} />
-          <BoardSpace onStep={tw.exporting ? null : stepBy}>
-            <Board
+          <BoardGroup>
+            <EvalBar
               M={M}
               T={T}
               S={S}
-              a={enter(0)}
-              arrows={tw.bestArrows}
-              pieces={pieces}
-              queen={queen}
-              vline={pv || vline}
-              slide={slide}
-              glide={!video && !CALM}
-              preview={!!pv}
-              hide={input.drag && input.drag.moved ? input.drag.from : null}
-              lines={
-                tw.bestArrows
-                  ? own
-                    ? lineArrows(own.after)
-                    : !playing && !pv && !vline && cNow >= 0
-                      ? moveEval
-                        ? lineArrows(moveEval.after)
-                        : nextArrows(M, cNow, liveAfter)
-                      : null
-                  : null
-              }
-              idle={!playing && !pv && !vline}
-              sel={input.sel}
+              a={enter(1)}
+              tb={tbBar(tb)}
+              dead={deadBar(dead)}
+              deep={!playing && liveAfter && liveAfter.cp != null ? liveAfter.cp : null}
             />
-            <BoardDraw draw={draw} hidden={playing || !!pv}>
-              <BoardTouch
-                pos={touchPos}
-                targets={input.targets}
-                drag={input.drag}
-                promo={input.promo}
-                castle={input.castle}
-                onCastle={input.pickCastle}
-                {...input.handlers}
-                keys={playing ? null : input.keys}
+            <PlayerBar M={M} T={T} S={S} side="b" a={enter(1)} pieces={pieces} />
+            <BoardSpace onStep={tw.exporting ? null : stepBy}>
+              <Board
+                M={M}
+                T={T}
+                S={S}
+                a={enter(0)}
+                arrows={tw.bestArrows}
+                pieces={pieces}
+                queen={queen}
+                vline={pv || vline}
+                slide={slide}
+                glide={!video && !CALM}
+                preview={!!pv}
+                hide={input.drag && input.drag.moved ? input.drag.from : null}
+                lines={
+                  tw.bestArrows
+                    ? own
+                      ? lineArrows(own.after)
+                      : !playing && !pv && !vline && cNow >= 0
+                        ? moveEval
+                          ? lineArrows(moveEval.after)
+                          : nextArrows(M, cNow, liveAfter)
+                        : null
+                    : null
+                }
+                idle={!playing && !pv && !vline}
+                sel={input.sel}
               />
-            </BoardDraw>
-          </BoardSpace>
-          <PlayerBar M={M} T={T} S={S} side="w" a={enter(1)} pieces={pieces} />
+              <BoardDraw draw={draw} hidden={playing || !!pv}>
+                <BoardTouch
+                  pos={touchPos}
+                  targets={input.targets}
+                  drag={input.drag}
+                  promo={input.promo}
+                  castle={input.castle}
+                  onCastle={input.pickCastle}
+                  {...input.handlers}
+                  keys={playing ? null : input.keys}
+                />
+              </BoardDraw>
+            </BoardSpace>
+            <PlayerBar M={M} T={T} S={S} side="w" a={enter(1)} pieces={pieces} />
+          </BoardGroup>
           {L.header && <Header M={M} a={enter(2)} />}
           <MoveList M={M} T={T} S={S} a={enter(3)} paused={!playing} onPick={goTo} deadAt={deadAt} end={end} />
           <Commentary

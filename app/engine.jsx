@@ -28,6 +28,7 @@ const useTimeline = () => React.useContext(TimelineContext);
 // a video (playing, or an export drawing) rather than a paused page, and the text size multiplier.
 // A view calls setContentH(h) with the height its layout needs, so a paused one-column page can scroll when it is taller than the area.
 // dock: a short two-column window, whose transport bar sits at the foot of the sidebar (LayoutCore's L.dock).
+// pinned: a paused one-column page scrolled past its board (setPinAt(y) gives the scroll where that starts, or null).
 const FrameContext = React.createContext({
   w: 1440,
   h: 900,
@@ -35,7 +36,9 @@ const FrameContext = React.createContext({
   video: false,
   text: 1,
   dock: false,
+  pinned: false,
   setContentH: () => {},
+  setPinAt: () => {},
 });
 const useFrame = () => React.useContext(FrameContext);
 
@@ -405,9 +408,23 @@ function Stage({
     return () => window.removeEventListener('chess-video:seek', onSeek);
   }, [duration, seek, play]);
 
+  // the paused one-column page pins a smaller board at the top once scrolled past pinAt (LayoutCore's L.flow.pinAt, which
+  // the view reports through setPinAt); only the crossing re-renders
+  const [pinAt, setPinAt] = React.useState(null);
+  const [past, setPast] = React.useState(false);
+  const pinnable = !video && cols === 1 && pinAt != null;
+  React.useEffect(() => {
+    const el = areaRef.current;
+    if (!pinnable || !el) return;
+    const check = () => setPast(el.scrollTop > pinAt);
+    check();
+    el.addEventListener('scroll', check, { passive: true });
+    return () => el.removeEventListener('scroll', check);
+  }, [pinnable, pinAt]);
+  const pinned = pinnable && past;
   const frame = React.useMemo(
-    () => ({ w, h, cols, video, text, dock: short, vw: area.vw, vh: area.vh, setContentH }),
-    [w, h, cols, video, text, short, area.vw, area.vh],
+    () => ({ w, h, cols, video, text, dock: short, vw: area.vw, vh: area.vh, pinned, setContentH, setPinAt }),
+    [w, h, cols, video, text, short, area.vw, area.vh, pinned],
   );
   const ctx = React.useMemo(
     () => ({ time, duration, playing, setTime: seek, setPlaying: play, setStart, snap: snapRef }),

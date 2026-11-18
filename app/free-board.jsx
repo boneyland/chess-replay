@@ -936,53 +936,55 @@ function FreeBoard({ board, onChange, tw, setTweak, onLichess, sf, nav, orient, 
       ref={flowRef}
       style={{ position: 'absolute', inset: 0, background: C.bg, ...flowStyle() }}
     >
-      {!G &&
-        (deadv || tbv ? (
-          <EvalBarView cp={(deadv || tbv).cp} txt={(deadv || tbv).txt} a={1} />
-        ) : (
-          <EvalBarView cp={cp == null ? 0 : cp} txt={cp == null ? (down ? '' : '…') : fmtSf(cp)} a={1} />
-        ))}
-      <FreeBar pos={pos} side="b" a={1} clock={clockOf('b')} name={G ? window.PlayCore.playerName(G, 'b') : null} />
-      <BoardSpace onStep={!steps.length ? null : (d) => goIf(upto + d)}>
-        <LineBoard
-          a={1}
-          sq={boardSquares()}
-          v={
-            pv && pv.length
-              ? {
-                  upto: upto + pv.length,
-                  moves: [...steps.slice(0, upto + 1), ...pv],
-                  base: board.start.pos,
-                  src: 'you',
-                }
-              : { upto, moves: steps, base: board.start.pos, src: 'you' }
-          }
-          hide={input.drag && input.drag.moved ? input.drag.from : null}
-          glide={!reduced}
-          preview={!!(pv && pv.length)}
-          arrows={
-            hintMove
-              ? [{ uci: had.best, k: 1 }]
-              : hovArrows(!G && tw.bestArrows !== false ? lineArrows(ev.after) : null, hov)
-          }
-          sel={input.sel}
-        />
-        <BoardDraw draw={draw} hidden={!!(pv && pv.length)}>
-          <BoardTouch
-            pos={pos}
-            targets={input.targets}
-            drag={input.drag}
-            promo={input.promo}
-            castle={input.castle}
-            onCastle={input.pickCastle}
-            {...(still ? stillInput : input.handlers)}
-            // a piece springing back lands even if the board went still meanwhile (a step back in a game)
-            onBack={input.handlers.onBack}
-            keys={still ? input.stillKeys : input.keys}
+      <BoardGroup>
+        {!G &&
+          (deadv || tbv ? (
+            <EvalBarView cp={(deadv || tbv).cp} txt={(deadv || tbv).txt} a={1} />
+          ) : (
+            <EvalBarView cp={cp == null ? 0 : cp} txt={cp == null ? (down ? '' : '…') : fmtSf(cp)} a={1} />
+          ))}
+        <FreeBar pos={pos} side="b" a={1} clock={clockOf('b')} name={G ? window.PlayCore.playerName(G, 'b') : null} />
+        <BoardSpace onStep={!steps.length ? null : (d) => goIf(upto + d)}>
+          <LineBoard
+            a={1}
+            sq={boardSquares()}
+            v={
+              pv && pv.length
+                ? {
+                    upto: upto + pv.length,
+                    moves: [...steps.slice(0, upto + 1), ...pv],
+                    base: board.start.pos,
+                    src: 'you',
+                  }
+                : { upto, moves: steps, base: board.start.pos, src: 'you' }
+            }
+            hide={input.drag && input.drag.moved ? input.drag.from : null}
+            glide={!reduced}
+            preview={!!(pv && pv.length)}
+            arrows={
+              hintMove
+                ? [{ uci: had.best, k: 1 }]
+                : hovArrows(!G && tw.bestArrows !== false ? lineArrows(ev.after) : null, hov)
+            }
+            sel={input.sel}
           />
-        </BoardDraw>
-      </BoardSpace>
-      <FreeBar pos={pos} side="w" a={1} clock={clockOf('w')} name={G ? window.PlayCore.playerName(G, 'w') : null} />
+          <BoardDraw draw={draw} hidden={!!(pv && pv.length)}>
+            <BoardTouch
+              pos={pos}
+              targets={input.targets}
+              drag={input.drag}
+              promo={input.promo}
+              castle={input.castle}
+              onCastle={input.pickCastle}
+              {...(still ? stillInput : input.handlers)}
+              // a piece springing back lands even if the board went still meanwhile (a step back in a game)
+              onBack={input.handlers.onBack}
+              keys={still ? input.stillKeys : input.keys}
+            />
+          </BoardDraw>
+        </BoardSpace>
+        <FreeBar pos={pos} side="w" a={1} clock={clockOf('w')} name={G ? window.PlayCore.playerName(G, 'w') : null} />
+      </BoardGroup>
       {L.header && <Header M={HM} a={1} />}
       <MoveList
         M={MV}

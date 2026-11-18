@@ -164,6 +164,9 @@ body:has(.stage-one) .twk-panel { bottom: calc(51px + var(--safe-b)); max-height
    padding, which the page scrolls through */
 .stage-one .stage-area { box-sizing: border-box; padding: 2px max(4px, var(--safe-r)) 6px max(4px, var(--safe-l)); }
 .stage-one .stage-frame { overflow-clip-margin: 48px; }
+/* the pinned board's strip (BoardGroup) sticks at the area's padding edge: its backdrop also covers that padding over it
+   and beside it, so no scrolled text shows around the strip, and casts its edge and shadow the screen's full width */
+.part-pinned-board::before { content: ""; position: absolute; z-index: -1; top: -2px; bottom: 0; left: calc(-1 * max(4px, var(--safe-l))); right: calc(-1 * max(4px, var(--safe-r))); background: inherit; box-shadow: 0 1px 0 var(--pin-edge), 0 6px 14px rgba(0, 0, 0, 0.3); }
 .stage-one .pbtn { width: 30px; height: 30px; }
 .stage-one .ptrack { min-width: 96px; }
 @media (max-width: 359px) { .stage-one .pbtn-end { display: none; } }
