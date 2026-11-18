@@ -11,6 +11,11 @@ on:
     paths-ignore: ['docs/**', 'media/**', '*.md', '!LAYOUT.md', 'LICENSE']
   pull_request:
     paths-ignore: ['docs/**', 'media/**', '*.md', '!LAYOUT.md', 'LICENSE']
+# a new push to a PR cancels that PR's older run, freeing its runners (20 jobs at once, 5 on macOS); each push to main
+# gets a group of its own, so every run on main finishes
+concurrency:
+  group: ${{ github.workflow }}-${{ github.event_name == 'pull_request' && github.event.pull_request.number || github.run_id }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
 # the job only reads the repo
 permissions:
   contents: read
