@@ -1,5 +1,19 @@
 {
+  "sandbox": {
+    "enabled": true,
+    "autoAllowBashIfSandboxed": true,
+    "allowUnsandboxedCommands": true,
+    "network": {
+      "allowLocalBinding": true,
+      "allowedDomains": ["registry.npmjs.org", "api.github.com"]
+    },
+    "filesystem": {
+      "denyRead": ["~/", "./.env", "./.env.*", "./secrets"],
+      "allowRead": ["."]
+    },
+  },
   "permissions": {
+    "deny": ["Read(./.env)", "Read(./.env.*)", "Read(./secrets/**)"],
     "allow": [
       "mcp__playwright__browser_take_screenshot",
       "mcp__playwright__browser_wait_for",
