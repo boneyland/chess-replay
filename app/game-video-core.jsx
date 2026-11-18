@@ -221,6 +221,8 @@ const pinLen = (m, from, to, shift = 0) => `calc((${from}px + var(--pin-t, 0) * 
 // the panels scrolling under it. With a strip to shrink to (pinMorph) it is stuck to the top from the start, with no box
 // of its own (its parts placed as in the page), and scales toward the strip as the page scrolls. Else it is out of the
 // way. Its margins cancel its place in the flow, so the panels don't move
+// the browser drives the shrink from the scroll (CSS scroll timelines: shell.html's .pin-morph)
+const SCROLL_TIMELINE = !!(window.CSS && CSS.supports && CSS.supports('animation-timeline: --a'));
 const SETTLE_MS = 120,
   SETTLE_GLIDE = 250;
 function BoardGroup({ children, overlay }) {
@@ -235,7 +237,8 @@ function BoardGroup({ children, overlay }) {
     if (!node || !area || pinAt == null) return;
     const on = () => {
       const t = Math.max(0, Math.min(1, area.scrollTop / Math.max(1, pinAt)));
-      node.style.setProperty('--pin-t', String(t));
+      // where the scroll drives --pin-t itself (shell.html's .pin-morph), only whether the page is scrolled is ours
+      if (!SCROLL_TIMELINE) node.style.setProperty('--pin-t', String(t));
       if (t > 0) node.dataset.pinning = '';
       else delete node.dataset.pinning;
     };
@@ -366,10 +369,13 @@ function BoardGroup({ children, overlay }) {
           // the parts' scale (.pin-scale): shell.html applies it while scrolled ([data-pinning]), so the page at the top
           // has no transform
           '--pin-tf': `translate(calc(var(--pin-t) * ${m.x}px), calc(var(--pin-t) * ${m.y}px)) scale(calc${m.k})`,
+          // the same, for the scroll timeline: where it ends, and its transform there
+          '--pin-at': `${pinAt}px`,
+          '--pin-end': `translate(${m.x}px, ${m.y}px) scale(${m.k1})`,
         }
       : { position: 'static', flex: 'none', height: 0, marginBottom: f ? -f.gap : 0 };
   return (
-    <div ref={el} className={pin ? 'part-pinned-board' : undefined} style={style}>
+    <div ref={el} className={pin ? 'part-pinned-board' : m ? 'pin-morph' : undefined} style={style}>
       {/* the parts, scaled while shrinking (shell.html's [data-pinning]); always there, so the board never remounts */}
       <div className="pin-scale" style={{ height: 0 }}>
         {children}
