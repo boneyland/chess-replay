@@ -944,6 +944,41 @@ for (const name of BROWSERS)
 
       // keyboard only: what closes gives the focus back to the control that opened it, or to Menu where that went with
       // its menu, never to the page (the next Tab would start from the top)
+      await t.test('desktop: a move by keyboard: Tab to the board, e2 to e4 with the arrows and Enter', async () => {
+        const g = await open(browser, { width: 1440, height: 900 });
+        const page = g.page,
+          errors = g.errors;
+        await page.goto(base, { waitUntil: 'load' });
+        await loadedOn(page);
+        const pause = page.getByRole('button', { name: /^Pause/ });
+        if (await pause.count()) await pause.click();
+        await page.getByRole('button', { name: 'Next move (→)' }).click();
+        await page.getByRole('button', { name: 'Previous move (←)' }).click();
+        const board = page.getByRole('application', { name: 'Board' });
+        const said = () =>
+          page.evaluate(() =>
+            [...document.querySelectorAll('[role="application"] [aria-live]')].map((e) => e.textContent).join(''),
+          );
+        // the board is the first Tab stop: Shift+Tab back to it from a stop after it (Firefox stops on a scrolling panel
+        // too; a Tab that wraps past the last stop gives headless Firefox's board the focus with no focus event)
+        await page.getByRole('button', { name: 'About Moves' }).focus();
+        for (let i = 0; i < 4 && !(await board.evaluate((el) => el === document.activeElement)); i++)
+          await page.keyboard.press('Shift+Tab');
+        assert.ok(await board.evaluate((el) => el === document.activeElement), 'Tab reaches the board');
+        await page.keyboard.press('ArrowDown');
+        await page.keyboard.press('ArrowDown');
+        assert.equal(await said(), 'e2, white pawn');
+        await page.keyboard.press('Enter');
+        assert.equal(await said(), 'e2, white pawn, picked up');
+        await page.keyboard.press('ArrowUp');
+        await page.keyboard.press('ArrowUp');
+        assert.equal(await said(), 'e4, empty, the white pawn can go here');
+        await page.keyboard.press('Enter');
+        await page.waitForFunction(() => /your move ·/i.test(document.body.innerText), null, { timeout: 5000 });
+        assert.equal(await said(), 'Played e4');
+        assert.deepEqual(errors, []);
+        await g.ctx.close();
+      });
       await t.test('desktop: closing a dialog, Settings or the menu by keyboard puts the focus back', async () => {
         const focused = () =>
           page.evaluate(() => {
@@ -7879,7 +7914,7 @@ for (const name of BROWSERS)
             width: Math.ceil(r.right) - Math.floor(r.left),
             height: Math.ceil(r.bottom) - Math.floor(r.top),
             faded: [...list.querySelectorAll('[data-ply]')]
-              .filter((m) => getComputedStyle(m).opacity === '0.5')
+              .filter((m) => getComputedStyle(m).opacity === '0.7')
               .map((m) => m.getBoundingClientRect())
               .filter((q) => q.top >= lr.top && q.bottom <= lr.bottom)
               .map((q) => [q.left, q.top, q.right, q.bottom]),

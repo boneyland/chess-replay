@@ -1679,13 +1679,16 @@ function CastleButtons({ pos, onMove, style }) {
   );
 }
 // keys: useBoardInput's keyboard (null: the board takes no keys, e.g. while the video plays or the free board is still).
-// The board is then a Tab stop that acts on keys only while it has the keyboard's focus (focused by Tab, not by a
-// press, so a press on a piece leaves Space and the arrows to the page's shortcuts), with the cursor outlined
+// The board is then a Tab stop that acts on keys only while it has the keyboard's focus (focused by Tab or the castle
+// question, not by a press, so a press on a piece leaves Space and the arrows to the page's shortcuts), with the cursor outlined
 function BoardTouch({ pos, targets, drag, promo, castle, onCastle, onDown, onMove, onUp, onCancel, onBack, keys }) {
   const dragged = drag && drag.moved ? drag.piece || pos.b[drag.from] : null,
     own = React.useRef(null),
     el = keys ? keys.boardEl : own;
   const [kbFocus, setKbFocus] = React.useState(false);
+  // set by a press on the board, which comes before the focus it gives: that focus isn't the keyboard's (Firefox didn't
+  // always match :focus-visible on a Tab to it)
+  const pressed = React.useRef(false);
   const ring = keys && kbFocus;
   return (
     <div
@@ -1697,10 +1700,14 @@ function BoardTouch({ pos, targets, drag, promo, castle, onCastle, onDown, onMov
         'aria-label': 'Board',
         'aria-describedby': 'board-keys',
         onKeyDown: (e) => kbFocus && keys.onKeyDown(e),
-        onFocus: (e) => setKbFocus(e.currentTarget.matches(':focus-visible')),
+        onFocus: () => {
+          setKbFocus(!pressed.current);
+          pressed.current = false;
+        },
         onBlur: () => setKbFocus(false),
       })}
       onPointerDown={(e) => {
+        pressed.current = true;
         setKbFocus(false);
         onDown(e);
       }}
