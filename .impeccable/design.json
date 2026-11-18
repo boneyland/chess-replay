@@ -437,7 +437,8 @@
       "**Do** keep panels flat with a 1 px hairline, and put glass, rim and shadow only on surfaces that float over the board.",
       "**Do** size text with `tx(px)` and position on the board in board pixels.",
       "**Do** measure contrast where the text actually sits (4.5:1 on glass over the board too) and give reduced transparency, more contrast and forced colours an opaque fallback.",
-      "**Do** keep reduced motion as a short fade that still shows the change."
+      "**Do** keep reduced motion as a short fade that still shows the change.",
+      "**Do** give every control a press area of 24 × 24 px or more (a transparent `::before` hit area where it is drawn smaller), and give the board a keyboard cursor (a 5 px ink ring inside the square) shown only on keyboard focus."
     ],
     "donts": [
       "**Don't** add a second accent hue, or use the verdict colours (green, amber, red, plum) for anything but their verdicts.",

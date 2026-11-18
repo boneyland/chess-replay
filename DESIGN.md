@@ -176,6 +176,7 @@ Warm, low-chroma paper and umber neutrals carry everything; gold and four verdic
 ### Board
 - **Board Light** (#f0d9b5) and **Board Dark** (#b58863), the default board; the Lichess last-move tint (yellow-green at 41%) sits on both. The board and the eval bar's white and black halves are the sides' colours and never follow the theme.
 - **Coordinates** are each square's colour on the other, as Lichess draws them (about 2:1); under `prefers-contrast: more` they turn black or white, whichever stands out on the square (4.58:1 at least).
+- **Keyboard cursor:** the board's square under the arrow keys carries a 5 px Ink Umber ring inside its edge (on both squares and both themes, as the board never follows the theme); it shows only while the board has keyboard focus, never after a press, and the picked-up square keeps its usual highlight.
 
 ### Named Rules
 **The One Lamp Rule.** Gold is the only accent. It marks where you are (the last move), what to do next (the primary button) and how to get around (the Transport bar, menu labels, links). Never a second accent hue, and never gold as decoration.
@@ -242,6 +243,7 @@ Tactile and warm: paper-toned, raised, pressed with a slight scale.
 - **Primary:** Lamplight Gold with Gold Ink text, no border; hover brightens it (brightness 1.15).
 - **Panel button:** gold, 30 px minimum, 4 × 12 px padding; **secondary** is Oak Raise with a hairline. Dialog buttons are 34 px and name their action ("Remove", "Keep"), never OK / Cancel.
 - **Hover / Focus:** hover deepens to the hover tone only where hover exists (`@media (hover: hover)`); focus is a 2 px gold outline offset 2 px, ink on thin glass.
+- **Target size:** every control takes presses over at least 24 × 24 px (WCAG 2.5.8), 44 px where the page already gives it on phones. A control drawn smaller (the ⓘ marks, Settings switches, move chips) gets a transparent `::before` hit area around it (the ⓘ marks' and switches' wider under `pointer: coarse`), so the drawing keeps its size.
 
 ### Move chips
 The record of the game: mono 600, 2 × 8 px padding, 2 px corners. White's moves on a pale chip (#f1ebe1), Black's on a dark one (#2a2320), whatever the theme, so the side reads at a glance. The current move is bolder and outlined; moves not yet played are faded to 70% (their text stays at 5:1 or more on either chip in either theme); a flagged move takes its verdict colour.
