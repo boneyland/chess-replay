@@ -176,7 +176,7 @@ Warm, low-chroma paper and umber neutrals carry everything; gold and four verdic
 ### Board
 - **Board Light** (#f0d9b5) and **Board Dark** (#b58863), the default board; the Lichess last-move tint (yellow-green at 41%) sits on both. The board and the eval bar's white and black halves are the sides' colours and never follow the theme.
 - **Coordinates** are each square's colour on the other, as Lichess draws them (about 2:1); under `prefers-contrast: more` they turn black or white, whichever stands out on the square (4.58:1 at least).
-- **Keyboard cursor:** the board's square under the arrow keys carries a 5 px Ink Umber ring inside its edge (on both squares and both themes, as the board never follows the theme); it shows only while the board has keyboard focus, never after a press, and the picked-up square keeps its usual highlight.
+- **Keyboard cursor:** the board's square under the arrow keys carries a 5 px ring inside its edge in the theme's ink (Ink Umber, Night Ink in dark); it shows only while the board has keyboard focus, never after a press, and the picked-up square keeps its usual highlight.
 
 ### Named Rules
 **The One Lamp Rule.** Gold is the only accent. It marks where you are (the last move), what to do next (the primary button) and how to get around (the Transport bar, menu labels, links). Never a second accent hue, and never gold as decoration.
