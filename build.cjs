@@ -1,13 +1,12 @@
-// Assemble the page (out/site): plain scripts inlined as-is, JSX precompiled with Babel, each unit in its own scope.
+// Assemble the page (out/site): plain scripts inlined as written, JSX precompiled with Babel, comments dropped
+// (build-js.cjs), each unit in its own scope.
 const fs = require('fs'),
   path = require('path');
 const dir = __dirname,
   src = path.join(dir, 'src'),
   app = path.join(dir, 'app');
-const Babel = require(path.join(dir, 'babel', 'babel.min.js'));
-// compact: false, or Babel squeezes a unit over 500 KB (game-video.jsx since the Prettier pass) onto a few long lines,
-// which makes the crash screen's line and column numbers useless
-const jsx = (code, name) => Babel.transform(code, { filename: name, presets: ['react'], compact: false }).code;
+// JSX compiled and comments dropped as build-js.cjs says
+const { jsx, plain } = require('./build-js.cjs');
 const read = (p) => fs.readFileSync(p, 'utf8');
 // Lichess's sound sets (vendor/sounds: Enigmahack's AGPL-3.0-or-later ones and EdinburghCollective's lisp, CC BY-NC-SA 4.0),
 // served next to the page as sounds/<set>/<Kind>.mp3 (Sfx.soundUrl) and kept by the service worker from the first visit
@@ -99,7 +98,8 @@ const units = [
   ],
 ];
 const scripts = units
-  .map(([name, code]) => {
+  .map(([name, src]) => {
+    const code = name.endsWith('.jsx') ? src : plain(src, name);
     if (/<\/script/i.test(code)) throw new Error(name + ' contains </script');
     return `<script>\n// ${name}\n(function () {\n${code}\n})();\n</script>`;
   })
