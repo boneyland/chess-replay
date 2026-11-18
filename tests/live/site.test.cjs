@@ -1869,27 +1869,24 @@ for (const name of BROWSERS)
         // game's own last move is what's lit
         await p.waitForFunction((was) => window.__imgsAt() !== was, before, { timeout: 5000 });
         await settled(p);
-        // the line's move lights its two squares, the last one its destination
-        await p.waitForFunction(
-          () =>
-            [...document.querySelectorAll('div')].filter(
-              (d) => getComputedStyle(d).backgroundColor === 'rgba(155, 199, 0, 0.41)',
-            ).length >= 2,
-          null,
-          { timeout: 5000 },
-        );
-        const lit = await p.evaluate(
-          ({ b }) =>
-            [...document.querySelectorAll('div')]
-              .filter((d) => getComputedStyle(d).backgroundColor === 'rgba(155, 199, 0, 0.41)')
-              .map((d) => {
-                const r = d.getBoundingClientRect(),
-                  c = Math.floor((r.left + r.width / 2 - b.x0) / b.sq),
-                  w = Math.floor((r.top + r.height / 2 - b.y0) / b.sq);
-                return 'hgfedcba'[c] + (w + 1);
-              }),
-          { b },
-        );
+        // the line's move lights its two squares, the last one its destination. The pieces can move before the
+        // highlight follows (WebKit on GitHub read the game's own last move, g8 f6, several times), so wait for the
+        // destination itself to light rather than for any two lit squares
+        const litSquares = ({ b, dest }) => {
+          const lit = [...document.querySelectorAll('div')]
+            .filter((d) => getComputedStyle(d).backgroundColor === 'rgba(155, 199, 0, 0.41)')
+            .map((d) => {
+              const r = d.getBoundingClientRect(),
+                c = Math.floor((r.left + r.width / 2 - b.x0) / b.sq),
+                w = Math.floor((r.top + r.height / 2 - b.y0) / b.sq);
+              return 'hgfedcba'[c] + (w + 1);
+            });
+          // waitForFunction wants a truthy answer once the destination is lit; evaluate (no dest) takes the list
+          return dest === undefined ? lit : lit.length >= 2 && (!dest || lit.includes(dest)) && lit;
+        };
+        // a timeout here is left to the assertion below, which says what was lit instead
+        await p.waitForFunction(litSquares, { b, dest: dest || null }, { timeout: 5000 }).catch(() => {});
+        const lit = await p.evaluate(litSquares, { b });
         const shown = await piecesOn(p, b, true);
         if (dest) {
           assert.ok(lit.includes(dest), `${san} lights ${dest} as seen flipped: ${lit.join(' ')}`);
