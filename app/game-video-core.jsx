@@ -216,6 +216,20 @@ const pinMorph = () => {
 // a length in the group's own (scaled) space that is from px at --pin-t 0 to to px at 1 on screen, less the group's
 // shift (shift px at 1) for a place
 const pinLen = (m, from, to, shift = 0) => `calc((${from}px + var(--pin-t, 0) * ${to - from - shift}px) / ${m.k})`;
+// Where the scroll drives the shrink (SCROLL_TIMELINE), a part that changes otherwise than the board does it by a
+// transform too, so the compositor runs it with the scroll: shell.html's .pin-steps, through the transforms at each tenth
+// of the shrink (--k0 to --k10, from at(t): [x, y, sx, sy], scaling from the element's top left unless it says)
+const PIN_STEPS = 10;
+const pinSteps = (at) => {
+  const o = {};
+  for (let i = 0; i <= PIN_STEPS; i++) {
+    const [x, y, sx, sy] = at(i / PIN_STEPS);
+    o['--k' + i] = `translate(${x}px, ${y}px) scale(${sx}, ${sy})`;
+  }
+  return o;
+};
+// the group's scale at t (as m.k in calc())
+const pinScale = (m, t) => 1 - t * (1 - m.k1);
 // The board, eval bar and player bars, as one element so the page can pin them without remounting the board. Pinned
 // (L.pin) it is the strip stuck to the top of the scrolling area, its parts placed in it (LayoutCore's strip boxes), over
 // the panels scrolling under it. With a strip to shrink to (pinMorph) it is stuck to the top from the start, with no box
@@ -2272,16 +2286,32 @@ function EvalBarView({ cp, txt, a }) {
     ef = Math.round((L.tier === 'phone' || L.pin ? Math.min(14, L.eval.w * 0.85) : L.eval.w * 0.75) * 10) / 10;
   // shrinking toward the pinned strip: its place, width and number go to the strip's (the phone's number size there)
   const m = pinMorph(),
-    se = m && m.st.eval;
+    se = m && m.st.eval,
+    fe = se && Math.min(14, se.w * 0.85);
+  // with a scroll timeline its place and width go by a transform (in the group's scaled space), and the number's
+  // size by its own that undoes the bar's sideways stretch, scaling from the bar's end it sits at
+  const steps = se && SCROLL_TIMELINE;
+  const evalAt = (t) => {
+    const k = pinScale(m, t),
+      x = L.eval.x + t * (se.x - L.eval.x),
+      w = L.eval.w + t * (se.w - L.eval.w);
+    return [(x - m.x * t) / k - L.eval.x, 0, w / (k * L.eval.w), 1];
+  };
+  const numAt = (t) => {
+    const k = pinScale(m, t),
+      n = (ef + t * (fe - ef)) / ef;
+    return [0, 0, n / (k * evalAt(t)[2]), n / k];
+  };
   return (
     <div
-      className="part-eval-bar"
+      className={'part-eval-bar' + (steps ? ' pin-steps' : '')}
       style={{
         ...NO_SELECT,
+        ...(steps && pinSteps(evalAt)),
         position: 'absolute',
-        left: se ? pinLen(m, L.eval.x, se.x, m.x) : L.eval.x,
+        left: se && !steps ? pinLen(m, L.eval.x, se.x, m.x) : L.eval.x,
         top: L.board.y,
-        width: se ? pinLen(m, L.eval.w, se.w) : L.eval.w,
+        width: se && !steps ? pinLen(m, L.eval.w, se.w) : L.eval.w,
         height: H,
         borderRadius: 2,
         overflow: 'hidden',
@@ -2304,7 +2334,9 @@ function EvalBarView({ cp, txt, a }) {
         style={{ position: 'absolute', left: 0, right: 0, top: H / 2 - 1, height: 2, background: C.last, opacity: 0.5 }}
       />
       <div
+        className={steps ? 'pin-steps' : undefined}
         style={{
+          ...(steps && { ...pinSteps(numAt), transformOrigin: `50% ${top ? '-0.5em' : 'calc(100% + 0.5em)'}` }),
           position: 'absolute',
           left: 0,
           right: 0,
@@ -2313,7 +2345,7 @@ function EvalBarView({ cp, txt, a }) {
           display: 'flex',
           alignItems: 'center',
           justifyContent: 'center',
-          font: `700 ${se ? pinLen(m, ef, Math.min(14, se.w * 0.85)) : ef + 'px'} ${MONO}`,
+          font: `700 ${se && !steps ? pinLen(m, ef, fe) : ef + 'px'} ${MONO}`,
           color: inWhite ? '#2a2320' : '#f1ebe1',
         }}
       >
@@ -2444,6 +2476,17 @@ function SideBar({ side, a, name, rating, taken, pts, clock, strip }) {
       x0 = b.x + b.size + gap,
       y0 = side === ORIENT ? b.y + b.size - strip.bars.h : b.y,
       y1 = side === ORIENT ? sb.y + sb.size - strip.bars.h : sb.y;
+    // with a scroll timeline, placed where they end up and moved there by a transform (shell.html's .pin-bar-in)
+    if (SCROLL_TIMELINE)
+      return (
+        <StackedBar
+          {...{ side, a, name, rating, shown, pts, clock }}
+          lay={strip}
+          place={{ left: x1, top: y1, '--pin-a': a, '--pin-from': `translate(${x0 - x1}px, ${y0 - y1}px)` }}
+          cls="pin-bar-in"
+          ghost
+        />
+      );
     return (
       <StackedBar
         {...{ side, name, rating, shown, pts, clock }}
@@ -2474,12 +2517,16 @@ function SideBar({ side, a, name, rating, taken, pts, clock, strip }) {
   const k = Math.max(0.6, fit(caps));
   return (
     <div
-      className={'part-player-bar ' + (side === ORIENT ? 'bottom' : 'top')}
-      // fading out as the board shrinks toward the pinned strip, whose bars are stacked beside it
+      className={
+        'part-player-bar ' + (side === ORIENT ? 'bottom' : 'top') + (pinMorph() && SCROLL_TIMELINE ? ' pin-out' : '')
+      }
+      // fading out as the board shrinks toward the pinned strip, whose bars are stacked beside it (by the scroll
+      // timeline where there is one: shell.html's .pin-out)
       style={{
         ...barPlace(side),
         gap: tx(14),
-        opacity: pinMorph() ? `calc(${a} * max(0, 1 - var(--pin-t, 0) * 1.6))` : a,
+        '--pin-a': a,
+        opacity: pinMorph() && !SCROLL_TIMELINE ? `calc(${a} * max(0, 1 - var(--pin-t, 0) * 1.6))` : a,
       }}
     >
       <span
@@ -2544,7 +2591,7 @@ function Clock({ clock, style, ghost = false }) {
 // the captures, then the name and rating. shown: the captured pieces' images, drawn smaller here
 // lay: the layout it's placed in (L, or the pinned strip's boxes); ghost: BoardGroup's fading copy, hidden from screen
 // readers and the page's parts (the real bars are the ones above and below the board)
-function StackedBar({ side, a, name, rating, shown, pts, clock, lay = L, ghost = false, place = null }) {
+function StackedBar({ side, a, name, rating, shown, pts, clock, lay = L, ghost = false, place = null, cls = '' }) {
   const bottom = side === ORIENT;
   // squeezed where its contents are taller than its box (half the board, a long name on two lines at a large text size,
   // or with captures): 1, the name on one line (ending in an ellipsis); 2, the captures go too. Measured after each
@@ -2643,7 +2690,7 @@ function StackedBar({ side, a, name, rating, shown, pts, clock, lay = L, ghost =
   return (
     <div
       ref={box}
-      className={ghost ? 'pin-ghost-bar' : 'part-player-bar ' + (bottom ? 'bottom' : 'top')}
+      className={(ghost ? 'pin-ghost-bar' : 'part-player-bar ' + (bottom ? 'bottom' : 'top')) + (cls ? ' ' + cls : '')}
       aria-hidden={ghost || undefined}
       style={{ ...sidePlace(side, lay), ...place, gap: tx(6), opacity: a, ...(ghost && { pointerEvents: 'none' }) }}
     >

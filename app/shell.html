@@ -185,7 +185,15 @@ body:has(.stage-one) .twk-panel { bottom: calc(51px + var(--safe-b)); max-height
   .stage-area { scroll-timeline: --page block; }
   .pin-morph { animation: pin-t linear both; animation-timeline: --page; animation-range: 0px var(--pin-at); }
   .pin-morph > .pin-scale { animation: pin-shrink linear both; animation-timeline: --page; animation-range: 0px var(--pin-at); transform-origin: 0 0; }
+  /* the rest by transforms and opacity too: the full player bars fade out (gone at 62.5%), the name copies (.pin-bar-in) slide in
+     from --pin-from and fade in over the second half, the eval bar and its number step through --k0 to --k10 */
+  .pin-morph .pin-out { animation: pin-out linear both; animation-timeline: --page; animation-range: 0px var(--pin-at); }
+  .pin-morph .pin-bar-in { animation: pin-bar-in linear both; animation-timeline: --page; animation-range: 0px var(--pin-at); }
+  .pin-morph .pin-steps { animation: pin-steps linear both; animation-timeline: --page; animation-range: 0px var(--pin-at); transform-origin: 0 0; }
 }
+@keyframes pin-out { from { opacity: var(--pin-a, 1); } 62.5%, to { opacity: 0; } }
+@keyframes pin-bar-in { from { transform: var(--pin-from); opacity: 0; } 50% { opacity: 0; } to { transform: none; opacity: var(--pin-a, 1); } }
+@keyframes pin-steps { 0% { transform: var(--k0); } 10% { transform: var(--k1); } 20% { transform: var(--k2); } 30% { transform: var(--k3); } 40% { transform: var(--k4); } 50% { transform: var(--k5); } 60% { transform: var(--k6); } 70% { transform: var(--k7); } 80% { transform: var(--k8); } 90% { transform: var(--k9); } 100% { transform: var(--k10); } }
 @keyframes pin-in { from { opacity: 0; } }
 .part-pinned-board::before { animation: pin-in 0.18s ease-out; }
 @media (prefers-reduced-motion: reduce) { .part-pinned-board::before { animation: none; } }

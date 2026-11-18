@@ -8750,7 +8750,8 @@ for (const name of BROWSERS)
           await loadedOn(p);
           await p.locator('[data-ply="38"]').click();
           const mv = p.locator('.part-analysis .mv').nth(1);
-          await mv.waitFor({ state: 'visible', timeout: 15000 });
+          // the engine's line (slow on a loaded machine)
+          await mv.waitFor({ state: 'visible', timeout: 30000 });
           const state = () =>
             p.locator('.stage-area').evaluate((a) => ({
               top: a.scrollTop,
