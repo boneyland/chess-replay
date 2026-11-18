@@ -1,6 +1,6 @@
 {
   "schemaVersion": 2,
-  "generatedAt": "2026-11-18T05:42:10.559849+00:00",
+  "generatedAt": "2026-11-18T07:26:00.830643+00:00",
   "title": "Design System: Chess Replay",
   "extensions": {
     "colorMeta": {
@@ -257,6 +257,10 @@
       "dialog-title": {
         "displayName": "Dialog title",
         "purpose": "A dialog's heading."
+      },
+      "info-mark": {
+        "displayName": "Info mark",
+        "purpose": "The \"i\" in the ⓘ buttons: Instrument Serif italic 400, 16 px."
       }
     },
     "shadows": [
@@ -398,7 +402,7 @@
       },
       {
         "name": "The Verdict Rule",
-        "body": "Green, amber, red and plum mean best, mistake, blunder and Queen, and nothing else. Never use them for branding, status chrome or emphasis.",
+        "body": "Green, amber, red and plum mean best, mistake, blunder and Queen, and nothing else. Never use them for branding, status chrome or emphasis. One exception: the analysis spinner (the Analysis title's computer button while a game analysis runs) is a turning rainbow of the night verdict hues plus a yellow, blue and violet of its own, read as \"working\", not as any verdict.",
         "section": "colors"
       },
       {
@@ -433,7 +437,8 @@
       "**Do** keep panels flat with a 1 px hairline, and put glass, rim and shadow only on surfaces that float over the board.",
       "**Do** size text with `tx(px)` and position on the board in board pixels.",
       "**Do** measure contrast where the text actually sits (4.5:1 on glass over the board too) and give reduced transparency, more contrast and forced colours an opaque fallback.",
-      "**Do** keep reduced motion as a short fade that still shows the change."
+      "**Do** keep reduced motion as a short fade that still shows the change.",
+      "**Do** give every control a press area of 24 × 24 px or more (a transparent `::before` hit area where it is drawn smaller), and give the board a keyboard cursor (a 5 px ink ring inside the square) shown only on keyboard focus."
     ],
     "donts": [
       "**Don't** add a second accent hue, or use the verdict colours (green, amber, red, plum) for anything but their verdicts.",
