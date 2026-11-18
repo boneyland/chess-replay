@@ -196,13 +196,54 @@ function useFlowHeight(frame, ref) {
     return () => ro.disconnect();
   });
 }
-// The board, eval bar and player bars, as one element so the page can pin them (L.pin) without remounting the board:
-// unpinned it is out of the way (no box, nothing in the flow; its parts place themselves in the view's container, its
-// own position static); pinned it is a strip stuck to the top of the scrolling area, its parts placed in it (LayoutCore's
-// strip boxes), over the panels scrolling under it. Its margins cancel its place in the flow, so the panels don't move
+// The paused one-column page's shrink toward the pinned strip (L.flow.strip), while scrolled less than L.flow.pinAt:
+// BoardGroup sets --pin-t (0 at the top, 1 at pinAt) as the page scrolls, and the group scales by it so the full board
+// lands on the strip's board; the parts that change otherwise (the eval bar's place, width and number, the player bars
+// fading out) read it in calc(). null where there's no strip, or it's pinned (L.pin). k: the scale at --pin-t
+const pinMorph = () => {
+  const st = L.flow && !L.pin ? L.flow.strip : null;
+  if (!st) return null;
+  const k1 = st.board.size / L.board.size;
+  return {
+    st,
+    x: st.board.x - k1 * L.board.x,
+    y: st.board.y - k1 * L.board.y,
+    k1,
+    k: `(1 - var(--pin-t, 0) * ${1 - k1})`,
+  };
+};
+// a length in the group's own (scaled) space that is from px at --pin-t 0 to to px at 1 on screen, less the group's
+// shift (shift px at 1) for a place
+const pinLen = (m, from, to, shift = 0) => `calc((${from}px + var(--pin-t, 0) * ${to - from - shift}px) / ${m.k})`;
+// The board, eval bar and player bars, as one element so the page can pin them without remounting the board. Pinned
+// (L.pin) it is the strip stuck to the top of the scrolling area, its parts placed in it (LayoutCore's strip boxes), over
+// the panels scrolling under it. With a strip to shrink to (pinMorph) it is stuck to the top from the start, with no box
+// of its own (its parts placed as in the page), and scales toward the strip as the page scrolls. Else it is out of the
+// way. Its margins cancel its place in the flow, so the panels don't move
 function BoardGroup({ children }) {
+  const el = React.useRef(null);
   const pin = L.pin,
-    f = L.flow;
+    f = L.flow,
+    m = pinMorph(),
+    pinAt = m ? f.pinAt : null;
+  React.useEffect(() => {
+    const node = el.current,
+      area = node && node.closest('.stage-area');
+    if (!node || !area || pinAt == null) return;
+    const on = () => {
+      const t = Math.max(0, Math.min(1, area.scrollTop / Math.max(1, pinAt)));
+      node.style.setProperty('--pin-t', String(t));
+      if (t > 0) node.dataset.pinning = '';
+      else delete node.dataset.pinning;
+    };
+    on();
+    area.addEventListener('scroll', on, { passive: true });
+    return () => {
+      area.removeEventListener('scroll', on);
+      node.style.removeProperty('--pin-t');
+      delete node.dataset.pinning;
+    };
+  }, [pinAt]);
   const style = pin
     ? {
         position: 'sticky',
@@ -214,9 +255,21 @@ function BoardGroup({ children }) {
         background: C.bg,
         '--pin-edge': C.line, // its edge, drawn by its backdrop (shell.html)
       }
-    : { position: 'static', flex: 'none', height: 0, marginBottom: f ? -f.gap : 0 };
+    : m
+      ? {
+          position: 'sticky',
+          top: 0,
+          zIndex: 3,
+          flex: 'none',
+          height: 0,
+          margin: `${-f.top}px ${-f.x}px ${f.top - f.gap}px`,
+          transformOrigin: '0 0',
+          // shell.html applies it while scrolled ([data-pinning]), so the page at the top has no transform
+          '--pin-tf': `translate(calc(var(--pin-t) * ${m.x}px), calc(var(--pin-t) * ${m.y}px)) scale(calc${m.k})`,
+        }
+      : { position: 'static', flex: 'none', height: 0, marginBottom: f ? -f.gap : 0 };
   return (
-    <div className={pin ? 'part-pinned-board' : undefined} style={style}>
+    <div ref={el} className={pin ? 'part-pinned-board' : undefined} style={style}>
       {children}
     </div>
   );
@@ -2091,15 +2144,18 @@ function EvalBarView({ cp, txt, a }) {
     // the line height, so 15.3 px spilled out of the sideways phone's 18 px bar (CI, 2026-11-18)
     // (the pinned strip's bar sizes it the phone's way on every device)
     ef = Math.round((L.tier === 'phone' || L.pin ? Math.min(14, L.eval.w * 0.85) : L.eval.w * 0.75) * 10) / 10;
+  // shrinking toward the pinned strip: its place, width and number go to the strip's (the phone's number size there)
+  const m = pinMorph(),
+    se = m && m.st.eval;
   return (
     <div
       className="part-eval-bar"
       style={{
         ...NO_SELECT,
         position: 'absolute',
-        left: L.eval.x,
+        left: se ? pinLen(m, L.eval.x, se.x, m.x) : L.eval.x,
         top: L.board.y,
-        width: L.eval.w,
+        width: se ? pinLen(m, L.eval.w, se.w) : L.eval.w,
         height: H,
         borderRadius: 2,
         overflow: 'hidden',
@@ -2126,12 +2182,12 @@ function EvalBarView({ cp, txt, a }) {
           position: 'absolute',
           left: 0,
           right: 0,
-          [top ? 'top' : 'bottom']: ef / 2,
-          height: ef * 5,
+          [top ? 'top' : 'bottom']: '0.5em',
+          height: '5em',
           display: 'flex',
           alignItems: 'center',
           justifyContent: 'center',
-          font: `700 ${ef}px ${MONO}`,
+          font: `700 ${se ? pinLen(m, ef, Math.min(14, se.w * 0.85)) : ef + 'px'} ${MONO}`,
           color: inWhite ? '#2a2320' : '#f1ebe1',
         }}
       >
@@ -2266,7 +2322,12 @@ function SideBar({ side, a, name, rating, taken, pts, clock }) {
   return (
     <div
       className={'part-player-bar ' + (side === ORIENT ? 'bottom' : 'top')}
-      style={{ ...barPlace(side), gap: tx(14), opacity: a }}
+      // fading out as the board shrinks toward the pinned strip, whose bars are stacked beside it
+      style={{
+        ...barPlace(side),
+        gap: tx(14),
+        opacity: pinMorph() ? `calc(${a} * max(0, 1 - var(--pin-t, 0) * 1.6))` : a,
+      }}
     >
       <span
         style={{

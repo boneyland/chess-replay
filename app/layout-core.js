@@ -94,9 +94,9 @@
   // The paused one-column page, scrolled past its board, pins a smaller board at the top of the screen (L.pin): the eval
   // bar at its left (18 px, as a phone's sideways bar, from the screen's edge on a phone and the panels' edge elsewhere),
   // the player bars stacked in a column at its right (as SIDE_COL's), board 200 px on a phone and 400 px elsewhere, less
-  // where the column would be under colMin (times text) or the strip over maxH of the height; none under minBoard. It
-  // pins once less of the full board shows than the strip would (L.flow.pinAt, Stage's call), and the panels' column
-  // keeps its place, so the page doesn't move
+  // where the column would be under colMin (times text) or the strip over maxH of the height; none under minBoard. From
+  // the first pixel of scroll the board stays at the top and shrinks toward the strip (L.flow.strip, its boxes), reaching
+  // it at L.flow.pinAt, where the page pins it (Stage's call); the panels' column keeps its place, so the page doesn't move
   const PIN = {
     pad: 6,
     evalW: 18,
@@ -432,6 +432,7 @@
     const strip = !video && view !== 'edit' ? pinStrip({ w, h, text, px, phone, hasEval }) : null;
     if (strip) {
       L.flow.pinAt = y - GAP - strip.h;
+      L.flow.strip = { h: strip.h, ...strip.boxes }; // where the board shrinks to, scrolling from 0 to pinAt
       if (pinned) Object.assign(L, strip.boxes, { pin: { h: strip.h } });
     }
     if (fixed) {
