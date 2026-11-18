@@ -317,6 +317,24 @@ function usePieceSet(chosen) {
 // the board drawn (BoardThemes): the squares' colours (null under a picture) and the coordinates'; for a picture board,
 // its picture (src) and the CSS filter it is shown through (css). Set by GameApp as PIECE_SET is (useBoardLook)
 let BOARD_LOOK = { ...window.BoardThemes.colours('brown'), src: null, css: 'none' };
+// The coordinates' colour on a light (light) or dark square: the board's own, each square's colour on the other as
+// Lichess draws them (about 2:1), or, for a viewer who asked for more contrast (prefers-contrast: more), black or
+// white, whichever stands out more on that square (4.58:1 at least on any colour; the page's ink and paper fell to 4.3
+// on one board). A picture board's squares are taken to be its coordinates' colours swapped, as on the flat boards
+const MORE_MQ = window.matchMedia ? window.matchMedia('(prefers-contrast: more)') : null;
+const relLum = (hex) => {
+  const v = [1, 3, 5].map((i) => parseInt(hex.slice(i, i + 2), 16) / 255);
+  const f = (c) => (c <= 0.03928 ? c / 12.92 : ((c + 0.055) / 1.055) ** 2.4);
+  return 0.2126 * f(v[0]) + 0.7152 * f(v[1]) + 0.0722 * f(v[2]);
+};
+const coordInk = (B, light) => {
+  const own = light ? B.onLight : B.onDark;
+  if (!(MORE_MQ && MORE_MQ.matches)) return own;
+  const sq = light ? B.onDark : B.onLight;
+  if (!/^#[0-9a-f]{6}$/i.test(sq || '')) return own;
+  const L = relLum(sq);
+  return (L + 0.05) / 0.05 >= 1.05 / (L + 0.05) ? '#000000' : '#ffffff';
+};
 // The board to draw: a flat one at once. A picture board is lila's file through a CSS filter on the page, so it follows
 // the sliders at once and never swaps pictures (a swap showed as a refresh when a slider stopped); a video export draws
 // the picture worked out through the sliders instead (BoardThemes.render, which exportVideo waits for), as the export
@@ -796,7 +814,7 @@ function boardSquares() {
                 left: 6,
                 top: 4,
                 font: `600 16px ${MONO}`,
-                color: light ? B.onLight : B.onDark,
+                color: coordInk(B, light),
               }}
             >
               {8 - sr}
@@ -809,7 +827,7 @@ function boardSquares() {
                 right: 6,
                 bottom: 3,
                 font: `600 16px ${MONO}`,
-                color: light ? B.onLight : B.onDark,
+                color: coordInk(B, light),
               }}
             >
               {String.fromCharCode(97 + sf)}
@@ -2533,7 +2551,7 @@ function MoveList({ M, T, S, a, paused, onPick, deadAt, end, startAt }) {
           }}
           onKeyDown={(e) => moveKey(e, i)}
           style={moveChip(white, {
-            opacity: ahead ? 0.5 : 1,
+            opacity: ahead ? 0.7 : 1, // a move not yet played: faded, its text still 5:1 on either chip, either theme
             height: CHIP,
             boxSizing: 'border-box',
             display: 'flex',

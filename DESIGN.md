@@ -175,11 +175,12 @@ Warm, low-chroma paper and umber neutrals carry everything; gold and four verdic
 
 ### Board
 - **Board Light** (#f0d9b5) and **Board Dark** (#b58863), the default board; the Lichess last-move tint (yellow-green at 41%) sits on both. The board and the eval bar's white and black halves are the sides' colours and never follow the theme.
+- **Coordinates** are each square's colour on the other, as Lichess draws them (about 2:1); under `prefers-contrast: more` they turn black or white, whichever stands out on the square (4.58:1 at least).
 
 ### Named Rules
 **The One Lamp Rule.** Gold is the only accent. It marks where you are (the last move), what to do next (the primary button) and how to get around (the Transport bar, menu labels, links). Never a second accent hue, and never gold as decoration.
 
-**The Verdict Rule.** Green, amber, red and plum mean best, mistake, blunder and Queen, and nothing else. Never use them for branding, status chrome or emphasis.
+**The Verdict Rule.** Green, amber, red and plum mean best, mistake, blunder and Queen, and nothing else. Never use them for branding, status chrome or emphasis. One exception: the analysis spinner (the Analysis title's computer button while a game analysis runs) is a turning rainbow of the night verdict hues plus a yellow, blue and violet of its own, read as "working", not as any verdict.
 
 **The Measured Contrast Rule.** Every coloured text keeps 4.5:1 where it actually sits, glass over the board included; on glass, a dialog's dim, gold and verdict colours are mixed a quarter of the way to the ink. A new colour or surface gets measured, not eyeballed.
 
@@ -189,9 +190,12 @@ Warm, low-chroma paper and umber neutrals carry everything; gold and four verdic
 **Body Font:** IBM Plex Sans (with system-ui, -apple-system, Segoe UI, sans-serif)
 **Label/Mono Font:** JetBrains Mono (with ui-monospace, SFMono-Regular, Menlo, monospace)
 
+Noto Sans Symbols 2 is also requested from Google Fonts but named in no font stack, so browsers never download it: an open question whether to drop it.
+
 **Character:** A typewritten scoresheet annotated by hand. The mono is exact and tabular, the serif is condensed and literary, and Plex keeps prose readable between them.
 
 ### Hierarchy
+- **Info mark** (Instrument Serif italic 400, 16 px): the "i" in the ⓘ buttons.
 - **Commentary** (Instrument Serif 400, sized to fit the panel, line-height 1.14): the commentary text, revealed by the typewriter while playing. Its asides ("No comment on 12… Nbd7.", "Loading the opening book…") are italic, 26–30 px, in Dust Umber.
 - **Headline** (JetBrains Mono 700, 28 px, 22 px when tight): the Analysis panel's move and eval, the biggest numbers on the page.
 - **Panel label** (JetBrains Mono 600, 15–16 px, 0.12em tracking, uppercase, Dust Umber): MOVES, ANALYSIS, COMMENTARY, WHITE/BLACK on the graph.
@@ -240,7 +244,7 @@ Tactile and warm: paper-toned, raised, pressed with a slight scale.
 - **Hover / Focus:** hover deepens to the hover tone only where hover exists (`@media (hover: hover)`); focus is a 2 px gold outline offset 2 px, ink on thin glass.
 
 ### Move chips
-The record of the game: mono 600, 2 × 8 px padding, 2 px corners. White's moves on a pale chip (#f1ebe1), Black's on a dark one (#2a2320), whatever the theme, so the side reads at a glance. The current move is bolder and outlined; moves not yet played are faded; a flagged move takes its verdict colour.
+The record of the game: mono 600, 2 × 8 px padding, 2 px corners. White's moves on a pale chip (#f1ebe1), Black's on a dark one (#2a2320), whatever the theme, so the side reads at a glance. The current move is bolder and outlined; moves not yet played are faded to 70% (their text stays at 5:1 or more on either chip in either theme); a flagged move takes its verdict colour.
 
 ### Cards / Containers (panels)
 - **Corner Style:** square-ish (2–4 px).
