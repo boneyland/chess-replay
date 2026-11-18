@@ -588,3 +588,45 @@ test('L.moves.chrome and L.tight are what MoveList draws', () => {
       assert.ok(Math.abs(L.moves.chrome - chromeOf(L)) < 1e-9, `${w}×${h}: ${L.moves.chrome} vs ${chromeOf(L)}`);
   }
 });
+
+test('the paused one-column page pins a smaller board once scrolled past it', () => {
+  // phone 390×844 (the area 382×803), tablet 768×1024 (760×983)
+  for (const [w, h, vw, vh, size, evalX] of [
+    [382, 803, 390, 844, 200, 0],
+    [760, 983, 768, 1024, 400, null],
+  ]) {
+    const id = `${vw}×${vh}`;
+    const open = LC.compute({ w, h, vw, vh, cols: 1 });
+    const L = LC.compute({ w, h, vw, vh, cols: 1, pinned: true });
+    assert.ok(!open.pin, `${id}: not pinned unless asked`);
+    assert.ok(L.pin, `${id}: pinned`);
+    assert.equal(L.board.size, size, `${id}: board`);
+    assert.equal(L.eval.w, 18, `${id}: eval bar width`);
+    // on a phone from the screen's edge, elsewhere from the panels' edge
+    assert.equal(L.eval.x, evalX == null ? L.flow.x : evalX, `${id}: eval bar's edge`);
+    assert.equal(L.board.x, L.eval.x + 18 + 4, `${id}: board beside the eval bar`);
+    assert.equal(L.pin.h, L.board.y * 2 + size, `${id}: strip around the board`);
+    // the player bars stacked beside the board, inside the panels' right edge
+    assert.ok(L.bars.side && L.bars.pinned, `${id}: stacked bars`);
+    assert.ok(L.bars.side.x >= L.board.x + size && L.bars.side.w >= 140 * L.text, `${id}: bar column`);
+    assert.ok(L.bars.side.x + L.bars.side.w <= L.flow.x + L.flow.w + 0.5, `${id}: bar column inside`);
+    // the panels keep their places, so the page doesn't move as it pins
+    assert.deepEqual(L.flow, open.flow, `${id}: same column`);
+    for (const k of ['header', 'moves', 'analysis', 'comment']) assert.deepEqual(L[k], open[k], `${id}: ${k}`);
+    // it pins once less of the full board shows than the strip
+    const full = open.board.y + open.board.size + open.bars.gap + open.bars.h;
+    assert.ok(Math.abs(open.flow.pinAt - (full - L.pin.h)) < 0.5, `${id}: pinAt`);
+  }
+  // a narrow phone keeps the bars' column its minimum, the board giving way
+  const n = LC.compute({ w: 352, h: 760, vw: 360, vh: 800, cols: 1, pinned: true });
+  assert.ok(n.board.size < 200 && n.bars.side.w >= 140 * n.text - 0.5, 'narrow phone');
+  // no pinning in a video, in Edit position, or where the board would be too small (a phone with its keyboard up)
+  assert.ok(!LC.compute({ w: 382, h: 803, vw: 390, vh: 844, cols: 1, video: true, pinned: true }).pin, 'video');
+  const edit = LC.compute({ w: 382, h: 803, vw: 390, vh: 844, cols: 1, view: 'edit', pinned: true });
+  assert.ok(!edit.pin && edit.flow.pinAt == null, 'edit');
+  const kb = LC.compute({ w: 382, h: 300, vw: 390, vh: 340, cols: 1, pinned: true });
+  assert.ok(!kb.pin && kb.flow.pinAt == null, 'too short');
+  // a game (no eval bar) starts the board where the eval bar would be
+  const g = LC.compute({ w: 382, h: 803, vw: 390, vh: 844, cols: 1, view: 'game', pinned: true });
+  assert.ok(!g.eval && g.board.x === 0, 'game');
+});

@@ -15,6 +15,7 @@ class by hand on anything else.
 | `part-board` | Board | The board and its pieces, arrows and highlights, in every view | `BoardSpace`, `L.board` |
 | `part-eval-bar` | Eval bar | The tall white/black bar left of the board (replay and free board) | `EvalBarView`, `L.eval` |
 | `part-player-bar top` / `bottom` | Player bar | The strips above and below the board: side mark, name, rating, captures, clock. `bottom` is the side the board is drawn from | `SideBar` (`PlayerBar`, `FreeBar`), `L.bars` |
+| `part-pinned-board` | Pinned board | The paused one-column page scrolled past its board: a smaller board pinned at the top of the screen, the eval bar at its left and the player bars stacked at its right, over the panels scrolling under it | `BoardGroup`, `L.pin` |
 | `part-piece-tray` | Piece tray | Edit position's twelve pieces to place | `Tray` (`app/edit-board.jsx`), `L.tray` |
 
 ## Panels
