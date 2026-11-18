@@ -8756,6 +8756,11 @@ for (const name of BROWSERS)
               top: a.scrollTop,
               pinned: !!document.querySelector('.part-pinned-board'),
             }));
+          // from the top (clicking the move scrolled to it)
+          await p.locator('.stage-area').evaluate((a) => {
+            a.scrollTop = 0;
+          });
+          await p.waitForTimeout(600);
           // scrolled by script, by exact amounts (a wheel's distance differs by browser), each settling as a scroll does
           for (const [dy, pinned] of [
             [30, false],
@@ -8775,6 +8780,31 @@ for (const name of BROWSERS)
           await mv.click();
           await p.waitForTimeout(1200);
           assert.equal((await state()).pinned, true, 'still pinned after picking an Analysis move');
+          // a quick mouse drag up from the top, let go while moving: the drag's glide and then the settle carry the page
+          // on to pinned without a step back (the settle once ran against the glide, and the glide's first frame stepped
+          // back when the frame began before the let-go)
+          await p.locator('.stage-area').evaluate((a) => {
+            a.scrollTop = 0;
+          });
+          await p.waitForTimeout(600);
+          await p.evaluate(() => {
+            const a = document.querySelector('.stage-area');
+            window.__tops = [];
+            const tick = () => {
+              window.__tops.push(a.scrollTop);
+              if (window.__tops.length < 120) requestAnimationFrame(tick);
+            };
+            requestAnimationFrame(tick);
+          });
+          await p.mouse.move(12, 580);
+          await p.mouse.down();
+          for (let i = 1; i <= 6; i++) await p.mouse.move(12, 580 - i * 20);
+          await p.mouse.up();
+          await p.waitForTimeout(2200);
+          const tops = await p.evaluate(() => window.__tops);
+          const back = tops.findIndex((v, i) => i && v < tops[i - 1] - 0.5);
+          assert.equal(back, -1, `a step back in ${tops.map(Math.round).join(',')}`);
+          assert.equal((await state()).pinned, true, 'pinned after the drag');
           assert.deepEqual(lc.errors, []);
           await lc.ctx.close();
         },

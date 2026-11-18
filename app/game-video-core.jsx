@@ -266,7 +266,8 @@ function BoardGroup({ children, overlay }) {
     };
     const settle = () => {
       clearTimeout(timer);
-      if (held || raf) return;
+      // a let-go mouse drag still gliding the page: its end settles it ('dragscroll-end'), as a fling's scrollend does
+      if (held || raf || (window.DragScroll && window.DragScroll.gliding(area))) return;
       const from = area.scrollTop,
         end = settleAt + 1;
       if (from <= 0.5 || from >= end - 0.5 || area.scrollHeight - area.clientHeight < end) return;
@@ -321,6 +322,7 @@ function BoardGroup({ children, overlay }) {
     };
     area.addEventListener('scroll', onScroll, { passive: true });
     area.addEventListener('scrollend', settle);
+    area.addEventListener('dragscroll-end', settle);
     area.addEventListener('pointerdown', mouseDown, { passive: true });
     area.addEventListener('touchstart', touchDown, { passive: true });
     window.addEventListener('pointerup', mouseUp);
@@ -334,6 +336,7 @@ function BoardGroup({ children, overlay }) {
       area.removeEventListener('wheel', stop);
       area.removeEventListener('scroll', onScroll);
       area.removeEventListener('scrollend', settle);
+      area.removeEventListener('dragscroll-end', settle);
       area.removeEventListener('pointerdown', mouseDown);
       area.removeEventListener('touchstart', touchDown);
       window.removeEventListener('pointerup', mouseUp);
