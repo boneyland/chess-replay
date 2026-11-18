@@ -21,6 +21,7 @@ services:
         - vision/**
         - openings-data.cjs
         - build.cjs
+        - build-js.cjs
         - render-headers.cjs
         - render.yaml
     # each pull request gets a temporary deployment, linked on the PR; a Blueprint without this turns them off

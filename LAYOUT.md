@@ -84,6 +84,7 @@ What each part of the repo is, with the pinned SHA-256 of every vendored file. B
   - all 44 board files: sha256 `c8c566fb2967370867e484f0def14ba5ed47f2a5b60a2f79c29226432202ca78` of `cd vendor/boards && sha256sum * | LC_ALL=C sort -k2` (checked by `tests/board-themes.test.cjs`)
 - `openings-data.cjs`: embeds `openings/*.tsv` (Lichess chess-openings, CC0; a copy of chess-animator's) into the page
 - `tools/chasolver-wasm/`: the crate and `build.sh` that build `vendor/chasolver.wasm` (Rust; run by hand, never by Render)
+- `build-js.cjs`: how `build.cjs` turns each script into the page's: JSX compiled with Babel (`babel/`), comments dropped but a licence's (the sources keep theirs); `tests/build.test.cjs` checks the page against it
 - `render.yaml`: the Render static site's settings (a Blueprint: Render syncs them from this file); `render-headers.cjs` reads its headers for `build.cjs`, `tests/live/serve.cjs` and the tests
 - `docs/`: the spec: `spec.md` (principles and contents), `spec/` (what's built, one file per area), `roadmap.md`, `known-gaps.md` and `decisions.md` (the decisions log); `audits/`, dated audit reports with their fix plans, and `plans/`, the implementation plans of built features, kept as written (the oldest, browser Stockfish of 2026-10-16, was written when this was `artifact/` in chess-animator; its paths are now repo-root paths)
 - `media/`: the README's pictures and video

@@ -20,8 +20,10 @@ test('the sample commentary has an intro and comments on moves', () => {
   assert.ok((window.SAMPLE_NOTES.match(/^\[\d+\] /gm) || []).length >= 5);
 });
 
-// String.replace would expand $' or $& in a script; the page must carry each plain unit's code as written
+// String.replace would expand $' or $& in a script; the page must carry each plain unit's code as written (less its
+// comments, which build-js.cjs drops)
 test('the built page inlines the plain units verbatim', () => {
+  const { plain } = require(path.join(ROOT, 'build-js.cjs'));
   const page = fs.readFileSync(path.join(ROOT, 'out', 'site', 'chess-game-video.html'), 'utf8');
   const units = [
     'src/pieces.js',
@@ -46,7 +48,7 @@ test('the built page inlines the plain units verbatim', () => {
     'app/sample-analysis.js',
   ];
   for (const u of units) {
-    const code = fs.readFileSync(path.join(ROOT, u), 'utf8');
+    const code = plain(fs.readFileSync(path.join(ROOT, u), 'utf8'), path.basename(u));
     assert.ok(page.includes(code), u);
   }
 });
