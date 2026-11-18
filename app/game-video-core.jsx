@@ -241,6 +241,29 @@ const setOrient = (o) => {
 const view = (x, y) => (ORIENT === 'b' ? [7 - x, 7 - y] : [x, y]);
 const sqXY = (sq) => view(sq.charCodeAt(0) - 97, 8 - +sq[1]);
 const idxXY = (i) => view(i % 8, Math.floor(i / 8));
+// The board by keyboard (the replay's, the free board's and Edit position's): the square the arrows move, as the
+// viewer sees the board (flipped too), and what a screen reader says for it
+const PIECE_NAME = { p: 'pawn', n: 'knight', b: 'bishop', r: 'rook', q: 'queen', k: 'king' };
+const pieceLabel = (p) => `${p === p.toUpperCase() ? 'White' : 'Black'} ${PIECE_NAME[p.toLowerCase()]}`;
+const squareName = (i) => window.ChessCore.sqName(i);
+const squareSay = (b, i) => `${squareName(i)}, ${b[i] ? pieceLabel(b[i]).toLowerCase() : 'empty'}`;
+// the square an arrow key moves the cursor to (null: not an arrow); the edge stops it
+const cursorStep = (cursor, key) => {
+  const step = { ArrowLeft: [-1, 0], ArrowRight: [1, 0], ArrowUp: [0, -1], ArrowDown: [0, 1] }[key];
+  if (!step) return null;
+  const [x, y] = idxXY(cursor),
+    [fx, fy] = view(Math.min(7, Math.max(0, x + step[0])), Math.min(7, Math.max(0, y + step[1])));
+  return fy * 8 + fx;
+};
+// the text a screen reader can read without showing it
+const SR_ONLY = {
+  position: 'absolute',
+  width: 1,
+  height: 1,
+  overflow: 'hidden',
+  clip: 'rect(0 0 0 0)',
+  whiteSpace: 'nowrap',
+};
 const sqC = (sq) => {
   const [x, y] = sqXY(sq);
   return [x * SQ + SQ / 2, y * SQ + SQ / 2];
@@ -294,6 +317,24 @@ function usePieceSet(chosen) {
 // the board drawn (BoardThemes): the squares' colours (null under a picture) and the coordinates'; for a picture board,
 // its picture (src) and the CSS filter it is shown through (css). Set by GameApp as PIECE_SET is (useBoardLook)
 let BOARD_LOOK = { ...window.BoardThemes.colours('brown'), src: null, css: 'none' };
+// The coordinates' colour on a light (light) or dark square: the board's own, each square's colour on the other as
+// Lichess draws them (about 2:1), or, for a viewer who asked for more contrast (prefers-contrast: more), black or
+// white, whichever stands out more on that square (4.58:1 at least on any colour; the page's ink and paper fell to 4.3
+// on one board). A picture board's squares are taken to be its coordinates' colours swapped, as on the flat boards
+const MORE_MQ = window.matchMedia ? window.matchMedia('(prefers-contrast: more)') : null;
+const relLum = (hex) => {
+  const v = [1, 3, 5].map((i) => parseInt(hex.slice(i, i + 2), 16) / 255);
+  const f = (c) => (c <= 0.03928 ? c / 12.92 : ((c + 0.055) / 1.055) ** 2.4);
+  return 0.2126 * f(v[0]) + 0.7152 * f(v[1]) + 0.0722 * f(v[2]);
+};
+const coordInk = (B, light) => {
+  const own = light ? B.onLight : B.onDark;
+  if (!(MORE_MQ && MORE_MQ.matches)) return own;
+  const sq = light ? B.onDark : B.onLight;
+  if (!/^#[0-9a-f]{6}$/i.test(sq || '')) return own;
+  const L = relLum(sq);
+  return (L + 0.05) / 0.05 >= 1.05 / (L + 0.05) ? '#000000' : '#ffffff';
+};
 // The board to draw: a flat one at once. A picture board is lila's file through a CSS filter on the page, so it follows
 // the sliders at once and never swaps pictures (a swap showed as a refresh when a slider stopped); a video export draws
 // the picture worked out through the sliders instead (BoardThemes.render, which exportVideo waits for), as the export
@@ -452,7 +493,9 @@ function SideScroll({ style, children }) {
 // part: the panel's name, as the class part-<part> (docs/parts.md)
 // progress: 0–1, drawn along the top border (the Analysis panel's while the game analysis runs, else while Stockfish
 // searches for it: no live search runs during a game analysis); null draws none
-function Panel({ box, part, title, info, right, extra, head, a, style, progress, tight, children }) {
+// label: the panel's name for a screen reader (its region), when its title isn't a plain string; a title is also its
+// heading (level 2), as is the title in a head that marks it so
+function Panel({ box, part, title, label, info, right, extra, head, a, style, progress, tight, children }) {
   const { x, y, w, h } = box;
   // the entrance slide only while it fades in (a video's): a settled panel has no transform. A flowing panel (a paused
   // one-column page) takes its place in the view's column, as tall as its contents
@@ -486,6 +529,8 @@ function Panel({ box, part, title, info, right, extra, head, a, style, progress,
     <>
       <div
         className={part && 'part-' + part}
+        role="region"
+        aria-label={label || (typeof title === 'string' ? title : undefined)}
         style={{
           ...place,
           background: C.panel,
@@ -513,6 +558,8 @@ function Panel({ box, part, title, info, right, extra, head, a, style, progress,
             {head || (
               <>
                 <span
+                  role="heading"
+                  aria-level={2}
                   style={{
                     flex: '0 1 auto',
                     minWidth: 0,
@@ -767,7 +814,7 @@ function boardSquares() {
                 left: 6,
                 top: 4,
                 font: `600 16px ${MONO}`,
-                color: light ? B.onLight : B.onDark,
+                color: coordInk(B, light),
               }}
             >
               {8 - sr}
@@ -780,7 +827,7 @@ function boardSquares() {
                 right: 6,
                 bottom: 3,
                 font: `600 16px ${MONO}`,
-                color: light ? B.onLight : B.onDark,
+                color: coordInk(B, light),
               }}
             >
               {String.fromCharCode(97 + sf)}
@@ -1046,7 +1093,9 @@ function AnalysisPanel({ box, a, depth, deep, paused, style, children }) {
         rowGap: tx(8),
       }}
     >
-      <span style={{ flex: 'none' }}>Analysis</span>
+      <span style={{ flex: 'none' }} role="heading" aria-level={2}>
+        Analysis
+      </span>
       {/* spaced as the desktop's heading whatever the layout's title gap (the phone's wide one left no room) */}
       <span
         style={{
@@ -1102,7 +1151,7 @@ function AnalysisPanel({ box, a, depth, deep, paused, style, children }) {
               font: 'inherit',
               fontSize: L.cols === 2 ? '1.15em' : '1em',
               height: 'auto',
-              minHeight: '1.6em',
+              minHeight: 'max(1.6em, 24px)', // a 24 px target at least (WCAG 2.5.8), the phone's small text too
               textTransform: 'none',
               background: C.panel,
             }}
@@ -1200,6 +1249,7 @@ function AnalysisPanel({ box, a, depth, deep, paused, style, children }) {
     <Panel
       box={shown && !box.flow ? { ...box, scroll: true } : box}
       part="analysis"
+      label="Analysis"
       a={a}
       style={style}
       tight
@@ -1532,13 +1582,16 @@ function DragGhost({ el, piece, x, y, ox = 0, oy = 0, back, onBack }) {
 
 // The pieces a pawn can become, in the picker's order, and where each sits: a column on the promotion square's file
 const PROMO_PIECES = ['q', 'n', 'r', 'b'];
+// the board's keys, for a screen reader (BoardTouch) and the Keyboard shortcuts dialog (SHORTCUTS)
+const BOARD_KEYS =
+  'Arrows move the square; Enter or Space picks up a piece, then plays it on the square you choose; Esc puts it down; Q, R, B or N chooses a promotion.';
 const promoPieces = (pr) => PROMO_PIECES.map((t, k) => ({ t, sq: pr.to + (pr.white ? 8 : -8) * k }));
 // A 960 castle's side as the page names it: 'Castle a-side' / 'Castle h-side'
 const castleName = (side) => `Castle ${side}-side`;
 // The castle-or-move question over the board (BoardTouch, castle: useBoardInput's): Castle a-side/h-side, and Move the
 // king to g1 when that king step is legal too. A press anywhere else reaches BoardTouch, which lets it go (the king stays);
 // its buttons take their own presses. In board pixels, so it scales with the board
-function CastleAsk({ castle, onPick }) {
+function CastleAsk({ castle, onPick, focus }) {
   const btn = (primary) => ({
     font: `600 28px ${MONO}`,
     letterSpacing: '0.02em',
@@ -1586,7 +1639,7 @@ function CastleAsk({ castle, onPick }) {
           boxShadow: '0 8px 30px rgba(0,0,0,0.55)',
         }}
       >
-        <button type="button" style={btn(true)} {...press('castle')}>
+        <button type="button" style={btn(true)} autoFocus={!!focus} {...press('castle')}>
           {castleName(castle.side)}
         </button>
         {castle.alsoMove && (
@@ -1625,14 +1678,39 @@ function CastleButtons({ pos, onMove, style }) {
     </div>
   );
 }
-function BoardTouch({ pos, targets, drag, promo, castle, onCastle, onDown, onMove, onUp, onCancel, onBack }) {
+// keys: useBoardInput's keyboard (null: the board takes no keys, e.g. while the video plays or the free board is still).
+// The board is then a Tab stop that acts on keys only while it has the keyboard's focus (focused by Tab or the castle
+// question, not by a press, so a press on a piece leaves Space and the arrows to the page's shortcuts), with the cursor outlined
+function BoardTouch({ pos, targets, drag, promo, castle, onCastle, onDown, onMove, onUp, onCancel, onBack, keys }) {
   const dragged = drag && drag.moved ? drag.piece || pos.b[drag.from] : null,
-    el = React.useRef(null);
+    own = React.useRef(null),
+    el = keys ? keys.boardEl : own;
+  const [kbFocus, setKbFocus] = React.useState(false);
+  // when a press last landed on the board: a focus right after it is the press's, not the keyboard's (a time, not a
+  // flag, so a press that gives no focus can't leave it stale; Firefox didn't always match :focus-visible on a Tab)
+  const pressedAt = React.useRef(-1e9);
+  const ring = keys && kbFocus;
   return (
     <div
       ref={el}
       data-no-drag-scroll
-      onPointerDown={onDown}
+      {...(keys && {
+        tabIndex: 0,
+        role: 'application',
+        'aria-label': 'Board',
+        'aria-describedby': 'board-keys',
+        onKeyDown: (e) => kbFocus && keys.onKeyDown(e),
+        onFocus: () => setKbFocus(performance.now() - pressedAt.current > 50), // a press focuses within a few ms
+        onBlur: () => {
+          setKbFocus(false);
+          pressedAt.current = -1e9; // a press while focused gave no focus: the next focus is a new one
+        },
+      })}
+      onPointerDown={(e) => {
+        pressedAt.current = performance.now();
+        setKbFocus(false);
+        onDown(e);
+      }}
       onPointerMove={onMove}
       onPointerUp={onUp}
       onPointerCancel={onCancel}
@@ -1647,8 +1725,33 @@ function BoardTouch({ pos, targets, drag, promo, castle, onCastle, onDown, onMov
         height: BW,
         cursor: drag && drag.moved && !drag.back ? 'grabbing' : 'grab',
         touchAction: 'none',
+        outline: 'none',
       }}
     >
+      {ring && (
+        <div
+          style={{
+            position: 'absolute',
+            left: idxXY(keys.cursor)[0] * SQ,
+            top: idxXY(keys.cursor)[1] * SQ,
+            width: SQ,
+            height: SQ,
+            boxShadow: `inset 0 0 0 5px ${C.ink}`,
+            pointerEvents: 'none',
+            zIndex: 3,
+          }}
+        />
+      )}
+      {keys && (
+        <>
+          <span id="board-keys" style={SR_ONLY}>
+            {BOARD_KEYS}
+          </span>
+          <span aria-live="polite" translate="no" style={SR_ONLY}>
+            {kbFocus ? keys.say : ''}
+          </span>
+        </>
+      )}
       {targets.map((t) => (
         <div
           key={t}
@@ -1738,7 +1841,7 @@ function BoardTouch({ pos, targets, drag, promo, castle, onCastle, onDown, onMov
           }}
         />
       )}
-      {castle && <CastleAsk castle={castle} onPick={onCastle} />}
+      {castle && <CastleAsk castle={castle} onPick={onCastle} focus={castle.keys} />}
     </div>
   );
 }
@@ -2270,6 +2373,7 @@ function Header({ M, a }) {
     <Panel
       box={L.header}
       part="game-info"
+      label="Game info"
       a={a}
       style={{
         padding: `${tx(10)}px ${tx(L.pad[1])}px`,
@@ -2454,7 +2558,7 @@ function MoveList({ M, T, S, a, paused, onPick, deadAt, end, startAt }) {
           }}
           onKeyDown={(e) => moveKey(e, i)}
           style={moveChip(white, {
-            opacity: ahead ? 0.5 : 1,
+            opacity: ahead ? 0.7 : 1, // a move not yet played: faded, its text still 5:1 on either chip, either theme
             height: CHIP,
             boxSizing: 'border-box',
             display: 'flex',
@@ -3420,6 +3524,13 @@ function useBoardInput({ pos, onPick, onMiss, onMove }) {
   const [promo, setPromo] = React.useState(null); // { from, to, white }: a pawn move waiting for its piece
   // { from, to, side, step, alsoMove }: a 960 king dropped one square from c or g, waiting for castle or king move
   const [castle, setCastle] = React.useState(null);
+  // the keyboard's square (a board index, e4 to begin with), what a screen reader hears after a move, the board's
+  // element (focused again once the castle question, opened from a key, is answered) and whether the move being made
+  // came from a key (the castle question then puts the focus on its first button)
+  const [cursor, setCursor] = React.useState(36);
+  const [played, setPlayed] = React.useState(null);
+  const boardEl = React.useRef(null);
+  const byKey = React.useRef(false);
   // a promotion first shows the picker, and plays once a piece is picked. A 960 king dropped where castling is legal
   // (CC.castleTarget) castles at once from two or more squares away or on its own rook, and asks from one square away,
   // where a king step could be meant; a standard position never gets here (castleTarget is null)
@@ -3429,8 +3540,10 @@ function useBoardInput({ pos, onPick, onMiss, onMove }) {
       const m = CC.castleMoves(pos).find((x) => x.side === ct.side);
       if (!ct.ask) {
         window.Sfx.buzz('move');
+        setPlayed(m.step.san);
         onMove(m.step);
-      } else setCastle({ from, to, side: ct.side, step: m.step, alsoMove: CC.userMove(pos, from, to) });
+      } else
+        setCastle({ from, to, side: ct.side, step: m.step, alsoMove: CC.userMove(pos, from, to), keys: byKey.current });
       return true;
     }
     if (!piece && CC.isPromotion(pos, from, to)) {
@@ -3440,6 +3553,7 @@ function useBoardInput({ pos, onPick, onMiss, onMove }) {
     const step = CC.userMove(pos, from, to, piece);
     if (!step) return false;
     window.Sfx.buzz(window.Sfx.hapticKind(step.san));
+    setPlayed(step.san);
     onMove(step);
     return true;
   };
@@ -3459,8 +3573,11 @@ function useBoardInput({ pos, onPick, onMiss, onMove }) {
       choice === 'castle' ? m && m.step : choice === 'move' && c.alsoMove ? CC.userMove(pos, c.from, c.to) : null;
     if (step) {
       window.Sfx.buzz(window.Sfx.hapticKind(step.san));
+      setPlayed(step.san);
       onMove(step);
     } else onMiss();
+    // answered from the keyboard: its buttons go, so the focus goes back to the board
+    if (c.keys && boardEl.current) boardEl.current.focus();
   };
   const boardXY = (e) => boardPoint(e.currentTarget, e, true),
     moved = dragMoved;
@@ -3553,7 +3670,74 @@ function useBoardInput({ pos, onPick, onMiss, onMove }) {
     setPromo(null);
     setCastle(null);
   };
-  return { sel, drag, promo, castle, pickCastle, targets, handlers, cancelPromo, clear };
+  // The keys while the board has the keyboard's focus (BoardTouch passes them only then): the arrows move the cursor,
+  // Enter or Space does what a tap on its square does (picks up a piece of the side to move, plays the picked piece
+  // there, or puts it down), Esc puts a picked piece down; with the promotion picker up, Q R B N (or Enter, a queen)
+  // choose the piece. A key it doesn't use goes on to the page's shortcuts (Esc with the picker up: the view's)
+  const onKeyDown = (e) => {
+    if (e.ctrlKey || e.metaKey || e.altKey || e.target !== e.currentTarget || castle) return;
+    const k = e.key.length === 1 ? e.key.toLowerCase() : e.key;
+    const to = cursorStep(cursor, e.key);
+    if (promo) {
+      const t = { Enter: 'q', ' ': 'q', q: 'q', r: 'r', b: 'b', n: 'n' }[k];
+      if (!t) return;
+      setPromo(null);
+      playMove(promo.from, promo.to, t);
+    } else if (to != null) {
+      setCursor(to);
+      setPlayed(null);
+    } else if (e.key === 'Enter' || e.key === ' ') {
+      const sq = cursor,
+        pc = pos.b[sq];
+      byKey.current = true;
+      if (sel != null && sel !== sq && targets.includes(sq)) {
+        playMove(sel, sq);
+        setSel(null);
+      } else if (sel === sq) setSel(null);
+      else if (pc && (pc === pc.toUpperCase() ? 'w' : 'b') === pos.turn) {
+        onPick();
+        setSel(sq);
+        setPlayed(null);
+      } else {
+        setSel(null);
+        onMiss();
+      }
+      byKey.current = false;
+    } else if (e.key === 'Escape' && sel != null) setSel(null);
+    else return;
+    e.preventDefault();
+    e.stopPropagation();
+  };
+  // what a screen reader hears for the cursor: the square and its piece, whether it's the picked piece or a square it
+  // can go to, or the move just played; the picker's choice while it's up
+  const say = promo
+    ? 'Promote to: Q queen, R rook, B bishop, N knight'
+    : played
+      ? `Played ${played}`
+      : squareSay(pos.b, cursor) +
+        (sel === cursor
+          ? ', picked up'
+          : sel != null && targets.includes(cursor)
+            ? `, the ${pieceLabel(pos.b[sel]).toLowerCase()} can go here`
+            : '');
+  const keys = { cursor, onKeyDown, say, boardEl };
+  // the board still (the engine's turn, a step back in a game): it stays a Tab stop and keeps the focus, the arrows
+  // still move the cursor and say its square, and Enter or Space plays nothing
+  const stillKeys = {
+    cursor,
+    boardEl,
+    say: played ? `Played ${played}` : squareSay(pos.b, cursor),
+    onKeyDown: (e) => {
+      if (e.ctrlKey || e.metaKey || e.altKey || e.target !== e.currentTarget) return;
+      const to = cursorStep(cursor, e.key);
+      if (to == null) return;
+      setCursor(to);
+      setPlayed(null);
+      e.preventDefault();
+      e.stopPropagation();
+    },
+  };
+  return { sel, drag, promo, castle, pickCastle, targets, handlers, keys, stillKeys, cancelPromo, clear };
 }
 
 // When the schedule changes (a Queen answer lengthens a move's hold, a commentary source is turned off), keep the board
@@ -4141,6 +4325,7 @@ function GameVideo({ M, tw, d, probe, queen, nav, scheme, sf, orient }) {
                 castle={input.castle}
                 onCastle={input.pickCastle}
                 {...input.handlers}
+                keys={playing ? null : input.keys}
               />
             </BoardDraw>
           </BoardSpace>

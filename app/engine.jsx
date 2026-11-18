@@ -429,6 +429,7 @@ function Stage({
       {top}
       <div
         ref={areaRef}
+        role="main"
         className="stage-area"
         style={{ overflowY: scrolls ? 'auto' : 'hidden', scrollbarGutter: cols === 1 ? 'stable' : undefined }}
       >
@@ -588,6 +589,8 @@ function PlaybackBar({ time, duration, playing, nav, menu, still, dock, onPlayPa
     // as a tapped button keeps :hover and some touch browsers (and touch laptops) report a hover-capable pointer
     <div
       className={'pbar part-transport-bar' + (dock ? ' pbar-dock' + (dock.narrow ? ' pbar-narrow' : '') : '')}
+      role="region"
+      aria-label="Playback"
       style={dock ? { ...dock, narrow: undefined } : undefined}
       onPointerOver={markPointer}
       onPointerDown={markPointer}
