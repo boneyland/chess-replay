@@ -8737,6 +8737,49 @@ for (const name of BROWSERS)
           await ph.ctx.close();
         });
 
+      // the one-column page settles on the full board or the pinned strip, never part-way through the shrink: a page whose
+      // content ends before the pin point still scrolls on to it (it once stopped mid-shrink there), and a move picked in
+      // Analysis, whose panel is shorter for a moment while the line loads, leaves the board pinned (it once pulled the
+      // page up under the viewer and unpinned it)
+      await t.test(
+        'one column: a scroll settles full or pinned, and a picked Analysis move keeps it pinned',
+        async () => {
+          const lc = await open(browser, { width: 390, height: 700 });
+          const p = lc.page;
+          await p.goto(base, { waitUntil: 'load' });
+          await loadedOn(p);
+          await p.locator('[data-ply="38"]').click();
+          const mv = p.locator('.part-analysis .mv').nth(1);
+          await mv.waitFor({ state: 'visible', timeout: 15000 });
+          const state = () =>
+            p.locator('.stage-area').evaluate((a) => ({
+              top: a.scrollTop,
+              pinned: !!document.querySelector('.part-pinned-board'),
+            }));
+          // scrolled by script, by exact amounts (a wheel's distance differs by browser), each settling as a scroll does
+          for (const [dy, pinned] of [
+            [30, false],
+            [150, true],
+            [-30, true],
+            [-150, false],
+            [400, true],
+          ]) {
+            await p.locator('.stage-area').evaluate((a, d) => {
+              a.scrollTop += d;
+            }, dy);
+            await p.waitForTimeout(900);
+            const s = await state();
+            assert.equal(s.pinned, pinned, `scrolled ${dy}: ${JSON.stringify(s)}`);
+            if (!pinned) assert.equal(s.top, 0, `scrolled ${dy}: back at the top`);
+          }
+          await mv.click();
+          await p.waitForTimeout(1200);
+          assert.equal((await state()).pinned, true, 'still pinned after picking an Analysis move');
+          assert.deepEqual(lc.errors, []);
+          await lc.ctx.close();
+        },
+      );
+
       await t.test('phone: the layout fits the width and folds the buttons into a menu', async () => {
         // Firefox has no mobile emulation in Playwright: there it is a narrow window with touch
         const ph = await open(browser, { width: 390, height: 844 }, phone({ hasTouch: true }));
