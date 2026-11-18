@@ -976,6 +976,55 @@ for (const name of BROWSERS)
         await page.keyboard.press('Enter');
         await page.waitForFunction(() => /your move ·/i.test(document.body.innerText), null, { timeout: 5000 });
         assert.equal(await said(), 'Played e4');
+        // a press on the board takes the keys away (Space and the arrows are the page's again) until Tab brings the
+        // focus back
+        const bb = await board.boundingBox();
+        await page.mouse.click(bb.x + bb.width * 0.5, bb.y + bb.height * 0.3);
+        await page.keyboard.press('ArrowLeft');
+        assert.equal(await said(), '', 'a pressed board takes no keys');
+        await page.keyboard.press('Tab');
+        for (let i = 0; i < 4 && !(await board.evaluate((el) => el === document.activeElement)); i++)
+          await page.keyboard.press('Shift+Tab');
+        await page.keyboard.press('ArrowUp');
+        assert.match(await said(), /^e5, /, 'back by Tab, the board takes the keys');
+        assert.deepEqual(errors, []);
+        await g.ctx.close();
+      });
+      await t.test('desktop: Play vs computer by keyboard: the board keeps the focus through the reply', async () => {
+        const g = await open(browser, { width: 1440, height: 900 });
+        const page = g.page,
+          errors = g.errors,
+          label = page.locator('.plabel');
+        await page.goto(base, { waitUntil: 'load' });
+        await loadedOn(page);
+        await page.getByRole('button', { name: 'Menu', exact: true }).click();
+        await page.getByRole('button', { name: 'Play vs computer' }).click();
+        const dialog = page.getByRole('dialog', { name: 'Play vs computer' });
+        await dialog.getByRole('radio', { name: 'White' }).click();
+        await dialog.getByRole('radio', { name: 'Off' }).click();
+        await dialog.getByRole('button', { name: 'Start game' }).click();
+        const board = page.getByRole('application', { name: 'Board' });
+        await board.waitFor();
+        const said = () =>
+          page.evaluate(() =>
+            [...document.querySelectorAll('[role="application"] [aria-live]')].map((e) => e.textContent).join(''),
+          );
+        // the Game panel's first control, after the board in the Tab order
+        await page.locator('.part-game button').first().focus();
+        for (let i = 0; i < 6 && !(await board.evaluate((el) => el === document.activeElement)); i++)
+          await page.keyboard.press('Shift+Tab');
+        assert.ok(await board.evaluate((el) => el === document.activeElement), 'Tab reaches the board');
+        for (const k of ['ArrowDown', 'ArrowDown', 'Enter', 'ArrowUp', 'ArrowUp', 'Enter'])
+          await page.keyboard.press(k);
+        await assert.doesNotReject(label.filter({ hasText: /^1… / }).waitFor({ timeout: 15000 }));
+        assert.ok(await board.evaluate((el) => el === document.activeElement), 'the board keeps the focus');
+        // e4 to g1, then the knight to f3
+        for (const k of ['ArrowDown', 'ArrowDown', 'ArrowDown', 'ArrowRight', 'ArrowRight', 'Enter'])
+          await page.keyboard.press(k);
+        assert.equal(await said(), 'g1, white knight, picked up');
+        for (const k of ['ArrowUp', 'ArrowUp', 'ArrowLeft', 'Enter']) await page.keyboard.press(k);
+        assert.equal(await said(), 'Played Nf3');
+        await assert.doesNotReject(label.filter({ hasText: /^2\. Nf3/ }).waitFor({ timeout: 5000 }));
         assert.deepEqual(errors, []);
         await g.ctx.close();
       });

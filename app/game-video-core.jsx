@@ -1686,9 +1686,9 @@ function BoardTouch({ pos, targets, drag, promo, castle, onCastle, onDown, onMov
     own = React.useRef(null),
     el = keys ? keys.boardEl : own;
   const [kbFocus, setKbFocus] = React.useState(false);
-  // set by a press on the board, which comes before the focus it gives: that focus isn't the keyboard's (Firefox didn't
-  // always match :focus-visible on a Tab to it)
-  const pressed = React.useRef(false);
+  // when a press last landed on the board: a focus right after it is the press's, not the keyboard's (a time, not a
+  // flag, so a press that gives no focus can't leave it stale; Firefox didn't always match :focus-visible on a Tab)
+  const pressedAt = React.useRef(-1e9);
   const ring = keys && kbFocus;
   return (
     <div
@@ -1700,14 +1700,14 @@ function BoardTouch({ pos, targets, drag, promo, castle, onCastle, onDown, onMov
         'aria-label': 'Board',
         'aria-describedby': 'board-keys',
         onKeyDown: (e) => kbFocus && keys.onKeyDown(e),
-        onFocus: () => {
-          setKbFocus(!pressed.current);
-          pressed.current = false;
+        onFocus: () => setKbFocus(performance.now() - pressedAt.current > 50), // a press focuses within a few ms
+        onBlur: () => {
+          setKbFocus(false);
+          pressedAt.current = -1e9; // a press while focused gave no focus: the next focus is a new one
         },
-        onBlur: () => setKbFocus(false),
       })}
       onPointerDown={(e) => {
-        pressed.current = true;
+        pressedAt.current = performance.now();
         setKbFocus(false);
         onDown(e);
       }}
@@ -3721,7 +3721,23 @@ function useBoardInput({ pos, onPick, onMiss, onMove }) {
             ? `, the ${pieceLabel(pos.b[sel]).toLowerCase()} can go here`
             : '');
   const keys = { cursor, onKeyDown, say, boardEl };
-  return { sel, drag, promo, castle, pickCastle, targets, handlers, keys, cancelPromo, clear };
+  // the board still (the engine's turn, a step back in a game): it stays a Tab stop and keeps the focus, the arrows
+  // still move the cursor and say its square, and Enter or Space plays nothing
+  const stillKeys = {
+    cursor,
+    boardEl,
+    say: played ? `Played ${played}` : squareSay(pos.b, cursor),
+    onKeyDown: (e) => {
+      if (e.ctrlKey || e.metaKey || e.altKey || e.target !== e.currentTarget) return;
+      const to = cursorStep(cursor, e.key);
+      if (to == null) return;
+      setCursor(to);
+      setPlayed(null);
+      e.preventDefault();
+      e.stopPropagation();
+    },
+  };
+  return { sel, drag, promo, castle, pickCastle, targets, handlers, keys, stillKeys, cancelPromo, clear };
 }
 
 // When the schedule changes (a Queen answer lengthens a move's hold, a commentary source is turned off), keep the board

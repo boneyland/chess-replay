@@ -978,7 +978,7 @@ function FreeBoard({ board, onChange, tw, setTweak, onLichess, sf, nav, orient, 
             {...(still ? stillInput : input.handlers)}
             // a piece springing back lands even if the board went still meanwhile (a step back in a game)
             onBack={input.handlers.onBack}
-            keys={still ? null : input.keys}
+            keys={still ? input.stillKeys : input.keys}
           />
         </BoardDraw>
       </BoardSpace>
