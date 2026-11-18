@@ -475,7 +475,9 @@ function SideScroll({ style, children }) {
 // part: the panel's name, as the class part-<part> (docs/parts.md)
 // progress: 0–1, drawn along the top border (the Analysis panel's while the game analysis runs, else while Stockfish
 // searches for it: no live search runs during a game analysis); null draws none
-function Panel({ box, part, title, info, right, extra, head, a, style, progress, tight, children }) {
+// label: the panel's name for a screen reader (its region), when its title isn't a plain string; a title is also its
+// heading (level 2), as is the title in a head that marks it so
+function Panel({ box, part, title, label, info, right, extra, head, a, style, progress, tight, children }) {
   const { x, y, w, h } = box;
   // the entrance slide only while it fades in (a video's): a settled panel has no transform. A flowing panel (a paused
   // one-column page) takes its place in the view's column, as tall as its contents
@@ -509,6 +511,8 @@ function Panel({ box, part, title, info, right, extra, head, a, style, progress,
     <>
       <div
         className={part && 'part-' + part}
+        role="region"
+        aria-label={label || (typeof title === 'string' ? title : undefined)}
         style={{
           ...place,
           background: C.panel,
@@ -536,6 +540,8 @@ function Panel({ box, part, title, info, right, extra, head, a, style, progress,
             {head || (
               <>
                 <span
+                  role="heading"
+                  aria-level={2}
                   style={{
                     flex: '0 1 auto',
                     minWidth: 0,
@@ -1069,7 +1075,9 @@ function AnalysisPanel({ box, a, depth, deep, paused, style, children }) {
         rowGap: tx(8),
       }}
     >
-      <span style={{ flex: 'none' }}>Analysis</span>
+      <span style={{ flex: 'none' }} role="heading" aria-level={2}>
+        Analysis
+      </span>
       {/* spaced as the desktop's heading whatever the layout's title gap (the phone's wide one left no room) */}
       <span
         style={{
@@ -1223,6 +1231,7 @@ function AnalysisPanel({ box, a, depth, deep, paused, style, children }) {
     <Panel
       box={shown && !box.flow ? { ...box, scroll: true } : box}
       part="analysis"
+      label="Analysis"
       a={a}
       style={style}
       tight
@@ -2339,6 +2348,7 @@ function Header({ M, a }) {
     <Panel
       box={L.header}
       part="game-info"
+      label="Game info"
       a={a}
       style={{
         padding: `${tx(10)}px ${tx(L.pad[1])}px`,

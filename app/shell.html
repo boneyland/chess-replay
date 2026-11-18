@@ -51,6 +51,8 @@ body { height: 100%; margin: 0; background: var(--bg); color: var(--ink); font: 
   #root { position: fixed; top: env(safe-area-inset-top, 0px); bottom: var(--safe-b); left: 0; right: 0; height: auto; }
 }
 button { font: inherit; color: inherit; }
+/* read by a screen reader, not shown (the page's title as its one level-1 heading) */
+.sr-only { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; }
 /* nothing on the page selects but what's typed in a field (a mouse drag scrolls instead: drag-scroll.js) */
 body { user-select: none; -webkit-user-select: none; -webkit-touch-callout: none; }
 input, textarea, [contenteditable]:not([contenteditable="false"]) { user-select: text; -webkit-user-select: text; -webkit-touch-callout: default; }
@@ -797,6 +799,7 @@ body:has(.stage:not(.stage-one)) .net-note { top: calc(64px + env(safe-area-inse
   .pbar::before { box-shadow: none; border-top: 1px solid CanvasText; }
 }
 </style>
+<h1 class="sr-only">Chess Replay</h1>
 <div id="root"></div>
 <!-- every script from a CDN is pinned by hash, so a changed file is refused rather than run (the
      page keeps a Hugging Face token in localStorage) -->
