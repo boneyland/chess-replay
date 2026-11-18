@@ -275,8 +275,23 @@ function BoardGroup({ children, overlay }) {
       <div className="pin-scale" style={{ height: 0 }}>
         {children}
       </div>
-      {/* the stacked bars' fading copies, only while scrolled */}
-      {m && L.scrolled && overlay}
+      {/* the stacked bars' fading copies, only while scrolled, clipped to the page (they slide in from past its edge) */}
+      {m && L.scrolled && overlay && (
+        <div
+          className="pin-ghosts"
+          style={{
+            position: 'absolute',
+            left: 0,
+            top: 0,
+            width: L.w,
+            height: L.board.y + L.board.size,
+            overflow: 'clip',
+            pointerEvents: 'none',
+          }}
+        >
+          {overlay}
+        </div>
+      )}
     </div>
   );
 }
@@ -2314,14 +2329,14 @@ function SideBar({ side, a, name, rating, taken, pts, clock, strip }) {
       );
   });
   if (strip) {
-    // at the strip's column from the start (top level with the shrinking board's top, bottom with its foot), shown from
-    // the left only as far as the board has uncovered it: never past the page, and the names wrapped as they end up
+    // riding the shrinking board's right edge (top level with its top, bottom with its foot) at the strip column's width,
+    // so the names slide in from the right, off the page at first (BoardGroup clips them to it), wrapped as they end up
     const b = L.board,
       sb = strip.board,
       t = 'var(--pin-t, 0)',
       x1 = strip.bars.side.x,
       gap = x1 - (sb.x + sb.size),
-      cover0 = b.x + b.size + gap - x1, // how far the full board's edge reaches into the column
+      x0 = b.x + b.size + gap,
       y0 = side === ORIENT ? b.y + b.size - strip.bars.h : b.y,
       y1 = side === ORIENT ? sb.y + sb.size - strip.bars.h : sb.y;
     return (
@@ -2330,8 +2345,8 @@ function SideBar({ side, a, name, rating, taken, pts, clock, strip }) {
         a={`calc(${a} * max(0, ${t} * 2 - 1))`}
         lay={strip}
         place={{
+          left: `calc(${x0}px + ${t} * ${x1 - x0}px)`,
           top: `calc(${y0}px + ${t} * ${y1 - y0}px)`,
-          clipPath: `inset(0 0 0 max(0px, calc(${cover0}px - ${t} * ${cover0}px)))`,
         }}
         ghost
       />
