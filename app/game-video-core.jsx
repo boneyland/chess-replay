@@ -2426,6 +2426,22 @@ function Clock({ clock, style, ghost = false }) {
 // readers and the page's parts (the real bars are the ones above and below the board)
 function StackedBar({ side, a, name, rating, shown, pts, clock, lay = L, ghost = false, place = null }) {
   const bottom = side === ORIENT;
+  // squeezed where its contents are taller than its box (half the board, a long name on two lines at a large text size,
+  // or with captures): 1, the name on one line (ending in an ellipsis); 2, the captures go too. Measured after each
+  // layout, from 0 again whenever the name or the box changes
+  const box = React.useRef(null);
+  const fitKey = `${name}|${rating}|${shown.length}|${lay.bars.h}|${lay.bars.side.w}|${TX}`;
+  const [fitAt, setFitAt] = React.useState({ key: fitKey, sq: 0 });
+  const sq = fitAt.key === fitKey ? fitAt.sq : 0;
+  React.useLayoutEffect(() => {
+    const el = box.current;
+    if (!el || sq >= 2 || !el.children.length) return;
+    // the children's own extent, as the bottom bar (aligned to the board's foot) overflows upward, which scrollHeight
+    // doesn't count
+    const kids = [...el.children].map((c) => c.getBoundingClientRect());
+    const tall = Math.max(...kids.map((r) => r.bottom)) - Math.min(...kids.map((r) => r.top));
+    if (tall > el.clientHeight + 1) setFitAt({ key: fitKey, sq: sq + 1 });
+  }, [sq, fitKey]);
   // the pinned strip's column takes the name and rating at the player bars' sizes (more room across, the strip shorter)
   const k = lay.bars.pinned
     ? { mark: 14, top: 3, name: 20, rating: 16, indent: 22 }
@@ -2467,12 +2483,12 @@ function StackedBar({ side, a, name, rating, shown, pts, clock, lay = L, ghost =
             // 1.3 in the pinned column, whose two-line names had their descenders clipped at 1.2
             font: `600 ${nameFs}px/${lay.bars.pinned ? 1.3 : 1.2} ${SANS}`,
             color: C.ink,
-            overflowWrap: 'anywhere',
-            display: '-webkit-box',
-            WebkitBoxOrient: 'vertical',
-            WebkitLineClamp: 2,
             overflow: 'hidden',
             minWidth: 0,
+            // two lines at most (then an ellipsis); squeezed, one line ending in an ellipsis
+            ...(sq
+              ? { whiteSpace: 'nowrap', textOverflow: 'ellipsis' }
+              : { overflowWrap: 'anywhere', display: '-webkit-box', WebkitBoxOrient: 'vertical', WebkitLineClamp: 2 }),
           }}
         >
           {name}
@@ -2492,19 +2508,21 @@ function StackedBar({ side, a, name, rating, shown, pts, clock, lay = L, ghost =
       )}
     </span>
   );
-  const caps = shown.length ? (
-    <span key="caps" style={{ display: 'flex', alignItems: 'center', flexWrap: 'wrap', rowGap: tx(2) }}>
-      {shown.map((im, i) =>
-        React.cloneElement(im, {
-          style: { ...im.props.style, width: tx(22), height: tx(22), marginLeft: i ? -tx(7) : 0 },
-        }),
-      )}
-      {pts > 0 && <span style={{ font: `600 ${tx(14)}px ${MONO}`, color: C.dim, marginLeft: tx(6) }}>+{pts}</span>}
-    </span>
-  ) : null;
+  const caps =
+    shown.length && sq < 2 ? (
+      <span key="caps" style={{ display: 'flex', alignItems: 'center', flexWrap: 'wrap', rowGap: tx(2) }}>
+        {shown.map((im, i) =>
+          React.cloneElement(im, {
+            style: { ...im.props.style, width: tx(22), height: tx(22), marginLeft: i ? -tx(7) : 0 },
+          }),
+        )}
+        {pts > 0 && <span style={{ font: `600 ${tx(14)}px ${MONO}`, color: C.dim, marginLeft: tx(6) }}>+{pts}</span>}
+      </span>
+    ) : null;
   const clk = clock ? <Clock key="clock" clock={clock} style={{ alignSelf: 'flex-start' }} ghost={ghost} /> : null;
   return (
     <div
+      ref={box}
       className={ghost ? 'pin-ghost-bar' : 'part-player-bar ' + (bottom ? 'bottom' : 'top')}
       aria-hidden={ghost || undefined}
       style={{ ...sidePlace(side, lay), ...place, gap: tx(6), opacity: a, ...(ghost && { pointerEvents: 'none' }) }}
