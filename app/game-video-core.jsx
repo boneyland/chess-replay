@@ -1133,7 +1133,7 @@ function AnalysisPanel({ box, a, depth, deep, paused, style, children }) {
               font: 'inherit',
               fontSize: L.cols === 2 ? '1.15em' : '1em',
               height: 'auto',
-              minHeight: '1.6em',
+              minHeight: 'max(1.6em, 24px)', // a 24 px target at least (WCAG 2.5.8), the phone's small text too
               textTransform: 'none',
               background: C.panel,
             }}

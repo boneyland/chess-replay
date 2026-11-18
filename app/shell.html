@@ -536,6 +536,10 @@ body:has(.stage.stage-short) .twk-panel { bottom: calc(44px + var(--safe-b)); ma
 .an-lines:not([data-playing]) .line-row[data-hover] { background: color-mix(in srgb, var(--accent) 9%, transparent); box-shadow: 0 0 0 4px color-mix(in srgb, var(--accent) 9%, transparent); }
 @media (hover: hover) { .mv:hover { outline: 1px solid color-mix(in srgb, var(--accent) 60%, transparent); } }
 .mv:focus-visible { outline: 2px solid var(--accent); outline-offset: 1px; }
+/* a move chip under 24 px (the moves' and lines' chips are 20–22 px tall) takes a press 24 px high and wide (WCAG
+   2.5.8) through a transparent layer, so the list keeps its size; a larger chip is left as it is */
+.mv { position: relative; }
+.mv::before { content: ''; position: absolute; inset: min(0px, calc(50% - 12px)); }
 .dock-queen { border-color: color-mix(in srgb, var(--queen) 55%, transparent); color: var(--queen); }
 @media (hover: hover) { .dock-queen:hover:not(:disabled) { background: color-mix(in srgb, var(--queen) 18%, var(--btn)); border-color: var(--queen); } }
 /* every other control's hover (buttons, drop-downs, segmented rows, switches, sliders, links), only where there's a mouse
@@ -565,6 +569,15 @@ body:has(.stage.stage-short) .twk-panel { bottom: calc(44px + var(--safe-b)); ma
 .twk-note a, .dlg-note a, .info-link { color: var(--accent); }
 .twk-info { flex: none; width: 18px; height: 18px; margin-left: 6px; padding: 0; vertical-align: 0; border: 1px solid var(--dim); border-radius: 50%; background: var(--dim); color: var(--panel); font: italic 600 0.8125rem/16px Georgia, serif; cursor: help; }
 .twk-info[aria-expanded="true"] { background: var(--ink); border-color: var(--ink); }
+/* the ⓘ buttons and the switches are drawn small, but take a press over a larger area: 24 px at least (WCAG 2.5.8), more
+   for a finger. A transparent layer round each, so nothing moves */
+.twk-info, .twk-toggle { position: relative; }
+.twk-info::before, .twk-toggle::before { content: ''; position: absolute; inset: -3px; border-radius: inherit; }
+.twk-toggle::before { inset: -2px -1px; }
+@media (pointer: coarse) {
+  .twk-info::before { inset: -9px; }
+  .twk-toggle::before { inset: -8px -5px; }
+}
 @media (hover: hover) { .twk-info:hover { background: var(--ink); border-color: var(--ink); } }
 .twk-btn-row { display: flex; align-items: center; gap: 4px; }
 .twk-tip { position: fixed; z-index: 100; max-width: min(280px, calc(100vw - 16px)); padding: 7px 10px; border: 1px solid var(--line); border-radius: 4px; background: var(--panel); color: var(--ink); box-shadow: 0 8px 24px var(--shadow), var(--halo); font: 0.875rem/1.4 var(--sans); pointer-events: none; }
