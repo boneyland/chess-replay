@@ -1,0 +1,446 @@
+{
+  "schemaVersion": 2,
+  "generatedAt": "2026-11-18T05:42:10.559849+00:00",
+  "title": "Design System: Chess Replay",
+  "extensions": {
+    "colorMeta": {
+      "lamplight-gold": {
+        "role": "primary",
+        "displayName": "Lamplight Gold",
+        "tonalRamp": [
+          "#150800",
+          "#362000",
+          "#5a3b07",
+          "#805819",
+          "#a37a3e",
+          "#c29e6f",
+          "#e1c49f",
+          "#ffebd0"
+        ]
+      },
+      "night-gold": {
+        "role": "primary",
+        "displayName": "Lamplight Gold (night)",
+        "tonalRamp": [
+          "#150800",
+          "#362000",
+          "#593c00",
+          "#805900",
+          "#a37b26",
+          "#c1a061",
+          "#e0c595",
+          "#ffecc9"
+        ]
+      },
+      "parchment": {
+        "role": "neutral",
+        "displayName": "Parchment",
+        "tonalRamp": [
+          "#0c0b09",
+          "#272521",
+          "#45413c",
+          "#656059",
+          "#86827a",
+          "#a9a49e",
+          "#ccc9c3",
+          "#f1eeea"
+        ]
+      },
+      "vellum": {
+        "role": "neutral",
+        "displayName": "Vellum",
+        "tonalRamp": [
+          "#0c0b09",
+          "#262522",
+          "#44423e",
+          "#64615c",
+          "#85827d",
+          "#a7a5a0",
+          "#cbc9c5",
+          "#f0eeec"
+        ]
+      },
+      "oak-raise": {
+        "role": "neutral",
+        "displayName": "Oak Raise",
+        "tonalRamp": [
+          "#0d0b08",
+          "#28251f",
+          "#464139",
+          "#676056",
+          "#888177",
+          "#aaa49b",
+          "#cdc8c1",
+          "#f1eee8"
+        ]
+      },
+      "ink-umber": {
+        "role": "neutral",
+        "displayName": "Ink Umber",
+        "tonalRamp": [
+          "#0e0a08",
+          "#292420",
+          "#48403b",
+          "#695f59",
+          "#8a8079",
+          "#aca39d",
+          "#cfc8c3",
+          "#f3edea"
+        ]
+      },
+      "dust-umber": {
+        "role": "neutral",
+        "displayName": "Dust Umber",
+        "tonalRamp": [
+          "#0e0a07",
+          "#2a241e",
+          "#494038",
+          "#6a5f54",
+          "#8c8075",
+          "#ada399",
+          "#d0c8c0",
+          "#f3ede7"
+        ]
+      },
+      "night-walnut": {
+        "role": "neutral",
+        "displayName": "Night Walnut",
+        "tonalRamp": [
+          "#0c0b0a",
+          "#262524",
+          "#444140",
+          "#64605f",
+          "#858180",
+          "#a7a4a3",
+          "#cbc8c7",
+          "#f0eeed"
+        ]
+      },
+      "night-panel": {
+        "role": "neutral",
+        "displayName": "Night Panel",
+        "tonalRamp": [
+          "#0c0b0a",
+          "#272423",
+          "#45413f",
+          "#65605e",
+          "#86817f",
+          "#a8a4a2",
+          "#ccc8c7",
+          "#f0eeed"
+        ]
+      },
+      "night-ink": {
+        "role": "neutral",
+        "displayName": "Night Ink",
+        "tonalRamp": [
+          "#0d0b08",
+          "#282520",
+          "#45413b",
+          "#666058",
+          "#878179",
+          "#a9a49d",
+          "#ccc8c3",
+          "#f1eeea"
+        ]
+      },
+      "best-green": {
+        "role": "tertiary",
+        "displayName": "Best Green",
+        "tonalRamp": [
+          "#001003",
+          "#012e14",
+          "#114f2b",
+          "#257243",
+          "#4b9563",
+          "#7ab58b",
+          "#a8d7b5",
+          "#d7f9df"
+        ]
+      },
+      "mistake-amber": {
+        "role": "tertiary",
+        "displayName": "Mistake Amber",
+        "tonalRamp": [
+          "#1c0200",
+          "#421500",
+          "#6b2d00",
+          "#97470a",
+          "#bd6936",
+          "#d99269",
+          "#f5bb9b",
+          "#ffe4cd"
+        ]
+      },
+      "blunder-red": {
+        "role": "tertiary",
+        "displayName": "Blunder Red",
+        "tonalRamp": [
+          "#220000",
+          "#4b0502",
+          "#781a11",
+          "#a93024",
+          "#d05545",
+          "#eb8374",
+          "#ffb0a2",
+          "#ffddd2"
+        ]
+      },
+      "queen-plum": {
+        "role": "tertiary",
+        "displayName": "Queen Plum",
+        "tonalRamp": [
+          "#1d000d",
+          "#440b29",
+          "#6e2047",
+          "#9b3768",
+          "#c1598a",
+          "#dd85ab",
+          "#f9b1ce",
+          "#ffddf2"
+        ]
+      },
+      "board-light": {
+        "role": "neutral",
+        "displayName": "Board Light",
+        "tonalRamp": [
+          "#100a02",
+          "#2d2313",
+          "#4e4029",
+          "#705e41",
+          "#927f61",
+          "#b3a389",
+          "#d4c7b3",
+          "#f7edde"
+        ]
+      },
+      "board-dark": {
+        "role": "neutral",
+        "displayName": "Board Dark",
+        "tonalRamp": [
+          "#150801",
+          "#35200d",
+          "#583b21",
+          "#7e5837",
+          "#a17958",
+          "#c09d82",
+          "#dfc3ad",
+          "#ffeada"
+        ]
+      }
+    },
+    "typographyMeta": {
+      "commentary": {
+        "displayName": "Commentary",
+        "purpose": "Commentary text, sized to fit its panel; italic for asides."
+      },
+      "headline": {
+        "displayName": "Headline",
+        "purpose": "The Analysis panel's move and eval."
+      },
+      "panel-label": {
+        "displayName": "Panel label",
+        "purpose": "Uppercase panel titles."
+      },
+      "notation": {
+        "displayName": "Notation",
+        "purpose": "Moves, clocks, lines."
+      },
+      "body": {
+        "displayName": "Body",
+        "purpose": "Names, notes, dialog prose."
+      },
+      "control": {
+        "displayName": "Control",
+        "purpose": "Dock and menu buttons."
+      },
+      "dialog-title": {
+        "displayName": "Dialog title",
+        "purpose": "A dialog's heading."
+      }
+    },
+    "shadows": [
+      {
+        "name": "tooltip",
+        "value": "0 8px 24px var(--shadow), var(--halo)",
+        "purpose": "Tooltips and small notes."
+      },
+      {
+        "name": "menu",
+        "value": "inset 0 1px 0 var(--rim), inset 0 0 0 1px var(--rim-soft), 0 12px 32px var(--shadow), var(--halo)",
+        "purpose": "Menus above the Dock."
+      },
+      {
+        "name": "dialog",
+        "value": "inset 0 1px 0 var(--rim), inset 0 0 0 1px var(--rim-soft), 0 16px 48px var(--shadow), var(--halo)",
+        "purpose": "Dialogs, Settings and Queen panels."
+      },
+      {
+        "name": "transport-glow",
+        "value": "inset 0 1px 0 var(--line-strong), inset 0 2px 0 var(--rim-soft), 0 0 4px 1px color-mix(in srgb, var(--accent) 25%, transparent)",
+        "purpose": "The Transport bar's gold-tinted glass."
+      },
+      {
+        "name": "halo-dark",
+        "value": "0 0 3px rgba(255, 236, 214, 0.3), 0 0 14px rgba(255, 236, 214, 0.14), 0 0 36px rgba(255, 236, 214, 0.1), 0 10px 40px rgba(255, 236, 214, 0.07)",
+        "purpose": "Dark theme glow ending every floating surface's shadow."
+      }
+    ],
+    "motion": [
+      {
+        "name": "dialog-in",
+        "value": "opacity 0.16s ease-out (scrim); translateY(8px) scale(0.98) to rest, 0.2s ease-out (box)",
+        "purpose": "Dialogs fade and rise; reduced motion keeps the fade."
+      },
+      {
+        "name": "ease-slide",
+        "value": "cubic-bezier(0.2, 0.9, 0.3, 1) 0.3s",
+        "purpose": "Menus and the seek knob sliding into place."
+      },
+      {
+        "name": "press",
+        "value": "transform 0.1s ease-out",
+        "purpose": "Buttons scale slightly when pressed."
+      }
+    ],
+    "breakpoints": [
+      {
+        "name": "phone",
+        "value": "max-width 599px or max-height 499px"
+      },
+      {
+        "name": "tablet-bar",
+        "value": "max-width 1180px"
+      },
+      {
+        "name": "landscape-short",
+        "value": "orientation landscape and max-height 499px"
+      },
+      {
+        "name": "note",
+        "value": "Columns are chosen by LayoutCore.columns(), not CSS breakpoints"
+      }
+    ]
+  },
+  "components": [
+    {
+      "name": "Dock Button",
+      "kind": "button",
+      "refersTo": "dock-button",
+      "description": "The Dock and menu buttons: raised paper, mono label.",
+      "html": "<button class=\"ds-dock-btn\">Import game</button>",
+      "css": ".ds-dock-btn{font:600 0.9375rem \"JetBrains Mono\",ui-monospace,monospace;padding:0 10px;height:34px;border-radius:3px;cursor:pointer;border:1px solid var(--btn-line,rgba(60,40,20,0.14));background:var(--btn,#ebe3d6);color:var(--ink,#2a211b);transition:transform .1s ease-out}.ds-dock-btn:hover{background:var(--btn-hover,#ddd2c0)}.ds-dock-btn:focus-visible{outline:2px solid var(--accent, #8a5e15);outline-offset:2px}.ds-dock-btn:active{transform:scale(.97)}"
+    },
+    {
+      "name": "Primary Dock Button",
+      "kind": "button",
+      "refersTo": "dock-button-primary",
+      "description": "The main action in a menu (Import game): Lamplight Gold.",
+      "html": "<button class=\"ds-dock-primary\">Import game</button>",
+      "css": ".ds-dock-primary{font:600 0.9375rem \"JetBrains Mono\",ui-monospace,monospace;padding:0 10px;height:34px;border-radius:3px;cursor:pointer;border:1px solid transparent;background:var(--accent, #8a5e15);color:var(--accent-ink,#fffaf2)}.ds-dock-primary:hover{filter:brightness(1.15)}.ds-dock-primary:focus-visible{outline:2px solid var(--ink,#2a211b);outline-offset:2px}.ds-dock-primary:active{transform:scale(.97)}"
+    },
+    {
+      "name": "Panel Buttons",
+      "kind": "button",
+      "refersTo": "panel-button",
+      "description": "Dialog and Settings buttons, named by their action.",
+      "html": "<div class=\"ds-btns\"><button class=\"ds-btn ds-btn-2\">Keep</button><button class=\"ds-btn\">Remove</button></div>",
+      "css": ".ds-btns{display:flex;gap:8px}.ds-btn{min-height:34px;padding:4px 16px;border:0;border-radius:4px;background:var(--accent, #8a5e15);color:var(--accent-ink,#fffaf2);font:600 0.875rem \"IBM Plex Sans\",system-ui,sans-serif;cursor:pointer}.ds-btn-2{background:var(--raise,#ebe3d6);color:var(--ink,#2a211b);border:1px solid var(--line,rgba(60,40,20,0.14))}.ds-btn:hover{filter:brightness(1.08)}.ds-btn:focus-visible{outline:2px solid var(--accent, #8a5e15);outline-offset:2px}"
+    },
+    {
+      "name": "Field",
+      "kind": "input",
+      "refersTo": "field",
+      "description": "A dialog field: oak raise, hairline, mono text.",
+      "html": "<input class=\"ds-field\" placeholder=\"PGN, FEN or Lichess link\" aria-label=\"PGN, FEN or Lichess link\">",
+      "css": ".ds-field{width:100%;height:38px;padding:0 10px;border:1px solid var(--line,rgba(60,40,20,0.14));border-radius:4px;background:var(--raise,#ebe3d6);color:var(--ink,#2a211b);font:500 0.875rem \"JetBrains Mono\",ui-monospace,monospace}.ds-field::placeholder{color:var(--dim,#6b5f53);opacity:.7}.ds-field:focus-visible{outline:2px solid var(--accent, #8a5e15);outline-offset:2px}"
+    },
+    {
+      "name": "Move Chips",
+      "kind": "chip",
+      "refersTo": "move-chip-white",
+      "description": "The record of the game: White on pale, Black on dark, whatever the theme; the current move outlined in gold.",
+      "html": "<div class=\"ds-moves\"><span class=\"ds-no\">12.</span><span class=\"ds-chip ds-w\">Rd1</span><span class=\"ds-chip ds-b ds-on\">Nbd7</span><span class=\"ds-no\">13.</span><span class=\"ds-chip ds-w ds-fut\">Bf4</span></div>",
+      "css": ".ds-moves{display:flex;align-items:center;gap:4px;font:600 16px \"JetBrains Mono\",ui-monospace,monospace}.ds-no{color:var(--dim,#6b5f53);font-weight:500;margin-left:6px}.ds-chip{padding:2px 8px;border-radius:2px}.ds-w{background:#f1ebe1;color:#15100d;border:1px solid rgba(60,40,20,0.22)}.ds-b{background:#2a2320;color:#efe8de;border:1px solid rgba(255,236,214,0.22)}.ds-on{font-weight:700;box-shadow:0 0 0 2px var(--accent, #8a5e15)}.ds-fut{opacity:.45}"
+    },
+    {
+      "name": "Panel",
+      "kind": "card",
+      "refersTo": "dialog",
+      "description": "A flat panel: vellum, hairline, uppercase mono label, serif commentary.",
+      "html": "<section class=\"ds-panel\"><div class=\"ds-label\">Commentary</div><p class=\"ds-comm\">Final, game 2. Carlsen has White in a Catalan.</p></section>",
+      "css": ".ds-panel{background:var(--panel,#fbf7f1);border:1px solid var(--line,rgba(60,40,20,0.14));border-radius:3px;padding:16px;color:var(--ink,#2a211b)}.ds-label{font:600 15px \"JetBrains Mono\",ui-monospace,monospace;letter-spacing:.12em;text-transform:uppercase;color:var(--dim,#6b5f53)}.ds-comm{margin:8px 0 0;font:400 30px/1.14 \"Instrument Serif\",serif}"
+    },
+    {
+      "name": "Glass Dialog",
+      "kind": "custom",
+      "refersTo": "dialog",
+      "description": "Floating glass over the board: blur, rim, drop shadow.",
+      "html": "<div class=\"ds-dlg\"><div class=\"ds-dlg-title\">Import game</div><p class=\"ds-dlg-note\">Paste a PGN, a FEN or a Lichess link.</p></div>",
+      "css": ".ds-dlg{width:min(560px,100%);padding:16px 18px 18px;border-radius:6px;background:color-mix(in srgb,var(--panel-glass,#fbf7f1) 85%,transparent);-webkit-backdrop-filter:blur(12px) saturate(1.6);backdrop-filter:blur(12px) saturate(1.6);color:var(--ink,#2a211b);border:1px solid var(--line,rgba(60,40,20,0.14));box-shadow:inset 0 1px 0 var(--rim,rgba(255,255,255,.8)),inset 0 0 0 1px var(--rim-soft,rgba(255,255,255,.35)),0 16px 48px var(--shadow,rgba(60,40,20,.18))}.ds-dlg-title{font:600 .875rem/1.3 \"IBM Plex Sans\",system-ui,sans-serif;letter-spacing:.005em;color:var(--dim,#6b5f53)}.ds-dlg-note{margin:12px 0 0;font:.875rem/1.45 \"IBM Plex Sans\",system-ui,sans-serif;color:var(--dim,#6b5f53)}"
+    }
+  ],
+  "narrative": {
+    "northStar": "The Study by Lamplight",
+    "overview": "A quiet study where a game is read slowly: parchment and vellum by day, walnut-dark by night, and one warm gold that does the work of a lamp, falling on the last move, the main action and the bar you play the game from. The board is the picture on the desk; everything else is paper laid beside it. The colours come from one source (`app/theme.js`), written into the page as CSS custom properties (`--bg`, `--panel`, `--ink`, `--accent`…) and into the views' palettes, so the page and an exported video always match.\n\nThe voice is split three ways and each has one job. Mono (JetBrains Mono) is the record: notation, clocks, evals, labels, buttons. Serif (Instrument Serif) is the annotator's hand: commentary and the board's quiet asides, often in italics. Sans (IBM Plex Sans) is the room's plain speech: player names, dialog prose, notes. Controls are tactile and warm: raised paper-toned buttons, gold primary buttons, and frosted-glass menus and dialogs that let the board show through, with a bright rim along their top edge like light catching a pane.\n\nPanels sit flat on the page, separated by hairlines rather than shadows; only what floats above the board (menus, Settings, Queen, dialogs) casts one. The playing video is a still, clean picture, and every control belongs to the paused page.",
+    "keyCharacteristics": [
+      "Two themes from one token set: Parchment (light) and Night Walnut (dark), following the system or the page's own setting, plus a stronger \"more contrast\" variant of each.",
+      "One accent, Lamplight Gold; four meaning colours (best, mistake, blunder, Queen) that are chess verdicts, never decoration.",
+      "Mono for anything that is data; serif only for commentary; sans for prose.",
+      "Flat panels with hairline borders; floating surfaces are glass with a rim and a drop shadow, and a soft halo glow in the dark theme.",
+      "Every size goes through the Text size setting (`tx(px)`), and the layout is computed, not breakpointed by hand."
+    ],
+    "rules": [
+      {
+        "name": "The One Lamp Rule",
+        "body": "Gold is the only accent. It marks where you are (the last move), what to do next (the primary button) and how to get around (the Transport bar, menu labels, links). Never a second accent hue, and never gold as decoration.",
+        "section": "colors"
+      },
+      {
+        "name": "The Verdict Rule",
+        "body": "Green, amber, red and plum mean best, mistake, blunder and Queen, and nothing else. Never use them for branding, status chrome or emphasis.",
+        "section": "colors"
+      },
+      {
+        "name": "The Measured Contrast Rule",
+        "body": "Every coloured text keeps 4.5:1 where it actually sits, glass over the board included; on glass, a dialog's dim, gold and verdict colours are mixed a quarter of the way to the ink. A new colour or surface gets measured, not eyeballed.",
+        "section": "colors"
+      },
+      {
+        "name": "The Three Hands Rule",
+        "body": "Mono is the record, serif is the annotator, sans is the room. Data never appears in serif, and commentary never in mono.",
+        "section": "typography"
+      },
+      {
+        "name": "The Text Size Rule",
+        "body": "Every size in the views goes through `tx(px)` so the Text size setting scales it; never a fixed pixel size for text the viewer reads.",
+        "section": "typography"
+      },
+      {
+        "name": "The Board Leads Rule",
+        "body": "The board takes the largest box the layout can give it; panels fit around it, never the other way round.",
+        "section": "layout"
+      },
+      {
+        "name": "The Paper and Glass Rule",
+        "body": "What lies on the page is paper: flat, hairline-edged, no shadow. What floats over the board is glass: blurred, rimmed and shadowed. Never a shadow on a resting panel.",
+        "section": "elevation"
+      }
+    ],
+    "dos": [
+      "**Do** take every colour from the theme tokens (`app/theme.js`, `--bg`, `--panel`, `--ink`, `--accent`…) and add a new one there for both themes and both \"more contrast\" variants.",
+      "**Do** set data (moves, clocks, evals, labels) in JetBrains Mono, commentary in Instrument Serif, prose in IBM Plex Sans.",
+      "**Do** keep panels flat with a 1 px hairline, and put glass, rim and shadow only on surfaces that float over the board.",
+      "**Do** size text with `tx(px)` and position on the board in board pixels.",
+      "**Do** measure contrast where the text actually sits (4.5:1 on glass over the board too) and give reduced transparency, more contrast and forced colours an opaque fallback.",
+      "**Do** keep reduced motion as a short fade that still shows the change."
+    ],
+    "donts": [
+      "**Don't** add a second accent hue, or use the verdict colours (green, amber, red, plum) for anything but their verdicts.",
+      "**Don't** theme the board squares, the eval bar's halves or the move chips' sides: they are White and Black.",
+      "**Don't** put a shadow on a resting panel, or a large radius or pill shape on a button.",
+      "**Don't** show buttons, progress lines or engine controls on the playing video.",
+      "**Don't** set commentary in mono or data in serif."
+    ]
+  }
+}
