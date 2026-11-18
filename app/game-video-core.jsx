@@ -220,7 +220,7 @@ const pinLen = (m, from, to, shift = 0) => `calc((${from}px + var(--pin-t, 0) * 
 // the panels scrolling under it. With a strip to shrink to (pinMorph) it is stuck to the top from the start, with no box
 // of its own (its parts placed as in the page), and scales toward the strip as the page scrolls. Else it is out of the
 // way. Its margins cancel its place in the flow, so the panels don't move
-function BoardGroup({ children }) {
+function BoardGroup({ children, overlay }) {
   const el = React.useRef(null);
   const pin = L.pin,
     f = L.flow,
@@ -263,14 +263,18 @@ function BoardGroup({ children }) {
           flex: 'none',
           height: 0,
           margin: `${-f.top}px ${-f.x}px ${f.top - f.gap}px`,
-          transformOrigin: '0 0',
-          // shell.html applies it while scrolled ([data-pinning]), so the page at the top has no transform
+          // the parts' scale (.pin-scale): shell.html applies it while scrolled ([data-pinning]), so the page at the top
+          // has no transform
           '--pin-tf': `translate(calc(var(--pin-t) * ${m.x}px), calc(var(--pin-t) * ${m.y}px)) scale(calc${m.k})`,
         }
       : { position: 'static', flex: 'none', height: 0, marginBottom: f ? -f.gap : 0 };
   return (
     <div ref={el} className={pin ? 'part-pinned-board' : undefined} style={style}>
-      {children}
+      {/* the parts, scaled while shrinking (shell.html's [data-pinning]); always there, so the board never remounts */}
+      <div className="pin-scale" style={{ height: 0, transformOrigin: '0 0' }}>
+        {children}
+      </div>
+      {m && overlay}
     </div>
   );
 }
@@ -2222,12 +2226,12 @@ function clockOf(M, color, T, S) {
 // bottom one from its foot up)
 const barLeft = () => (L.eval ? L.eval.x : L.board.x),
   barWidth = () => L.board.x + L.board.size - barLeft();
-const sidePlace = (side) => ({
+const sidePlace = (side, lay = L) => ({
   position: 'absolute',
-  left: L.bars.side.x,
-  width: L.bars.side.w,
-  height: L.bars.h,
-  top: side === ORIENT ? L.board.y + L.board.size - L.bars.h : L.board.y,
+  left: lay.bars.side.x,
+  width: lay.bars.side.w,
+  height: lay.bars.h,
+  top: side === ORIENT ? lay.board.y + lay.board.size - lay.bars.h : lay.board.y,
   display: 'flex',
   flexDirection: 'column',
   justifyContent: side === ORIENT ? 'flex-end' : 'flex-start',
@@ -2257,7 +2261,7 @@ function materialOf(side, left) {
 }
 // A game's player bar: the captures and material edge from the pieces on the board at time T (taken off as they are
 // captured, a pawn counted as its new piece once it has promoted, as the board draws them), the clock from the PGN's clocks
-function PlayerBar({ M, T, S, side, a, pieces }) {
+function PlayerBar({ M, T, S, side, a, pieces, strip }) {
   const P = side === 'w' ? M.white : M.black;
   const count = { w: {}, b: {} };
   pieces.forEach((p) => {
@@ -2275,6 +2279,7 @@ function PlayerBar({ M, T, S, side, a, pieces }) {
       taken={taken}
       pts={pts}
       clock={M.hasClock ? clockOf(M, side, T, S) : null}
+      strip={strip}
     />
   );
 }
@@ -2283,7 +2288,9 @@ function PlayerBar({ M, T, S, side, a, pieces }) {
 // a count by type, more of the opponent's than of its own; none drawn where it's less) and its material edge pts, and
 // the clock ({ s, active }, or null) at the right. The full name, title and rating always; where the bar is too narrow
 // (a phone's) their text gets smaller, down to 0.6 of its size, then the captures go, then the name ends in an ellipsis
-function SideBar({ side, a, name, rating, taken, pts, clock }) {
+// strip: the copy stacked in the pinned strip's column (L.flow.strip) while the board shrinks toward it (BoardGroup's
+// overlay), fading in over the shrink's second half so the names are there before the board lands
+function SideBar({ side, a, name, rating, taken, pts, clock, strip }) {
   const opp = side === 'w' ? 'b' : 'w',
     shown = [];
   ['q', 'r', 'b', 'n', 'p'].forEach((t) => {
@@ -2304,6 +2311,30 @@ function SideBar({ side, a, name, rating, taken, pts, clock }) {
         />,
       );
   });
+  if (strip) {
+    // riding along the shrinking board's right edge (top level with its top, bottom with its foot) at the strip column's
+    // width, sliding in from the right as the board shrinks (narrowed, the names re-wrapped as they faded in)
+    const b = L.board,
+      sb = strip.board,
+      t = 'var(--pin-t, 0)',
+      gap = strip.bars.side.x - (sb.x + sb.size),
+      x0 = b.x + b.size + gap,
+      y0 = side === ORIENT ? b.y + b.size - strip.bars.h : b.y,
+      y1 = side === ORIENT ? sb.y + sb.size - strip.bars.h : sb.y,
+      left = `(${x0}px + ${t} * ${strip.bars.side.x - x0}px)`;
+    return (
+      <StackedBar
+        {...{ side, name, rating, shown, pts, clock }}
+        a={`calc(${a} * max(0, ${t} * 2 - 1))`}
+        lay={strip}
+        place={{
+          left: `calc${left}`,
+          top: `calc(${y0}px + ${t} * ${y1 - y0}px)`,
+        }}
+        ghost
+      />
+    );
+  }
   if (L.bars.side) return <StackedBar {...{ side, a, name, rating, shown, pts, clock }} />;
   const capsW = shown.length
     ? tx(6) +
@@ -2388,20 +2419,22 @@ function Clock({ clock, style }) {
 // SideBar in the column beside the board (L.bars.side): stacked, mirrored so both clocks sit toward the middle: the top
 // bar the name (two lines at most, then an ellipsis) and rating, the captures, then the clock; the bottom one the clock,
 // the captures, then the name and rating. shown: the captured pieces' images, drawn smaller here
-function StackedBar({ side, a, name, rating, shown, pts, clock }) {
+// lay: the layout it's placed in (L, or the pinned strip's boxes); ghost: BoardGroup's fading copy, hidden from screen
+// readers and the page's parts (the real bars are the ones above and below the board)
+function StackedBar({ side, a, name, rating, shown, pts, clock, lay = L, ghost = false, place = null }) {
   const bottom = side === ORIENT;
   // the pinned strip's column takes the name and rating at the player bars' sizes (more room across, the strip shorter)
-  const k = L.bars.pinned
+  const k = lay.bars.pinned
     ? { mark: 14, top: 3, name: 20, rating: 16, indent: 22 }
     : { mark: 12, top: 4, name: 17, rating: 14, indent: 20 };
   // there, the name a little smaller (to 0.75 of it) where its longest word would otherwise break mid-word
-  const nameFs = L.bars.pinned
+  const nameFs = lay.bars.pinned
     ? tx(k.name) *
       Math.max(
         0.75,
         Math.min(
           1,
-          (L.bars.side.w - tx(k.indent)) /
+          (lay.bars.side.w - tx(k.indent)) /
             Math.max(
               1,
               ...String(name)
@@ -2468,8 +2501,9 @@ function StackedBar({ side, a, name, rating, shown, pts, clock }) {
   const clk = clock ? <Clock key="clock" clock={clock} style={{ alignSelf: 'flex-start' }} /> : null;
   return (
     <div
-      className={'part-player-bar ' + (bottom ? 'bottom' : 'top')}
-      style={{ ...sidePlace(side), gap: tx(6), opacity: a }}
+      className={ghost ? 'pin-ghost-bar' : 'part-player-bar ' + (bottom ? 'bottom' : 'top')}
+      aria-hidden={ghost || undefined}
+      style={{ ...sidePlace(side, lay), ...place, gap: tx(6), opacity: a, ...(ghost && { pointerEvents: 'none' }) }}
     >
       {bottom ? [clk, caps, who] : [who, caps, clk]}
     </div>
@@ -4398,7 +4432,16 @@ function GameVideo({ M, tw, d, probe, queen, nav, scheme, sf, orient }) {
               !tw.exporting && { transform: `translate(${cx}px,${cy}px) scale(${sc}) translate(${-cx}px,${-cy}px)` }),
           }}
         >
-          <BoardGroup>
+          <BoardGroup
+            overlay={
+              pinMorph() && (
+                <>
+                  <PlayerBar M={M} T={T} S={S} side="b" a={1} pieces={pieces} strip={L.flow.strip} />
+                  <PlayerBar M={M} T={T} S={S} side="w" a={1} pieces={pieces} strip={L.flow.strip} />
+                </>
+              )
+            }
+          >
             <EvalBar
               M={M}
               T={T}

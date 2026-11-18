@@ -5,7 +5,7 @@
 
 // A player bar for "White" or "Black" (or name: "You", "Stockfish 19"): the pieces taken and the material edge, counted from
 // the pieces on the board (materialOf), and in a clocked game the clock ({ s, active })
-function FreeBar({ pos, side, a, clock, name }) {
+function FreeBar({ pos, side, a, clock, name, strip }) {
   const { taken, pts } = materialOf(
     side,
     (col, t) => pos.b.filter((p) => p === (col === 'w' ? t.toUpperCase() : t)).length,
@@ -18,6 +18,7 @@ function FreeBar({ pos, side, a, clock, name }) {
       taken={taken}
       pts={pts}
       clock={clock}
+      strip={strip}
     />
   );
 }
@@ -936,7 +937,30 @@ function FreeBoard({ board, onChange, tw, setTweak, onLichess, sf, nav, orient, 
       ref={flowRef}
       style={{ position: 'absolute', inset: 0, background: C.bg, ...flowStyle() }}
     >
-      <BoardGroup>
+      <BoardGroup
+        overlay={
+          pinMorph() && (
+            <>
+              <FreeBar
+                pos={pos}
+                side="b"
+                a={1}
+                clock={clockOf('b')}
+                name={G ? window.PlayCore.playerName(G, 'b') : null}
+                strip={L.flow.strip}
+              />
+              <FreeBar
+                pos={pos}
+                side="w"
+                a={1}
+                clock={clockOf('w')}
+                name={G ? window.PlayCore.playerName(G, 'w') : null}
+                strip={L.flow.strip}
+              />
+            </>
+          )
+        }
+      >
         {!G &&
           (deadv || tbv ? (
             <EvalBarView cp={(deadv || tbv).cp} txt={(deadv || tbv).txt} a={1} />
