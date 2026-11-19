@@ -220,13 +220,14 @@ function useStoredFiles({ stored, setErr, onCommit, clockRef }) {
     }
   };
   // only a game that changed (a move, a takeback, its clocks or result) is kept again: stepping through it isn't, so a
-  // finished game deleted while on the board stays deleted. A board that couldn't be stored has said so already
-  const commitBoard = (b) => {
+  // finished game deleted while on the board stays deleted, nor is a board brought back as it was left (back: Back to
+  // the free board). A board that couldn't be stored has said so already
+  const commitBoard = (b, { back = false } = {}) => {
     const saved = window.BoardCore.save(b),
       prev = board;
     boardSaved.current = { saved, board: b };
     const ok = commit({ board: saved });
-    if (b.game && !(prev && prev.game === b.game && prev.steps === b.steps))
+    if (b.game && !back && !(prev && prev.game === b.game && prev.steps === b.steps))
       updateGames(
         (list) => window.GamesCore.keep(list, b, Date.now()),
         ok ? 'This game couldn’t be kept in My games: the browser’s storage is full.' : null,
@@ -890,7 +891,7 @@ function GameApp() {
   // the board's moves as a loaded game (replay, Analyse with Stockfish, PGN and video export); the board is kept with it, to go back to
   const boardAsGame = () => {
     commit({
-      pgn: window.BoardCore.pgn(board),
+      pgn: boardPgn(),
       pgnName: 'free-board.pgn',
       gameIndex: 0,
       fromBoard: files.board,
@@ -1835,7 +1836,7 @@ function GameApp() {
                   backToGame,
                   backToBoard: () => {
                     const b = window.BoardCore.restore(files.fromBoard);
-                    if (b) commitBoard(b);
+                    if (b) commitBoard(b, { back: true });
                   },
                   backToSample: () => guard(() => commit(SAMPLE)),
                   reset: () => setResetOpen(true),
