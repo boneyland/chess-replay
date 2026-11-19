@@ -238,7 +238,15 @@ async function videoEncoder(cv, W, H, fps, audio, { webm = false, quality = 'Hig
   });
   const hold = vfr ? Object.assign(document.createElement('canvas'), { width: W, height: H }) : null,
     hx = vfr ? hold.getContext('2d') : null;
-  const src = new MB.CanvasSource(vfr ? hold : cv, { codec, bitrate: mp4Bitrate(MB, quality) });
+  // VP9 is asked for in realtime mode. Left to its default ('quality'), Firefox's encoder (libvpx) looks ~25 frames ahead
+  // and spends ~75 ms on a 1440×900 frame: a WebM export took three times an MP4's, holding more memory. In realtime it
+  // holds ~4 and takes ~13 ms, as sharp against a lossless copy (39.2 against 39.3 dB) in a file ~30% larger (measured
+  // 2026-11-20). Chromium's VP9 runs the same either way; H.264 is left to its default (Firefox's was a little slower)
+  const src = new MB.CanvasSource(vfr ? hold : cv, {
+    codec,
+    bitrate: mp4Bitrate(MB, quality),
+    ...(codec === 'vp9' ? { latencyMode: 'realtime' } : {}),
+  });
   output.addVideoTrack(src, { frameRate: fps });
   // the move sounds, when the browser can encode them: AAC in an MP4, else Opus (which MP4 and WebM both hold)
   const sound = audio ? await audio() : null;
