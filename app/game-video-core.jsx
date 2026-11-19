@@ -605,59 +605,6 @@ function useBoardLook(theme, adj, exporting) {
   return { failed: failed === want };
 }
 
-function simulate(M) {
-  const board = {},
-    pieces = [];
-  M.start.pos.b.forEach((ch, i) => {
-    if (!ch) return;
-    const sq = window.ChessCore.sqName(i);
-    const p = {
-      id: sq,
-      color: ch === ch.toUpperCase() ? 'w' : 'b',
-      type: ch.toLowerCase(),
-      home: sq,
-      track: [],
-      captured: -1,
-      promo: null,
-    };
-    pieces.push(p);
-    board[sq] = p;
-  });
-  const step = (from, to, i) => {
-    const p = board[from];
-    if (board[to]) board[to].captured = i;
-    board[to] = p;
-    delete board[from];
-    p.track.push({ ply: i, from, to });
-    return p;
-  };
-  M.plies.forEach((pl, i) => {
-    const f = pl.uci.slice(0, 2),
-      t = pl.uci.slice(2, 4),
-      p = board[f];
-    if (p.type === 'p' && f[0] !== t[0] && !board[t]) {
-      const epSq = t[0] + f[1];
-      if (board[epSq]) {
-        board[epSq].captured = i;
-        delete board[epSq];
-      }
-    }
-    // a 960 castle is the king taking its own rook: the rook is lifted first, so the king's step captures nothing
-    const rook = window.ChessCore.castleRookStep(i ? M.plies[i - 1].pos : M.start.pos, pl.uci);
-    if (rook) {
-      const rp = board[rook.from];
-      delete board[rook.from];
-      const kt = (rook.to[0] === 'f' ? 'g' : 'c') + f[1];
-      if (kt === f) p.track.push({ ply: i, from: f, to: kt });
-      else step(f, kt, i);
-      board[rook.to] = rp;
-      rp.track.push({ ply: i, from: rook.from, to: rook.to });
-    } else step(f, t, i);
-    if (pl.uci.length === 5) p.promo = { ply: i, type: pl.uci[4] };
-  });
-  return pieces;
-}
-
 // ---------- schedule ----------
 function useSchedule(M, CUES, d) {
   return React.useMemo(() => window.ChessCore.schedule(M, CUES, d), [M, CUES, d]);
@@ -4586,7 +4533,7 @@ function GameVideo({ M, tw, d, probe, queen, nav, scheme, sf, orient }) {
     // eslint-disable-next-line react-hooks/exhaustive-deps -- once, on opening: GameApp keys this view on the game
   }, []);
   const stepBy = useReplayNav({ nav, M, S, c: cNow, line, input, goTo, fen: shownFen, keys: !tw.exporting });
-  const pieces = React.useMemo(() => simulate(M), [M]);
+  const pieces = React.useMemo(() => window.ChessCore.pieceTracks(M), [M]);
   // the video touches (panels fading in, the camera push, the blunder glow, the final fade, the title and end cards)
   // only while playing or exporting: stepping, exploring and analysing show a still page
   const enter = (i) => (video ? MOTION.enter(cl01((T - (CUES.Opening - 0.5 + i * 0.12)) / 0.7)) : 1);

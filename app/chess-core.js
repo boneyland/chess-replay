@@ -1786,6 +1786,62 @@
     return null;
   }
 
+  // Each piece of the game M's start, with its moves: { id, color, type, home, track: [{ ply, from, to }], captured (the
+  // ply it was taken on, else -1), promo: { ply, type } or null }, for the replay board's sliding pieces
+  function pieceTracks(M) {
+    const board = {},
+      pieces = [];
+    M.start.pos.b.forEach((ch, i) => {
+      if (!ch) return;
+      const sq = idxSq(i);
+      const p = {
+        id: sq,
+        color: ch === ch.toUpperCase() ? 'w' : 'b',
+        type: ch.toLowerCase(),
+        home: sq,
+        track: [],
+        captured: -1,
+        promo: null,
+      };
+      pieces.push(p);
+      board[sq] = p;
+    });
+    const step = (from, to, i) => {
+      const p = board[from];
+      if (board[to]) board[to].captured = i;
+      board[to] = p;
+      delete board[from];
+      p.track.push({ ply: i, from, to });
+      return p;
+    };
+    M.plies.forEach((pl, i) => {
+      const f = pl.uci.slice(0, 2),
+        t = pl.uci.slice(2, 4),
+        p = board[f];
+      // a pawn's diagonal step to an empty square is en passant; a promoted pawn is that piece now, and takes nothing beside it
+      if (p.type === 'p' && !p.promo && f[0] !== t[0] && !board[t]) {
+        const epSq = t[0] + f[1];
+        if (board[epSq]) {
+          board[epSq].captured = i;
+          delete board[epSq];
+        }
+      }
+      // a 960 castle is the king taking its own rook: the rook is lifted first, so the king's step captures nothing
+      const rook = castleRookStep(i ? M.plies[i - 1].pos : M.start.pos, pl.uci);
+      if (rook) {
+        const rp = board[rook.from];
+        delete board[rook.from];
+        const kt = (rook.to[0] === 'f' ? 'g' : 'c') + f[1];
+        if (kt === f) p.track.push({ ply: i, from: f, to: kt });
+        else step(f, kt, i);
+        board[rook.to] = rp;
+        rp.track.push({ ply: i, from: rook.from, to: rook.to });
+      } else step(f, t, i);
+      if (pl.uci.length === 5) p.promo = { ply: i, type: pl.uci[4] };
+    });
+    return pieces;
+  }
+
   // A SAN move → { pos after it, uci }; throws when it isn't legal
   function applySan(pos, san) {
     const mv = sanToMove(pos, san);
@@ -1867,6 +1923,7 @@
     castleMoves,
     castleTarget,
     castleRookStep,
+    pieceTracks,
     is960,
     isVariant960,
     stdRights,
