@@ -27,19 +27,25 @@
 
   let drag = null,
     glide = 0,
+    glideEl = null,
     swallow = false;
   const stop = () => {
     cancelAnimationFrame(glide);
     glide = 0;
+    glideEl = null;
   };
+  // whether a let-go drag is still gliding el, and, when the glide runs down by itself, a 'dragscroll-end' event on el:
+  // the one-column page settles its pinned board after the glide (BoardGroup), not against it
+  window.DragScroll = { gliding: (el) => !!glide && glideEl === el };
 
   const flick = (el, vx, vy, k) => {
     let x = el.scrollLeft,
       y = el.scrollTop,
       last = performance.now();
     const step = (now) => {
-      const dt = Math.min(now - last, 50);
-      last = now;
+      // a frame's time is when the frame began, which can be before the let-go's performance.now(): no step back then
+      const dt = Math.max(0, Math.min(now - last, 50));
+      last = Math.max(last, now);
       if (!el.isConnected) return stop();
       x += (vx * dt) / k.x;
       y += (vy * dt) / k.y;
@@ -53,10 +59,14 @@
         Math.hypot(vx, vy) < GLIDE_MIN ||
         (k.ax.x && Math.abs(el.scrollLeft - x) > 1) ||
         (k.ax.y && Math.abs(el.scrollTop - y) > 1)
-      )
-        return stop();
+      ) {
+        stop();
+        el.dispatchEvent(new Event('dragscroll-end'));
+        return;
+      }
       glide = requestAnimationFrame(step);
     };
+    glideEl = el;
     glide = requestAnimationFrame(step);
   };
 

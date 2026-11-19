@@ -154,8 +154,17 @@ async function open(browser, viewport, opts) {
 }
 // the elements reaching past the window's right edge, when the page scrolls sideways (none when it doesn't)
 // every running animation and transition done (dialogs rise, menus fade): a measure taken mid-way reads a scaled, shifted box
+// the time-based animations only: a scroll-driven one (the pinned board's shrink, shell.html's .pin-morph) never
+// finishes, so waiting on it hung every test that called this
 const animationsDone = (page) =>
-  page.evaluate(() => Promise.all(document.getAnimations().map((a) => a.finished.catch(() => {}))).then(() => {}));
+  page.evaluate(() =>
+    Promise.all(
+      document
+        .getAnimations()
+        .filter((a) => a.timeline instanceof DocumentTimeline)
+        .map((a) => a.finished.catch(() => {})),
+    ).then(() => {}),
+  );
 const wider = async (page) => {
   await animationsDone(page);
   return page.evaluate(() => {
@@ -8733,6 +8742,80 @@ for (const name of BROWSERS)
           assert.equal(await ph.page.evaluate(() => visualViewport.scale), 1);
           await ph.ctx.close();
         });
+
+      // the one-column page settles on the full board or the pinned strip, never part-way through the shrink: a page whose
+      // content ends before the pin point still scrolls on to it (it once stopped mid-shrink there), and a move picked in
+      // Analysis, whose panel is shorter for a moment while the line loads, leaves the board pinned (it once pulled the
+      // page up under the viewer and unpinned it)
+      await t.test(
+        'one column: a scroll settles full or pinned, and a picked Analysis move keeps it pinned',
+        async () => {
+          const lc = await open(browser, { width: 390, height: 700 });
+          const p = lc.page;
+          await p.goto(base, { waitUntil: 'load' });
+          await loadedOn(p);
+          await p.locator('[data-ply="38"]').click();
+          const mv = p.locator('.part-analysis .mv').nth(1);
+          // the engine's line (slow on a loaded machine)
+          await mv.waitFor({ state: 'visible', timeout: 30000 });
+          const state = () =>
+            p.locator('.stage-area').evaluate((a) => ({
+              top: a.scrollTop,
+              pinned: !!document.querySelector('.part-pinned-board'),
+            }));
+          // from the top (clicking the move scrolled to it)
+          await p.locator('.stage-area').evaluate((a) => {
+            a.scrollTop = 0;
+          });
+          await p.waitForTimeout(600);
+          // scrolled by script, by exact amounts (a wheel's distance differs by browser), each settling as a scroll does
+          for (const [dy, pinned] of [
+            [30, false],
+            [150, true],
+            [-30, true],
+            [-150, false],
+            [400, true],
+          ]) {
+            await p.locator('.stage-area').evaluate((a, d) => {
+              a.scrollTop += d;
+            }, dy);
+            await p.waitForTimeout(900);
+            const s = await state();
+            assert.equal(s.pinned, pinned, `scrolled ${dy}: ${JSON.stringify(s)}`);
+            if (!pinned) assert.equal(s.top, 0, `scrolled ${dy}: back at the top`);
+          }
+          await mv.click();
+          await p.waitForTimeout(1200);
+          assert.equal((await state()).pinned, true, 'still pinned after picking an Analysis move');
+          // a quick mouse drag up from the top, let go while moving: the drag's glide and then the settle carry the page
+          // on to pinned without a step back (the settle once ran against the glide, and the glide's first frame stepped
+          // back when the frame began before the let-go)
+          await p.locator('.stage-area').evaluate((a) => {
+            a.scrollTop = 0;
+          });
+          await p.waitForTimeout(600);
+          await p.evaluate(() => {
+            const a = document.querySelector('.stage-area');
+            window.__tops = [];
+            const tick = () => {
+              window.__tops.push(a.scrollTop);
+              if (window.__tops.length < 120) requestAnimationFrame(tick);
+            };
+            requestAnimationFrame(tick);
+          });
+          await p.mouse.move(12, 580);
+          await p.mouse.down();
+          for (let i = 1; i <= 6; i++) await p.mouse.move(12, 580 - i * 20);
+          await p.mouse.up();
+          await p.waitForTimeout(2200);
+          const tops = await p.evaluate(() => window.__tops);
+          const back = tops.findIndex((v, i) => i && v < tops[i - 1] - 0.5);
+          assert.equal(back, -1, `a step back in ${tops.map(Math.round).join(',')}`);
+          assert.equal((await state()).pinned, true, 'pinned after the drag');
+          assert.deepEqual(lc.errors, []);
+          await lc.ctx.close();
+        },
+      );
 
       await t.test('phone: the layout fits the width and folds the buttons into a menu', async () => {
         // Firefox has no mobile emulation in Playwright: there it is a narrow window with touch

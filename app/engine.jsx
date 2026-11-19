@@ -238,7 +238,27 @@ function Stage({
     } else setPlaying(true);
   };
   const [area, setArea] = React.useState({ w: 1440, h: 900, cols: 2, sh: 900, vw: 1440, vh: 900 });
-  const [contentH, setContentH] = React.useState(0);
+  const [contentH, setContentHRaw] = React.useState(0);
+  const areaRef = React.useRef(null);
+  // the scrolled page's floor (keep): the bottom of the window (in the frame: the area runs on under the transport bar,
+  // past the frame's h) as the content was last measured, so content that gets
+  // shorter (the Analysis panel while a picked line loads) doesn't pull the page up under the viewer and unpin the
+  // board; scrolling up gives the room back (the scroll listener below)
+  const [keep, setKeep] = React.useState(0);
+  const keepRef = React.useRef(0);
+  const holdKeep = React.useCallback((k) => {
+    if (keepRef.current === k) return;
+    keepRef.current = k;
+    setKeep(k);
+  }, []);
+  const setContentH = React.useCallback(
+    (v) => {
+      const el = areaRef.current;
+      if (el && el.scrollTop > 0) holdKeep(Math.ceil(el.scrollTop + hRef.current));
+      setContentHRaw(v);
+    },
+    [holdKeep],
+  );
   const colsRef = React.useRef(null); // the last column count, for the switch's hysteresis
   React.useEffect(() => {
     if (still) setPlaying(false);
@@ -247,7 +267,6 @@ function Stage({
   React.useEffect(() => {
     setTime((t) => (t > duration ? duration : t));
   }, [duration]);
-  const areaRef = React.useRef(null);
   const video = playing || !!forceVideo;
   const lastTsRef = React.useRef(null);
   const passesRef = React.useRef(0);
@@ -297,6 +316,8 @@ function Stage({
     return () => ro.disconnect();
   }, [text, video]);
   const { w, h, cols, sh } = area;
+  const hRef = React.useRef(h);
+  hRef.current = h;
   // a short two-column window (a phone held sideways): the transport bar goes in the sidebar, under the panels, so the
   // board gets the whole height; it is placed over the area at the box the layout keeps for it. There it always folds
   // its buttons into the menu, however wide the window (a large phone is 932 px wide on its side)
@@ -429,7 +450,7 @@ function Stage({
     scrolled = pinnable && moved;
   const frame = React.useMemo(
     () => ({ w, h, cols, video, text, dock: short, vw: area.vw, vh: area.vh, pinned, scrolled, setContentH, setPinAt }),
-    [w, h, cols, video, text, short, area.vw, area.vh, pinned, scrolled],
+    [w, h, cols, video, text, short, area.vw, area.vh, pinned, scrolled, setContentH],
   );
   const ctx = React.useMemo(
     () => ({ time, duration, playing, setTime: seek, setPlaying: play, setStart, snap: snapRef }),
@@ -440,7 +461,32 @@ function Stage({
   // one column keeps room for a classic scrollbar whether or not it shows: the page's height depends on its width, so a
   // width that changed when the bar came and went flipped the bar on and off near the edge (and a video, which has no bar,
   // is as wide as the paused page, which the export's widths assume)
-  const fh = scrolls ? Math.max(h, contentH) : h;
+  // a page that scrolls at all can scroll on to where the board pins (pinAt, with a pixel or two to spare for the settle's
+  // pinAt + 1), even if its content ends sooner: the blank under the last panel is the price of never being left
+  // part-way through the shrink with nowhere to settle (BoardGroup)
+  const base = !scrolls
+    ? h
+    : pinnable && contentH > h + 1
+      ? Math.max(contentH, h + Math.ceil(pinAt) + 3)
+      : Math.max(h, contentH);
+  const fh = scrolls ? Math.max(base, keep) : h;
+  const baseRef = React.useRef(base);
+  baseRef.current = base;
+  // the floor goes as the viewer scrolls up past it, and with a new window size or a video (playing, exporting)
+  React.useEffect(() => {
+    const el = areaRef.current;
+    if (!scrolls || !el) return;
+    const up = () => {
+      const k = keepRef.current,
+        bottom = Math.ceil(el.scrollTop + h);
+      if (k > baseRef.current && bottom < k) holdKeep(bottom > baseRef.current ? bottom : 0);
+    };
+    el.addEventListener('scroll', up, { passive: true });
+    return () => {
+      el.removeEventListener('scroll', up);
+      holdKeep(0);
+    };
+  }, [scrolls, w, h, holdKeep]);
 
   return (
     <div
