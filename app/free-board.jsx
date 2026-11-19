@@ -536,21 +536,19 @@ function GameStatus({ board, onChange, down, why, retry, tip, onMove }) {
     const again = () => onChange(P.start(window.BoardCore.go(free, from - 1), G.tc, null, { ...mode, keep: from > 0 }));
     return (
       <React.Fragment>
-        <div style={{ display: 'flex', alignItems: 'center', gap: tx(28) }}>
-          <div className="game-result" style={{ display: 'flex', flexDirection: 'column', gap: tx(6) }}>
-            {big(r.score, C.ink)}
-            {small(r.why, C.last)}
-          </div>
-          <div style={{ marginLeft: 'auto' }}>
-            <FrameButton primary onClick={again}>
-              Play again
-            </FrameButton>
-          </div>
+        <div className="game-result" style={{ display: 'flex', flexDirection: 'column', gap: tx(6) }}>
+          {big(r.score, C.ink)}
+          {small(r.why, C.last)}
         </div>
         {row(
-          <FrameButton primary color={C.last} onClick={() => onChange(free)}>
-            Analyse on the free board
-          </FrameButton>,
+          <React.Fragment>
+            <FrameButton app primary onClick={again}>
+              Play again
+            </FrameButton>
+            <FrameButton app onClick={() => onChange(free)}>
+              Analyse on the free board
+            </FrameButton>
+          </React.Fragment>,
         )}
       </React.Fragment>
     );
@@ -581,10 +579,10 @@ function GameStatus({ board, onChange, down, why, retry, tip, onMove }) {
           ? row(
               <React.Fragment>
                 <span style={{ font: `600 ${tx(18)}px ${SANS}`, color: C.ink }}>Resign this game?</span>
-                <FrameButton color={C.blunder} onClick={() => onChange(P.resign(board, now(), G.you))}>
+                <FrameButton app danger onClick={() => onChange(P.resign(board, now(), G.you))}>
                   Resign
                 </FrameButton>
-                <FrameButton color={C.dim} onClick={() => setAsk(null)}>
+                <FrameButton app color={C.dim} onClick={() => setAsk(null)}>
                   Keep playing
                 </FrameButton>
               </React.Fragment>,
@@ -592,7 +590,7 @@ function GameStatus({ board, onChange, down, why, retry, tip, onMove }) {
           : row(
               <React.Fragment>
                 {trouble && retry && (
-                  <FrameButton primary color={C.last} onClick={retry}>
+                  <FrameButton app primary color={C.last} onClick={retry}>
                     Try again
                   </FrameButton>
                 )}
@@ -602,7 +600,7 @@ function GameStatus({ board, onChange, down, why, retry, tip, onMove }) {
                   tip &&
                   !tip.san &&
                   (tip.left > 0 ? (
-                    <FrameButton color={C.best} disabled={tip.wait} onClick={tip.ask}>
+                    <FrameButton app color={C.best} disabled={tip.wait} onClick={tip.ask}>
                       Hint · {tip.left} left
                     </FrameButton>
                   ) : (
@@ -618,11 +616,11 @@ function GameStatus({ board, onChange, down, why, retry, tip, onMove }) {
                     </span>
                   ))}
                 {P.canTakeback(board) && (
-                  <FrameButton color={C.dim} onClick={() => onChange(P.takeback(board, now()))}>
+                  <FrameButton app color={C.dim} onClick={() => onChange(P.takeback(board, now()))}>
                     Take back
                   </FrameButton>
                 )}
-                <FrameButton color={C.dim} onClick={() => setAsk('resign')}>
+                <FrameButton app color={C.dim} onClick={() => setAsk('resign')}>
                   Resign
                 </FrameButton>
               </React.Fragment>,
@@ -667,12 +665,14 @@ function GameStatus({ board, onChange, down, why, retry, tip, onMove }) {
                   : `${side} offers a draw. ${side === 'White' ? 'Black' : 'White'}, accept?`}
               </span>
               <FrameButton
-                color={ask === 'resign' ? C.blunder : C.last}
+                app
+                danger={ask === 'resign'}
+                primary={ask !== 'resign'}
                 onClick={() => onChange(ask === 'resign' ? P.resign(board, now()) : P.agreeDraw(board, now()))}
               >
                 {ask === 'resign' ? 'Resign' : 'Accept'}
               </FrameButton>
-              <FrameButton color={C.dim} onClick={() => setAsk(null)}>
+              <FrameButton app color={C.dim} onClick={() => setAsk(null)}>
                 {ask === 'resign' ? 'Keep playing' : 'Decline'}
               </FrameButton>
             </React.Fragment>,
@@ -680,21 +680,21 @@ function GameStatus({ board, onChange, down, why, retry, tip, onMove }) {
         : row(
             <React.Fragment>
               {claim && (
-                <FrameButton color={C.last} onClick={() => onChange(P.claimDraw(board, now()))}>
+                <FrameButton app color={C.last} onClick={() => onChange(P.claimDraw(board, now()))}>
                   Claim a draw
                 </FrameButton>
               )}
               {P.canTakeback(board) && (
-                <FrameButton color={C.dim} onClick={() => onChange(P.takeback(board, now()))}>
+                <FrameButton app color={C.dim} onClick={() => onChange(P.takeback(board, now()))}>
                   Take back
                 </FrameButton>
               )}
               {P.played(board) > 0 && !claim && (
-                <FrameButton color={C.dim} onClick={() => setAsk('draw')}>
+                <FrameButton app color={C.dim} onClick={() => setAsk('draw')}>
                   Offer a draw
                 </FrameButton>
               )}
-              <FrameButton color={C.dim} onClick={() => setAsk('resign')}>
+              <FrameButton app color={C.dim} onClick={() => setAsk('resign')}>
                 Resign as {side}
               </FrameButton>
             </React.Fragment>,

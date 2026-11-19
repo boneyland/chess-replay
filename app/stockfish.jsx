@@ -626,8 +626,32 @@ function useGameAnalysis(M, files, getFiles, commit, engine, settings, tbOn) {
 
 // A button inside a panel (theme colours, sized with the panel text)
 // compact: a size down, for a phone's tight panels (Edit position held sideways)
-function FrameButton({ primary, color, onClick, children, label, disabled, compact, className }) {
+// app: the app's own button (.twk-btn: filled accent, or the raised secondary one), as in the dialogs and Settings
+function FrameButton({ primary, color, onClick, children, label, disabled, compact, className, app, danger }) {
   const c = color || C.best;
+  if (app)
+    return (
+      <button
+        type="button"
+        className={['twk-btn', danger ? 'danger' : !primary && 'secondary', className].filter(Boolean).join(' ')}
+        aria-label={label}
+        disabled={disabled}
+        onClick={(e) => {
+          e.stopPropagation();
+          onClick();
+        }}
+        onPointerDown={(e) => e.stopPropagation()}
+        style={{
+          ...NO_SELECT,
+          whiteSpace: 'nowrap',
+          fontSize: tx(16),
+          minHeight: tx(36),
+          padding: `${tx(4)}px ${tx(16)}px`,
+        }}
+      >
+        {children}
+      </button>
+    );
   return (
     <button
       type="button"
@@ -696,7 +720,7 @@ function EngineEmptyState({ M, sf, paused, compact, ask = true }) {
         </div>
         {paused && (
           <div>
-            <FrameButton onClick={sf.stop} label="Stop the analysis">
+            <FrameButton app onClick={sf.stop} label="Stop the analysis">
               Stop
             </FrameButton>
           </div>
@@ -719,7 +743,7 @@ function EngineEmptyState({ M, sf, paused, compact, ask = true }) {
         {text}
         <span style={{ font: `500 ${tx(17)}px ${MONO}`, color: C.dim }}>Stockfish can't run here.</span>
         <div>
-          <FrameButton onClick={() => sf.engine.get().catch(() => {})} label="Try starting Stockfish again">
+          <FrameButton app onClick={() => sf.engine.get().catch(() => {})} label="Try starting Stockfish again">
             Try again
           </FrameButton>
         </div>
@@ -730,7 +754,7 @@ function EngineEmptyState({ M, sf, paused, compact, ask = true }) {
     <div style={{ display: 'flex', flexDirection: 'column', gap: tx(14), alignItems: 'flex-start' }}>
       {text}
       <div style={{ display: 'flex', alignItems: 'center', gap: tx(14), flexWrap: 'wrap' }}>
-        <FrameButton primary onClick={sf.ask}>
+        <FrameButton app primary onClick={sf.ask}>
           {(run.resumeAt
             ? `${narrow ? 'Resume' : 'Resume analysis'} from move ${Math.floor((M.ply0 + run.resumeAt) / 2) + 1}`
             : 'Analyse with Stockfish') + (narrow ? '' : ` · ${est}`)}
