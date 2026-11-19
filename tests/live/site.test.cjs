@@ -8781,11 +8781,16 @@ for (const name of BROWSERS)
             }, dy);
             // the settle's glide takes up to 250 ms of frames, and a loaded runner (WebKit on GitHub) draws them slowly:
             // wait for the layout it should reach rather than a fixed time, then check it
-            let s;
+            // and for the page to hold still (the glide's last frame is still to come when it first reads right, and the next
+            // scroll would be written over)
+            let s,
+              prev = null;
             for (const t0 = Date.now(); ; ) {
               await p.waitForTimeout(150);
               s = await state();
-              if ((s.pinned === pinned && (pinned || s.top === 0)) || Date.now() - t0 > 8000) break;
+              const right = s.pinned === pinned && (pinned || s.top === 0);
+              if ((right && prev && prev.top === s.top) || Date.now() - t0 > 8000) break;
+              prev = s;
             }
             assert.equal(s.pinned, pinned, `scrolled ${dy}: ${JSON.stringify(s)}`);
             if (!pinned) assert.equal(s.top, 0, `scrolled ${dy}: back at the top`);
