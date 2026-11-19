@@ -41,7 +41,7 @@ jobs:
       - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
         with:
           node-version: 22
-      - run: npm install --no-save --no-package-lock --no-audit --no-fund prettier@3.6.2 eslint@9.39.1 @eslint/js@9.39.1 eslint-plugin-react-hooks@7.0.1 globals@16.5.0
+      - run: npm install --no-save --no-package-lock --no-audit --no-fund prettier@3.6.2 eslint@9.39.1 @eslint/js@9.39.1 eslint-plugin-react-hooks@7.0.1 globals@16.5.0 espree@10.4.0
       - run: npx prettier --check '**/*.{js,jsx,cjs,mjs}'
       - run: npx eslint .
   # The smoke tests (tests/live/site.test.cjs) against this commit's build, served the way render.yaml has Render

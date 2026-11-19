@@ -18,14 +18,14 @@ Most mediums sit where the page is still live during long work: an export (keys 
 Hot spots (last 300 commits): `app/game-video-core.jsx` 68, `app/shell.html` 56, `app/free-board.jsx` 37, `app/game-app.jsx` 35, `app/stockfish.jsx` 31.
 
 ## Fix plan
-Not started (2026-11-19). Each item is one PR on a `claude/<topic>` branch (they change the page; see CLAUDE.md's Workflow), in this order. Line numbers are at commit ba6a515: if they have moved, find the code by the quoted evidence. Tick an item here, with its PR, when it merges.
+Not started (2026-11-19); the straight-to-`main` note below is done. Each item is one PR on a `claude/<topic>` branch (they change the page; see CLAUDE.md's Workflow), in this order. Line numbers are at commit ba6a515: if they have moved, find the code by the quoted evidence. Tick an item here, with its PR, when it merges.
 
-**First, straight to `main` (tooling and tests, no PR):**
-- Put back the `HEAVY_TESTS` alternative `desktop: the Lichess explorer lists` in test.yml. That test has run in WebKit's main part, near its 30-minute limit, since PR 254 renamed it.
-- Add a node test that checks each `HEAVY_TESTS`/`ENGINE_TESTS` alternative matches exactly one live subtest name.
-- Fix test.yml's stale "ESLint's warnings don't fail" comment.
-- Make `sw.test.cjs` read the vision cache name instead of hard-coding `chess-vision-1`.
-- Add `espree` to both lint install lines.
+**First, straight to `main` (tooling and tests, no PR):** done 2026-11-19.
+- [x] Put back the `HEAVY_TESTS` alternative `desktop: the Lichess explorer lists` in test.yml. That test had run in WebKit's main part, near its 30-minute limit, since PR 254 renamed it. (70e5f4c)
+- [x] Add a node test that checks each `HEAVY_TESTS`/`ENGINE_TESTS` alternative matches a live subtest name: `tests/ci-patterns.test.cjs`. Two alternatives match two subtests each on purpose, so it asks for at least one, not exactly one. It fails on the old pattern.
+- [x] Fix test.yml's stale "ESLint's warnings don't fail" comment. (70e5f4c)
+- [x] Make `sw.test.cjs` read the vision cache name (`VisionCore.CACHE`, and the one before it) instead of hard-coding `chess-vision-1`. It passes with the name bumped to `chess-vision-2`.
+- [x] Add `espree@10.4.0` (eslint 9.39.1's own range, `^10.4.0`) to both lint install lines, test.yml and CLAUDE.md.
 
 (Medium and Low, Build.)
 
@@ -188,6 +188,7 @@ Its lows:
 
 **Build, deploy, offline**
 - [medium] [ci] [.github/workflows/test.yml:71](../../.github/workflows/test.yml#L71) - `HEAVY_TESTS`'s `desktop: the Lichess explorer asks` matches no subtest (grep: 0) since PR 254 renamed it. WebKit's main part, which test.yml says keeps hitting its 30-minute limit, carries it again. Nothing catches a rename. confidence: sure
+  *Fixed 2026-11-19 (70e5f4c), and `tests/ci-patterns.test.cjs` now catches a rename.*
 - [medium] [offline] [app/sw.js:165](../../app/sw.js#L165) - Offline after a half-installed deploy, the page's engine, prover and export files fail.
   evidence: `page()` ([:109](../../app/sw.js#L109)) stores a new deploy's page in the old worker's cache. `cacheFirst` sends another version's `?v=` straight to the network with no fallback.
   scenario: the viewer goes offline before the new worker installs. The next visit loads the new page from the old cache, and every `?v=N+1` request fails, though plain-URL copies sit in that cache.
@@ -295,11 +296,11 @@ Unchecked unless marked. Grouped by area.
 - [app/layout-core.js:345](../../app/layout-core.js#L345) - A negative board size below about 30 px wide (from 2026-11-09, narrower than reported).
 
 **Build, deploy, offline**
-- [tests/sw.test.cjs:80](../../tests/sw.test.cjs#L80) - Hard-codes `chess-vision-1` five times, though LAYOUT.md says the name lives in one place; a cache bump fails it.
-- [.github/workflows/test.yml:33](../../.github/workflows/test.yml#L33) - Stale: "ESLint's warnings don't fail the job" (exhaustive-deps is an error).
+- [tests/sw.test.cjs:80](../../tests/sw.test.cjs#L80) - Hard-codes `chess-vision-1` five times, though LAYOUT.md says the name lives in one place; a cache bump fails it. *Fixed 2026-11-19.*
+- [.github/workflows/test.yml:33](../../.github/workflows/test.yml#L33) - Stale: "ESLint's warnings don't fail the job" (exhaustive-deps is an error). *Fixed 2026-11-19 (70e5f4c).*
 - [build.cjs:116](../../build.cjs#L116) - `VENDOR` is a hand list; nothing checks a pinned vendor file is served.
 - [build.cjs:196](../../build.cjs#L196) - "Never a comment's" overclaims: a commented-out CDN URL still matches.
-- [eslint.config.mjs:10](../../eslint.config.mjs#L10) - `espree` is in neither install line.
+- [eslint.config.mjs:10](../../eslint.config.mjs#L10) - `espree` is in neither install line. *Fixed 2026-11-19.*
 - [eslint.config.mjs:117](../../eslint.config.mjs#L117) - sw.js and the Workers get browser and page globals.
 - [tests/live/serve.cjs:8](../../tests/live/serve.cjs#L8) - The page name and `/` rewrite are written in four places (build.cjs, sw.js, serve.cjs, render.yaml).
 

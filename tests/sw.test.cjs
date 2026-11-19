@@ -5,6 +5,14 @@ const fs = require('fs'),
   path = require('path'),
   vm = require('vm');
 const ROOT = path.join(__dirname, '..');
+const { loadUnit } = require('./load.cjs');
+loadUnit('chess-core.js');
+loadUnit('board-core.js');
+loadUnit('edit-core.js');
+loadUnit('vision-core.js');
+// the board reader's cache name, from its one home (build.cjs gives sw.js the same), and the one before it
+const VISION = window.VisionCore.CACHE,
+  OLD_VISION = VISION.replace(/\d+$/, (n) => n - 1);
 
 // Loads the built sw.js in a vm with a fake self, caches and fetch, and dispatches fetch events at it
 // status: what the network answers (200 unless given); fetched gets each URL, fetchOpts the options a URL was fetched with
@@ -77,9 +85,9 @@ function load({ status = 200 } = {}) {
 
 const WASM = 'https://site.test/vision/ort.wasm.min.mjs';
 
-test('a vision/ file kept in chess-vision-1 is answered from it, with the isolation headers', async () => {
+test(`a vision/ file kept in ${VISION} is answered from it, with the isolation headers`, async () => {
   const sw = load();
-  sw.store('chess-vision-1').set(WASM, new Response('kept', { status: 200 }));
+  sw.store(VISION).set(WASM, new Response('kept', { status: 200 }));
   const r = await sw.fetchEvent(WASM);
   assert.equal(await r.text(), 'kept');
   assert.equal(r.headers.get('Cross-Origin-Embedder-Policy'), 'require-corp');
@@ -110,7 +118,7 @@ test('another file next to the page still goes through cacheFirst, into the per-
 
 test('a HEAD for a kept vision/ file gets no body, the kept headers and the isolation headers', async () => {
   const sw = load();
-  sw.store('chess-vision-1').set(WASM, new Response('kept', { status: 200, headers: { 'Content-Length': '4' } }));
+  sw.store(VISION).set(WASM, new Response('kept', { status: 200, headers: { 'Content-Length': '4' } }));
   const r = await sw.fetchEvent(WASM, 'HEAD');
   assert.equal(r.body, null);
   assert.equal(r.headers.get('Content-Length'), '4');
@@ -121,9 +129,9 @@ test('a HEAD for a kept vision/ file gets no body, the kept headers and the isol
 
 test('activate deletes a board reader kept under an older name, and keeps the current one and Full Stockfish', async () => {
   const sw = load();
-  for (const n of ['chess-vision-0', 'chess-vision-1', 'stockfish-full-19', 'chess-replay-old']) sw.store(n);
+  for (const n of [OLD_VISION, VISION, 'stockfish-full-19', 'chess-replay-old']) sw.store(n);
   await sw.activate();
-  assert.deepEqual(Object.keys(sw.stores).sort(), ['chess-vision-1', 'stockfish-full-19']);
+  assert.deepEqual(Object.keys(sw.stores).sort(), [VISION, 'stockfish-full-19'].sort());
 });
 
 const PAGE = 'chess-game-video.html';
