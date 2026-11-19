@@ -266,8 +266,38 @@ function useEngineOpponent(board, onChange, sf) {
   React.useEffect(() => {
     setDown(null);
     if (!active) {
+      // a player's move that drew the game (stalemate, repetition…) gets no reply search: it is rated from the search before
+      // it, which the move stopped, against the draw's 0
+      const c = before.current,
+        drawn = P.drawnByYou(board),
+        n = moves.length,
+        list = moves.join(' ');
       before.current = null;
-      return;
+      if (!drawn || !c || c.key !== G.id + '|' + moves.slice(0, -1).join(' ')) return;
+      let live = true;
+      (async () => {
+        const bf = await c.promise;
+        const { board: b, onChange: set } = latest.current;
+        if (!live || !bf || !b.game || b.game.id !== G.id || b.steps.length !== n || B.ucis(b, n).join(' ') !== list)
+          return;
+        const j = n - 1,
+          played = b.steps[j],
+          best = window.AnalysisCore.bestOf(bf);
+        const cls =
+          best &&
+          P.rateMove({
+            before: bf,
+            after: { cp: 0, depth: bf.depth },
+            you: G.you,
+            playedIsBest: played.uci === best,
+            isCheckmate: false,
+          });
+        if (FLAGGED.includes(cls))
+          set(P.addCritique(b, { j, cls, best, text: P.critiqueText(played.pos, [], G.you, cls, false, drawn) }));
+      })();
+      return () => {
+        live = false;
+      };
     }
     const A = window.AnalysisCore,
       CC = window.ChessCore,
@@ -288,15 +318,16 @@ function useEngineOpponent(board, onChange, sf) {
       }
     };
     if (gameTurn(board) === you) {
-      before.current = {
-        key,
-        promise: (async () => {
-          const eng = await engine();
-          if (!live || !eng) return null;
-          handle = eng.search({ moves, fen, ...BEFORE_SEARCH, priority: 'own' });
-          return handle.promise;
-        })(),
+      const search = async () => {
+        const eng = await engine();
+        if (!live || !eng) return null;
+        handle = eng.search({ moves, fen, ...BEFORE_SEARCH, priority: 'own' });
+        return handle.promise;
       };
+      // again(): a new search in its place (Hint asked after one that found no move), stopped by the move as the first is
+      const c = { key, promise: search() };
+      c.again = () => (c.promise = search());
+      before.current = c;
       // the player's move (or a takeback) stops it; its last complete depth is what the move is rated against
       return () => {
         live = false;
@@ -364,11 +395,17 @@ function useEngineOpponent(board, onChange, sf) {
     // eslint-disable-next-line react-hooks/exhaustive-deps -- only a new game or move list (key) or Try again searches again; later reads go through latest
   }, [key, tries]);
   // hint(): Stockfish's best move in the position the player is to move in, from that "before" search (it ends within
-  // BEFORE_SEARCH's 5 s), or null when there is none (not the player's turn, Stockfish down)
+  // BEFORE_SEARCH's 5 s), or from a new one when it found none (Stockfish was down: Ask again asks afresh), or null when
+  // there is none (not the player's turn, Stockfish down)
   const hint = async () => {
     const c = before.current;
     if (!active || !c || c.key !== key) return null;
-    return window.AnalysisCore.bestOf(await c.promise);
+    const best = window.AnalysisCore.bestOf(await c.promise);
+    if (best || before.current !== c) return best;
+    const again = window.AnalysisCore.bestOf(await c.again());
+    // Stockfish answered after all: its "can't run" note goes
+    if (again && before.current === c) setDown(null);
+    return again;
   };
   return { down: active ? down : null, retry: () => setTries((n) => n + 1), hint };
 }
@@ -819,7 +856,21 @@ function FreeBoard({ board, onChange, tw, setTweak, onLichess, sf, nav, orient, 
       steps.slice(0, upto + 1).map((s) => s.san),
       pos,
     );
-  const { tb, dead, fifty, fen } = useBoardFacts({ pos, fen: boardFen, tbOn: !G, tablebase: tw.tablebase !== false });
+  // MoveList draws a game at time T: one second a move, with T just short of the next, so the move shown is current and later ones dim
+  const MV = React.useMemo(
+    () => ({ ply0: board.start.ply0, plies: steps.map((s) => ({ san: s.san, cls: 'none', pos: s.pos })) }),
+    [steps, board.start.ply0],
+  );
+  // the move after which the position is first dead, marked with a pill on the Moves list; as in the
+  // replay, a position after it is known dead without asking (dead stays dead)
+  const deadAt = useFirstDead(MV);
+  const { tb, dead, fifty, fen } = useBoardFacts({
+    pos,
+    fen: boardFen,
+    tbOn: !G,
+    tablebase: tw.tablebase !== false,
+    known: deadAt != null && upto >= deadAt,
+  });
   const tbv = tbBar(tb),
     deadv = G ? null : deadBar(dead);
   // Lichess's opening explorer (Settings › Online), asked where the tablebase isn't, in place of the local book
@@ -830,8 +881,11 @@ function FreeBoard({ board, onChange, tw, setTweak, onLichess, sf, nav, orient, 
   const [, tick] = React.useState(0);
   const latest = React.useRef(null);
   latest.current = { board, onChange };
-  const deadW = dead && dead.w,
-    deadB = dead && dead.b;
+  // the game's last position decides its end (PlayCore.recheck), not the one stepped back to
+  const lastDead = useDead(behind ? steps[last].pos : null),
+    deadNow = behind ? lastDead : dead;
+  const deadW = deadNow && deadNow.w,
+    deadB = deadNow && deadNow.b;
   React.useEffect(() => {
     const { board: b, onChange: set } = latest.current,
       r = P.recheck(b, Date.now());
@@ -901,13 +955,6 @@ function FreeBoard({ board, onChange, tw, setTweak, onLichess, sf, nav, orient, 
     e.preventDefault();
     goIf(to);
   });
-  // MoveList draws a game at time T: one second a move, with T just short of the next, so the move shown is current and later ones dim
-  const MV = React.useMemo(
-    () => ({ ply0: board.start.ply0, plies: steps.map((s) => ({ san: s.san, cls: 'none', pos: s.pos })) }),
-    [steps, board.start.ply0],
-  );
-  // the move after which the position is first dead, marked with a pill on the Moves list
-  const deadAt = useFirstDead(MV);
   // a dead position's block, else the fifty-move rule's for the position on the board
   const rule = deadWords(dead) || fifty;
   // the result after the last move: a game's, else the last position's own end (checkmate, stalemate, a dead position)

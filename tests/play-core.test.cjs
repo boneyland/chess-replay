@@ -541,6 +541,25 @@ test('resign: against Stockfish the player can resign while it is to move', () =
   assert.equal(P.resign(g, 1000, 'w').game.clock.left.b, 299000, 'the running clock is charged');
   assert.deepEqual(P.resign(g, 1000).game.result.side, 'b', 'the side to move by default');
 });
+test("drawnByYou: a draw the player's own move made against Stockfish, said by critiqueText", () => {
+  const fen = '7k/8/5K2/8/8/8/8/6Q1 w - - 0 1';
+  const stale = sfGame('w', null, [['g1g6', 0]], fen);
+  assert.equal(stale.game.result.reason, 'stalemate');
+  assert.equal(P.drawnByYou(stale), 'stalemate');
+  assert.equal(P.critiqueText(B.pos(stale), [], 'w', 'blunder', false, 'stalemate'), 'that stalemates');
+  assert.equal(P.drawnByYou(sfGame('b', null, [['g1g6', 0]], fen)), null, "Stockfish's move");
+  assert.equal(P.drawnByYou(sfGame('w', null, [['g1g7', 0]], fen)), null, 'a checkmate');
+  assert.equal(P.drawnByYou(sfGame('w', null, [['g1g2', 0]], fen)), null, 'going on');
+  assert.equal(P.drawnByYou(P.resign(sfGame('w', null, [['g1g2', 0]], fen), 0, 'b')), null, 'a resignation');
+  const human = game(null, [['g1g6', 0]], fen);
+  assert.equal(human.game.result.reason, 'stalemate');
+  assert.equal(P.drawnByYou(human), null, 'a game between two players');
+});
+test("critiqueText: a Chess960 castle in the reply line (king takes rook) isn't a capture of its own rook", () => {
+  const pos = CC.parseFen('rk5r/p7/8/8/8/8/8/RK5R b KQkq - 0 1').pos;
+  assert.equal(P.critiqueText(pos, ['a7a6', 'b1a1'], 'w', 'mistake', false), 'that gives Stockfish the edge');
+  assert.equal(P.critiqueText(pos, ['b8a8'], 'w', 'mistake', false), 'that gives Stockfish the edge', "nor Black's");
+});
 test('critiqueText: a piece dropped in the reply line, a mate allowed, else a line for the class', () => {
   const after = (fen, u) => CC.applyUci(CC.parseFen(fen).pos, u).pos;
   // 1. e4 e5 2. ... d6, and Qg4?? hangs the queen to ...Bxg4
