@@ -575,11 +575,13 @@ function GameApp() {
     },
     [gameKey],
   );
-  // and its error and note were about the old game
+  // and its error and note were about the old game (not the note of Queen answers dropped with the new game's PGN)
   const { setErr: setQueenErr, setMsg: setQueenMsg } = Q;
+  const queenNoteFor = React.useRef(null); // the PGN those answers came with
   React.useEffect(() => {
     setQueenErr('');
-    setQueenMsg('');
+    if (queenNoteFor.current !== gameSeq.current.pgn) setQueenMsg('');
+    queenNoteFor.current = null;
   }, [gameKey, setQueenErr, setQueenMsg]);
 
   const newBoard = () => {
@@ -993,6 +995,7 @@ function GameApp() {
       delete batch.queenName;
       if (answers) {
         Q.merge(answers);
+        queenNoteFor.current = batch.pgn || null;
         setErr('');
         setQueenOpen(true);
         setPanel(false);
