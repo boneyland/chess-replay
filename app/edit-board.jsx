@@ -151,7 +151,8 @@ function useEditInput({ setup, onChange }) {
   const [cursor, setCursor] = React.useState(36); // the keyboard's square (a board index), e4 to begin with
   const [carry, setCarry] = React.useState(null); // the square of the piece picked up by keyboard, to put down
   const carrying = carry != null && setup.b[carry] ? carry : null; // (gone if the piece was moved some other way)
-  // { piece, from (a square, or null from the tray), x, y, x0, y0, ox, oy (grabOffset), moved }
+  // { piece, from (a square, or null from the tray), x, y, x0, y0, ox, oy (grabOffset), moved, id (the pointer dragging
+  // it: another finger's moves and lifts are not this drag's, nor does a second finger's press take it over) }
   const [drag, setDrag] = React.useState(null);
   const boardEl = React.useRef(null),
     dragged = React.useRef(false);
@@ -171,17 +172,20 @@ function useEditInput({ setup, onChange }) {
       y0: p.y,
       ...(from != null ? grabOffset(from, p) : null),
       moved: false,
+      id: e.pointerId,
     });
   };
+  const ours = (e) => drag && e.pointerId === drag.id;
   const moved = dragMoved;
   const follow = (e) => {
-    if (!drag) return;
+    if (!ours(e)) return;
     const p = at(e);
     setDrag((d) => d && { ...d, x: p.x, y: p.y, moved: moved(d, p) });
   };
   const E = window.EditCore;
   const handlers = {
     onDown: (e) => {
+      if (!e.isPrimary) return;
       const p = at(e);
       if (p.sq < 0) return;
       if (held) {
@@ -192,24 +196,25 @@ function useEditInput({ setup, onChange }) {
     },
     onMove: follow,
     onUp: (e) => {
-      if (!drag) return;
+      if (!ours(e)) return;
       const d = drag,
         p = liftPoint(e, d, at, false);
       setDrag(null);
       const to = dropSquare(d, p, false);
       if (moved(d, p)) onChange(to < 0 ? E.put(setup, d.from, null) : E.move(setup, d.from, to));
     },
-    onCancel: () => setDrag(null),
+    onCancel: (e) => setDrag((d) => (d && e.pointerId === d.id ? null : d)),
   };
   // a tray press that doesn't move is a click (as Enter or Space on the button is): it holds the piece, or lets it go
   const trayHandlers = (piece) => ({
     onPointerDown: (e) => {
+      if (!e.isPrimary) return;
       dragged.current = false;
       start(e, piece, null);
     },
     onPointerMove: follow,
     onPointerUp: (e) => {
-      if (!drag) return;
+      if (!ours(e)) return;
       const d = drag,
         p = liftPoint(e, d, at, false);
       setDrag(null);
@@ -217,7 +222,7 @@ function useEditInput({ setup, onChange }) {
       dragged.current = true;
       if (p.sq >= 0) onChange(E.put(setup, p.sq, piece));
     },
-    onPointerCancel: () => setDrag(null),
+    onPointerCancel: (e) => setDrag((d) => (d && e.pointerId === d.id ? null : d)),
     // picked by keyboard (a click with no pointer: detail 0), the board takes the focus to place it
     onClick: (e) => {
       if (dragged.current) {
@@ -363,7 +368,8 @@ function EditBoard({
   const trayHandlers = input.trayHandlers,
     H = input.handlers;
   // the keyboard's square shows while the board has the focus from the keyboard
-  const [kbFocus, setKbFocus] = React.useState(false);
+  const kf = useKbFocus(),
+    kbFocus = kf.kb;
   const ring = (i, color, inset) => {
     const [x, y] = idxXY(i);
     return (
@@ -443,10 +449,19 @@ function EditBoard({
         <div
           ref={input.boardEl}
           data-no-drag-scroll
-          onPointerDown={H.onDown}
+          onPointerDown={(e) => {
+            kf.press();
+            H.onDown(e);
+          }}
           onPointerMove={H.onMove}
-          onPointerUp={H.onUp}
-          onPointerCancel={H.onCancel}
+          onPointerUp={(e) => {
+            kf.press();
+            H.onUp(e);
+          }}
+          onPointerCancel={(e) => {
+            kf.press();
+            H.onCancel(e);
+          }}
           onDragStart={(e) => e.preventDefault()}
           tabIndex={0}
           role="application"
@@ -454,10 +469,10 @@ function EditBoard({
           aria-describedby="edit-board-keys"
           onKeyDown={(e) => {
             input.onKeyDown(e);
-            if (e.defaultPrevented) setKbFocus(true);
+            if (e.defaultPrevented) kf.setKb(true);
           }}
-          onFocus={(e) => setKbFocus(e.currentTarget.matches(':focus-visible'))}
-          onBlur={() => setKbFocus(false)}
+          onFocus={kf.focus}
+          onBlur={kf.blur}
           title={held ? 'Tap squares to place the piece' : 'Drag a piece to move it, or off the board to take it away'}
           style={{
             ...NO_SELECT,

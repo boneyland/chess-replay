@@ -3457,6 +3457,64 @@ for (const name of BROWSERS)
         assert.deepEqual(ph.errors, []);
         await ph.ctx.close();
       });
+      // a second finger while one holds a piece is not the board's: on the free board it plays nothing (it once played the
+      // held piece's move to the square it touched), in Edit position it doesn't take the drag over. Touches by CDP, so
+      // Chromium only (Playwright's touchscreen has one finger)
+      if (name === 'chromium')
+        await t.test('phone: a second finger on the board plays and moves nothing', async () => {
+          const ph = await open(browser, { width: 390, height: 844 }, phone({}));
+          const p = ph.page;
+          await p.goto(base, { waitUntil: 'load' });
+          await loadedOn(p);
+          const cdp = await ph.ctx.newCDPSession(p);
+          const touch = (type, pts) =>
+            cdp.send('Input.dispatchTouchEvent', { type, touchPoints: pts.map(([q, id]) => ({ x: q.x, y: q.y, id })) });
+          await p.getByRole('button', { name: 'Menu', exact: true }).click();
+          await p.getByRole('button', { name: 'Starting position' }).click();
+          const label = p.locator('.plabel');
+          await assert.doesNotReject(label.filter({ hasText: /^Start$/ }).waitFor({ timeout: 5000 }));
+          let b = await boardBox(p);
+          // the first finger holds the e-pawn (selected, its squares shown); the second taps e4
+          await touch('touchStart', [[square(b, 'e2'), 0]]);
+          await touch('touchStart', [
+            [square(b, 'e2'), 0],
+            [square(b, 'e4'), 1],
+          ]);
+          await touch('touchEnd', [[square(b, 'e2'), 0]]);
+          await touch('touchEnd', []);
+          await p.waitForTimeout(500);
+          assert.equal(await label.filter({ hasText: /e4/ }).count(), 0, 'no move played');
+          assert.equal(await label.filter({ hasText: /^Start$/ }).count(), 1, 'still at the start');
+          // Edit position: the first finger drags the e-pawn to e4 while a second presses the d-pawn and moves it to d4
+          await p.getByRole('button', { name: 'Menu', exact: true }).click();
+          await p.getByRole('button', { name: 'Edit position' }).click();
+          const field = p.getByRole('textbox', { name: 'FEN' });
+          await assert.doesNotReject(field.waitFor({ timeout: 5000 }));
+          await p.getByRole('button', { name: 'Start', exact: true }).click();
+          b = await editBox(p);
+          const at = (from, to, k) => ({
+            x: from.x + ((to.x - from.x) * k) / 6,
+            y: from.y + ((to.y - from.y) * k) / 6,
+          });
+          const [e2, e4, d2, d4] = ['e2', 'e4', 'd2', 'd4'].map((q) => square(b, q));
+          await touch('touchStart', [[e2, 0]]);
+          await touch('touchStart', [
+            [e2, 0],
+            [d2, 1],
+          ]);
+          for (let k = 1; k <= 6; k++)
+            await touch('touchMove', [
+              [at(e2, e4, k), 0],
+              [at(d2, d4, k), 1],
+            ]);
+          await touch('touchEnd', [[e4, 0]]);
+          await touch('touchEnd', []);
+          await p.waitForTimeout(300);
+          const fen = (await field.inputValue()).split(' ')[0];
+          assert.equal(fen, 'rnbqkbnr/pppppppp/8/8/4P3/8/PPPP1PPP/RNBQKBNR', 'the e-pawn on e4, the d-pawn home');
+          assert.deepEqual(ph.errors, []);
+          await ph.ctx.close();
+        });
       // review fixes: Esc that closes Settings or the Play/Explore menu leaves the editor alone; an analysis finishing
       // meanwhile doesn't close it; a Stockfish reply made while the Leave dialog was up survives Leave and Cancel
       await t.test('desktop: Edit position survives Esc on an open menu and an analysis finishing', async () => {

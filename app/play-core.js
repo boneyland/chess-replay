@@ -434,12 +434,30 @@
     return withGame(b, { hints: [...hintsOf(b), { j, fen: positionKey(j ? b.steps[j - 1].pos : b.start.pos), best }] });
   }
 
+  // A draw the player's own move made against Stockfish (the result's reason), or null: no search follows it, so the move
+  // is rated from the search before it and the draw's eval (0). Checkmate isn't one: the player won
+  const DRAWN_BY = {
+    stalemate: 'that stalemates',
+    material: 'that leaves too little material to mate',
+    dead: 'that leaves no way to mate',
+    repetition: 'that repeats the position, a draw',
+    fivefold: 'that repeats the position, a draw',
+    fifty: 'that draws by the fifty-move rule',
+    seventyfive: 'that draws by the 75-move rule',
+  };
+  function drawnByYou(b) {
+    if (!isSf(b) || !b.game.result || !played(b)) return null;
+    const why = b.game.result.reason;
+    return DRAWN_BY[why] && moverOf(b, b.steps.length - 1) === b.game.you ? why : null;
+  }
+
   // A short line on why the player's move was bad, without the better move: pos the position after it, pv Stockfish's reply
-  // line (UCI). When the line's first four plies win the player's material net, the most valuable piece taken is named;
-  // else a mate against the player; else a line for the class
+  // line (UCI). A move that drew the game (drawn, drawnByYou's reason) says how; when the line's first four plies win the
+  // player's material net, the most valuable piece taken is named; else a mate against the player; else a line for the class
   const VALUE = { p: 1, n: 3, b: 3, r: 5, q: 9 };
   const PIECE = { p: 'a pawn', n: 'the knight', b: 'the bishop', r: 'the rook', q: 'the queen' };
-  function critiqueText(pos, pv, you, cls, mateAgainst) {
+  function critiqueText(pos, pv, you, cls, mateAgainst, drawn) {
+    if (drawn && DRAWN_BY[drawn]) return DRAWN_BY[drawn];
     let p = pos,
       lost = 0,
       won = 0,
@@ -451,9 +469,16 @@
       const from = CC().sqIndex(m[1]),
         to = CC().sqIndex(m[2]),
         mover = p.b[from];
-      // en passant: a pawn moving sideways onto an empty square
-      const taken =
-        p.b[to] || (mover.toLowerCase() === 'p' && from % 8 !== to % 8 ? (p.turn === 'w' ? 'p' : 'P') : null);
+      // en passant: a pawn moving sideways onto an empty square; a Chess960 castle (king takes its own rook) takes nothing
+      const taken = p.b[to]
+        ? colorOf(p.b[to]) === colorOf(mover)
+          ? null
+          : p.b[to]
+        : mover.toLowerCase() === 'p' && from % 8 !== to % 8
+          ? p.turn === 'w'
+            ? 'p'
+            : 'P'
+          : null;
       if (taken) {
         const t = taken.toLowerCase(),
           v = VALUE[t] || 0;
@@ -764,6 +789,7 @@
     rateMove,
     addCritique,
     critiqueText,
+    drawnByYou,
     HINTS,
     hintsLeft,
     hintFor,

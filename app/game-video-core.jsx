@@ -323,7 +323,8 @@ function BoardGroup({ children, overlay }) {
       timer = setTimeout(settle, SETTLE_MS);
     };
     // a finger by its touch events (a touch that turns into a scroll fires pointercancel while the finger is still
-    // down), a mouse button by its pointer events
+    // down), the main mouse button by its pointer events (the right one opens a menu that can swallow its release); a
+    // release lost all the same shows as a move with no button down
     let touches = 0,
       button = false;
     const hold = () => {
@@ -349,8 +350,13 @@ function BoardGroup({ children, overlay }) {
       hold();
     };
     const mouseDown = (e) => {
-      if (e.pointerType === 'touch') return;
+      if (e.pointerType === 'touch' || e.button !== 0) return;
       button = true;
+      hold();
+    };
+    const mouseMove = (e) => {
+      if (!button || e.pointerType === 'touch' || e.buttons & 1) return;
+      button = false;
       hold();
     };
     const mouseUp = (e) => {
@@ -364,6 +370,7 @@ function BoardGroup({ children, overlay }) {
     area.addEventListener('pointerdown', mouseDown, { passive: true });
     area.addEventListener('touchstart', touchDown, { passive: true });
     window.addEventListener('pointerup', mouseUp);
+    area.addEventListener('pointermove', mouseMove, { passive: true });
     window.addEventListener('touchend', touchUp);
     window.addEventListener('touchcancel', touchUp);
     // a wheel turned during the glide takes over too
@@ -378,6 +385,7 @@ function BoardGroup({ children, overlay }) {
       area.removeEventListener('pointerdown', mouseDown);
       area.removeEventListener('touchstart', touchDown);
       window.removeEventListener('pointerup', mouseUp);
+      area.removeEventListener('pointermove', mouseMove);
       window.removeEventListener('touchend', touchUp);
       window.removeEventListener('touchcancel', touchUp);
     };
@@ -1877,6 +1885,32 @@ function CastleButtons({ pos, onMove, style }) {
     </div>
   );
 }
+// Whether a board's focus is the keyboard's (Tab, the castle question answered by key, a tray piece picked by key) or a
+// press's: a focus within PRESS_FOCUS_MS of a pointer going down or up on the board is the press's. Up counts too: a tap
+// on a touch screen focuses at the compatibility mousedown, after the finger lifts, so a tap held a while would otherwise
+// read as a key's. A time, not a flag, so a press that gives no focus can't leave it stale; not :focus-visible, which
+// Firefox didn't always match on a Tab; forgotten on blur, so a Tab away and back soon after a press is the keyboard's.
+// One rule for both boards (BoardTouch, EditBoard). The element takes press() on
+// pointer down, up and cancel, focus() and blur()
+const PRESS_FOCUS_MS = 300;
+function useKbFocus() {
+  const [kb, setKb] = React.useState(false);
+  const pressedAt = React.useRef(-1e9);
+  return {
+    kb,
+    setKb,
+    press: () => {
+      pressedAt.current = performance.now();
+      setKb(false);
+    },
+    focus: () => setKb(performance.now() - pressedAt.current > PRESS_FOCUS_MS),
+    blur: () => {
+      setKb(false);
+      pressedAt.current = -1e9; // a press while focused gave no focus: the next focus is a new one
+    },
+  };
+}
+
 // keys: useBoardInput's keyboard (null: the board takes no keys, e.g. while the video plays or the free board is still).
 // The board is then a Tab stop that acts on keys only while it has the keyboard's focus (focused by Tab or the castle
 // question, not by a press, so a press on a piece leaves Space and the arrows to the page's shortcuts), with the cursor outlined
@@ -1884,10 +1918,8 @@ function BoardTouch({ pos, targets, drag, promo, castle, onCastle, onDown, onMov
   const dragged = drag && drag.moved ? drag.piece || pos.b[drag.from] : null,
     own = React.useRef(null),
     el = keys ? keys.boardEl : own;
-  const [kbFocus, setKbFocus] = React.useState(false);
-  // when a press last landed on the board: a focus right after it is the press's, not the keyboard's (a time, not a
-  // flag, so a press that gives no focus can't leave it stale; Firefox didn't always match :focus-visible on a Tab)
-  const pressedAt = React.useRef(-1e9);
+  const kf = useKbFocus(),
+    kbFocus = kf.kb;
   const ring = keys && kbFocus;
   return (
     <div
@@ -1899,20 +1931,22 @@ function BoardTouch({ pos, targets, drag, promo, castle, onCastle, onDown, onMov
         'aria-label': 'Board',
         'aria-describedby': 'board-keys',
         onKeyDown: (e) => kbFocus && keys.onKeyDown(e),
-        onFocus: () => setKbFocus(performance.now() - pressedAt.current > 50), // a press focuses within a few ms
-        onBlur: () => {
-          setKbFocus(false);
-          pressedAt.current = -1e9; // a press while focused gave no focus: the next focus is a new one
-        },
+        onFocus: kf.focus,
+        onBlur: kf.blur,
       })}
       onPointerDown={(e) => {
-        pressedAt.current = performance.now();
-        setKbFocus(false);
+        kf.press();
         onDown(e);
       }}
       onPointerMove={onMove}
-      onPointerUp={onUp}
-      onPointerCancel={onCancel}
+      onPointerUp={(e) => {
+        kf.press();
+        onUp(e);
+      }}
+      onPointerCancel={(e) => {
+        kf.press();
+        onCancel(e);
+      }}
       onDragStart={(e) => e.preventDefault()}
       title="Drag a piece to try your own move"
       style={{
@@ -3837,7 +3871,7 @@ function useBoardInput({ pos, onPick, onMiss, onMove }) {
   const CC = window.ChessCore;
   const [sel, setSel] = React.useState(null); // selected square (0 = a8)
   // { from, x, y, x0, y0, ox, oy (grabOffset), moved, again (pressed on the selected piece), back (let go: springing back to from), piece (the
-  // one springing back) } in board pixels. A drop that plays nothing keeps the drag, back set, until its piece is home
+  // one springing back), id (the pointer dragging it: another finger's moves and lifts are not this drag's) } in board pixels. A drop that plays nothing keeps the drag, back set, until its piece is home
   // (handlers.onBack); its square stays hidden till then. A new press starts a new drag at once
   const [drag, setDrag] = React.useState(null);
   const [promo, setPromo] = React.useState(null); // { from, to, white }: a pawn move waiting for its piece
@@ -3900,8 +3934,11 @@ function useBoardInput({ pos, onPick, onMiss, onMove }) {
   };
   const boardXY = (e) => boardPoint(e.currentTarget, e, true),
     moved = dragMoved;
+  const ours = (e) => drag && !drag.back && e.pointerId === drag.id;
   const handlers = {
     onDown: (e) => {
+      // only the first finger on the screen (or a mouse or pen): a second one, while a piece is held, plays nothing
+      if (!e.isPrimary) return;
       const p = boardXY(e);
       // the castle question open: a press anywhere but its buttons (which take their own presses) lets it go
       if (castle) {
@@ -3937,6 +3974,7 @@ function useBoardInput({ pos, onPick, onMiss, onMove }) {
           ...grabOffset(p.sq, p),
           moved: false,
           again: sel === p.sq,
+          id: e.pointerId,
         });
       } else {
         setSel(null);
@@ -3944,12 +3982,12 @@ function useBoardInput({ pos, onPick, onMiss, onMove }) {
       }
     },
     onMove: (e) => {
-      if (!drag || drag.back) return;
+      if (!ours(e)) return;
       const p = boardXY(e);
       setDrag((d) => d && { ...d, x: p.x, y: p.y, moved: moved(d, p) });
     },
     onUp: (e) => {
-      if (!drag || drag.back) return;
+      if (!ours(e)) return;
       const d = drag,
         p = liftPoint(e, d, boardXY, true);
       setDrag(null);
@@ -3970,7 +4008,7 @@ function useBoardInput({ pos, onPick, onMiss, onMove }) {
         else setDrag({ ...d, x: p.x, y: p.y, moved: true, back: true, piece: pos.b[d.from] });
       }
     },
-    onCancel: () => setDrag((d) => (d && d.back ? d : null)),
+    onCancel: (e) => setDrag((d) => (d && !d.back && e.pointerId === d.id ? null : d)),
     onBack: () => {
       if (!drag || !drag.back) return;
       setDrag(null);
