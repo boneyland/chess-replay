@@ -158,11 +158,18 @@ function useExportSettings({
   // the game and timing the export started from: the stage keeps showing them until it ends (GameApp), as its stretch,
   // frame count and soundtrack were worked out from them, though an analysis or a Queen answer that lands meanwhile
   // changes MV and TM (new marks and reading times move every later move)
-  const held = React.useRef(null);
+  const held = React.useRef(null),
+    starting = React.useRef(false);
+  // a second Export while the board's picture renders (before the export's own state says it's busy) starts nothing
   const run = () => {
+    if (starting.current || video.busy) return Promise.resolve();
+    starting.current = true;
     held.current = { MV, TM };
     return window.BoardThemes.render(boardTheme.id, boardAdj)
       .catch(() => null)
+      .finally(() => {
+        starting.current = false;
+      })
       .then(() =>
         video.run({
           start: clipT.start,
@@ -208,11 +215,11 @@ function useExportSettings({
 }
 
 // fen: the position's, as it was when the dialog opened; board: a free board (its moves are the PGN), else the loaded
-// game's annotated and raw PGN. pgn: { board, saveBoard, annotated, saveAnnotated, raw, saveRaw, saveAnalysis (or null),
-// notes (or null: the game has none), saveNotes },
-// each text a function. x: useExportSettings. onFail(what) is the copy button's onFail; onReplay replays a board's moves
+// game's annotated and raw PGN; editing: Edit position covers the loaded game, so it can't be exported.
+// pgn: { board, saveBoard, annotated, saveAnnotated, raw, saveRaw, saveAnalysis (or null), notes (or null: the game has
+// none), saveNotes }, each text a function. x: useExportSettings. onFail(what) is the copy button's onFail; onReplay replays a board's moves
 // as a game; onExport runs the export
-function ShareDialog({ fen, board, pgn, x, setTweak, onFail, onReplay, onExport, onClose }) {
+function ShareDialog({ fen, board, editing, pgn, x, setTweak, onFail, onReplay, onExport, onClose }) {
   return (
     <DialogBox label="Share and export" part="share" className="xfer-box" onClose={onClose}>
       <TweakSection label="FEN">
@@ -266,7 +273,13 @@ function ShareDialog({ fen, board, pgn, x, setTweak, onFail, onReplay, onExport,
           <TweakButton secondary label="Download analysis" onClick={pgn.saveAnalysis} />
         </TweakSection>
       )}
-      {!board && !x.formats.length ? (
+      {!board && editing ? (
+        <TweakSection label="Export video">
+          <div className="twk-note">
+            Edit position is open over the game: close it (Done or Cancel) to export the game.
+          </div>
+        </TweakSection>
+      ) : !board && !x.formats.length ? (
         <TweakSection label="Export video">
           <div className="twk-note twk-err">{EXPORT_NONE}</div>
         </TweakSection>

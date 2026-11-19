@@ -49,9 +49,16 @@ const MAX_FILE_BYTES = 50e6;
 // files leave the window, are dropped or the drag ends, drop(e) on a drop. No timer: Firefox fires dragover only while the
 // pointer moves, so a file held still would time out. Leaving is counted (dragenter up, dragleave down: the next element's
 // enter comes before the last one's leave); a mouse move with no dragover just before it means a drag that ended unseen.
-// skip(): another listener takes the drag. Returns the cleanup
-function watchFileDrag({ over, off, drop, skip = () => false }) {
+// skip(): another listener takes the drag. block(): the page takes no files now (an export, a dialog): the drag is
+// still kept from the browser, which would otherwise open the file in place of the page, but shows and loads nothing.
+// Returns the cleanup
+function watchFileDrag({ over, off, drop, skip = () => false, block = () => false }) {
   const hasFiles = (e) => e.dataTransfer && Array.from(e.dataTransfer.types || []).includes('Files');
+  const refuse = (e) => {
+    e.preventDefault();
+    e.dataTransfer.dropEffect = 'none';
+    stop();
+  };
   let n = 0,
     on = false,
     last = 0;
@@ -65,11 +72,13 @@ function watchFileDrag({ over, off, drop, skip = () => false }) {
   const L = {
     dragenter: (e) => {
       if (!hasFiles(e) || skip()) return;
+      if (block()) return refuse(e);
       e.preventDefault();
       n++;
     },
     dragover: (e) => {
       if (!hasFiles(e) || skip()) return;
+      if (block()) return refuse(e);
       e.preventDefault();
       n = Math.max(n, 1);
       on = true;
@@ -83,6 +92,7 @@ function watchFileDrag({ over, off, drop, skip = () => false }) {
     },
     drop: (e) => {
       if (!hasFiles(e) || skip()) return;
+      if (block()) return refuse(e);
       e.preventDefault();
       stop();
       drop(e);
@@ -476,8 +486,9 @@ function GameApp() {
   guardRef.current = guard;
   const hf = useHfAuth();
   const Q = useQueen(M, hf);
-  // Ask Queen reads standard chess only: not on a free board, nor in a Chess960 game (its start, never position 518)
-  const askable = !board && !window.ChessCore.is960(M.start.pos);
+  // Ask Queen reads standard chess only: not on a free board, nor in a Chess960 game (its start, never position 518);
+  // nor while Edit position covers the game (its arrows would have no board)
+  const askable = !board && !editing && !window.ChessCore.is960(M.start.pos);
   // the engine drop-down: Full runs once its download is kept; until then Lite does
   const full = useFullEngine();
   const sfKind = !SF_SIMD ? 'asm' : t.sfEngine === 'Full' && full.state === 'ready' ? 'full' : 'lite';
@@ -1044,13 +1055,16 @@ function GameApp() {
   const loadRef = React.useRef(loadFiles);
   loadRef.current = loadFiles; // the listeners below are registered once and always load with the current files
   const visionOpen = React.useRef(false),
-    importRef = React.useRef(false);
+    importRef = React.useRef(false),
+    exportRef = React.useRef(false);
   visionOpen.current = !!vision;
   importRef.current = importOpen;
   React.useEffect(
     () =>
       watchFileDrag({
         skip: () => visionOpen.current,
+        // no files during an export (its overlay, failed or not), nor under a dialog but Import game, which asks for them
+        block: () => exportRef.current || (!importRef.current && !!document.querySelector('[aria-modal="true"]')),
         over: (e) => {
           e.dataTransfer.dropEffect = 'copy';
           setDrag(true);
@@ -1177,6 +1191,7 @@ function GameApp() {
       soundVolume,
     }),
     video = X.video;
+  exportRef.current = !!video.state; // file drops wait for the export (watchFileDrag's block)
   // while exporting, the stage shows the game and timing the export started from (useExportSettings' held), not what
   // an analysis or a Queen answer landing meanwhile makes of them, which would shift every later frame
   const shown = (video.busy && X.held.current) || { MV, TM };
@@ -1188,7 +1203,9 @@ function GameApp() {
     resetPreview && !video.busy ? window.BoardThemes.adjust() : boardAdj,
     video.busy,
   );
+  // never while Edit position covers the game: the export draws the stage, which is then the editor
   const exportVideo = () => {
+    if (editing) return;
     setShareOpen(null);
     setPanel(false);
     setQueenOpen(false);
@@ -1725,6 +1742,7 @@ function GameApp() {
         <ShareDialog
           fen={shareOpen.fen}
           board={board}
+          editing={!!editing}
           x={X}
           setTweak={setTweak}
           onFail={copyFailed}

@@ -2063,6 +2063,97 @@ for (const name of BROWSERS)
           await fx.ctx.close();
         },
       );
+      // the export's overlay is modal: the page behind it is inert (a Tab or a key there once put frames from the wrong
+      // moment into the file), the focus stays in it, a file dropped meanwhile is refused (and kept from the browser), and
+      // once it closes the focus is back on the button that opened the export
+      await t.test(
+        'desktop: during an export the page behind takes no Tab, keys or files',
+        { timeout: 180000 },
+        async () => {
+          const fx = await open(browser, { width: 1440, height: 900 }, { newViewer: true });
+          const p = fx.page;
+          await p.goto(base, { waitUntil: 'load' });
+          await loadedOn(p);
+          const dialog = await openShare(p);
+          await p.getByRole('radio', { name: 'WebP' }).click();
+          await p
+            .locator('#tw-webp-width')
+            .selectOption(await p.locator('#tw-webp-width option', { hasText: 'half' }).getAttribute('value'));
+          await dialog.getByRole('button', { name: /^Export animated WebP/ }).click();
+          const overlay = p.getByRole('dialog', { name: 'Exporting' });
+          await p.waitForFunction(
+            () =>
+              /Frame [1-9]\d* of/.test(
+                document.querySelector('.part-exporting-dialog .export-line')?.textContent || '',
+              ),
+            null,
+            { timeout: 60000, polling: 50 },
+          );
+          const inOverlay = () =>
+            p.evaluate(() => {
+              const a = document.activeElement;
+              return !!document.querySelector('.part-exporting-dialog')?.contains(a);
+            });
+          assert.ok(await inOverlay(), 'the focus is in the overlay');
+          assert.ok(
+            await p.evaluate(() => !!document.querySelector('.stage-area').closest('[inert]')),
+            'the page behind is inert',
+          );
+          for (let i = 0; i < 4; i++) {
+            await p.keyboard.press('Tab');
+            assert.ok(await inOverlay(), `Tab ${i + 1} stays in the overlay`);
+          }
+          // a PGN dropped on the page: refused (the browser kept from it), no drop overlay, nothing loaded
+          const dropped = await p.evaluate(() => {
+            const dt = new DataTransfer();
+            dt.items.add(new File(['[White "Dropped"]\n\n1. e4 e5 *'], 'dropped.pgn', { type: 'text/plain' }));
+            const fire = (type) => {
+              const e = new DragEvent(type, { dataTransfer: dt, bubbles: true, cancelable: true });
+              document.body.dispatchEvent(e);
+              return e.defaultPrevented;
+            };
+            const r = [fire('dragenter'), fire('dragover')];
+            r.push(!!document.querySelector('.drop'));
+            r.push(fire('drop'));
+            return r;
+          });
+          assert.deepEqual(dropped, [true, true, false, true], 'kept from the browser, with no drop overlay');
+          // Cancel, by keyboard: the export ends, nothing is inert, and the focus is back on Share and export
+          await overlay.getByRole('button', { name: 'Cancel' }).focus();
+          await p.keyboard.press('Enter');
+          await assert.doesNotReject(overlay.waitFor({ state: 'detached', timeout: 10000 }));
+          assert.equal(await p.locator('[inert]').count(), 0, 'nothing left inert');
+          assert.equal(
+            await p.evaluate(() => document.activeElement && document.activeElement.getAttribute('aria-label')),
+            'Share and export',
+            'the focus is back on the button that opened it',
+          );
+          await p.waitForTimeout(500);
+          assert.doesNotMatch(await p.locator('.stage-frame').innerText(), /Dropped/, 'the dropped file never loaded');
+          assert.deepEqual(fx.errors, []);
+          await fx.ctx.close();
+        },
+      );
+      // Edit position over a loaded game: the export would draw the editor, and Queen's arrows would have no board
+      await t.test('desktop: Edit position over a game offers no export and no Ask Queen', async () => {
+        const fx = await open(browser, { width: 1440, height: 900 }, { newViewer: true });
+        const p = fx.page;
+        await p.goto(base, { waitUntil: 'load' });
+        await loadedOn(p);
+        const menu = p.getByRole('button', { name: 'Menu', exact: true });
+        await menu.click();
+        assert.equal(await p.getByRole('button', { name: 'Ask Queen' }).count(), 1, 'Ask Queen on the loaded game');
+        await p.getByRole('button', { name: 'Edit position' }).click();
+        await assert.doesNotReject(p.getByRole('textbox', { name: 'FEN' }).waitFor({ timeout: 5000 }));
+        await menu.click();
+        assert.equal(await p.getByRole('button', { name: 'Ask Queen' }).count(), 0, 'no Ask Queen over the editor');
+        await p.keyboard.press('Escape');
+        const dialog = await openShare(p);
+        assert.equal(await dialog.getByRole('button', { name: /^Export (video|animated WebP)/ }).count(), 0);
+        await assert.doesNotReject(dialog.getByText(/Edit position is open over the game/).waitFor({ timeout: 3000 }));
+        assert.deepEqual(fx.errors, []);
+        await fx.ctx.close();
+      });
       await t.test('desktop: a flipped game from a set-up position exports flipped', { timeout: 180000 }, async () => {
         const fx = await open(browser, { width: 1440, height: 900 });
         const p = fx.page;
