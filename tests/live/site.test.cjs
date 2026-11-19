@@ -8779,8 +8779,19 @@ for (const name of BROWSERS)
             await p.locator('.stage-area').evaluate((a, d) => {
               a.scrollTop += d;
             }, dy);
-            await p.waitForTimeout(900);
-            const s = await state();
+            // the settle's glide takes up to 250 ms of frames, and a loaded runner (WebKit on GitHub) draws them slowly:
+            // wait for the layout it should reach rather than a fixed time, then check it
+            // and for the page to hold still (the glide's last frame is still to come when it first reads right, and the next
+            // scroll would be written over)
+            let s,
+              prev = null;
+            for (const t0 = Date.now(); ; ) {
+              await p.waitForTimeout(150);
+              s = await state();
+              const right = s.pinned === pinned && (pinned || s.top === 0);
+              if ((right && prev && prev.top === s.top) || Date.now() - t0 > 8000) break;
+              prev = s;
+            }
             assert.equal(s.pinned, pinned, `scrolled ${dy}: ${JSON.stringify(s)}`);
             if (!pinned) assert.equal(s.top, 0, `scrolled ${dy}: back at the top`);
           }
@@ -8816,6 +8827,60 @@ for (const name of BROWSERS)
           await lc.ctx.close();
         },
       );
+
+      // a flick up from the pinned board: the finger lets go while the drag's last scroll event has the settle's pause timer
+      // armed, and the momentum goes on. The let-go once started a second timer without clearing that one, which fired
+      // mid-momentum, found the page still past half way and glided it back down to pinned (on a phone the board grew for a
+      // moment, then snapped small). So after a let-go nothing settles the page before the pause is over (120 ms after the
+      // last scroll event, which momentum keeps pushing back): the first scroll after the let-go comes no sooner than that.
+      // Script-made touch events stand in for the finger; timestamps, not frames, so a slow runner can't fail it. Not in
+      // WebKit, whose scroll event for the glide comes ~200 ms late even with the bug (measured 2026-11-19): no telling apart
+      if (name !== 'webkit')
+        await t.test("one column: a let-go settles after the pause, not after the drag's last scroll", async () => {
+          // no engine (a new viewer's default), so frames are quick
+          const lc = await open(browser, { width: 390, height: 700 }, { newViewer: true });
+          const p = lc.page;
+          await p.goto(base, { waitUntil: 'load' });
+          await loadedOn(p);
+          await p.locator('[data-ply="38"]').click();
+          await p.waitForTimeout(600);
+          const area = p.locator('.stage-area');
+          await area.evaluate((a) => {
+            a.scrollTop = 0;
+          });
+          await p.waitForTimeout(600);
+          const gap = await area.evaluate(async (a) => {
+            const pinAt = parseFloat(
+              getComputedStyle(document.querySelector('.pin-morph')).getPropertyValue('--pin-at'),
+            );
+            const wait = (ms) => new Promise((r) => setTimeout(r, ms));
+            const touch = (type, n) => {
+              const e = new Event(type, { bubbles: true });
+              e.touches = Array.from({ length: n }, () => ({}));
+              (type === 'touchstart' ? a : window).dispatchEvent(e);
+            };
+            // a script's every write fires a scrollend, a fling's one is at its end: none reach the page here (on window in
+            // the capture phase, as WebKit runs a target's listeners in the order they were added)
+            window.addEventListener('scrollend', (e) => e.stopPropagation(), { capture: true });
+            // the finger drags the page up to just short of the pin point (the page's own listener sees the scroll first)
+            touch('touchstart', 1);
+            await new Promise((r) => {
+              a.addEventListener('scroll', r, { once: true });
+              a.scrollTop = pinAt * 0.9;
+            });
+            await wait(60);
+            let first = 0;
+            a.addEventListener('scroll', () => (first = first || performance.now()), { once: true });
+            const lift = performance.now();
+            touch('touchend', 0);
+            await wait(600);
+            return first ? first - lift : null;
+          });
+          // the pause is 120 ms; the bug's second timer fired 60 ms after the let-go
+          assert.ok(gap !== null && gap >= 100, `the page moved ${gap} ms after the let-go`);
+          assert.deepEqual(lc.errors, []);
+          await lc.ctx.close();
+        });
 
       await t.test('phone: the layout fits the width and folds the buttons into a menu', async () => {
         // Firefox has no mobile emulation in Playwright: there it is a narrow window with touch

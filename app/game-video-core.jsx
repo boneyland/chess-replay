@@ -316,7 +316,13 @@ function BoardGroup({ children, overlay }) {
       if (held) {
         clearTimeout(timer);
         stop();
-      } else timer = setTimeout(settle, SETTLE_MS); // a fling's momentum goes on: its scrollend (or the pause) settles it
+      } else {
+        // a fling's momentum goes on: its scrollend (or the pause) settles it. The drag's last scroll event has a timer
+        // armed already: clear it, or it fires mid-momentum and settles the page against the fling (Chrome for Android,
+        // 2026-11-19: a flick up grew the board, then glided it back to pinned)
+        clearTimeout(timer);
+        timer = setTimeout(settle, SETTLE_MS);
+      }
     };
     const touchDown = (e) => {
       touches = e.touches.length;
