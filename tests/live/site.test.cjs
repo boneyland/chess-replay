@@ -154,8 +154,17 @@ async function open(browser, viewport, opts) {
 }
 // the elements reaching past the window's right edge, when the page scrolls sideways (none when it doesn't)
 // every running animation and transition done (dialogs rise, menus fade): a measure taken mid-way reads a scaled, shifted box
+// the time-based animations only: a scroll-driven one (the pinned board's shrink, shell.html's .pin-morph) never
+// finishes, so waiting on it hung every test that called this
 const animationsDone = (page) =>
-  page.evaluate(() => Promise.all(document.getAnimations().map((a) => a.finished.catch(() => {}))).then(() => {}));
+  page.evaluate(() =>
+    Promise.all(
+      document
+        .getAnimations()
+        .filter((a) => a.timeline instanceof DocumentTimeline)
+        .map((a) => a.finished.catch(() => {})),
+    ).then(() => {}),
+  );
 const wider = async (page) => {
   await animationsDone(page);
   return page.evaluate(() => {
