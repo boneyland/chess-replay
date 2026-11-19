@@ -10,7 +10,7 @@
     "filesystem": {
       "denyRead": ["~/", "./.env", "./.env.*", "./secrets"],
       "allowRead": ["."]
-    },
+    }
   },
   "permissions": {
     "deny": ["Read(./.env)", "Read(./.env.*)", "Read(./secrets/**)"],
