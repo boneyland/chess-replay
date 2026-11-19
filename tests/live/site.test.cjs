@@ -2851,7 +2851,9 @@ for (const name of BROWSERS)
           await assert.doesNotReject(
             p
               .getByText(
-                why === 'Safari 26.2' ? 'Safari 26.2 crashes with threads' : 'This browser has no shared memory',
+                why === 'Safari 26.2'
+                  ? 'Safari 26.2 crashes with threads'
+                  : 'This browser can’t share memory between threads, so Stockfish uses one thread.',
               )
               .waitFor({ timeout: 3000 }),
           );
