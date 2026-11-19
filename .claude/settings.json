@@ -8,8 +8,8 @@
       "allowedDomains": ["registry.npmjs.org", "api.github.com"]
     },
     "filesystem": {
-      "denyRead": ["~/", "./.env", "./.env.*", "./secrets"],
-      "allowRead": ["."]
+      "denyRead": ["./.env", "./.env.*", "./secrets"],
+      "allowRead": [".", "../chess-animator"]
     }
   },
   "permissions": {
