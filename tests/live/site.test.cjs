@@ -2110,12 +2110,15 @@ for (const name of BROWSERS)
         const p = fx.page;
         await p.goto(base, { waitUntil: 'load' });
         await loadedOn(p);
+        // the board's picture renders until the test lets it finish (a fixed 2 s was once too short for WebKit in CI to
+        // open the dialog again: the first export ran and saved, and the second click started a real second one)
         await p.evaluate(() => {
-          const render = window.BoardThemes.render;
+          const render = window.BoardThemes.render,
+            gate = new Promise((ok) => (window.__release = ok));
           window.__renders = 0;
           window.BoardThemes.render = (...a) => {
             window.__renders++;
-            return new Promise((ok) => setTimeout(ok, 2000)).then(() => render(...a));
+            return gate.then(() => render(...a));
           };
         });
         const downloads = [];
@@ -2133,7 +2136,9 @@ for (const name of BROWSERS)
         await exportNow();
         assert.equal(await p.getByRole('dialog', { name: 'Exporting' }).count(), 0, 'the picture still renders');
         await exportNow();
-        await p.waitForFunction(() => window.__renders > 0, null, { timeout: 5000 });
+        assert.equal(await p.getByRole('dialog', { name: 'Exporting' }).count(), 0, 'the picture still renders');
+        assert.equal(await p.evaluate(() => window.__renders), 1, 'the second Export rendered nothing');
+        await p.evaluate(() => window.__release());
         // the one export runs and saves; nothing else follows
         await p.waitForEvent('download', { timeout: 90000 });
         await p.getByRole('dialog', { name: 'Exporting' }).waitFor({ state: 'detached', timeout: 10000 });
@@ -5678,9 +5683,10 @@ for (const name of BROWSERS)
           // nothing to go deeper on: a timed search in the browser doesn't reach the cloud's depth 60
           await p.waitForTimeout(1000);
           assert.equal(await p.getByRole('button', { name: /^Go deeper/ }).count(), 0);
-          // the browser logs the miss's 404 itself
+          // the browser logs the miss's 404 itself, or a 429 when CI's runners have asked Lichess too often (the
+          // page backs off for a minute, LichessCore)
           assert.deepEqual(
-            ce.errors.filter((e) => !/status of 404 .*lichess\.org\/api\/cloud-eval/.test(e)),
+            ce.errors.filter((e) => !/status of (404|429) .*lichess\.org\/api\/cloud-eval/.test(e)),
             [],
           );
           await ce.ctx.close();
