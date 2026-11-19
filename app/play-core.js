@@ -138,14 +138,27 @@
   // pawn of the side to move can take there
   const positionKey = (pos) => CC().fullFen(pos, { ep: 'legal' });
 
+  // The end the position itself makes, in this order: checkmate, stalemate, insufficient material, a dead position
+  // (locked pawns, or dead(): chasolver's answer, or a loaded game's own); null while play can go on
+  function posEnd(pos, dead) {
+    if (!CC().hasLegal(pos))
+      return CC().inCheck(pos.b, pos.turn)
+        ? { result: pos.turn === 'w' ? '0-1' : '1-0', reason: 'checkmate' }
+        : { result: '1/2-1/2', reason: 'stalemate' };
+    if (!canMate(pos, 'w') && !canMate(pos, 'b')) return { result: '1/2-1/2', reason: 'material' };
+    if (lockedDead(pos) || (dead && dead())) return { result: '1/2-1/2', reason: 'dead' };
+    return null;
+  }
   const lastPos = (board) => (board.steps.length ? board.steps[board.steps.length - 1].pos : board.start.pos);
   // In the position after the board's last move: half, the half-moves since a capture or pawn move (from the FEN's), and
   // seen, how often the position has stood on the board, counted from the start
   function drawCounts(board) {
     const steps = board.steps,
       pos = lastPos(board);
-    let half = +board.fen.split(' ')[4] || 0;
-    for (const s of steps) half = /^[a-h]/.test(s.san) || s.san.includes('x') ? 0 : half + 1;
+    const half = CC().halfMoves(
+      +board.fen.split(' ')[4] || 0,
+      steps.map((s) => s.san),
+    );
     const key = positionKey(pos);
     let seen = positionKey(board.start.pos) === key ? 1 : 0;
     for (const s of steps) if (positionKey(s.pos) === key) seen++;
@@ -171,15 +184,9 @@
   // threefold repetition and the fifty-move rule only let the side to move claim a draw (claimable); the game ends by
   // itself at a fivefold repetition or after 75 moves, as FIDE's rules have it. Without, the 3 and 50 end it
   function outcome(board, claim) {
-    const pos = lastPos(board);
-    if (!CC().hasLegal(pos)) {
-      if (CC().inCheck(pos.b, pos.turn)) return { result: pos.turn === 'w' ? '0-1' : '1-0', reason: 'checkmate' };
-      return { result: '1/2-1/2', reason: 'stalemate' };
-    }
+    const end = posEnd(lastPos(board), () => provenUnable(board, 'w') && provenUnable(board, 'b'));
+    if (end) return end;
     const draw = (reason) => ({ result: '1/2-1/2', reason });
-    if (!canMate(pos, 'w') && !canMate(pos, 'b')) return draw('material');
-    if (lockedDead(pos)) return draw('dead');
-    if (provenUnable(board, 'w') && provenUnable(board, 'b')) return draw('dead');
     const { half, seen } = drawCounts(board);
     if (claim) return half >= 150 ? draw('seventyfive') : seen >= 5 ? draw('fivefold') : null;
     if (half >= 100) return draw('fifty');
@@ -579,19 +586,14 @@
             : SHORT[x.reason],
     });
     if (r) return words(r);
-    let own = null;
-    if (pos) {
-      if (!CC().hasLegal(pos))
-        own = CC().inCheck(pos.b, pos.turn)
-          ? { result: pos.turn === 'w' ? '0-1' : '1-0', reason: 'checkmate' }
-          : { result: '1/2-1/2', reason: 'stalemate' };
-      else if (!canMate(pos, 'w') && !canMate(pos, 'b')) own = { result: '1/2-1/2', reason: 'material' };
-      else if (dead || lockedDead(pos)) own = { result: '1/2-1/2', reason: 'dead' };
-    }
+    const own = pos ? posEnd(pos, () => !!dead) : null;
     const res = pgn && pgn.result;
     if (!res || res === '*' || (own && own.result === res)) return own && words(own);
     const t = String(pgn.termination || ''),
       loser = res === '1-0' ? 'b' : 'w';
+    // the reason this page's own games write (PlayCore.pgn's Termination), in its words
+    const said = Object.values(SHORT).find((w) => w.toLowerCase() === t.trim().toLowerCase());
+    if (said) return { score: resultText({ result: res }).score, why: said };
     const why =
       res === '1/2-1/2'
         ? /agree/i.test(t)
@@ -729,7 +731,9 @@
     ];
     const more = [];
     if (t) more.push(['TimeControl', `${t.base / 1000}+${t.inc / 1000}`]);
-    if (g.result) more.push(['Termination', g.result.reason === 'time' ? 'time forfeit' : 'normal']);
+    // the reason in the words ending() reads back (a resigned game reopened says who resigned, a claimed draw why); a
+    // flag fall as PGN's own 'time forfeit'
+    if (g.result) more.push(['Termination', g.result.reason === 'time' ? 'time forfeit' : ending({ r: g.result }).why]);
     // clk has the game's own moves, from step `from` on, in ms; written as an annotated game's are (ChessCore.pgnClk: tenths kept wherever the clock has them)
     const f = fromOf(b),
       has = (j) => !!t && j >= f && g.clock.clk[j - f] != null;
