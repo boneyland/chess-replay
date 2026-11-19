@@ -179,23 +179,37 @@ function useFlowHeight(frame, ref) {
   React.useLayoutEffect(() => {
     frame.setPinAt(pinAt);
   }, [frame, pinAt]);
+  // measured once per layout, then again when a panel changes size or one comes or goes (not on every render: that
+  // rebuilt the observer and forced a layout each time). top and gap move the panels without resizing them
+  const setContentH = frame.setContentH,
+    top = L.flow ? L.flow.top : 0,
+    gap = L.flow ? L.flow.gap : 0;
   React.useLayoutEffect(() => {
     const el = ref.current;
     if (!flow || !el) {
-      frame.setContentH(h);
-      return;
+      setContentH(h);
+      return undefined;
     }
     const measure = () => {
       let end = 0;
       for (const c of el.children)
         if (getComputedStyle(c).position !== 'absolute') end = Math.max(end, c.offsetTop + c.offsetHeight);
-      frame.setContentH(Math.ceil(end + bottom));
+      setContentH(Math.ceil(end + bottom));
     };
-    measure();
     const ro = new ResizeObserver(measure);
-    for (const c of el.children) ro.observe(c);
-    return () => ro.disconnect();
-  });
+    const watch = () => {
+      ro.disconnect();
+      for (const c of el.children) ro.observe(c);
+      measure();
+    };
+    watch();
+    const mo = new MutationObserver(watch);
+    mo.observe(el, { childList: true });
+    return () => {
+      ro.disconnect();
+      mo.disconnect();
+    };
+  }, [flow, h, bottom, top, gap, setContentH, ref]);
 }
 // The paused one-column page's shrink toward the pinned strip (L.flow.strip), while scrolled less than L.flow.pinAt:
 // BoardGroup sets --pin-t (0 at the top, 1 at pinAt) as the page scrolls, and the group scales by it so the full board
@@ -1166,15 +1180,23 @@ function Board({ M, T, S, a, arrows, pieces, queen, vline, hide, lines, sel, idl
 }
 
 // ---------- exploring a best line on the board ----------
-const LINE_CACHE = new Map();
+// the lines played out from a position, the newest LINE_CACHE_MAX kept (Go deeper and the panels ask on every render)
+const LINE_CACHE = new Map(),
+  LINE_CACHE_MAX = 500;
 // the whole position: a 960 right's rook (pos.rooks) too, as the same placement and rights can castle with another rook
 const posKey = (pos) =>
   window.ChessCore.toFen(pos) + ' ' + pos.castle + ' ' + pos.ep + (pos.rooks ? ' ' + JSON.stringify(pos.rooks) : '');
 function playLineCached(M, c, moves) {
   const pos = window.ChessCore.posAt(M, c),
     key = posKey(pos) + '|' + moves.join(' ');
-  if (!LINE_CACHE.has(key)) LINE_CACHE.set(key, window.ChessCore.playLine(pos, moves));
-  return LINE_CACHE.get(key);
+  let line = LINE_CACHE.get(key);
+  if (line) LINE_CACHE.delete(key);
+  else {
+    line = window.ChessCore.playLine(pos, moves);
+    if (LINE_CACHE.size >= LINE_CACHE_MAX) LINE_CACHE.delete(LINE_CACHE.keys().next().value);
+  }
+  LINE_CACHE.set(key, line); // last in the Map's order: the oldest goes first
+  return line;
 }
 // Go deeper's best line from the position after a ply P, as steps: the last one kept (the panel re-renders while the
 // search streams in, and the line changes far less often)
@@ -4344,7 +4366,7 @@ function useReducedMotion() {
 // a piece's slide under reduced motion, in seconds at most
 const CALM_SLIDE = 0.15;
 
-function GameVideo({ M, tw, d, probe, queen, nav, scheme, sf, orient }) {
+function GameVideo({ M, tw, d, probe, queen, nav, sf, orient }) {
   const { T: T0, CUES, authoredTotal, playing: live } = useComposition();
   // the export steps through a paused player; its frames look like playback (no paused-only hints or buttons)
   const playing = live || !!tw.exporting;

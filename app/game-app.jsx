@@ -1105,7 +1105,10 @@ function GameApp() {
     }
   }, [sfKind]);
   // Lichess's opening book per ply, built after the first paint (about 0.25 s the first time)
-  const [book, setBook] = React.useState(null);
+  // kept with the game it was built for: in the render after another game loads, before the effect clears it, the old
+  // game's book would name the new game's moves
+  const [bookOf, setBook] = React.useState(null);
+  const book = bookOf && bookOf.M === M ? bookOf.byPly : null;
   // no book for the start on show when it is Chess960 (a free board's, else the replay's)
   const noBook = window.ChessCore.is960(board ? board.start.pos : M.start.pos);
   React.useEffect(() => {
@@ -1113,12 +1116,13 @@ function GameApp() {
     if (noBook) return undefined;
     const id = setTimeout(() => {
       try {
-        setBook(
-          window.Openings.book().byPly(
+        setBook({
+          M,
+          byPly: window.Openings.book().byPly(
             M.plies.map((p) => p.uci),
             M.start.fen,
           ),
-        );
+        });
       } catch (e) {}
     }, 50);
     return () => clearTimeout(id);
@@ -1575,7 +1579,6 @@ function GameApp() {
               probe={probe}
               queen={queenArrow}
               nav={nav}
-              scheme={scheme}
               sf={sf}
               orient={t.flip ? 'b' : 'w'}
             />
