@@ -577,11 +577,11 @@ function GameApp() {
   );
   // and its error and note were about the old game (not the note of Queen answers dropped with the new game's PGN)
   const { setErr: setQueenErr, setMsg: setQueenMsg } = Q;
-  const queenNoteFor = React.useRef(null); // the PGN those answers came with
+  const queenNoteNext = React.useRef(false); // set by a load whose answers came with the game it switches to
   React.useEffect(() => {
     setQueenErr('');
-    if (queenNoteFor.current !== gameSeq.current.pgn) setQueenMsg('');
-    queenNoteFor.current = null;
+    if (!queenNoteNext.current) setQueenMsg('');
+    queenNoteNext.current = false;
   }, [gameKey, setQueenErr, setQueenMsg]);
 
   const newBoard = () => {
@@ -989,18 +989,21 @@ function GameApp() {
       setErr('Could not read that file: ' + ((e && e.message) || e));
       return;
     }
+    // Queen answers join the cache once the files with them are loaded, so their note counts against the game shown
+    let answers = null;
     if (batch.queen) {
-      const answers = window.QueenCore.readQueenFile(batch.queen);
+      answers = window.QueenCore.readQueenFile(batch.queen);
       delete batch.queen;
       delete batch.queenName;
       if (answers) {
-        Q.merge(answers);
-        queenNoteFor.current = batch.pgn || null;
         setErr('');
         setQueenOpen(true);
         setPanel(false);
       }
-      if (!batch.pgn && !batch.analysis && !batch.notes) return;
+      if (!batch.pgn && !batch.analysis && !batch.notes) {
+        if (answers) Q.merge(answers);
+        return;
+      }
     } else if (batch.pgn) setQueenOpen(false); // another game: Queen's panel closes, as the other ways to load one close it
     if (!batch.pgn && !batch.analysis && !batch.notes) {
       setErr('That file isn’t a PGN, an analysis JSON or a notes file.');
@@ -1008,6 +1011,7 @@ function GameApp() {
     }
     // a free board has no game for notes or an analysis to go with
     if (board && !batch.pgn) {
+      if (answers) Q.merge(answers);
       setErr('Load a PGN first: notes and analysis files go with a game.');
       return;
     }
@@ -1022,7 +1026,17 @@ function GameApp() {
         } catch (e) {}
       }
     } else next = { ...(board ? {} : files), ...batch, sample: false };
-    commit(next);
+    const ok = commit(next) !== false;
+    if (answers) {
+      let game;
+      if (ok && batch.pgn)
+        try {
+          game = window.ChessCore.buildGame(next);
+        } catch (e) {}
+      Q.merge(answers, game);
+      // the note outlives the game change this load makes, and no other: one that keeps the open game makes none
+      queenNoteNext.current = !!game && (next.pgn !== files.pgn || next.gameIndex !== files.gameIndex);
+    }
   };
   // Drag-and-drop: the overlay shows while files are held over the page (watchFileDrag); Position from image takes
   // the drags while it is open
