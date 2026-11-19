@@ -18,7 +18,7 @@ Most mediums sit where the page is still live during long work: an export (keys 
 Hot spots (last 300 commits): `app/game-video-core.jsx` 68, `app/shell.html` 56, `app/free-board.jsx` 37, `app/game-app.jsx` 35, `app/stockfish.jsx` 31.
 
 ## Fix plan
-Not started (2026-11-19); the straight-to-`main` note below is done. Each item is one PR on a `claude/<topic>` branch (they change the page; see CLAUDE.md's Workflow), in this order. Line numbers are at commit ba6a515: if they have moved, find the code by the quoted evidence. Tick an item here, with its PR, when it merges.
+In progress: item 1 merged 2026-11-19; the straight-to-`main` note below is done. Each item is one PR on a `claude/<topic>` branch (they change the page; see CLAUDE.md's Workflow), in this order. Line numbers are at commit ba6a515: if they have moved, find the code by the quoted evidence. Tick an item here, with its PR, when it merges.
 
 **First, straight to `main` (tooling and tests, no PR):** done 2026-11-19.
 - [x] Put back the `HEAVY_TESTS` alternative `desktop: the Lichess explorer lists` in test.yml. That test had run in WebKit's main part, near its 30-minute limit, since PR 254 renamed it. (70e5f4c)
@@ -29,7 +29,7 @@ Not started (2026-11-19); the straight-to-`main` note below is done. Each item i
 
 (Medium and Low, Build.)
 
-- [ ] 1. **Replay crashes and jumps** (the three view highs):
+- [x] 1. **Replay crashes and jumps** (the three view highs): PR #274 (2f855e8).
   - `simulate` skips its en passant guess for a promoted piece (`!p.promo`). Add a node test for it: lift `simulate` into a core if that is what testing it takes.
   - `useHeldSchedule` finds the old ply from the unclamped `tl.time`.
   - `useQueen` clears `log`/`err`/`msg` when the game changes, or stores each entry's label when it is written.
@@ -37,6 +37,9 @@ Not started (2026-11-19); the straight-to-`main` note below is done. Each item i
   Add a live test for the schedule jump.
 
   Ride-alongs: Commentary's one render with the old book, `LINE_CACHE` unbounded, `useFlowHeight` rebuilding its observer every render, `GameVideo`'s unused `scheme` (Low, Replay).
+
+  Done as planned: `simulate` became `ChessCore.pieceTracks`, with node tests. Queen stores each entry's label, and clears its error and note when another game loads, except the note for answers dropped with that game's PGN. All the ride-alongs are done except `useFlowHeight`.
+  - [ ] Still open: `useFlowHeight`. Observing only resizes and added or removed panels was tried and backed out. It missed panels that move without resizing, and WebKit's layout test found the page 18–25 px taller than its frame at 320×568 and 390×400. A fix must still catch those moves.
 - [ ] 2. **Game records and PGN**:
   - One Chess960 tag builder shared by `annotatedPgn` and `BoardCore.pgnOf` (High).
   - `PlayCore.pgn` writes a Termination that `ending` reads back.
