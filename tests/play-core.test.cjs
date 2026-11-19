@@ -226,7 +226,7 @@ test('the PGN has the result, the time control and the clocks', () => {
   assert.match(text, /\[Date "2026\.10\.19"\]/);
   assert.match(text, /\[Result "1-0"\]/);
   assert.match(text, /\[TimeControl "600\+0"\]/);
-  assert.match(text, /\[Termination "normal"\]/);
+  assert.match(text, /\[Termination "Black resigned"\]/);
   // the clocks as an annotated game writes them (ChessCore.pgnClk): tenths kept
   assert.match(text, /1\. e4 \{\[%clk 0:10:00\]\} 1\.\.\. e5 \{\[%clk 0:09:58\]\} 2\. Nf3 \{\[%clk 0:09:58\.5\]\} 1-0/);
   const M = CC.buildGame({ pgn: text });
@@ -250,7 +250,32 @@ test('a draw by agreement ends the game and survives a reload', () => {
   assert.equal(P.agreeDraw(d, 6000), d, 'only in a game in progress');
   assert.deepEqual(P.resultText(d.game.result), { score: '½–½', why: 'Draw by agreement' });
   assert.deepEqual(B.restore(JSON.parse(JSON.stringify(B.save(d)))).game.result, d.game.result);
-  assert.match(P.pgn(d), /\[Result "1\/2-1\/2"\][\s\S]*\[Termination "normal"\][\s\S]* 1\/2-1\/2\n$/);
+  assert.match(P.pgn(d), /\[Result "1\/2-1\/2"\][\s\S]*\[Termination "Draw agreed"\][\s\S]* 1\/2-1\/2\n$/);
+});
+// a finished game's PGN, reopened (My games › Replay, a saved file), ends for the reason it ended (audit 2026-11-19)
+test("PlayCore.pgn's Termination reads back as the game's own end", () => {
+  const g = game('5+0', [
+    ['e2e4', 0],
+    ['e7e5', 3000],
+  ]);
+  const ends = [
+    { result: '1-0', reason: 'resign', side: 'b' },
+    { result: '0-1', reason: 'resign', side: 'w' },
+    { result: '0-1', reason: 'time', side: 'w' },
+    { result: '1/2-1/2', reason: 'agreement' },
+    { result: '1/2-1/2', reason: 'repetition' },
+    { result: '1/2-1/2', reason: 'fifty' },
+    { result: '1/2-1/2', reason: 'fivefold' },
+    { result: '1/2-1/2', reason: 'seventyfive' },
+  ];
+  for (const r of ends) {
+    const M = CC.buildGame({ pgn: P.pgn({ ...g, game: { ...g.game, result: r } }) });
+    const back = P.ending({
+      pos: M.plies[M.plies.length - 1].pos,
+      pgn: { result: M.result, termination: M.headers.Termination },
+    });
+    assert.deepEqual(back, P.ending({ r }), r.reason);
+  }
 });
 
 // a Stockfish game played from a list of [uci, ms] moves

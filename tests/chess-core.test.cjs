@@ -1425,3 +1425,88 @@ test('pieceTracks: a Chess960 castle moves king and rook without a capture', () 
   assert.deepEqual(pieces.find((p) => p.home === 'h1').track, [{ ply: 0, from: 'h1', to: 'f1' }]);
   assert.deepEqual(pieces.find((p) => p.home === 'g1').track, [{ ply: 0, from: 'g1', to: 'g1' }]);
 });
+
+// audit 2026-11-19, item 2: the two PGN writers tag a Chess960 start the same way (decision 2026-11-13)
+test('annotatedPgn and BoardCore.pgnOf write the same Variant, SetUp and FEN', () => {
+  loadUnit('board-core.js');
+  const B = window.BoardCore;
+  const tagsOf = (text) => [...text.matchAll(/^\[(Variant|SetUp|FEN) "([^"]*)"\]$/gm)].map((m) => [m[1], m[2]]);
+  const f0 = CC.chess960Fen(0);
+  const cases = [
+    // a 960 game with no Variant tag (pasted, or from an analysis's start_fen) is still tagged
+    {
+      pgn: `[SetUp "1"]\n[FEN "${f0}"]\n\n1. e4 *`,
+      board: B.fromFen(f0),
+      want: [
+        ['Variant', 'Chess960'],
+        ['SetUp', '1'],
+        ['FEN', f0],
+      ],
+    },
+    // position 518 labelled: Variant, and SetUp and FEN though the start is the standard one
+    {
+      pgn: `[Variant "Chess960"]\n\n1. e4 *`,
+      board: B.fromFen(CC.START_FEN, { chess960: 518 }),
+      want: [
+        ['Variant', 'Chess960'],
+        ['SetUp', '1'],
+        ['FEN', CC.START_FEN],
+      ],
+    },
+    // a standard game from a set-up position: SetUp and FEN only
+    {
+      pgn: `[SetUp "1"]\n[FEN "4k3/8/8/8/8/8/4P3/4K3 w - - 0 1"]\n\n1. e4 *`,
+      board: B.fromFen('4k3/8/8/8/8/8/4P3/4K3 w - - 0 1'),
+      want: [
+        ['SetUp', '1'],
+        ['FEN', '4k3/8/8/8/8/8/4P3/4K3 w - - 0 1'],
+      ],
+    },
+    // the standard start: none
+    { pgn: '1. e4 *', board: B.fromFen(), want: [] },
+  ];
+  for (const c of cases) {
+    const a = tagsOf(CC.annotatedPgn(CC.buildGame({ pgn: c.pgn }))),
+      b = tagsOf(B.pgn(c.board));
+    assert.deepEqual(a, c.want, 'annotated: ' + c.pgn);
+    assert.deepEqual(b, c.want, 'board: ' + c.pgn);
+    // and read back, the 960 game is one again
+    if (c.want.length && c.want[0][0] === 'Variant')
+      assert.ok(CC.buildGame({ pgn: CC.annotatedPgn(CC.buildGame({ pgn: c.pgn })) }).chess960 != null);
+  }
+});
+
+test("playLine's steps are standard SAN, whatever the variation wrote", () => {
+  const start = CC.posFromFen(CC.START_FEN);
+  assert.deepEqual(
+    CC.playLine(start, ['e2-e4', 'e7e5', 'Ng1-f3', '♞b8-c6', 'Bf1-c4', 'Ng8-f6', '0-0']).map((s) => s.san),
+    ['e4', 'e5', 'Nf3', 'Nc6', 'Bc4', 'Nf6', 'O-O'],
+  );
+  // a figurine pawn move resets the half-move clock (fenAfter counts it from the SAN)
+  const line = CC.playLine(CC.posFromFen('4k3/4p3/8/8/8/8/8/4K2R b - - 7 30'), ['♟e6']);
+  assert.equal(line[0].san, 'e6');
+  assert.equal(CC.fenAfter('4k3/4p3/8/8/8/8/8/4K2R b - - 7 30', ['e6'], line[0].pos).split(' ')[4], '0');
+  assert.equal(CC.halfMoves(7, ['Kf1', 'e6']), 0);
+  assert.equal(CC.halfMoves(7, ['Kf1', 'Kd8']), 9);
+});
+
+test('PGN import: a glued NAG, % escape lines, one-line header-less games, cutechess fractions', () => {
+  const g = CC.buildGame({ pgn: '%a comment for software\n1. e4$1 e5$2$14 2. Nf3 {1/2} Nc6 {+0.25/20 1.2s} *' });
+  assert.deepEqual(
+    g.plies.map((p) => [p.san, p.mark, p.nags || null]),
+    [
+      ['e4', '!', null],
+      ['e5', '?', [14]],
+      ['Nf3', null, null],
+      ['Nc6', null, null],
+    ],
+  );
+  assert.equal(g.plies[2].cp, undefined, '{1/2} is no eval');
+  assert.equal(g.plies[2].comment, '1/2');
+  assert.equal(g.plies[3].cp, -25, "cutechess's score, from the mover's side");
+  assert.equal(CC.buildGame({ pgn: '1. e4 {2/3 0.5s} *' }).plies[0].cp, undefined);
+  assert.deepEqual(CC.splitGames('1. e4 e5 1-0 1. d4 d5 0-1 1. c4 *'), ['1. e4 e5 1-0', '1. d4 d5 0-1', '1. c4 *']);
+  // a result inside a comment or a variation still ends nothing
+  assert.equal(CC.splitGames('1. e4 {1-0 2. d4} e5 (1... c5 1-0 2. d4) 2. Nf3 *').length, 1);
+  assert.equal(CC.splitGames('%x\n1. e4 *\n%y\n\n1. d4 *').length, 2);
+});

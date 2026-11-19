@@ -297,34 +297,67 @@
       inMoves = false;
       ended = false;
     };
+    const RESULT = /^(?:1-0|0-1|1\/2-1\/2|\*)$/;
+    // a line, or the part of one up to where a game's result is followed by more moves (header-less games on one line)
+    const take = (line, hdr, outside) => {
+      if ((hdr && inMoves) || (ended && outside.trim())) flush();
+      if (outside.trim()) inMoves = true;
+      if (depth === 0 && /(?:^|\s)(?:1-0|0-1|1\/2-1\/2|\*)\s*$/.test(outside)) ended = true;
+      cur.push(line);
+    };
     text
       .replace(/\r/g, '')
       .split('\n')
-      .forEach((line) => {
-        const hdr = !inComment && /^\s*\[\w+\s+".*"\]\s*$/.test(line);
-        let outside = '';
-        if (!hdr) {
-          for (let i = 0; i < line.length; i++) {
-            const ch = line[i];
-            if (inComment) {
-              if (ch === '}') inComment = false;
-              continue;
-            }
-            if (ch === '{') {
-              inComment = true;
-              outside += ' ';
-              continue;
-            }
-            if (ch === ';') break;
-            if (ch === '(') depth++;
-            else if (ch === ')') depth = Math.max(0, depth - 1);
-            else if (depth === 0) outside += ch;
-          }
+      .forEach((whole) => {
+        // a line starting with % is PGN's escape: kept with its game, never moves
+        if (!inComment && whole[0] === '%') {
+          cur.push(whole);
+          return;
         }
-        if ((hdr && inMoves) || (ended && outside.trim())) flush();
-        if (outside.trim()) inMoves = true;
-        if (depth === 0 && /(?:^|\s)(?:1-0|0-1|1\/2-1\/2|\*)\s*$/.test(outside)) ended = true;
-        cur.push(line);
+        let line = whole;
+        for (;;) {
+          const hdr = !inComment && /^\s*\[\w+\s+".*"\]\s*$/.test(line);
+          let outside = '',
+            word = '',
+            afterResult = false,
+            cut = -1;
+          if (!hdr) {
+            for (let i = 0; i < line.length; i++) {
+              const ch = line[i];
+              if (inComment) {
+                if (ch === '}') inComment = false;
+                continue;
+              }
+              if (ch === '{') {
+                inComment = true;
+                outside += ' ';
+                continue;
+              }
+              if (ch === ';') break;
+              if (ch === '(') depth++;
+              else if (ch === ')') depth = Math.max(0, depth - 1);
+              else if (depth === 0) {
+                if (/\s/.test(ch)) {
+                  if (word) afterResult = RESULT.test(word);
+                  word = '';
+                } else {
+                  if (!word && afterResult) {
+                    cut = i;
+                    break;
+                  }
+                  word += ch;
+                }
+                outside += ch;
+              }
+            }
+          }
+          if (cut < 0) {
+            take(line, hdr, outside);
+            break;
+          }
+          take(line.slice(0, cut).trimEnd(), false, outside);
+          line = line.slice(cut);
+        }
       });
     if (cur.join('').trim()) games.push(cur.join('\n'));
     return games.filter((g) => /\S/.test(g));
@@ -332,12 +365,15 @@
   const NAG = { 1: '!', 2: '?', 3: '!!', 4: '??', 5: '!?', 6: '?!' };
   function parsePGN(text) {
     const headers = {};
+    // a line starting with % is PGN's escape: no part of the game
     // a comment ({…} or ; to the end of the line) is passed over whole, so a tag written inside one stays its text
-    const body = text.replace(/\{[^}]*\}?|;[^\n]*|\[(\w+)\s+"((?:[^"\\]|\\.)*)"\]/g, (m, k, v) => {
-      if (!k) return m;
-      headers[k] = v.replace(/\\(["\\])/g, '$1');
-      return ' ';
-    });
+    const body = text
+      .replace(/^%[^\n]*/gm, '')
+      .replace(/\{[^}]*\}?|;[^\n]*|\[(\w+)\s+"((?:[^"\\]|\\.)*)"\]/g, (m, k, v) => {
+        if (!k) return m;
+        headers[k] = v.replace(/\\(["\\])/g, '$1');
+        return ' ';
+      });
     // a [FEN] start with Black to move: the first ply is Black's (cutechess evals below are the mover's)
     const black0 = (headers.FEN || '').trim().split(/\s+/)[1] === 'b';
     const plies = [];
@@ -353,7 +389,7 @@
         ck = raw.match(/\[%clk\s+([\d:.]+)/);
       // cutechess engine comments: {+0.25/20 1.2s}, {+M5/30 0.8s} (M counts plies), {book}; cutechess
       // stores them for the side that just moved (its whitepov option only fixes engines that report White's view)
-      const ae = ev ? null : raw.match(/^\s*([+-]?)(?:(\d+(?:\.\d+)?)|M(\d+))\/\d+(?:\s+[\d.]+s\b|\s*$)/);
+      const ae = ev ? null : raw.match(/^\s*([+-]?)(?:(\d+\.\d+)|M(\d+))\/\d+(?:\s+[\d.]+s\b|\s*$)/);
       const txt = (ae ? raw.slice(ae[0].length) : raw)
         .replace(/\[%[^\]]*\]/g, '')
         .replace(/^\s*book\s*$/, '')
@@ -419,7 +455,8 @@
         continue;
       }
       let j = i;
-      while (j < body.length && !/[\s{}();]/.test(body[j])) j++;
+      // a NAG glued to its move (e4$1) is a token of its own
+      while (j < body.length && !/[\s{}();]/.test(body[j]) && !(body[j] === '$' && j > i)) j++;
       // a stray } (a comment with a { inside it) has no token: skip it, or the loop never moves on
       if (j === i) {
         i++;
@@ -776,10 +813,17 @@
   // and en passant square from it), the half-move clock counted on from the start's, the move number from its ply0
   function fenAfter(startFen, sans, pos) {
     const s = parseFen(startFen);
-    let half = +s.fen.split(' ')[4];
-    for (const san of sans) half = /^[a-h]/.test(san) || san.includes('x') ? 0 : half + 1;
-    return fullFen(pos, { counters: [half, Math.floor((s.ply0 + sans.length) / 2) + 1] });
+    return fullFen(pos, {
+      counters: [halfMoves(+s.fen.split(' ')[4], sans), Math.floor((s.ply0 + sans.length) / 2) + 1],
+    });
   }
+  // the half-move clock after `sans` (standard SAN: a pawn move starts with its file) from `half`: 0 after a capture or
+  // pawn move, one more after any other
+  const halfMoves = (half, sans) => {
+    let n = half || 0;
+    for (const san of sans) n = /^[a-h]/.test(san) || san.includes('x') ? 0 : n + 1;
+    return n;
+  };
 
   const ends = (N) => ({ intro: (N && N.intro) || '', conclusion: (N && (N.conclusion || N.result)) || '' });
   const SAY_ORDER = ['notes', 'pgn']; // a notes file wins over the PGN's comments
@@ -1410,6 +1454,21 @@
   // PGN text from tags ([[name, value]]) and movetext tokens (moves, comments, the result): values escaped, the moves
   // wrapped at 80 columns, breaking on spaces, comments included; a line never starts with % (in column 1 it makes an
   // escape line)
+  // A PGN's tags for its start (decision 2026-11-13): Variant "Chess960" when the game is labelled one (label: true or
+  // its number) or its start has 960 castling rights, even without a number; SetUp and FEN when it's 960 or doesn't
+  // start from the standard position. Both PGN writers (annotatedPgn, BoardCore.pgnOf) take them from here
+  function setupTags(fen, pos, label) {
+    const c = label === true || Number.isInteger(label) || is960(pos);
+    return [
+      ...(c ? [['Variant', 'Chess960']] : []),
+      ...(c || fen !== START_FEN
+        ? [
+            ['SetUp', '1'],
+            ['FEN', fen],
+          ]
+        : []),
+    ];
+  }
   function pgnText(tags, toks) {
     const head = tags.map(([k, v]) => `[${k} "${String(v).replace(/\\/g, '\\\\').replace(/"/g, '\\"')}"]`).join('\n');
     const lines = [];
@@ -1446,12 +1505,10 @@
     set('ECO', M.eco);
     set('Opening', M.opening);
     H.Result = M.result || '*';
+    delete H.Variant;
     delete H.SetUp;
     delete H.FEN;
-    if (M.start && M.start.fen !== START_FEN) {
-      H.SetUp = '1';
-      H.FEN = M.start.fen;
-    }
+    if (M.start) for (const [k, v] of setupTags(M.start.fen, M.start.pos, M.chess960)) H[k] = v;
     const order = ['Event', 'Site', 'Date', 'Round', 'White', 'Black', 'Result'];
     const keys = order.filter((k) => H[k] != null).concat(Object.keys(H).filter((k) => !order.includes(k)));
     const toks = [];
@@ -1585,10 +1642,11 @@
       } catch (e) {
         break;
       }
+      const std = canon(pos, mv);
       pos = applyMove(pos, mv.from, mv.to, mv.promo);
       const check = inCheck(pos.b, pos.turn);
       out.push({
-        san,
+        san: std,
         uci: idxSq(mv.from) + idxSq(mv.to) + (mv.promo || ''),
         board: pos.b.slice(),
         checkSq: check ? idxSq(kingIdx(pos.b, pos.turn)) : null,
@@ -1939,6 +1997,7 @@
     fullFen,
     parseFen,
     fenAfter,
+    halfMoves,
     moveNo,
     sqIndex: sqIdx,
     applySan,
@@ -1980,6 +2039,7 @@
     pgnMoveNo,
     pgnReopens,
     pgnText,
+    setupTags,
     annotatedPgn,
     withSearches,
     notesText,

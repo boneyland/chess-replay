@@ -6448,6 +6448,57 @@ for (const name of BROWSERS)
           await g.ctx.close();
         },
       );
+      // a finished game's moves replay with its record (PlayCore.pgn: names, result and why), and Back to the free board
+      // doesn't keep it in My games again: one deleted there stays deleted (audit 2026-11-19, item 2)
+      await t.test(
+        'desktop: a finished game replays with its result, and coming back keeps no deleted game',
+        async () => {
+          const g = await open(browser, { width: 1440, height: 900 });
+          const p = g.page;
+          await p.addInitScript(() => {
+            try {
+              if (!sessionStorage.getItem('seeded')) {
+                const game = {
+                  mode: 'human',
+                  id: 'resigned1',
+                  date: '2026.11.20',
+                  result: { result: '1-0', reason: 'resign', side: 'b' },
+                };
+                const board = {
+                  fen: 'rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1',
+                  moves: ['e2e4', 'e7e5'],
+                  upto: 1,
+                  game,
+                };
+                localStorage.setItem('chess-video.files.v1', JSON.stringify({ board }));
+                localStorage.setItem('chess-video.games.v1', JSON.stringify([])); // deleted from My games
+                sessionStorage.setItem('seeded', '1');
+              }
+            } catch (e) {}
+          });
+          await p.goto(base, { waitUntil: 'load' });
+          await loadedOn(p);
+          await p.locator('.pdock').getByRole('button', { name: 'Settings' }).click();
+          await p.getByRole('button', { name: 'Replay these moves as a game' }).click();
+          await assert.doesNotReject(p.getByRole('button', { name: 'Play (space)' }).waitFor({ timeout: 5000 }));
+          await assert.doesNotReject(
+            p.waitForFunction(() => /Black resigned/.test(document.body.innerText), null, { timeout: 5000 }),
+            'the replay ends as the game did',
+          );
+          await p.getByRole('tab', { name: 'Game' }).click();
+          await p.getByRole('button', { name: 'Back to the free board' }).click();
+          await assert.doesNotReject(
+            p.getByRole('button', { name: 'Play (space)' }).waitFor({ state: 'detached', timeout: 5000 }),
+          );
+          assert.equal(
+            await p.evaluate(() => localStorage.getItem('chess-video.games.v1')),
+            '[]',
+            'the deleted game stays deleted',
+          );
+          assert.deepEqual(g.errors, []);
+          await g.ctx.close();
+        },
+      );
       // a game kept before the reader got stricter (an illegal O-O the old one let through) is dropped on the next visit and
       // said so once, rather than the error showing on every visit
       await t.test('desktop: a kept game that no longer reads is dropped and said so once', async () => {
