@@ -18,7 +18,7 @@ Most mediums sit where the page is still live during long work: an export (keys 
 Hot spots (last 300 commits): `app/game-video-core.jsx` 68, `app/shell.html` 56, `app/free-board.jsx` 37, `app/game-app.jsx` 35, `app/stockfish.jsx` 31.
 
 ## Fix plan
-In progress: item 1 merged 2026-11-19 (its open part 2026-11-20), item 2 on 2026-11-20; the straight-to-`main` note below is done. Each item is one PR on a `claude/<topic>` branch (they change the page; see CLAUDE.md's Workflow), in this order. Line numbers are at commit ba6a515: if they have moved, find the code by the quoted evidence. Tick an item here, with its PR, when it merges.
+In progress: item 1 merged 2026-11-19 (its open part 2026-11-20), items 2 and 3 on 2026-11-20; the straight-to-`main` note below is done. Each item is one PR on a `claude/<topic>` branch (they change the page; see CLAUDE.md's Workflow), in this order. Line numbers are at commit ba6a515: if they have moved, find the code by the quoted evidence. Tick an item here, with its PR, when it merges.
 
 **First, straight to `main` (tooling and tests, no PR):** done 2026-11-19.
 - [x] Put back the `HEAVY_TESTS` alternative `desktop: the Lichess explorer lists` in test.yml. That test had run in WebKit's main part, near its 30-minute limit, since PR 254 renamed it. (70e5f4c)
@@ -53,13 +53,15 @@ In progress: item 1 merged 2026-11-19 (its open part 2026-11-20), item 2 on 2026
   Ride-alongs: a NAG glued to a move, `%` lines, header-less games on one line, bare-fraction cutechess comments, one half-move-clock helper, the end order written twice (Low, Rules).
 
   Done as planned, ride-alongs included: `ChessCore.setupTags` for both writers, `ChessCore.halfMoves`, PlayCore's `posEnd`. `PlayCore.pgn`'s Termination is now `ending()`'s words (`Black resigned`, `Fivefold repetition`…; a flag fall stays `time forfeit`), free text where Lichess writes `Normal`.
-- [ ] 3. **Play vs Stockfish and board input**:
+- [x] 3. **Play vs Stockfish and board input**: PR #278 (2a47feb).
   - `critiqueText` skips a 960 castle's own rook.
   - A player's move that ends the game is rated from the before search.
   - Both board inputs ignore non-primary pointers and keep the drag's `pointerId`.
   - One keyboard-focus rule for BoardTouch and EditBoard (Medium, Boards and Replay).
 
   Ride-alongs: the free board's `useBoardFacts` without `known`; Hint's "ask again" reusing a null promise; the late dead-position recheck listening to the viewed position; BoardGroup's settle stuck after a swallowed release (Low).
+
+  Done as planned, ride-alongs included: `PlayCore.drawnByYou` (a drawing move is rated from the search before it against 0, and says how it drew), `useKbFocus` (a focus within 300 ms of a pointer going down or up on the board is the press's; decisions log). A press is ignored only while another pointer drags on the board: `isPrimary` was tried first and dropped in review, as a finger resting elsewhere on the page blocked taps on the board. New live tests for each part, each failing on the code before.
 - [ ] 4. **Export while the page is live**:
   - The export overlay modal (`DialogBox`, or `inert` on the stage and bar while `video.busy`). This covers the Transport bar's buttons, seek bar and Moves chips (reported by two areas; the unfinished half of 2026-11-09 item 4).
   - No Export or Ask Queen while Edit position covers a game.
