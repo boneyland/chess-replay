@@ -330,22 +330,25 @@ try {
     assert.equal(await state(), 'running');
   });
 
-  await t.test('the service worker takes over the page', { timeout: 120000 }, async (st) => {
+  await t.test('the service worker takes over the page', { timeout: 180000 }, async (st) => {
     // the polling below stops at a deadline from the test's start, not after a count: on a slow Simulator the steps
     // before it and each poll's WebDriver calls took the test past its timeout (2026-11-17, PR 257), though it asserts
-    // nothing about the worker
+    // nothing about the worker. One round of polls still took 30 s there (2026-11-19, the 64 s line to the 95 s one),
+    // running past a 120 s timeout: each poll's script now answers within 5 s, and the timeout leaves room past the
+    // deadline for a slow round of WebDriver calls
     const start = Date.now(),
       left = () => 90000 - (Date.now() - start);
     const reg = () =>
-      browser.executeAsync((done) =>
+      browser.executeAsync((done) => {
+        setTimeout(() => done('no answer in 5 s'), 5000);
         navigator.serviceWorker.getRegistration().then(
           (r) =>
             done(
               r ? ['installing', 'waiting', 'active'].map((k) => `${k} ${r[k] ? r[k].state : '-'}`).join(', ') : 'none',
             ),
           (e) => done('error ' + e.message),
-        ),
-      );
+        );
+      });
     await until(() => !!navigator.serviceWorker, 5000, 'no navigator.serviceWorker');
     t.diagnostic(`before the reload: ${await reg()}`);
     // run 5 had a registration with no worker at all: whether the script loads, and what a register() of it says
@@ -369,7 +372,8 @@ try {
     await browser.url(URL_);
     await loaded();
     const cached = () =>
-      browser.executeAsync((done) =>
+      browser.executeAsync((done) => {
+        setTimeout(() => done('caches: no answer in 5 s'), 5000);
         caches
           .keys()
           .then((ks) =>
@@ -385,14 +389,14 @@ try {
           .then(
             (l) => done(l.join(', ') || 'no caches'),
             (e) => done('error ' + e.message),
-          ),
-      );
+          );
+      });
     let ok = false;
     // runs 2, 5 and 6: still installing 30–50 s after the reload, its cache not yet opened
     const reloaded = Date.now();
     while (!ok && left() > 0) {
       ok = await js(() => !!navigator.serviceWorker.controller);
-      if (ok) break;
+      if (ok || left() <= 0) break;
       t.diagnostic(
         `${Math.round((Date.now() - reloaded) / 1000)} s after the reload: ${await reg()} · ${await cached()}`,
       );
