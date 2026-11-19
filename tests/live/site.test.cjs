@@ -9293,8 +9293,8 @@ for (const name of BROWSERS)
 
       // the settle waits while the main mouse button is down, and only that one: a right-click's release can go to the menu
       // it opens, and settling once stopped for good after one. A release lost all the same (a button press the page never
-      // saw let go) ends with the next move with no button down. The presses are script-made (their releases withheld),
-      // the moves real
+      // saw let go) ends with the next move with no button down. The right-click and the lost press are script-made (their
+      // releases withheld), the hold and the moves real
       await t.test("one column: a right-click or a lost release doesn't stop the scroll settling", async () => {
         const lc = await open(browser, { width: 390, height: 700 }, { newViewer: true });
         const p = lc.page;
@@ -9337,12 +9337,18 @@ for (const name of BROWSERS)
         await press(2);
         assert.ok((await partWay()) > 10, 'the page scrolls');
         await settles('after a right-button press');
-        // the main button held: no settle while it's down
-        await press(0);
+        // the main button held (a real press, beside the panels): no settle while it's down, and its release settles
+        await p.mouse.move(2, 500);
+        await p.mouse.down();
         const at = await partWay();
         await p.waitForTimeout(700);
-        assert.equal(await top(), at, 'held where the button is down');
-        // its release lost: a move with no button down lets it go
+        assert.equal(await top(), at, 'held while the button is down');
+        await p.mouse.up();
+        await settles('after the release');
+        // a press whose release the page never sees (script-made: WebKit's own pointer moves say no button is down, so the
+        // hold can't be scripted there): the next move with no button down lets it go
+        await press(0);
+        await partWay();
         await p.mouse.move(200, 400);
         await p.mouse.move(210, 420, { steps: 3 });
         await settles('after a move with no button down');
