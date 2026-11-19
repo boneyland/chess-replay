@@ -179,37 +179,23 @@ function useFlowHeight(frame, ref) {
   React.useLayoutEffect(() => {
     frame.setPinAt(pinAt);
   }, [frame, pinAt]);
-  // measured once per layout, then again when a panel changes size or one comes or goes (not on every render: that
-  // rebuilt the observer and forced a layout each time). top and gap move the panels without resizing them
-  const setContentH = frame.setContentH,
-    top = L.flow ? L.flow.top : 0,
-    gap = L.flow ? L.flow.gap : 0;
   React.useLayoutEffect(() => {
     const el = ref.current;
     if (!flow || !el) {
-      setContentH(h);
-      return undefined;
+      frame.setContentH(h);
+      return;
     }
     const measure = () => {
       let end = 0;
       for (const c of el.children)
         if (getComputedStyle(c).position !== 'absolute') end = Math.max(end, c.offsetTop + c.offsetHeight);
-      setContentH(Math.ceil(end + bottom));
+      frame.setContentH(Math.ceil(end + bottom));
     };
+    measure();
     const ro = new ResizeObserver(measure);
-    const watch = () => {
-      ro.disconnect();
-      for (const c of el.children) ro.observe(c);
-      measure();
-    };
-    watch();
-    const mo = new MutationObserver(watch);
-    mo.observe(el, { childList: true });
-    return () => {
-      ro.disconnect();
-      mo.disconnect();
-    };
-  }, [flow, h, bottom, top, gap, setContentH, ref]);
+    for (const c of el.children) ro.observe(c);
+    return () => ro.disconnect();
+  });
 }
 // The paused one-column page's shrink toward the pinned strip (L.flow.strip), while scrolled less than L.flow.pinAt:
 // BoardGroup sets --pin-t (0 at the top, 1 at pinAt) as the page scrolls, and the group scales by it so the full board
