@@ -202,7 +202,7 @@ function writeQueenCache(c) {
 function useQueen(M, hf) {
   const [cache, setCache] = React.useState(readQueenCache);
   const cacheRef = React.useRef(cache);
-  const [busy, setBusy] = React.useState(null); // {at, started}
+  const [busy, setBusy] = React.useState(null); // {at, label, started}
   const [err, setErr] = React.useState('');
   const [, tick] = React.useState(0);
   const stopRef = React.useRef(false);
@@ -236,15 +236,18 @@ function useQueen(M, hf) {
         );
     });
 
+  // the call log and the busy line carry the position's name from when it was asked: another game may be loaded by the
+  // time they show (an old game's move past the new one's end threw)
   const analyse = async (at) => {
-    const key = keyAt(at);
+    const key = keyAt(at),
+      label = posLabel(M, at);
     if (cacheRef.current[key]) return cacheRef.current[key];
     const ctrl = new AbortController();
     ctrlRef.current = ctrl;
     try {
       for (let attempt = 1; ; attempt++) {
         const started = Date.now();
-        setBusy({ at, started, attempt });
+        setBusy({ at, label, started, attempt });
         try {
           const res = await directCall(movesAt(at), hf && hf.auth ? hf.auth.token : null, ctrl.signal, startFen);
           const p = queenPayload(res);
@@ -263,7 +266,7 @@ function useQueen(M, hf) {
             at,
           );
           note({
-            at,
+            label,
             ok: true,
             secs: Math.round((Date.now() - started) / 1000),
             gpu: p.seconds ? Math.round(p.seconds) : null,
@@ -278,7 +281,7 @@ function useQueen(M, hf) {
         } catch (e) {
           const secs = Math.round((Date.now() - started) / 1000);
           note({
-            at,
+            label,
             ok: false,
             code: (e && e.code) || '?',
             secs,
@@ -288,7 +291,7 @@ function useQueen(M, hf) {
           // A temporary failure gets one more try after a few seconds
           if (attempt === 1 && e && e.retryable && !ctrl.signal.aborted) {
             const ms = 4000 + Math.random() * 4000;
-            setBusy({ at, started: Date.now(), attempt, retryAt: Date.now() + ms });
+            setBusy({ at, label, started: Date.now(), attempt, retryAt: Date.now() + ms });
             await wait(ms, ctrl.signal);
             continue;
           }
@@ -757,8 +760,8 @@ function QueenPanel({ M, Q, hf, probe, live, onClose, onOverlay: overlay, onSave
           <div className="q-busy">
             <span className="q-dot" aria-hidden="true" />
             {Q.busy.retryAt
-              ? `No answer for the position ${posLabel(M, Q.busy.at)}; retrying in ${Math.max(0, Math.ceil((Q.busy.retryAt - Date.now()) / 1000))} s`
-              : `Queen is thinking about the position ${posLabel(M, Q.busy.at)} … ${busySecs} s${Q.busy.attempt > 1 ? ' (retry)' : ''}`}
+              ? `No answer for the position ${Q.busy.label}; retrying in ${Math.max(0, Math.ceil((Q.busy.retryAt - Date.now()) / 1000))} s`
+              : `Queen is thinking about the position ${Q.busy.label} … ${busySecs} s${Q.busy.attempt > 1 ? ' (retry)' : ''}`}
             <button type="button" className="q-stop" onClick={Q.stop}>
               Stop
             </button>
@@ -883,7 +886,7 @@ function QueenPanel({ M, Q, hf, probe, live, onClose, onOverlay: overlay, onSave
               {Q.log
                 .map(
                   (x) =>
-                    `${x.when}  ${posLabel(M, x.at)}  ${x.ok ? `ok in ${x.secs} s${x.gpu != null ? ` (GPU ${x.gpu} s, ${x.tokens} tokens)` : ''}` : `${x.code} after ${x.secs} s${x.msg ? ': ' + x.msg : ''}`}`,
+                    `${x.when}  ${x.label}  ${x.ok ? `ok in ${x.secs} s${x.gpu != null ? ` (GPU ${x.gpu} s, ${x.tokens} tokens)` : ''}` : `${x.code} after ${x.secs} s${x.msg ? ': ' + x.msg : ''}`}`,
                 )
                 .join('\n')}
             </pre>

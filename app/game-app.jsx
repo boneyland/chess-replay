@@ -575,6 +575,12 @@ function GameApp() {
     },
     [gameKey],
   );
+  // and its error and note were about the old game
+  const { setErr: setQueenErr, setMsg: setQueenMsg } = Q;
+  React.useEffect(() => {
+    setQueenErr('');
+    setQueenMsg('');
+  }, [gameKey, setQueenErr, setQueenMsg]);
 
   const newBoard = () => {
     closeOverlays();
