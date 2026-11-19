@@ -179,23 +179,38 @@ function useFlowHeight(frame, ref) {
   React.useLayoutEffect(() => {
     frame.setPinAt(pinAt);
   }, [frame, pinAt]);
-  React.useLayoutEffect(() => {
+  // measured after every render (a panel can move without resizing: measuring only on resizes and added or removed
+  // panels left WebKit's page 18-25 px taller than its frame at 320x568 and 390x400), and when a panel changes size
+  // between renders; the observer is made once per flowing view, not each render
+  const measure = React.useRef(null);
+  measure.current = () => {
     const el = ref.current;
     if (!flow || !el) {
       frame.setContentH(h);
       return;
     }
-    const measure = () => {
-      let end = 0;
-      for (const c of el.children)
-        if (getComputedStyle(c).position !== 'absolute') end = Math.max(end, c.offsetTop + c.offsetHeight);
-      frame.setContentH(Math.ceil(end + bottom));
+    let end = 0;
+    for (const c of el.children)
+      if (getComputedStyle(c).position !== 'absolute') end = Math.max(end, c.offsetTop + c.offsetHeight);
+    frame.setContentH(Math.ceil(end + bottom));
+  };
+  React.useLayoutEffect(() => measure.current());
+  React.useLayoutEffect(() => {
+    const el = ref.current;
+    if (!flow || !el) return undefined;
+    const ro = new ResizeObserver(() => measure.current());
+    const watch = () => {
+      ro.disconnect();
+      for (const c of el.children) ro.observe(c);
     };
-    measure();
-    const ro = new ResizeObserver(measure);
-    for (const c of el.children) ro.observe(c);
-    return () => ro.disconnect();
-  });
+    watch();
+    const mo = new MutationObserver(watch); // a panel that comes later is watched too
+    mo.observe(el, { childList: true });
+    return () => {
+      ro.disconnect();
+      mo.disconnect();
+    };
+  }, [flow, ref]);
 }
 // The paused one-column page's shrink toward the pinned strip (L.flow.strip), while scrolled less than L.flow.pinAt:
 // BoardGroup sets --pin-t (0 at the top, 1 at pinAt) as the page scrolls, and the group scales by it so the full board
