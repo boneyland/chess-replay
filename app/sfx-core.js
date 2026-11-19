@@ -152,33 +152,55 @@
   }
   const gainOf = (volume) => Math.max(0, Math.min(1, (volume == null ? 70 : volume) / 100));
 
-  // Mixes a track() into a stereo AudioBuffer dur seconds long, offline, for the video export
-  async function renderTrack(get, set, events, volume, dur, rate = 48000) {
+  // Mixes a track() into stereo sound dur seconds long, offline, for the video export: { sampleRate, numberOfChannels,
+  // length (in samples), chunks() }, or null where the browser can't. chunks() renders it a window of windowS seconds at
+  // a time, each in an OfflineAudioContext of its own, and yields { at (its first sample), buffer (an AudioBuffer) }: the
+  // whole track as one buffer was ~230 MB for a 10-minute export, a window ~11.5 MB. A sound that runs across a window's
+  // start is started that far into its own samples. The sounds are decoded once, for every window
+  const TRACK_WINDOW_S = 30;
+  async function renderTrack(get, set, events, volume, dur, rate = 48000, windowS = TRACK_WINDOW_S) {
     const OAC = window.OfflineAudioContext || window.webkitOfflineAudioContext;
     if (!OAC) return null;
     if (!SETS.includes(set)) set = SETS[0];
-    const ctx = new OAC(2, Math.max(1, Math.ceil(dur * rate)), rate),
+    const length = Math.max(1, Math.ceil(dur * rate)),
+      win = Math.max(1, Math.round(windowS * rate)),
+      decoder = new OAC(2, 1, rate),
       bufs = {};
     for (const k of new Set(events.flatMap((e) => e.kinds))) {
       try {
-        bufs[k] = await decode(ctx, get, set, k);
+        bufs[k] = await decode(decoder, get, set, k);
       } catch (e) {
         bufs[k] = null;
       }
     }
-    const gain = ctx.createGain();
-    gain.gain.value = gainOf(volume);
-    gain.connect(ctx.destination);
-    events.forEach((e) =>
-      e.kinds.forEach((k) => {
-        if (!bufs[k]) return;
-        const src = ctx.createBufferSource();
-        src.buffer = bufs[k];
-        src.connect(gain);
-        src.start(e.at);
-      }),
-    );
-    return ctx.startRendering();
+    const render = (w0, n) => {
+      const ctx = new OAC(2, n, rate),
+        from = w0 / rate,
+        to = (w0 + n) / rate;
+      const gain = ctx.createGain();
+      gain.gain.value = gainOf(volume);
+      gain.connect(ctx.destination);
+      events.forEach((e) =>
+        e.kinds.forEach((k) => {
+          const b = bufs[k];
+          if (!b || e.at >= to || e.at + b.duration <= from) return;
+          const src = ctx.createBufferSource();
+          src.buffer = b;
+          src.connect(gain);
+          if (e.at >= from) src.start(e.at - from);
+          else src.start(0, from - e.at);
+        }),
+      );
+      return ctx.startRendering();
+    };
+    return {
+      sampleRate: rate,
+      numberOfChannels: 2,
+      length,
+      async *chunks() {
+        for (let w0 = 0; w0 < length; w0 += win) yield { at: w0, buffer: await render(w0, Math.min(win, length - w0)) };
+      },
+    };
   }
 
   // ---- the player: Web Audio, started by the viewer's first tap or key (browsers keep it silent until then) ----

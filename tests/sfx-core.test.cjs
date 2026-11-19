@@ -116,14 +116,17 @@ test('NON_COMMERCIAL: lisp, which the Export tab warns about', () => {
   assert.deepEqual(X.NON_COMMERCIAL, ['Lichess lisp']);
 });
 
-// a stand-in OfflineAudioContext: decodes anything, records what starts when
+// a stand-in OfflineAudioContext: decodes anything (each sound a second long), records what starts when (and how far
+// into the sound, for one already playing at its start), and renders that record
 class FakeOAC {
-  constructor() {
+  constructor(ch, length, rate) {
     this.started = [];
     this.destination = {};
+    this.length = length;
+    this.rate = rate;
   }
   decodeAudioData(b) {
-    return Promise.resolve({ from: b.url });
+    return Promise.resolve({ from: b.url, duration: 1 });
   }
   createGain() {
     return { gain: {}, connect() {} };
@@ -132,15 +135,21 @@ class FakeOAC {
     const ctx = this;
     return {
       connect() {},
-      start(at) {
-        ctx.started.push([this.buffer.from, at]);
+      start(at, off) {
+        ctx.started.push(off == null ? [this.buffer.from, at] : [this.buffer.from, at, off]);
       },
     };
   }
   startRendering() {
-    return Promise.resolve(this.started);
+    return Promise.resolve({ started: this.started, length: this.length });
   }
 }
+// what each window of a renderTrack started, in order
+const windows = async (track) => {
+  const out = [];
+  for await (const w of track.chunks()) out.push([w.at, w.buffer.started]);
+  return out;
+};
 test('renderTrack: an export sounds the chosen set, lisp included; a set that is gone falls back to the default', async () => {
   const was = window.OfflineAudioContext;
   window.OfflineAudioContext = FakeOAC;
@@ -150,17 +159,62 @@ test('renderTrack: an export sounds the chosen set, lisp included; a set that is
       { at: 0.5, kinds: ['move'] },
       { at: 1.5, kinds: ['capture', 'check'] },
     ];
-    assert.deepEqual(await X.renderTrack(get, 'Lichess lisp', events, 70, 2), [
-      ['sounds/lisp/Move.mp3', 0.5],
-      ['sounds/lisp/Capture.mp3', 1.5],
-      ['sounds/lisp/Check.mp3', 1.5],
+    const lisp = await X.renderTrack(get, 'Lichess lisp', events, 70, 2);
+    assert.equal(lisp.length, 96000);
+    assert.deepEqual(await windows(lisp), [
+      [
+        0,
+        [
+          ['sounds/lisp/Move.mp3', 0.5],
+          ['sounds/lisp/Capture.mp3', 1.5],
+          ['sounds/lisp/Check.mp3', 1.5],
+        ],
+      ],
     ]);
-    assert.deepEqual((await X.renderTrack(get, 'Gone', events, 70, 2))[0], ['sounds/sfx/Move.mp3', 0.5]);
+    assert.deepEqual((await windows(await X.renderTrack(get, 'Gone', events, 70, 2)))[0][1][0], [
+      'sounds/sfx/Move.mp3',
+      0.5,
+    ]);
   } finally {
     window.OfflineAudioContext = was;
   }
 });
 
+test('renderTrack: rendered a window at a time; a sound running across a window starts part way in', async () => {
+  const was = window.OfflineAudioContext;
+  window.OfflineAudioContext = FakeOAC;
+  try {
+    const get = (url) => Promise.resolve({ url }),
+      M = 'sounds/sfx/Move.mp3';
+    // two moves, each sound a second long, in a 4 s track of 1 s windows
+    const track = await X.renderTrack(
+      get,
+      'Lichess',
+      [
+        { at: 0.5, kinds: ['move'] },
+        { at: 2.5, kinds: ['move'] },
+      ],
+      70,
+      4,
+      48000,
+      1,
+    );
+    assert.equal(track.length, 4 * 48000);
+    assert.deepEqual(await windows(track), [
+      [0, [[M, 0.5]]],
+      [48000, [[M, 0, 0.5]]],
+      [96000, [[M, 0.5]]],
+      [144000, [[M, 0, 0.5]]],
+    ]);
+    // the last window is as long as what's left
+    const odd = await X.renderTrack(get, 'Lichess sfx', [], 70, 2.5, 48000, 1),
+      lens = [];
+    for await (const w of odd.chunks()) lens.push(w.buffer.length);
+    assert.deepEqual(lens, [48000, 48000, 24000]);
+  } finally {
+    window.OfflineAudioContext = was;
+  }
+});
 test('synth: every Wood sound is short, audible, never clips, and the same every time', () => {
   for (const k of X.KINDS) {
     const a = X.synth(k, 48000),

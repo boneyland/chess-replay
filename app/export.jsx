@@ -184,21 +184,25 @@ async function encodeSound(MB, sound, acodec) {
           { once: true },
         );
     });
-  for (let at = 0; at < sound.length && !err; at += step) {
-    while (enc.encodeQueueSize >= QUEUED && !err) await room();
-    const n = Math.min(step, sound.length - at),
-      data = new Float32Array(n * ch);
-    for (let c = 0; c < ch; c++) data.set(sound.getChannelData(c).subarray(at, at + n), c * n);
-    const ad = new AudioData({
-      format: 'f32-planar',
-      sampleRate: sr,
-      numberOfFrames: n,
-      numberOfChannels: ch,
-      timestamp: Math.round((at / sr) * 1e6),
-      data,
-    });
-    enc.encode(ad);
-    ad.close();
+  // the track comes a window at a time (Sfx.renderTrack), each let go once it is sliced and queued
+  for await (const { at: w0, buffer } of sound.chunks()) {
+    for (let at = 0; at < buffer.length && !err; at += step) {
+      while (enc.encodeQueueSize >= QUEUED && !err) await room();
+      const n = Math.min(step, buffer.length - at),
+        data = new Float32Array(n * ch);
+      for (let c = 0; c < ch; c++) data.set(buffer.getChannelData(c).subarray(at, at + n), c * n);
+      const ad = new AudioData({
+        format: 'f32-planar',
+        sampleRate: sr,
+        numberOfFrames: n,
+        numberOfChannels: ch,
+        timestamp: Math.round(((w0 + at) / sr) * 1e6),
+        data,
+      });
+      enc.encode(ad);
+      ad.close();
+    }
+    if (err) break;
   }
   if (!err) await enc.flush();
   enc.close();
@@ -365,7 +369,7 @@ async function webpEncoder(cv, W, H, fps, frames, { width = 0, quality = 75 } = 
 const seekStage = (t) => window.dispatchEvent(new CustomEvent('chess-video:seek', { detail: { time: t, sync: true } }));
 
 // run() takes the stretch of the timeline to export in seconds ({ start, end }), a file name suffix, and audio: an
-// async function giving the stretch's soundtrack as an AudioBuffer (or null for none; a WebP has no sound).
+// async function giving the stretch's soundtrack as Sfx.renderTrack's windowed track (or null for none; a WebP has no sound).
 // format: one of EXPORT_FORMATS; webp: { width (0 the frame's own, 'Half', or pixels), quality } for webpEncoder; mp4Quality: one of MP4_QUALITIES (MP4 and WebM)
 function useVideoExport({ fps, format, webp, mp4Quality, mp4Vfr = false, save, stem }) {
   const [state, setState] = React.useState(null); // { phase: 'load' | 'render' | 'save', done, N, eta } or { phase: 'error', msg }

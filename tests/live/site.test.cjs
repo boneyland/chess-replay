@@ -2063,6 +2063,87 @@ for (const name of BROWSERS)
           await fx.ctx.close();
         },
       );
+      // the export's soundtrack is rendered a window at a time (a whole one was ~230 MB for 10 minutes): windows that cut
+      // through sounds give the same samples as one rendered whole. Wood, the synthesised set, needs no download
+      await t.test("desktop: the export's soundtrack rendered in windows is the one rendered whole", async () => {
+        const fx = await open(browser, { width: 1440, height: 900 }, { newViewer: true });
+        const p = fx.page;
+        await p.goto(base, { waitUntil: 'load' });
+        await loadedOn(p);
+        const r = await p.evaluate(async () => {
+          const ev = [
+            { at: 0.2, kinds: ['move'] },
+            { at: 0.95, kinds: ['capture', 'check'] },
+            { at: 1.9, kinds: ['victory'] },
+          ];
+          const samples = async (windowS) => {
+            const tr = await window.Sfx.renderTrack(window.Sfx.fetchSound, 'Wood', ev, 70, 3, 48000, windowS),
+              out = [new Float32Array(tr.length), new Float32Array(tr.length)];
+            let n = 0;
+            for await (const { at, buffer } of tr.chunks()) {
+              for (let c = 0; c < 2; c++) out[c].set(buffer.getChannelData(c), at);
+              n++;
+            }
+            return { out, n };
+          };
+          const whole = await samples(100),
+            parts = await samples(0.5);
+          let diff = 0,
+            peak = 0;
+          for (let c = 0; c < 2; c++)
+            for (let i = 0; i < whole.out[c].length; i++) {
+              diff = Math.max(diff, Math.abs(whole.out[c][i] - parts.out[c][i]));
+              peak = Math.max(peak, Math.abs(whole.out[c][i]));
+            }
+          return { diff, peak, windows: [whole.n, parts.n] };
+        });
+        assert.deepEqual(r.windows, [1, 6]);
+        assert.ok(r.peak > 0.1, 'the track sounds: ' + JSON.stringify(r));
+        assert.ok(r.diff < 0.01 * r.peak, 'the windows match the whole: ' + JSON.stringify(r));
+        assert.deepEqual(fx.errors, []);
+        await fx.ctx.close();
+      });
+      // a second Export while the board's picture renders, before the export says it is busy, starts nothing: it once
+      // started a second run (the picture's render is slowed down here, so the second press lands in it)
+      await t.test('desktop: a second Export while the first starts runs one export', { timeout: 120000 }, async () => {
+        const fx = await open(browser, { width: 1440, height: 900 }, { newViewer: true });
+        const p = fx.page;
+        await p.goto(base, { waitUntil: 'load' });
+        await loadedOn(p);
+        await p.evaluate(() => {
+          const render = window.BoardThemes.render;
+          window.__renders = 0;
+          window.BoardThemes.render = (...a) => {
+            window.__renders++;
+            return new Promise((ok) => setTimeout(ok, 2000)).then(() => render(...a));
+          };
+        });
+        const downloads = [];
+        p.on('download', (d) => downloads.push(d));
+        const exportNow = async () => {
+          const dialog = await openShare(p);
+          await p.getByRole('radio', { name: 'WebP' }).click();
+          await p
+            .locator('#tw-webp-width')
+            .selectOption(await p.locator('#tw-webp-width option', { hasText: 'half' }).getAttribute('value'));
+          await p.locator('#tw-clip-from').selectOption({ index: 1 });
+          await p.locator('#tw-clip-to').selectOption({ index: 1 });
+          await dialog.getByRole('button', { name: /^Export animated WebP/ }).click();
+        };
+        await exportNow();
+        assert.equal(await p.getByRole('dialog', { name: 'Exporting' }).count(), 0, 'the picture still renders');
+        await exportNow();
+        await p.waitForFunction(() => window.__renders > 0, null, { timeout: 5000 });
+        // the one export runs and saves; nothing else follows
+        await p.waitForEvent('download', { timeout: 90000 });
+        await p.getByRole('dialog', { name: 'Exporting' }).waitFor({ state: 'detached', timeout: 10000 });
+        await p.waitForTimeout(4000);
+        assert.equal(await p.evaluate(() => window.__renders), 1, 'one export started');
+        assert.equal(downloads.length, 1, 'one file saved');
+        assert.equal(await p.getByRole('dialog', { name: /Export/ }).count(), 0, 'no export running or failed');
+        assert.deepEqual(fx.errors, []);
+        await fx.ctx.close();
+      });
       // the export's overlay is modal: the page behind it is inert (a Tab or a key there once put frames from the wrong
       // moment into the file), the focus stays in it, a file dropped meanwhile is refused (and kept from the browser), and
       // once it closes the focus is back on the button that opened the export
