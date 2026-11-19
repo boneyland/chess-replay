@@ -651,9 +651,11 @@ test('threadSupport: isolation, shared memory, Safari 26.2, and the cores', () =
   assert.deepEqual(SF.threadSupport(env({ crossOriginIsolated: false })), {
     ok: false,
     cores: 8,
-    reason: 'This page isn’t cross-origin isolated',
+    reason:
+      'This page can’t share memory between threads (it isn’t cross-origin isolated), so Stockfish uses one thread.',
   });
-  assert.equal(SF.threadSupport(env({ SharedArrayBuffer: undefined })).reason, 'This browser has no shared memory');
+  const noShared = 'This browser can’t share memory between threads, so Stockfish uses one thread.';
+  assert.equal(SF.threadSupport(env({ SharedArrayBuffer: undefined })).reason, noShared);
   assert.equal(
     SF.threadSupport(
       env({
@@ -664,7 +666,7 @@ test('threadSupport: isolation, shared memory, Safari 26.2, and the cores', () =
         },
       }),
     ).reason,
-    'This browser has no shared memory',
+    noShared,
   );
   const safari = {
     hardwareConcurrency: 8,

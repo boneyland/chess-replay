@@ -63,13 +63,16 @@
     const nav = g.navigator || {},
       cores = nav.hardwareConcurrency || 1;
     const no = (reason) => ({ ok: false, cores, reason });
-    if (!g.crossOriginIsolated) return no('This page isn’t cross-origin isolated');
+    if (!g.crossOriginIsolated)
+      return no(
+        'This page can’t share memory between threads (it isn’t cross-origin isolated), so Stockfish uses one thread.',
+      );
     try {
       if (typeof g.Atomics !== 'object' || typeof g.SharedArrayBuffer !== 'function') throw new Error('none');
       const mem = new g.WebAssembly.Memory({ shared: true, initial: 1, maximum: 2 });
       if (!(mem.buffer instanceof g.SharedArrayBuffer)) throw new Error('not shared');
     } catch (e) {
-      return no('This browser has no shared memory');
+      return no('This browser can’t share memory between threads, so Stockfish uses one thread.');
     }
     if (/version\/26\.2\b/i.test(nav.userAgent || '')) return no('Safari 26.2 crashes with threads');
     return { ok: true, cores, reason: '' };
