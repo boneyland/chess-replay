@@ -1208,6 +1208,51 @@ for (const name of BROWSERS)
         await q.ctx.close();
       });
 
+      // Queen answers dropped with a PGN: the note counts them against that game, and goes with the next game loaded
+      // (the first drop keeps the open game, so the note isn't saved for a later switch)
+      await t.test(
+        'desktop: Queen answers dropped with a PGN count against it, and the note leaves with it',
+        async () => {
+          const q = await open(browser, { width: 1440, height: 900 });
+          const p = q.page;
+          await p.goto(base, { waitUntil: 'load' });
+          await loadedOn(p);
+          const pgn =
+            '[White "Gamma Tester"]\n[Black "Delta Tester"]\n\n1. d4 d5 2. c4 e6 *\n\n' +
+            '[White "Eta Tester"]\n[Black "Theta Tester"]\n\n1. Nf3 Nf6 *\n';
+          const ans = { prose: ['Fine.'], evalText: 'Equal.' };
+          const file = (answers) => ({
+            name: 'other_queen.json',
+            mimeType: 'application/json',
+            buffer: Buffer.from(JSON.stringify({ format: 'queen-answers', version: 1, answers })),
+          });
+          const game = { name: 'other.pgn', mimeType: 'text/plain', buffer: Buffer.from(pgn) };
+          const note = p.locator('.q-panel [role="status"]');
+          await p.setInputFiles('#game-files', [game, file({ d2d4: ans, 'd2d4 d7d5': ans, 'b1c3 b8c6': ans })]);
+          await p.waitForFunction(() => /Gamma Tester/.test(document.body.innerText), null, { timeout: 10000 });
+          await assert.doesNotReject(note.waitFor({ timeout: 3000 }));
+          assert.equal(
+            await note.innerText(),
+            'Loaded 3 Queen answers, 2 for this game.',
+            'counted against the new game',
+          );
+          await p.setInputFiles('#game-files', [game, file({ 'g1f3 g8f6': ans })]);
+          await p.waitForFunction(() => /Loaded 1 Queen answer, 0 for this game/.test(document.body.innerText), null, {
+            timeout: 5000,
+          });
+          await p.locator('.pdock').getByRole('button', { name: 'Settings' }).click();
+          await p.getByRole('tab', { name: 'Game' }).click();
+          await p.locator('#tw-game').selectOption('2');
+          await p.waitForFunction(() => /Eta Tester/.test(document.body.innerText), null, { timeout: 5000 });
+          await p.getByRole('button', { name: 'Close settings' }).click();
+          await p.getByRole('button', { name: 'Menu', exact: true }).click();
+          await p.getByRole('button', { name: 'Ask Queen' }).click();
+          await p.locator('.q-panel').waitFor({ timeout: 3000 });
+          assert.equal(await note.count(), 0, "game 1's note is gone on game 2");
+          await q.ctx.close();
+        },
+      );
+
       await t.test('desktop: Esc closes the Queen panel', async () => {
         await page.getByRole('button', { name: 'Menu', exact: true }).click();
         await page.getByRole('button', { name: 'Ask Queen' }).click();

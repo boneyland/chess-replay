@@ -314,17 +314,18 @@ function useQueen(M, hf) {
     setCache({});
     writeQueenCache({});
   };
-  // answers from a saved file join the cache as its newest entries; returns how many are for this game
+  // answers from a saved file join the cache as its newest entries; returns how many are for this game (or for game,
+  // the one loaded with them, not yet in M)
   const [msg, setMsg] = React.useState('');
-  const merge = (answers) => {
+  const merge = (answers, game = M) => {
     const next = capQueenCache({ ...cacheRef.current, ...answers });
     cacheRef.current = next;
     setCache(next);
     const n = Object.keys(
         queenFile(
           answers,
-          M.plies.map((p) => p.uci),
-          M.start.fen,
+          game.plies.map((p) => p.uci),
+          game.start.fen,
         ).answers,
       ).length,
       all = Object.keys(answers).length;
