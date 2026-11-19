@@ -9,6 +9,7 @@ Surface: the built page (`out/site`) served by `tests/live/serve.cjs`, driven th
 as evidence; read `tests/live/site.test.cjs` only to learn flows and helpers.
 
 ## Setup
+
 - `node build.cjs`, then a driver script in the scratchpad that `require`s `tests/live/serve.cjs` (`serve(dir)` → `{ url, close }`)
   and `tests/live/board.cjs` (`loadedOn`, `settled`, `square`); 1440×900 for desktop, 390×844 for the phone layout
 - Launch the browsers the way `LAUNCH` and `open()` in `tests/live/site.test.cjs` do (copy them): they pick this laptop's
@@ -16,11 +17,13 @@ as evidence; read `tests/live/site.test.cjs` only to learn flows and helpers.
 - Find Playwright with `require('playwright')`, falling back to `npm root -g` (as site.test.cjs does)
 
 ### On the user's laptop
+
 - Playwright via `NODE_PATH=$(dirname ~/.npm/_npx/*/node_modules/playwright)`, run with the sandbox disabled. Chromium is the
   ungoogled-chromium flatpak, Firefox the Developer Edition (`channel: 'moz-firefox'`)
 - Wrap each run in a watchdog (poll `MemAvailable`, SIGKILL the process group under ~2200 MB): the machine freezes otherwise
 
 ### On a Claude Code cloud machine (`CCR_AGENT_PROXY_ENABLED` is set)
+
 - No flatpak or Developer Edition: Playwright's own Chromium, and its own Firefox (`FIREFOX_PATH=playwright` in the live
   tests' terms); install them with `npx playwright install chromium firefox` if they're missing
 - Firefox's contexts need `ignoreHTTPSErrors: true` (Playwright's Firefox doesn't trust the proxy's CA); Chromium's don't
@@ -29,6 +32,7 @@ as evidence; read `tests/live/site.test.cjs` only to learn flows and helpers.
 - No phone or adb, no Epiphany: say which checks were left for the laptop or GitHub Actions
 
 ## Driving
+
 - Menu: `getByRole('button', { name: 'Menu', exact: true })`, then the item by name (Starting position, Edit position,
   Chess960 position, Play vs human, Play vs computer, My games…). Import game is its own Dock button; its box is
   `getByRole('textbox', { name: 'PGN, FEN or Lichess link' })`, and a file goes in with `setInputFiles('#game-files', { name, mimeType, buffer })`.
@@ -70,6 +74,7 @@ These come from Vercel's Web Interface Guidelines (github.com/vercel-labs/web-in
 what applies to this page and its tools.
 
 ## Gotchas
+
 - The game dialogs remember the free board: once the board holds a set-up position there is no "Set up position…" button,
   and Start game uses the board as it is. Set the position first with Edit position for a known start
 - `innerText` applies CSS `text-transform` (result lines read upper case): match case-insensitively

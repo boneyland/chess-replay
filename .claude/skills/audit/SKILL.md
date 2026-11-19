@@ -14,6 +14,7 @@ minutes per agent. An audit of all six kinds costs more than one kind; with the 
 scope is "everything" and offer one kind at a time.
 
 ## Arguments
+
 Given: `$ARGUMENTS`
 
 - Words that name a kind (correctness, security, debt, tests, structure, docs) pick those kinds; none named = all (warn about cost).
@@ -23,6 +24,7 @@ Given: `$ARGUMENTS`
 With no arguments, settle the scope as in step 1.
 
 ## 1. Settle the scope
+
 Kinds of audit (the user may name one or several; with none named, do all of them):
 
 - **correctness**: bugs, wrong edge cases, races, unhandled failures, state that can go stale
@@ -40,6 +42,7 @@ Say the scope in one line and go on; ask only when the request is genuinely uncl
 `docs/audits/` first, if there is one: its open findings and Fix plan feed step 5's "Since the last audit".
 
 ## 2. Split the repo into areas
+
 List the tracked files (`git ls-files`) with their line counts. Leave out data and third-party files, whose pins are
 checked in area 5 instead: `vendor/`, `vision/`, `openings/`, `babel/`, `media/`, `tests/fixtures/`, `tests/out/`,
 `app/icons/`, `app/og-image.png`, `app/sample-analysis.js`, `src/pieces.js`, `src/pieces/`, `Cargo.lock`, `LICENSE`.
@@ -67,6 +70,7 @@ changes every week than in one nobody touches: findings in hot files go earlier 
 candidate in a file that hasn't changed in those 300 commits is low at most.
 
 ## 3. One subagent per area, in parallel
+
 Use `general-purpose` agents, not `Explore` (Explore reads excerpts, and bugs hide in the middle of long functions),
 launched together in the background. Brief each one from [agent-brief.md](agent-brief.md): fill in the area, its files and
 the kinds in scope, and add the area's key questions (the brief lists the ones that paid off before). The brief carries
@@ -81,6 +85,7 @@ Severity, the same for every kind:
 - **low**: everything else worth knowing
 
 ## 4. Check, merge, and keep what's out of scope
+
 As each agent reports, check its findings while the others run:
 
 - **Check** every high and medium finding: open the cited lines (a `grep`/`sed` batch per agent is enough) and confirm
@@ -103,6 +108,7 @@ As each agent reports, check its findings while the others run:
 If a quick check needs code to run (a unit-level `node -e` on a core), run it alone and bounded; never a browser.
 
 ## 5. Write the report
+
 Path: `docs/audits/YYYY-MM-DD-<kinds>.md` (e.g. `2026-11-05-all.md`). Template:
 
 ```
