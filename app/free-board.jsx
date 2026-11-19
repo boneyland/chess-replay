@@ -536,21 +536,19 @@ function GameStatus({ board, onChange, down, why, retry, tip, onMove }) {
     const again = () => onChange(P.start(window.BoardCore.go(free, from - 1), G.tc, null, { ...mode, keep: from > 0 }));
     return (
       <React.Fragment>
-        <div style={{ display: 'flex', alignItems: 'center', gap: tx(28) }}>
-          <div className="game-result" style={{ display: 'flex', flexDirection: 'column', gap: tx(6) }}>
-            {big(r.score, C.ink)}
-            {small(r.why, C.last)}
-          </div>
-          <div style={{ marginLeft: 'auto' }}>
+        <div className="game-result" style={{ display: 'flex', flexDirection: 'column', gap: tx(6) }}>
+          {big(r.score, C.ink)}
+          {small(r.why, C.last)}
+        </div>
+        {row(
+          <React.Fragment>
             <FrameButton app primary onClick={again}>
               Play again
             </FrameButton>
-          </div>
-        </div>
-        {row(
-          <FrameButton app primary color={C.last} onClick={() => onChange(free)}>
-            Analyse on the free board
-          </FrameButton>,
+            <FrameButton app onClick={() => onChange(free)}>
+              Analyse on the free board
+            </FrameButton>
+          </React.Fragment>,
         )}
       </React.Fragment>
     );
