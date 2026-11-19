@@ -377,7 +377,7 @@ function ShareDialog({ fen, board, editing, pgn, x, setTweak, onFail, onReplay, 
             Each move’s clip runs from just before it until the board settles. {x.ncNote}
             {x.webp
               ? 'No sound, and it loops; a smaller width or quality makes a smaller file, and Lossless a much larger one.'
-              : `Includes move sounds when on; a lower quality makes a smaller file.${x.exportFormat === 'WebM' ? ' In Firefox, a WebM export takes about three times as long as an MP4 export.' : ''}`}
+              : 'Includes move sounds when on; a lower quality makes a smaller file.'}
           </div>
         </TweakSection>
       ) : (
