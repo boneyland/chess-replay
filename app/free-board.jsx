@@ -402,7 +402,10 @@ function useEngineOpponent(board, onChange, sf) {
     if (!active || !c || c.key !== key) return null;
     const best = window.AnalysisCore.bestOf(await c.promise);
     if (best || before.current !== c) return best;
-    return window.AnalysisCore.bestOf(await c.again());
+    const again = window.AnalysisCore.bestOf(await c.again());
+    // Stockfish answered after all: its "can't run" note goes
+    if (again && before.current === c) setDown(null);
+    return again;
   };
   return { down: active ? down : null, retry: () => setTries((n) => n + 1), hint };
 }

@@ -3458,63 +3458,106 @@ for (const name of BROWSERS)
         await ph.ctx.close();
       });
       // a second finger while one holds a piece is not the board's: on the free board it plays nothing (it once played the
-      // held piece's move to the square it touched), in Edit position it doesn't take the drag over. Touches by CDP, so
-      // Chromium only (Playwright's touchscreen has one finger)
+      // held piece's move to the square it touched), in Edit position it doesn't take the drag over; a finger resting
+      // elsewhere on the page stops no taps on the board. A tap held a while gives the board a press's focus, not the
+      // keyboard's: a touch screen focuses at the compatibility mousedown, after the finger lifts (a tap held over 50 ms
+      // once read as a key's, and the board took the arrows). Touches by CDP, so Chromium only (Playwright's touchscreen
+      // has one finger)
       if (name === 'chromium')
-        await t.test('phone: a second finger on the board plays and moves nothing', async () => {
-          const ph = await open(browser, { width: 390, height: 844 }, phone({}));
-          const p = ph.page;
-          await p.goto(base, { waitUntil: 'load' });
-          await loadedOn(p);
-          const cdp = await ph.ctx.newCDPSession(p);
-          const touch = (type, pts) =>
-            cdp.send('Input.dispatchTouchEvent', { type, touchPoints: pts.map(([q, id]) => ({ x: q.x, y: q.y, id })) });
-          await p.getByRole('button', { name: 'Menu', exact: true }).click();
-          await p.getByRole('button', { name: 'Starting position' }).click();
-          const label = p.locator('.plabel');
-          await assert.doesNotReject(label.filter({ hasText: /^Start$/ }).waitFor({ timeout: 5000 }));
-          let b = await boardBox(p);
-          // the first finger holds the e-pawn (selected, its squares shown); the second taps e4
-          await touch('touchStart', [[square(b, 'e2'), 0]]);
-          await touch('touchStart', [
-            [square(b, 'e2'), 0],
-            [square(b, 'e4'), 1],
-          ]);
-          await touch('touchEnd', [[square(b, 'e2'), 0]]);
-          await touch('touchEnd', []);
-          await p.waitForTimeout(500);
-          assert.equal(await label.filter({ hasText: /e4/ }).count(), 0, 'no move played');
-          assert.equal(await label.filter({ hasText: /^Start$/ }).count(), 1, 'still at the start');
-          // Edit position: the first finger drags the e-pawn to e4 while a second presses the d-pawn and moves it to d4
-          await p.getByRole('button', { name: 'Menu', exact: true }).click();
-          await p.getByRole('button', { name: 'Edit position' }).click();
-          const field = p.getByRole('textbox', { name: 'FEN' });
-          await assert.doesNotReject(field.waitFor({ timeout: 5000 }));
-          await p.getByRole('button', { name: 'Start', exact: true }).click();
-          b = await editBox(p);
-          const at = (from, to, k) => ({
-            x: from.x + ((to.x - from.x) * k) / 6,
-            y: from.y + ((to.y - from.y) * k) / 6,
-          });
-          const [e2, e4, d2, d4] = ['e2', 'e4', 'd2', 'd4'].map((q) => square(b, q));
-          await touch('touchStart', [[e2, 0]]);
-          await touch('touchStart', [
-            [e2, 0],
-            [d2, 1],
-          ]);
-          for (let k = 1; k <= 6; k++)
-            await touch('touchMove', [
-              [at(e2, e4, k), 0],
-              [at(d2, d4, k), 1],
+        await t.test(
+          'phone: a second finger on the board plays and moves nothing; a held tap takes no keys',
+          async () => {
+            const ph = await open(browser, { width: 390, height: 844 }, phone({}));
+            const p = ph.page;
+            await p.goto(base, { waitUntil: 'load' });
+            await loadedOn(p);
+            const cdp = await ph.ctx.newCDPSession(p);
+            const touch = (type, pts) =>
+              cdp.send('Input.dispatchTouchEvent', {
+                type,
+                touchPoints: pts.map(([q, id]) => ({ x: q.x, y: q.y, id })),
+              });
+            await p.getByRole('button', { name: 'Menu', exact: true }).click();
+            await p.getByRole('button', { name: 'Starting position' }).click();
+            const label = p.locator('.plabel');
+            await assert.doesNotReject(label.filter({ hasText: /^Start$/ }).waitFor({ timeout: 5000 }));
+            let b = await boardBox(p);
+            // the first finger holds the e-pawn (selected, its squares shown); the second taps e4
+            await touch('touchStart', [[square(b, 'e2'), 0]]);
+            await touch('touchStart', [
+              [square(b, 'e2'), 0],
+              [square(b, 'e4'), 1],
             ]);
-          await touch('touchEnd', [[e4, 0]]);
-          await touch('touchEnd', []);
-          await p.waitForTimeout(300);
-          const fen = (await field.inputValue()).split(' ')[0];
-          assert.equal(fen, 'rnbqkbnr/pppppppp/8/8/4P3/8/PPPP1PPP/RNBQKBNR', 'the e-pawn on e4, the d-pawn home');
-          assert.deepEqual(ph.errors, []);
-          await ph.ctx.close();
-        });
+            await touch('touchEnd', [[square(b, 'e4'), 1]]);
+            await touch('touchEnd', []);
+            await p.waitForTimeout(500);
+            assert.equal(await label.filter({ hasText: /e4/ }).count(), 0, 'no move played');
+            assert.equal(await label.filter({ hasText: /^Start$/ }).count(), 1, 'still at the start');
+            // a tap held 150 ms on an empty square (it lets the e-pawn go): the board has the focus, but not the keys
+            await touch('touchStart', [[square(b, 'e5'), 2]]);
+            await p.waitForTimeout(150);
+            await touch('touchEnd', []);
+            await p.waitForTimeout(300);
+            const board = p.getByRole('application', { name: 'Board' });
+            assert.ok(await board.evaluate((el) => el === document.activeElement), 'the tap focused the board');
+            await p.keyboard.press('ArrowUp');
+            assert.equal(
+              await p.evaluate(() =>
+                [...document.querySelectorAll('[role="application"] [aria-live]')].map((e) => e.textContent).join(''),
+              ),
+              '',
+              'a held tap takes no keys',
+            );
+            // a finger resting beside the board: taps on e2, then e4, play 1. e4
+            const aside = { x: 3, y: b.y0 + 4 * b.sq };
+            await touch('touchStart', [[aside, 3]]);
+            for (const [q, id] of [
+              ['e2', 4],
+              ['e4', 5],
+            ]) {
+              await touch('touchStart', [
+                [aside, 3],
+                [square(b, q), id],
+              ]);
+              await touch('touchEnd', [[square(b, q), id]]); // (touchEnd names the fingers lifted)
+              await p.waitForTimeout(150);
+            }
+            await touch('touchEnd', []);
+            await assert.doesNotReject(
+              label.filter({ hasText: /e4/ }).first().waitFor({ timeout: 5000 }),
+              'taps beside a resting finger play',
+            );
+            // Edit position: the first finger drags the e-pawn to e4 while a second presses the d-pawn and moves it to d4
+            await p.getByRole('button', { name: 'Menu', exact: true }).click();
+            await p.getByRole('button', { name: 'Edit position' }).click();
+            const field = p.getByRole('textbox', { name: 'FEN' });
+            await assert.doesNotReject(field.waitFor({ timeout: 5000 }));
+            await p.getByRole('button', { name: 'Start', exact: true }).click();
+            b = await editBox(p);
+            const at = (from, to, k) => ({
+              x: from.x + ((to.x - from.x) * k) / 6,
+              y: from.y + ((to.y - from.y) * k) / 6,
+            });
+            const [e2, e4, d2, d4] = ['e2', 'e4', 'd2', 'd4'].map((q) => square(b, q));
+            await touch('touchStart', [[e2, 0]]);
+            await touch('touchStart', [
+              [e2, 0],
+              [d2, 1],
+            ]);
+            for (let k = 1; k <= 6; k++)
+              await touch('touchMove', [
+                [at(e2, e4, k), 0],
+                [at(d2, d4, k), 1],
+              ]);
+            await touch('touchEnd', [[e4, 0]]);
+            await touch('touchEnd', []);
+            await p.waitForTimeout(300);
+            const fen = (await field.inputValue()).split(' ')[0];
+            assert.equal(fen, 'rnbqkbnr/pppppppp/8/8/4P3/8/PPPP1PPP/RNBQKBNR', 'the e-pawn on e4, the d-pawn home');
+            assert.deepEqual(ph.errors, []);
+            await ph.ctx.close();
+          },
+        );
       // review fixes: Esc that closes Settings or the Play/Explore menu leaves the editor alone; an analysis finishing
       // meanwhile doesn't close it; a Stockfish reply made while the Leave dialog was up survives Leave and Cancel
       await t.test('desktop: Edit position survives Esc on an open menu and an analysis finishing', async () => {
@@ -3600,6 +3643,180 @@ for (const name of BROWSERS)
         await p.getByRole('button', { name: 'Try again' }).click();
         await assert.doesNotReject(p.getByText('Your move', { exact: true }).waitFor({ timeout: 45000 }));
         assert.match(await p.locator('.part-moves').innerText(), /1\./, 'Stockfish played its first move');
+        assert.deepEqual(g.errors, []);
+        await g.ctx.close();
+      });
+      // a move of the player's that draws the game gets no reply search: it is rated from the search before it against the
+      // draw (it once went unrated, "No moves flagged" after stalemating a won K+Q v K)
+      await t.test('desktop: Play vs computer flags a stalemating move', async () => {
+        const g = await open(browser, { width: 1440, height: 900 });
+        const p = g.page;
+        // the engine's searches ('go') and their ends ('bestmove'), so the move waits for the search before it
+        await p.addInitScript(() => {
+          const out = (window.__sfOut = []),
+            W = window.Worker;
+          window.Worker = class extends W {
+            set onmessage(f) {
+              super.onmessage =
+                f &&
+                ((e) => {
+                  if (typeof e.data === 'string' && e.data.startsWith('bestmove')) out.push('bestmove');
+                  return f(e);
+                });
+            }
+            get onmessage() {
+              return super.onmessage;
+            }
+            postMessage(d, o) {
+              if (typeof d === 'string' && d.startsWith('go')) out.push('go');
+              return super.postMessage(d, o);
+            }
+          };
+        });
+        await p.goto(base, { waitUntil: 'load' });
+        await loadedOn(p);
+        await setUpFen(p, '7k/8/5K2/8/8/8/8/6Q1 w - - 0 1');
+        await p.getByRole('button', { name: 'Menu', exact: true }).click();
+        await p.getByRole('button', { name: 'Play vs computer' }).click();
+        const dialog = p.getByRole('dialog', { name: 'Play vs computer' });
+        await dialog.getByRole('radio', { name: 'Set-up position' }).click();
+        await dialog.getByRole('radio', { name: 'White' }).click();
+        const n0 = await p.evaluate(() => window.__sfOut.length);
+        await dialog.getByRole('button', { name: 'Start game' }).click();
+        await assert.doesNotReject(dialog.waitFor({ state: 'detached', timeout: 3000 }));
+        // the search of the position (5 s at most once the engine is up) has ended
+        await p.waitForFunction(
+          (n0) => {
+            const o = window.__sfOut.slice(n0),
+              g = o.lastIndexOf('go');
+            return g >= 0 && o.indexOf('bestmove', g) > g;
+          },
+          n0,
+          { timeout: 60000 },
+        );
+        const b = await p.evaluate(() => {
+          const r = [...document.querySelectorAll('div')]
+            .find((d) => d.style.touchAction === 'none')
+            .getBoundingClientRect();
+          return { x0: r.left, y0: r.top, sq: r.width / 8 };
+        });
+        const f = square(b, 'g1'),
+          to = square(b, 'g6');
+        await p.mouse.move(f.x, f.y);
+        await p.mouse.down();
+        await p.mouse.move(to.x, to.y, { steps: 8 });
+        await p.mouse.up();
+        await assert.doesNotReject(
+          p
+            .getByText(/That stalemates\./)
+            .first()
+            .waitFor({ timeout: 10000 }),
+          'the stalemating move is flagged',
+        );
+        assert.match(await p.evaluate(() => document.body.innerText), /Blunder: 1\. Qg6/i);
+        assert.deepEqual(g.errors, []);
+        await g.ctx.close();
+      });
+      // Hint after a search that found nothing (here the engine died during it, which says nothing to the player) asks
+      // Stockfish again: it once awaited the same empty answer, "Stockfish found no move: ask again" for good
+      await t.test(
+        'desktop: Play vs computer: Hint asks Stockfish again after a search that found nothing',
+        async () => {
+          const g = await open(browser, { width: 1440, height: 900 });
+          const p = g.page;
+          await p.addInitScript(() => {
+            const W = window.Worker;
+            window.__sfLive = [];
+            window.Worker = class extends W {
+              constructor(u, o) {
+                super(u, o);
+                if (/stockfish/.test(String(u))) window.__sfLive.push(this);
+              }
+            };
+          });
+          await p.goto(base, { waitUntil: 'load' });
+          await loadedOn(p);
+          await p.getByRole('button', { name: 'Menu', exact: true }).click();
+          await p.getByRole('button', { name: 'Play vs computer' }).click();
+          const dialog = p.getByRole('dialog', { name: 'Play vs computer' });
+          await dialog.getByRole('radio', { name: 'White' }).click();
+          await dialog.getByRole('button', { name: 'Start game' }).click();
+          await assert.doesNotReject(dialog.waitFor({ state: 'detached', timeout: 3000 }));
+          const hint = p.getByRole('button', { name: /^Hint · 3 left$/ });
+          await assert.doesNotReject(hint.waitFor({ timeout: 10000 }));
+          // the engine up and searching the start (the "before" search), then dead: that search ends with nothing
+          await p.waitForFunction(() => window.__sfLive.length > 0, null, { timeout: 30000 });
+          await p.waitForTimeout(1500);
+          await p.evaluate(() => {
+            const w = window.__sfLive[window.__sfLive.length - 1];
+            w.terminate();
+            if (w.onerror) w.onerror(new ErrorEvent('error', { message: 'killed by the test' }));
+          });
+          await hint.click();
+          await assert.doesNotReject(
+            p.getByText(/^Hint: \S+ · 2 left$/).waitFor({ timeout: 45000 }),
+            'a new search gives the hint',
+          );
+          assert.equal(await p.getByText(/Stockfish can’t run here|Stockfish stopped/).count(), 0, 'no trouble shown');
+          await g.ctx.close();
+        },
+      );
+      // a dead position's answer that lands while the game is stepped back still ends the game: the end is the last
+      // position's (it once listened to the position stepped back to). The prover's answers are held back 2 s
+      await t.test('desktop: a dead position proven while a game is stepped back ends it', async () => {
+        const g = await open(browser, { width: 1440, height: 900 });
+        const p = g.page;
+        await p.addInitScript(() => {
+          const W = window.Worker;
+          window.Worker = class extends W {
+            constructor(u, o) {
+              super(u, o);
+              this.__slow = /dead-worker/.test(String(u));
+            }
+            set onmessage(f) {
+              super.onmessage = f && this.__slow ? (e) => setTimeout(() => f(e), 2000) : f;
+            }
+            get onmessage() {
+              return super.onmessage;
+            }
+          };
+        });
+        await p.goto(base, { waitUntil: 'load' });
+        await loadedOn(p);
+        // 1. Nd7 Bxd7 leaves only locked pawns, the kings and opposite bishops: dead, which only the prover can tell
+        await setUpFen(p, '2b1k3/8/8/1pNp1p1p/1P1P1P1P/8/8/2B1K3 w - - 0 1');
+        await p.getByRole('button', { name: 'Menu', exact: true }).click();
+        await p.getByRole('button', { name: 'Play vs human' }).click();
+        const dialog = p.getByRole('dialog', { name: 'Play vs human' });
+        await dialog
+          .getByRole('radiogroup', { name: 'Start from' })
+          .getByRole('radio', { name: 'Set-up position' })
+          .click();
+        await dialog.getByRole('button', { name: 'Start game' }).click();
+        await assert.doesNotReject(dialog.waitFor({ state: 'detached', timeout: 3000 }));
+        await settled(p);
+        const drag = async (from, to, flipped) => {
+          const r = await p.locator('[title="Drag a piece to try your own move"]').boundingBox(),
+            b = { x0: r.x, y0: r.y, sq: r.width / 8 },
+            f = square(b, from, flipped),
+            tt = square(b, to, flipped);
+          await p.mouse.move(f.x, f.y);
+          await p.mouse.down();
+          await p.mouse.move(tt.x, tt.y, { steps: 8 });
+          await p.mouse.up();
+        };
+        await drag('c5', 'd7', false);
+        await p.waitForTimeout(400);
+        // the board turns to the side to move: Black's
+        await drag('c8', 'd7', true);
+        await assert.doesNotReject(p.locator('.plabel').filter({ hasText: /Bxd7/ }).first().waitFor({ timeout: 5000 }));
+        // stepped back before the answer
+        await p.getByRole('button', { name: 'Previous move (←)' }).click();
+        assert.equal(await p.getByText('Draw: dead position, neither side can mate').count(), 0, 'not yet');
+        await assert.doesNotReject(
+          p.getByText('Draw: dead position, neither side can mate').waitFor({ timeout: 20000 }),
+          'the answer ends the game',
+        );
         assert.deepEqual(g.errors, []);
         await g.ctx.close();
       });
@@ -9073,6 +9290,65 @@ for (const name of BROWSERS)
           assert.deepEqual(lc.errors, []);
           await lc.ctx.close();
         });
+
+      // the settle waits while the main mouse button is down, and only that one: a right-click's release can go to the menu
+      // it opens, and settling once stopped for good after one. A release lost all the same (a button press the page never
+      // saw let go) ends with the next move with no button down. The presses are script-made (their releases withheld),
+      // the moves real
+      await t.test("one column: a right-click or a lost release doesn't stop the scroll settling", async () => {
+        const lc = await open(browser, { width: 390, height: 700 }, { newViewer: true });
+        const p = lc.page;
+        await p.goto(base, { waitUntil: 'load' });
+        await loadedOn(p);
+        await p.locator('[data-ply="38"]').click();
+        await p.waitForTimeout(600);
+        const area = p.locator('.stage-area');
+        const top = () => area.evaluate((a) => a.scrollTop);
+        const press = (button) =>
+          area.evaluate((a, button) => {
+            a.dispatchEvent(
+              new PointerEvent('pointerdown', {
+                bubbles: true,
+                pointerType: 'mouse',
+                pointerId: 1,
+                isPrimary: true,
+                button,
+                buttons: button === 2 ? 2 : 1,
+              }),
+            );
+          }, button);
+        // a third of the way to the pin point: settles back to the top
+        const partWay = () =>
+          area.evaluate((a) => {
+            const pinAt = parseFloat(
+              getComputedStyle(document.querySelector('.pin-morph')).getPropertyValue('--pin-at'),
+            );
+            a.scrollTop = Math.round(pinAt / 3);
+            return a.scrollTop;
+          });
+        const settles = async (what) => {
+          for (let i = 0; i < 30 && (await top()) > 0.5; i++) await p.waitForTimeout(100);
+          assert.ok((await top()) <= 0.5, `${what}: settled to the top, not left at ${await top()}`);
+        };
+        await area.evaluate((a) => {
+          a.scrollTop = 0;
+        });
+        await p.waitForTimeout(400);
+        await press(2);
+        assert.ok((await partWay()) > 10, 'the page scrolls');
+        await settles('after a right-button press');
+        // the main button held: no settle while it's down
+        await press(0);
+        const at = await partWay();
+        await p.waitForTimeout(700);
+        assert.equal(await top(), at, 'held where the button is down');
+        // its release lost: a move with no button down lets it go
+        await p.mouse.move(200, 400);
+        await p.mouse.move(210, 420, { steps: 3 });
+        await settles('after a move with no button down');
+        assert.deepEqual(lc.errors, []);
+        await lc.ctx.close();
+      });
 
       await t.test('phone: the layout fits the width and folds the buttons into a menu', async () => {
         // Firefox has no mobile emulation in Playwright: there it is a narrow window with touch

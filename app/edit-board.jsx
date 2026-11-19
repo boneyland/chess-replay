@@ -185,7 +185,7 @@ function useEditInput({ setup, onChange }) {
   const E = window.EditCore;
   const handlers = {
     onDown: (e) => {
-      if (!e.isPrimary) return;
+      if (drag && e.pointerId !== drag.id) return; // a second finger doesn't take over the drag
       const p = at(e);
       if (p.sq < 0) return;
       if (held) {
@@ -208,7 +208,7 @@ function useEditInput({ setup, onChange }) {
   // a tray press that doesn't move is a click (as Enter or Space on the button is): it holds the piece, or lets it go
   const trayHandlers = (piece) => ({
     onPointerDown: (e) => {
-      if (!e.isPrimary) return;
+      if (drag && e.pointerId !== drag.id) return;
       dragged.current = false;
       start(e, piece, null);
     },

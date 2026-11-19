@@ -3937,8 +3937,8 @@ function useBoardInput({ pos, onPick, onMiss, onMove }) {
   const ours = (e) => drag && !drag.back && e.pointerId === drag.id;
   const handlers = {
     onDown: (e) => {
-      // only the first finger on the screen (or a mouse or pen): a second one, while a piece is held, plays nothing
-      if (!e.isPrimary) return;
+      // a second finger while one holds a piece plays nothing (a finger elsewhere on the page doesn't stop taps here)
+      if (drag && !drag.back && e.pointerId !== drag.id) return;
       const p = boardXY(e);
       // the castle question open: a press anywhere but its buttons (which take their own presses) lets it go
       if (castle) {
