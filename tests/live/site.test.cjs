@@ -8817,6 +8817,65 @@ for (const name of BROWSERS)
         },
       );
 
+      // a flick up from the pinned board: the finger lets go while the drag's scroll events have just armed the settle's
+      // pause timer, and the momentum goes on. The let-go once started a second timer without clearing that one, which
+      // fired mid-momentum, found the page still past half way and glided it back down to pinned (on a phone the board
+      // grew for a moment, then snapped small). Script-made touch events and a script's momentum stand in for the finger
+      await t.test('one column: a flick up from the pinned board settles on the full board, no step back', async () => {
+        const lc = await open(browser, { width: 390, height: 700 });
+        const p = lc.page;
+        await p.goto(base, { waitUntil: 'load' });
+        await loadedOn(p);
+        await p.locator('[data-ply="38"]').click();
+        await p.locator('.part-analysis .mv').nth(1).waitFor({ state: 'visible', timeout: 30000 });
+        const area = p.locator('.stage-area');
+        await area.evaluate((a) => {
+          a.scrollTop = 0;
+        });
+        await p.waitForTimeout(600);
+        const tops = await area.evaluate(async (a) => {
+          const pinAt = parseFloat(getComputedStyle(document.querySelector('.pin-morph')).getPropertyValue('--pin-at'));
+          const frame = () => new Promise((r) => requestAnimationFrame(r));
+          const wait = (ms) => new Promise((r) => setTimeout(r, ms));
+          const touch = (type, n) => {
+            const e = new Event(type, { bubbles: true });
+            e.touches = Array.from({ length: n }, () => ({}));
+            (type === 'touchstart' ? a : window).dispatchEvent(e);
+          };
+          // a fling fires one scrollend, when it is spent; a script's every write fires one, so none reach the page here
+          a.addEventListener('scrollend', (e) => e.stopImmediatePropagation(), { capture: true });
+          // the finger drags the page up to just short of the pin point, then lets go
+          const start = pinAt * 0.9;
+          touch('touchstart', 1);
+          a.scrollTop = start;
+          await frame();
+          await wait(30);
+          touch('touchend', 0);
+          // momentum back up the page, about 60 frames to the top: still past half way when 120 ms have gone
+          // (a browser's momentum ends when script moves the page, as the settle's glide does: so does this one)
+          const out = [];
+          let last = start,
+            cancelled = false;
+          for (let i = 1; i <= 60; i++) {
+            out.push(a.scrollTop);
+            if (Math.abs(a.scrollTop - last) > 0.5) cancelled = true;
+            if (!cancelled) {
+              last = start * (1 - i / 60);
+              a.scrollTop = last;
+            }
+            await frame();
+          }
+          await wait(1200);
+          out.push(a.scrollTop);
+          return out;
+        });
+        const back = tops.findIndex((v, i) => i && v > tops[i - 1] + 0.5);
+        assert.equal(back, -1, `a step back down in ${tops.map(Math.round).join(',')}`);
+        assert.equal(tops[tops.length - 1], 0, 'back at the top, the full board');
+        assert.deepEqual(lc.errors, []);
+        await lc.ctx.close();
+      });
+
       await t.test('phone: the layout fits the width and folds the buttons into a menu', async () => {
         // Firefox has no mobile emulation in Playwright: there it is a narrow window with touch
         const ph = await open(browser, { width: 390, height: 844 }, phone({ hasTouch: true }));
