@@ -4045,13 +4045,16 @@ function useHeldSchedule(T0, S) {
   const prevS = React.useRef(S);
   const shift = React.useRef(null); // { S, from, to } until the timeline holds `to`
   if (prevS.current !== S) {
+    // the old move is found from the timeline's own time: T0 is already clamped to the new, shorter total, which on
+    // the old schedule is a move mid-game
+    const was = Number.isFinite(tl.time) ? tl.time : T0;
     const p = prevS.current,
-      c = lastPly(T0, p);
+      c = lastPly(was, p);
     prevS.current = S;
     shift.current = null;
     if (c >= 0 && c < S.N) {
       const next = c + 1 < S.N ? S.tp[c + 1] - 0.05 : Infinity;
-      const t = Math.min(S.tp[c] + (T0 - p.tp[c]), next);
+      const t = Math.min(S.tp[c] + (was - p.tp[c]), next);
       if (Math.abs(t - T0) > 0.01) shift.current = { S, from: T0, to: t };
     }
   }

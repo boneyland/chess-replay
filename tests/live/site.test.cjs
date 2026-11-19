@@ -820,6 +820,42 @@ for (const name of BROWSERS)
         await g.ctx.close();
       });
 
+      await t.test('desktop: a shorter schedule while paused on the last move keeps the board on it', async () => {
+        const g = await open(browser, { width: 1440, height: 900 });
+        const p = g.page,
+          label = p.locator('.plabel');
+        await p.goto(base, { waitUntil: 'load' });
+        await loadedOn(p);
+        await p.setInputFiles('#game-files', {
+          name: 'held.pgn',
+          mimeType: 'text/plain',
+          buffer: Buffer.from(
+            '[White "Held Tester"]\n[Black "B"]\n\n1. d4 d5 2. c4 e6 3. Nc3 Nf6 4. Bg5 Be7 5. e3 O-O 6. Nf3 Nbd7 7. Rc1 c6 8. Bd3 dxc4 9. Bxc4 Nd5 10. Bxe7 Qxe7 11. O-O Nxc3 12. Rxc3 e5 *',
+          ),
+        });
+        await p.waitForFunction(() => /Held Tester/.test(document.body.innerText), null, { timeout: 10000 });
+        const head = p.getByRole('slider', { name: 'Playhead' });
+        await head.focus();
+        await p.keyboard.press('End');
+        await assert.doesNotReject(
+          label.filter({ hasText: /^12…\s*e5/ }).waitFor({ timeout: 5000 }),
+          'on the last move',
+        );
+        const before = +(await head.getAttribute('aria-valuemax'));
+        await p.getByRole('button', { name: 'Settings' }).click();
+        await p.getByRole('tab', { name: 'View' }).click();
+        await p.getByRole('slider', { name: 'Seconds per move' }).focus();
+        await p.keyboard.press('Home'); // 1.6 s → 0.5 s a move
+        await p.waitForFunction((b) => +document.querySelector('[aria-label="Playhead"]').ariaValueMax < b, before, {
+          timeout: 5000,
+        });
+        await p.keyboard.press('Escape');
+        await settled(p);
+        assert.match(await label.innerText(), /^12…\s*e5/, 'still on the last move');
+        assert.deepEqual(g.errors, []);
+        await g.ctx.close();
+      });
+
       await t.test('desktop: an own move gets a Stockfish verdict', async () => {
         const b = await boardBox(page);
         const from = square(b, 'e2'),
