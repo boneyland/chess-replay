@@ -1,10 +1,10 @@
 // ---------- video export ----------
-// Steps the player through every frame, draws the stage into a canvas (export-draw.js: the board, the eval bar and the
-// graph drawn there, the other layers with html2canvas-pro, each only when it changes) and encodes it in
-// the browser: an MP4 or a WebM (WebCodecs, muxed by Mediabunny), or an animated WebP (each frame a still WebP from libwebp,
-// joined by webp-core.js). The libraries load on the first export only: html2canvas-pro from the CDN, Mediabunny and
-// libwebp from the site.
-// frame rates offered in Settings; each frame takes about 0.2 s to draw, so the export time scales with it
+// Steps the player through every frame, draws the stage into a canvas (export-draw.js paints most layers itself and
+// hands the few it can't read to html2canvas-pro, each layer only when its markup changes) and encodes it in the
+// browser: an MP4 or a WebM (WebCodecs, muxed by Mediabunny), or an animated WebP (each frame a still WebP from
+// libwebp, joined by webp-core.js). The libraries load on the first export only: html2canvas-pro from the CDN,
+// Mediabunny and libwebp from the site.
+// frame rates offered in Settings; the export's time scales with it (Share and export's estimate: about 0.04 s a frame)
 const EXPORT_FPS_OPTIONS = [8, 12, 15, 24, 30];
 // a new version of html2canvas-pro needs a new hash. Mediabunny 1.61.0 (an ES module) is served next to the page
 // (vendor/): an import() can't carry an integrity hash, and not every browser honours an import map's
@@ -88,6 +88,13 @@ const WEBP_CONFIG = {
 };
 // quality 100 is lossless: libwebp then reads `quality` as effort, so it is left at the top
 const WEBP_LOSSLESS = { lossless: 1 };
+// A canvas no longer needed, emptied so its memory goes now rather than when it is collected (export-draw.js's free)
+const freeCanvas = (cv) => {
+  if (cv && cv.width) {
+    cv.width = 0;
+    cv.height = 0;
+  }
+};
 // each library loads once; a failed load is tried again on the next export
 const once = (load) => {
   let p = null;
@@ -126,8 +133,6 @@ const loadWebp = once(async () => {
   return glue.default({ noInitialRun: true, wasmBinary: wasm });
 });
 
-// The two encoders behind one interface: frame(isNew) after each frame is drawn into the canvas (isNew false when
-// run() left the canvas as it was, its markup unchanged), then finish() gives the file as { blob, ext }, or cancel()
 // The soundtrack encoded to packets, with times of our own. WebKitGTK's audio encoder stamps every packet of a slice it is
 // given with the slice's start (and some with the slice's length), so the track's clock jumped and players stuttered and
 // drifted from the picture. A packet's length is known from its data instead: an Opus packet says it in its first bytes,
@@ -162,20 +167,42 @@ async function encodeSound(MB, sound, acodec) {
     bitrate: 96000,
   });
   const step = Math.round(sr / 2);
-  for (let at = 0; at < sound.length && !err; at += step) {
-    const n = Math.min(step, sound.length - at),
-      data = new Float32Array(n * ch);
-    for (let c = 0; c < ch; c++) data.set(sound.getChannelData(c).subarray(at, at + n), c * n);
-    const ad = new AudioData({
-      format: 'f32-planar',
-      sampleRate: sr,
-      numberOfFrames: n,
-      numberOfChannels: ch,
-      timestamp: Math.round((at / sr) * 1e6),
-      data,
+  // a few slices queued at a time: queued all at once, every slice's copy of the sound was held until the encoder got to
+  // it (a second whole soundtrack in memory). The encoder says when it takes one ('dequeue'); a browser that doesn't is
+  // polled
+  const QUEUED = 4;
+  const room = () =>
+    new Promise((ok) => {
+      const t = setTimeout(ok, 20);
+      if ('ondequeue' in enc)
+        enc.addEventListener(
+          'dequeue',
+          () => {
+            clearTimeout(t);
+            ok();
+          },
+          { once: true },
+        );
     });
-    enc.encode(ad);
-    ad.close();
+  // the track comes a window at a time (Sfx.renderTrack), each let go once it is sliced and queued
+  for await (const { at: w0, buffer } of sound.chunks()) {
+    for (let at = 0; at < buffer.length && !err; at += step) {
+      while (enc.encodeQueueSize >= QUEUED && !err) await room();
+      const n = Math.min(step, buffer.length - at),
+        data = new Float32Array(n * ch);
+      for (let c = 0; c < ch; c++) data.set(buffer.getChannelData(c).subarray(at, at + n), c * n);
+      const ad = new AudioData({
+        format: 'f32-planar',
+        sampleRate: sr,
+        numberOfFrames: n,
+        numberOfChannels: ch,
+        timestamp: Math.round(((w0 + at) / sr) * 1e6),
+        data,
+      });
+      enc.encode(ad);
+      ad.close();
+    }
+    if (err) break;
   }
   if (!err) await enc.flush();
   enc.close();
@@ -189,6 +216,8 @@ async function encodeSound(MB, sound, acodec) {
   });
 }
 
+// The two encoders behind one interface: frame(isNew) after each frame is drawn into the canvas (isNew false when
+// run() left the canvas as it was, its markup unchanged), then finish() gives the file as { blob, ext }, or cancel().
 // vfr: a frame whose picture didn't change (isNew false) isn't encoded: the frame before is held for its time, so a
 // pause is one long frame and fps is the most frames a second a move's animation gets. The picture is kept in a copy
 // of the canvas, as the canvas itself is drawn over with the next new frame before the held one's length is known
@@ -203,7 +232,7 @@ async function videoEncoder(cv, W, H, fps, audio, { webm = false, quality = 'Hig
         ? 'this browser can’t encode VP9 video at this size. Export an MP4 or an animated WebP instead.'
         : 'this browser can’t encode the video (as H.264 or VP9, at this size). Export an animated WebP instead.',
     );
-  const output = new MB.Output({
+  let output = new MB.Output({
     format: avc ? new MB.Mp4OutputFormat() : new MB.WebMOutputFormat(),
     target: new MB.BufferTarget(),
   });
@@ -250,13 +279,15 @@ async function videoEncoder(cv, W, H, fps, audio, { webm = false, quality = 'Hig
     finish: async () => {
       if (vfr && from != null) await src.add(from / fps, (i - from) / fps);
       await output.finalize();
-      return {
-        blob: new Blob([output.target.buffer], { type: avc ? 'video/mp4' : 'video/webm' }),
-        ext: avc ? '.mp4' : '.webm',
-      };
+      const blob = new Blob([output.target.buffer], { type: avc ? 'video/mp4' : 'video/webm' });
+      // the file's buffer let go now that the Blob holds its own copy, so saving it doesn't hold two
+      output = null;
+      freeCanvas(hold);
+      return { blob, ext: avc ? '.mp4' : '.webm' };
     },
     cancel: async () => {
-      if (output.state === 'started') await output.cancel();
+      freeCanvas(hold);
+      if (output && output.state === 'started') await output.cancel();
     },
   };
 }
@@ -322,28 +353,36 @@ async function webpEncoder(cv, W, H, fps, frames, { width = 0, quality = 75 } = 
         ...box,
       });
     },
-    finish: async () => ({
-      blob: new Blob(window.WebPAnim.mux(stills, { width: w, height: h }), { type: 'image/webp' }),
-      ext: '.webp',
-    }),
-    cancel: async () => {},
+    finish: async () => {
+      if (out !== cv) freeCanvas(out);
+      return {
+        blob: new Blob(window.WebPAnim.mux(stills, { width: w, height: h }), { type: 'image/webp' }),
+        ext: '.webp',
+      };
+    },
+    cancel: async () => {
+      if (out !== cv) freeCanvas(out);
+    },
   };
 }
 // the stage re-renders synchronously inside dispatchEvent, so the frame can be drawn straight after
 const seekStage = (t) => window.dispatchEvent(new CustomEvent('chess-video:seek', { detail: { time: t, sync: true } }));
 
 // run() takes the stretch of the timeline to export in seconds ({ start, end }), a file name suffix, and audio: an
-// async function giving the stretch's soundtrack as an AudioBuffer (or null for none; a WebP has no sound).
+// async function giving the stretch's soundtrack as Sfx.renderTrack's windowed track (or null for none; a WebP has no sound).
 // format: one of EXPORT_FORMATS; webp: { width (0 the frame's own, 'Half', or pixels), quality } for webpEncoder; mp4Quality: one of MP4_QUALITIES (MP4 and WebM)
 function useVideoExport({ fps, format, webp, mp4Quality, mp4Vfr = false, save, stem }) {
   const [state, setState] = React.useState(null); // { phase: 'load' | 'render' | 'save', done, N, eta } or { phase: 'error', msg }
-  const stopRef = React.useRef(false);
+  const stopRef = React.useRef(false),
+    runningRef = React.useRef(false); // set at once, where state is only set at the next render
   const run = async ({ start, end, suffix = '', audio }) => {
-    if (state && state.phase !== 'error') return;
+    if (runningRef.current) return;
+    runningRef.current = true;
     stopRef.current = false;
     setState({ phase: 'load', done: 0, N: 0 });
     let enc = null,
-      stage = null;
+      stage = null,
+      cv = null;
     try {
       const html2canvas = await loadHtml2canvas();
       // the stage is in its screen-sized video layout once the busy state has rendered: wait a frame, then draw it from
@@ -368,7 +407,7 @@ function useVideoExport({ fps, format, webp, mp4Quality, mp4Vfr = false, save, s
       const W = LayoutCore.exportPx(vw, scale),
         H = LayoutCore.exportPx(fullH, scale),
         k = W / vw;
-      const cv = document.createElement('canvas');
+      cv = document.createElement('canvas');
       cv.width = W;
       cv.height = H;
       const cx = cv.getContext('2d', { willReadFrequently: format === 'WebP' }); // the WebP encoder reads every frame back
@@ -431,6 +470,9 @@ function useVideoExport({ fps, format, webp, mp4Quality, mp4Vfr = false, save, s
         if (enc) await enc.cancel();
       } catch (_) {}
       setState({ phase: 'error', msg: 'Export failed: ' + ((e && e.message) || e) });
+    } finally {
+      freeCanvas(cv);
+      runningRef.current = false;
     }
   };
   return {
@@ -445,12 +487,64 @@ function useVideoExport({ fps, format, webp, mp4Quality, mp4Vfr = false, save, s
   };
 }
 
+// The overlay is modal while it shows (the 2026-11-16 dialogs decision): the rest of the page is inert, so no key, click
+// or Tab reaches the Transport bar, the Moves chips or Settings behind it, which once let a frame from the wrong moment
+// into the file. The focus goes into the overlay (its button, else its box) and, once it closes, back where it was.
+// key: re-run when the overlay's content changes (the failure's Close replaces Cancel)
+function useModal(ref, on, key) {
+  // where the focus goes back to: kept across the runs a change of content makes, and never the overlay itself
+  const back = React.useRef(null);
+  React.useLayoutEffect(() => {
+    const box = ref.current;
+    if (!on || !box) return;
+    const a0 = document.activeElement,
+      made = [];
+    if (a0 && a0 !== document.body && !box.contains(a0)) back.current = a0;
+    for (let el = box; el.parentElement && el !== document.body; el = el.parentElement)
+      for (const sib of el.parentElement.children)
+        if (sib !== el && !sib.inert && !/^(SCRIPT|STYLE|LINK|TEMPLATE)$/.test(sib.tagName)) {
+          sib.inert = true;
+          made.push(sib);
+        }
+    (box.querySelector('button') || box).focus();
+    // Tab stays on the overlay's one button (or its box), as in the other dialogs
+    const trap = (e) => {
+      if (e.key !== 'Tab') return;
+      e.preventDefault();
+      (box.querySelector('button') || box).focus();
+    };
+    box.addEventListener('keydown', trap);
+    return () => {
+      box.removeEventListener('keydown', trap);
+      for (const el of made) el.inert = false;
+      const a = document.activeElement,
+        to = back.current;
+      if (to && to.isConnected && (!a || a === document.body || box.contains(a))) to.focus();
+    };
+  }, [ref, on, key]);
+}
+
 function ExportOverlay({ x }) {
-  const s = x.state;
+  const s = x.state,
+    box = React.useRef(null);
+  useModal(box, !!s, s && (s.phase === 'error' ? 'error' : s.phase === 'render' ? 'render' : 'busy'));
   if (!s) return null;
   if (s.phase === 'error')
     return (
-      <div className="export part-export-failed-dialog" role="alertdialog" aria-label="Export failed">
+      <div
+        ref={box}
+        tabIndex={-1}
+        className="export part-export-failed-dialog"
+        role="alertdialog"
+        aria-modal="true"
+        aria-label="Export failed"
+        onKeyDown={(e) => {
+          if (e.key === 'Escape') {
+            e.stopPropagation();
+            x.dismiss();
+          }
+        }}
+      >
         <div className="export-box">
           <div className="export-title">Export failed</div>
           <div className="export-line export-err">{s.msg.replace(/^Export failed: /, '')}</div>
@@ -471,7 +565,14 @@ function ExportOverlay({ x }) {
         ? 'Finishing the file…'
         : `Frame ${s.done} of ${s.N}` + (s.eta != null ? ` · about ${eta} left` : '');
   return (
-    <div className="export part-exporting-dialog" role="dialog" aria-label="Exporting">
+    <div
+      ref={box}
+      tabIndex={-1}
+      className="export part-exporting-dialog"
+      role="dialog"
+      aria-modal="true"
+      aria-label="Exporting"
+    >
       <div className="export-box">
         <div className="export-title">Exporting {x.format === 'WebP' ? 'animated WebP' : 'video'}</div>
         <div className="export-bar">

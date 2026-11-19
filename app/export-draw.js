@@ -189,8 +189,8 @@
   // Draws node (an element of the stage) and what's in it. cx's transform maps the stage's own CSS px (place()) to the
   // canvas; dev is the canvas's px per stage px, for the shadows, which canvas draws in device pixels.
   // a: the opacity so far; k: the scale of the transforms so far; rot: their rotation; shadow: a drop-shadow filter
-  // depth: how many faded groups (see group) it is drawn inside; grouped: its opacity is already drawn by its group
-  function paint(cx, node, place, dev, a = 1, k = 1, rot = 0, shadow = null, depth = 0, grouped = false) {
+  // grouped: its opacity is already drawn by its group
+  function paint(cx, node, place, dev, a = 1, k = 1, rot = 0, shadow = null, grouped = false) {
     const s = getComputedStyle(node);
     if (s.display === 'none' || s.visibility === 'hidden' || s.visibility === 'collapse') return;
     if (s.maskImage && s.maskImage !== 'none') no('mask');
@@ -202,7 +202,7 @@
     // CSS fades a box and what's in it as one picture: where they overlap (a chip and its text), fading each apart lets
     // the chip show through the text. So a faded box drawing two things or more is drawn opaque on a scratch canvas, which
     // is then drawn here at its opacity
-    if (o < 1 && drawsTwo(node)) return group(cx, node, place, dev, a * o, k, rot, shadow, depth);
+    if (o < 1 && drawsTwo(node)) return group(cx, node, place, dev, a * o, k, rot, shadow);
     a *= o;
     const m = matrixOf(s.transform);
     k *= m.k;
@@ -307,7 +307,7 @@
     ];
     for (const c of kids) {
       if (c.nodeType === 3) paintText(cx, c, s, place, a, k, rot, shadow);
-      else paint(cx, c, place, dev, a, k, rot, shadow, depth);
+      else paint(cx, c, place, dev, a, k, rot, shadow);
     }
     cx.restore();
   }
@@ -437,7 +437,7 @@
   // next (one per depth of nesting) left Firefox for Android drawing the last group's picture under the next: a new
   // move's chip, fading in, came with the corner of the Moves panel, which had faded in on the same canvas at the same
   // offset (seen 2026-11-06), though the part used had been cleared
-  function group(cx, node, place, dev, a, k, rot, shadow, depth) {
+  function group(cx, node, place, dev, a, k, rot, shadow) {
     // what it covers, on cx's canvas in device px: the box and everything in it (with MARGIN round each for shadows),
     // no more than the canvas
     const T = cx.getTransform();
@@ -469,7 +469,7 @@
       g.imageSmoothingQuality = 'high';
       g.setTransform(T.a, 0, 0, T.d, T.e - X0, T.f - Y0);
       // its own opacity is the group's
-      paint(g, node, place, dev, 1, k, rot, shadow, depth + 1, true);
+      paint(g, node, place, dev, 1, k, rot, shadow, true);
       cx.save();
       cx.setTransform(1, 0, 0, 1, 0, 0);
       cx.globalAlpha = a;
@@ -772,33 +772,47 @@
       // html2canvas's first capture in a page lays text out wrongly in WebKit (stray gaps between words, the Moves
       // highlights missing); one thrown-away capture of the stage first, at the export's scale, and the rest come out right
       if (!warm) {
-        await html2canvas(root, { scale, backgroundColor: null, logging: false, ignoreElements: skip(root), onclone });
+        free(
+          await html2canvas(root, {
+            scale,
+            backgroundColor: null,
+            logging: false,
+            ignoreElements: skip(root),
+            onclone,
+          }),
+        );
         warm = true;
       }
       const place = placer(root);
       const next = new Map(),
         layers = layersOf(root);
       let changed = false;
-      for (const n of layers) {
-        const key = n.outerHTML + scrollsOf(n),
-          had = cache.get(n);
-        if (had && had.key === key) {
-          next.set(n, had);
-          stats.reused++;
-          continue;
+      try {
+        for (const n of layers) {
+          const key = n.outerHTML + scrollsOf(n),
+            had = cache.get(n);
+          if (had && had.key === key) {
+            next.set(n, had);
+            stats.reused++;
+            continue;
+          }
+          changed = true;
+          let got;
+          try {
+            got = render(n, place);
+            stats.painted++;
+          } catch (e) {
+            if (!(e instanceof Unsupported)) throw e;
+            stats.why[e.message] = (stats.why[e.message] || 0) + 1;
+            got = await capture(n, place);
+            stats.captured++;
+          }
+          next.set(n, { key, ...got });
         }
-        changed = true;
-        let got;
-        try {
-          got = render(n, place);
-          stats.painted++;
-        } catch (e) {
-          if (!(e instanceof Unsupported)) throw e;
-          stats.why[e.message] = (stats.why[e.message] || 0) + 1;
-          got = await capture(n, place);
-          stats.captured++;
-        }
-        next.set(n, { key, ...got });
+      } catch (e) {
+        // a draw that fails part way: the layers it made for this frame aren't the cache's, and done() can't reach them
+        for (const [n, l] of next) if (cache.get(n) !== l) free(l.bmp);
+        throw e;
       }
       // the bitmaps no longer used, let go at once (see free)
       for (const [n, l] of cache) if (next.get(n) !== l) free(l.bmp);
