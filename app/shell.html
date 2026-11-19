@@ -184,7 +184,9 @@ body:has(.stage-one) .twk-panel { bottom: calc(51px + var(--safe-b)); max-height
 @supports (animation-timeline: --a) {
   .stage-area { scroll-timeline: --page block; }
   .pin-morph { animation: pin-t linear both; animation-timeline: --page; animation-range: 0px var(--pin-at); }
-  .pin-morph > .pin-scale { animation: pin-shrink linear both; animation-timeline: --page; animation-range: 0px var(--pin-at); transform-origin: 0 0; }
+  /* only while scrolled ([data-pinning]): at the top it is no transform anyway, and in Firefox (2026-11-19) the board
+     under it took no clicks or taps while the timeline was inactive (a page too short to scroll) */
+  .pin-morph[data-pinning] > .pin-scale { animation: pin-shrink linear both; animation-timeline: --page; animation-range: 0px var(--pin-at); transform-origin: 0 0; }
   /* the rest by transforms and opacity too: the full player bars fade out (gone at 62.5%), the name copies (.pin-bar-in) slide in
      from --pin-from and fade in over the second half, the eval bar and its number step through --k0 to --k10 */
   .pin-morph .pin-out { animation: pin-out linear both; animation-timeline: --page; animation-range: 0px var(--pin-at); }
