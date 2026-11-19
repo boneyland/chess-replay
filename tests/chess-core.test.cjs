@@ -1393,3 +1393,35 @@ test('movedPieces: the pieces one move took from square to square', () => {
   assert.equal(CC.movedPieces(B(start), B(start)), null);
   assert.equal(CC.movedPieces(B(start), B('rnbqkbnr/pp1ppppp/8/2p5/4P3/5N2/PPPP1PPP/RNBQKB1R b KQkq - 1 2')), null);
 });
+
+test('pieceTracks: a promoted piece moving diagonally takes nothing beside it', () => {
+  const pgn = (moves) => `[SetUp "1"]\n[FEN "2r4k/1P6/8/8/8/8/8/K7 w - - 0 1"]\n\n${moves} *`;
+  const M = CC.buildGame({ pgn: pgn('1. b8=Q Kg7 2. Qc7+ Kg6') });
+  const pieces = CC.pieceTracks(M);
+  const rook = pieces.find((p) => p.home === 'c8');
+  assert.equal(rook.captured, -1);
+  const queen = pieces.find((p) => p.home === 'b7');
+  assert.deepEqual(queen.promo, { ply: 0, type: 'q' });
+  // the rook then takes the queen: the page crashed here
+  const M2 = CC.buildGame({ pgn: pgn('1. b8=Q Kg7 2. Qc7+ Rxc7') });
+  const p2 = CC.pieceTracks(M2);
+  assert.equal(p2.find((p) => p.home === 'b7').captured, 3);
+  assert.deepEqual(p2.find((p) => p.home === 'c8').track.at(-1), { ply: 3, from: 'c8', to: 'c7' });
+});
+
+test('pieceTracks: en passant still takes the pawn beside it', () => {
+  const M = CC.buildGame({ pgn: '1. e4 a6 2. e5 d5 3. exd6 *' });
+  const pieces = CC.pieceTracks(M);
+  assert.equal(pieces.find((p) => p.home === 'd7').captured, 4);
+  assert.deepEqual(pieces.find((p) => p.home === 'e2').track.at(-1), { ply: 4, from: 'e5', to: 'd6' });
+});
+
+test('pieceTracks: a Chess960 castle moves king and rook without a capture', () => {
+  const M = CC.buildGame({
+    pgn: '[Variant "Chess960"]\n[SetUp "1"]\n[FEN "4k3/8/8/8/8/8/8/R5KR w HA - 0 1"]\n\n1. O-O Kd7 *',
+  });
+  const pieces = CC.pieceTracks(M);
+  assert.ok(pieces.every((p) => p.captured === -1));
+  assert.deepEqual(pieces.find((p) => p.home === 'h1').track, [{ ply: 0, from: 'h1', to: 'f1' }]);
+  assert.deepEqual(pieces.find((p) => p.home === 'g1').track, [{ ply: 0, from: 'g1', to: 'g1' }]);
+});

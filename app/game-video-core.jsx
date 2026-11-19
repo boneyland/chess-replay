@@ -605,59 +605,6 @@ function useBoardLook(theme, adj, exporting) {
   return { failed: failed === want };
 }
 
-function simulate(M) {
-  const board = {},
-    pieces = [];
-  M.start.pos.b.forEach((ch, i) => {
-    if (!ch) return;
-    const sq = window.ChessCore.sqName(i);
-    const p = {
-      id: sq,
-      color: ch === ch.toUpperCase() ? 'w' : 'b',
-      type: ch.toLowerCase(),
-      home: sq,
-      track: [],
-      captured: -1,
-      promo: null,
-    };
-    pieces.push(p);
-    board[sq] = p;
-  });
-  const step = (from, to, i) => {
-    const p = board[from];
-    if (board[to]) board[to].captured = i;
-    board[to] = p;
-    delete board[from];
-    p.track.push({ ply: i, from, to });
-    return p;
-  };
-  M.plies.forEach((pl, i) => {
-    const f = pl.uci.slice(0, 2),
-      t = pl.uci.slice(2, 4),
-      p = board[f];
-    if (p.type === 'p' && f[0] !== t[0] && !board[t]) {
-      const epSq = t[0] + f[1];
-      if (board[epSq]) {
-        board[epSq].captured = i;
-        delete board[epSq];
-      }
-    }
-    // a 960 castle is the king taking its own rook: the rook is lifted first, so the king's step captures nothing
-    const rook = window.ChessCore.castleRookStep(i ? M.plies[i - 1].pos : M.start.pos, pl.uci);
-    if (rook) {
-      const rp = board[rook.from];
-      delete board[rook.from];
-      const kt = (rook.to[0] === 'f' ? 'g' : 'c') + f[1];
-      if (kt === f) p.track.push({ ply: i, from: f, to: kt });
-      else step(f, kt, i);
-      board[rook.to] = rp;
-      rp.track.push({ ply: i, from: rook.from, to: rook.to });
-    } else step(f, t, i);
-    if (pl.uci.length === 5) p.promo = { ply: i, type: pl.uci[4] };
-  });
-  return pieces;
-}
-
 // ---------- schedule ----------
 function useSchedule(M, CUES, d) {
   return React.useMemo(() => window.ChessCore.schedule(M, CUES, d), [M, CUES, d]);
@@ -1219,15 +1166,23 @@ function Board({ M, T, S, a, arrows, pieces, queen, vline, hide, lines, sel, idl
 }
 
 // ---------- exploring a best line on the board ----------
-const LINE_CACHE = new Map();
+// the lines played out from a position, the newest LINE_CACHE_MAX kept (Go deeper and the panels ask on every render)
+const LINE_CACHE = new Map(),
+  LINE_CACHE_MAX = 500;
 // the whole position: a 960 right's rook (pos.rooks) too, as the same placement and rights can castle with another rook
 const posKey = (pos) =>
   window.ChessCore.toFen(pos) + ' ' + pos.castle + ' ' + pos.ep + (pos.rooks ? ' ' + JSON.stringify(pos.rooks) : '');
 function playLineCached(M, c, moves) {
   const pos = window.ChessCore.posAt(M, c),
     key = posKey(pos) + '|' + moves.join(' ');
-  if (!LINE_CACHE.has(key)) LINE_CACHE.set(key, window.ChessCore.playLine(pos, moves));
-  return LINE_CACHE.get(key);
+  let line = LINE_CACHE.get(key);
+  if (line) LINE_CACHE.delete(key);
+  else {
+    line = window.ChessCore.playLine(pos, moves);
+    if (LINE_CACHE.size >= LINE_CACHE_MAX) LINE_CACHE.delete(LINE_CACHE.keys().next().value);
+  }
+  LINE_CACHE.set(key, line); // last in the Map's order: the oldest goes first
+  return line;
 }
 // Go deeper's best line from the position after a ply P, as steps: the last one kept (the panel re-renders while the
 // search streams in, and the line changes far less often)
@@ -4098,13 +4053,16 @@ function useHeldSchedule(T0, S) {
   const prevS = React.useRef(S);
   const shift = React.useRef(null); // { S, from, to } until the timeline holds `to`
   if (prevS.current !== S) {
+    // the old move is found from the timeline's own time: T0 is already clamped to the new, shorter total, which on
+    // the old schedule is a move mid-game
+    const was = Number.isFinite(tl.time) ? tl.time : T0;
     const p = prevS.current,
-      c = lastPly(T0, p);
+      c = lastPly(was, p);
     prevS.current = S;
     shift.current = null;
     if (c >= 0 && c < S.N) {
       const next = c + 1 < S.N ? S.tp[c + 1] - 0.05 : Infinity;
-      const t = Math.min(S.tp[c] + (T0 - p.tp[c]), next);
+      const t = Math.min(S.tp[c] + (was - p.tp[c]), next);
       if (Math.abs(t - T0) > 0.01) shift.current = { S, from: T0, to: t };
     }
   }
@@ -4394,7 +4352,7 @@ function useReducedMotion() {
 // a piece's slide under reduced motion, in seconds at most
 const CALM_SLIDE = 0.15;
 
-function GameVideo({ M, tw, d, probe, queen, nav, scheme, sf, orient }) {
+function GameVideo({ M, tw, d, probe, queen, nav, sf, orient }) {
   const { T: T0, CUES, authoredTotal, playing: live } = useComposition();
   // the export steps through a paused player; its frames look like playback (no paused-only hints or buttons)
   const playing = live || !!tw.exporting;
@@ -4586,7 +4544,7 @@ function GameVideo({ M, tw, d, probe, queen, nav, scheme, sf, orient }) {
     // eslint-disable-next-line react-hooks/exhaustive-deps -- once, on opening: GameApp keys this view on the game
   }, []);
   const stepBy = useReplayNav({ nav, M, S, c: cNow, line, input, goTo, fen: shownFen, keys: !tw.exporting });
-  const pieces = React.useMemo(() => simulate(M), [M]);
+  const pieces = React.useMemo(() => window.ChessCore.pieceTracks(M), [M]);
   // the video touches (panels fading in, the camera push, the blunder glow, the final fade, the title and end cards)
   // only while playing or exporting: stepping, exploring and analysing show a still page
   const enter = (i) => (video ? MOTION.enter(cl01((T - (CUES.Opening - 0.5 + i * 0.12)) / 0.7)) : 1);
