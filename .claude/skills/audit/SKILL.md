@@ -15,6 +15,7 @@ scope is "everything" and offer one kind at a time.
 
 ## Arguments
 Given: `$ARGUMENTS`
+
 - Words that name a kind (correctness, security, debt, tests, structure, docs) pick those kinds; none named = all (warn about cost).
 - Paths (e.g. `app/explorer.jsx`, `app/`) narrow the scope to those files/folders.
 - `--max-agents N` caps the subagent count.
@@ -23,6 +24,7 @@ With no arguments, settle the scope as in step 1.
 
 ## 1. Settle the scope
 Kinds of audit (the user may name one or several; with none named, do all of them):
+
 - **correctness**: bugs, wrong edge cases, races, unhandled failures, state that can go stale
 - **security**: CSP and headers, OAuth (HF, Lichess PKCE), tokens and localStorage, pinned hashes, workers, `fetch` targets, file input
 - **debt**: duplication (above all copies that have already drifted apart), dead code, overgrown functions, inconsistent patterns, hand-synced lists
@@ -72,6 +74,7 @@ the read-only rule, the context to read first (CLAUDE.md's Gotchas and Workflow,
 decisions aren't reported as faults) and the finding format.
 
 Severity, the same for every kind:
+
 - **high**: a viewer loses data, sees a wrong result or is exposed **now**, or copies have **already** drifted, or a
   common change is error-prone today. Something that caused a bug in the past but shows no drift now is medium
 - **medium**: a real bug with a narrow trigger, or debt that already costs
@@ -79,6 +82,7 @@ Severity, the same for every kind:
 
 ## 4. Check, merge, and keep what's out of scope
 As each agent reports, check its findings while the others run:
+
 - **Check** every high and medium finding: open the cited lines (a `grep`/`sed` batch per agent is enough) and confirm
   the scenario happens: the guard isn't elsewhere, the caller can really pass that value. Drop what doesn't hold, move
   what's overstated to its proper severity, and count both. Low findings may go in unchecked, marked so.
@@ -86,7 +90,6 @@ As each agent reports, check its findings while the others run:
   locations from all, and note "reported by N areas". Findings reported several times are usually the most important.
 - **Keep bugs found by accident.** A debt audit that turns up a crash keeps it, labelled with its real kind
   (`[debt→bug]` or `[bug]`), usually high. Never drop a real defect for being out of scope.
-
 - **Structure candidates: three at most**, the ones in the hottest files. Check each before keeping it:
   - which rules, by name, and that no node test reaches them (grep `tests/*.test.cjs` for the hook or component; a hit
     only in `tests/live/` means browser-only);
