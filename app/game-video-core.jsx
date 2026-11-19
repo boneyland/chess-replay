@@ -1900,7 +1900,7 @@ function CastleButtons({ pos, onMove, style }) {
       }}
     >
       {ms.map((m) => (
-        <FrameButton key={m.side} color={C.last} onClick={() => onMove(m.step)}>
+        <FrameButton app key={m.side} color={C.last} onClick={() => onMove(m.step)}>
           {castleName(m.side)}
         </FrameButton>
       ))}
