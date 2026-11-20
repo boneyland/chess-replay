@@ -16,6 +16,7 @@ media/*.mp4
 tests/fixtures/
 tests/out/
 tools/
+.claude/skills/
 app/sample-analysis.js
 src/pieces.js
 src/sample-game.js

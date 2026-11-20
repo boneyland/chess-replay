@@ -62,13 +62,15 @@ In progress: item 1 merged 2026-11-19 (its open part 2026-11-20), items 2 and 3 
   Ride-alongs: the free board's `useBoardFacts` without `known`; Hint's "ask again" reusing a null promise; the late dead-position recheck listening to the viewed position; BoardGroup's settle stuck after a swallowed release (Low).
 
   Done as planned, ride-alongs included: `PlayCore.drawnByYou` (a drawing move is rated from the search before it against 0, and says how it drew), `useKbFocus` (a focus within 300 ms of a pointer going down or up on the board is the press's; decisions log). A press is ignored only while another pointer drags on the board: `isPrimary` was tried first and dropped in review, as a finger resting elsewhere on the page blocked taps on the board. New live tests for each part, each failing on the code before.
-- [ ] 4. **Export while the page is live**:
+- [x] 4. **Export while the page is live**: PR #279 (78ca7cd).
   - The export overlay modal (`DialogBox`, or `inert` on the stage and bar while `video.busy`). This covers the Transport bar's buttons, seek bar and Moves chips (reported by two areas; the unfinished half of 2026-11-09 item 4).
   - No Export or Ask Queen while Edit position covers a game.
   - No file drops during an export or under open dialogs.
   - Sound encoded with backpressure, and the file target not copied twice (Medium, Export and App).
 
   Ride-alongs: free the canvases outside `free()`'s reach, a double Export while a board picture renders, the stale export.jsx header, the dead `depth`/`dev` parameters (Low, Export).
+
+  Done as planned, ride-alongs included: the overlay is modal by `useModal` in `app/export.jsx` (the rest of the page `inert`, Tab kept in it, Esc closes "Export failed", focus back to Share and export); Share and export says to close Edit position first; drops are refused during an export and under any dialog but Import game; the soundtrack is rendered 30 s at a time (`Sfx.renderTrack`'s `chunks()`) and fed on the encoder's `dequeue`. Only `depth` was dead (`dev` is used, so kept). The memory saving was not measured on a device. New live tests for each part, each failing on the code before.
 - [ ] 5. **Offline after a deploy**:
   - `cacheFirst` falls back to the kept copy when another version's fetch fails.
   - Handle a page older than its worker: drop `skipWaiting`/`claim`, keep the previous cache while a client uses it, or reload on `controllerchange` (the unfinished half of 2026-11-09 item 6).

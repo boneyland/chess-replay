@@ -106,6 +106,7 @@ export default [
       'tests/fixtures/**',
       'tests/out/**',
       'tools/**',
+      '.claude/skills/**',
       'node_modules/**',
       'app/sample-analysis.js',
       'src/pieces.js',
