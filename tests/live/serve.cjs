@@ -47,9 +47,19 @@ function serve(dir, port = 0) {
     if (req.method === 'HEAD') return res.end();
     fs.createReadStream(file).pipe(res);
   });
+  // Idle keep-alive connections stay open (Node closes them after 5 s by default): in CI, WebKit's page load three
+  // times (2026-11-20 and 21) never got the page's own HTML in 30 s ("still loading: … (document, 30 s)"), the
+  // request sent on a connection the server was closing just then, which WebKit doesn't send again. close() ends them
+  server.keepAliveTimeout = 0;
   return new Promise((ok) =>
     server.listen(port, '127.0.0.1', () =>
-      ok({ url: `http://127.0.0.1:${server.address().port}/`, close: () => server.close() }),
+      ok({
+        url: `http://127.0.0.1:${server.address().port}/`,
+        close: () => {
+          server.close();
+          server.closeAllConnections();
+        },
+      }),
     ),
   );
 }
