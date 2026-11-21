@@ -727,3 +727,148 @@ function EditBoard({
     </div>
   );
 }
+
+// ---------- Edit position and Position from image: the flow between them ----------
+// GameApp's state for the editor (editing) and the picture's dialog (vision), and the steps between them, the Play
+// dialog and Import game: which one opens what, and what Cancel goes back to. The editor shows in place of the board or
+// the loaded game while editing is set; GameApp's commit clears it.
+// boardRef, nav, commitBoard, focusBack: GameApp's; closeQueen, openImport(text), reopenPlay(mode, init) and
+// startGame(mode, choice) do those steps in GameApp
+function useEditorFlow({ boardRef, nav, commitBoard, focusBack, closeQueen, openImport, reopenPlay, startGame }) {
+  // Edit position: { setup, text, msg, resume, play, image } while the editor shows in place of the board or the loaded
+  // game; text is the FEN field's, msg why it doesn't parse, resume the paused game in progress left to open it (Cancel
+  // goes back to it), image the picture it was read from ({ url, unsure, bitmap, box }, or null)
+  const [editing, setEditing] = React.useState(null);
+  // Position from image's dialog while it is open: { play, again, back }, play the Play dialog's choices it came from (or null),
+  // again the picture, box, greyscale copy and found squares for Back to crop (or null), back true when Import game opened it
+  const [vision, setVision] = React.useState(null);
+  // the editor opens on the position on the board (empty when there is none); a game in progress is paused for it (and
+  // kept, when it has moves, by guard's Leave). play: the Play dialog's { mode, tc, you } when its Set-up position opened
+  // the editor, whose Done starts that game
+  // read: Position from image's { setup, image }, the editor opening on it with the picture, or Import game's
+  // { setup, image: null, back }, an illegal pasted FEN, back the paste box's text for Cancel to restore
+  const openEditor = (play, read) => {
+    // the board as it is now: Stockfish may have replied, or a flag fallen, while the Leave dialog was up
+    const E = window.EditCore,
+      P = window.PlayCore,
+      b = boardRef.current,
+      fen = nav.current && nav.current.fen && nav.current.fen();
+    const s = (fen && E.fromFen(fen).setup) || E.empty();
+    const resume = editing ? editing.resume : b && P.inProgress(b) ? P.pause(b, Date.now()) : null;
+    if (resume && !editing) commitBoard(resume);
+    const setup = read ? read.setup : s;
+    closeQueen();
+    setEditing({
+      setup,
+      text: E.toFen(setup),
+      msg: '',
+      resume,
+      play: play || null,
+      image: read ? read.image : null,
+      back: read && read.back != null ? read.back : null,
+    });
+  };
+  // a square the reader was unsure of stops being outlined once its piece changes, however it was edited
+  const sureOf = (e, setup) => {
+    const im = e.image;
+    if (!im || !im.unsure.some((i) => e.setup.b[i] !== setup.b[i])) return im;
+    return { ...im, unsure: im.unsure.filter((i) => e.setup.b[i] === setup.b[i]) };
+  };
+  const editTo = (setup) =>
+    setEditing((e) => e && { ...e, setup, text: window.EditCore.toFen(setup), msg: '', image: sureOf(e, setup) });
+  // a typed FEN sets up the board as soon as it is well-formed, legal or not; until then the board stays as it was
+  const editText = (text) =>
+    setEditing((e) => {
+      if (!e) return e;
+      const r = window.EditCore.fromFen(text);
+      return r.setup
+        ? { ...e, setup: r.setup, text, msg: '', image: sureOf(e, r.setup) }
+        : { ...e, text, msg: r.error };
+    });
+  // Turn board 180° turns the board as it stands, edits included, and the outlines still showing with it
+  const editTurn = () =>
+    setEditing((e) => {
+      if (!e) return e;
+      const V = window.VisionCore,
+        setup = V.turn(e.setup);
+      return {
+        ...e,
+        setup,
+        text: window.EditCore.toFen(setup),
+        msg: '',
+        image: e.image && { ...e.image, unsure: V.turnSquares(e.image.unsure) },
+      };
+    });
+  const backToCrop = () => {
+    if (editing && editing.image) {
+      const { bitmap, box, grey, found } = editing.image;
+      setVision({ play: editing.play, again: { bitmap, box, grey, found } });
+    }
+  };
+  // The picture's object URL and bitmap are GameApp's while the editor shows it: one the editor no longer holds (Done,
+  // Cancel, a new editor, another read) is let go here, whichever way it went, but never one the next state still holds
+  // (Back to crop's read may keep the bitmap and replace the URL)
+  const heldPic = React.useRef(null),
+    editPic = editing && editing.image;
+  React.useEffect(() => {
+    const was = heldPic.current;
+    heldPic.current = editPic || null;
+    if (!was) return;
+    if (!editPic || editPic.url !== was.url) URL.revokeObjectURL(was.url);
+    if (!editPic || editPic.bitmap !== was.bitmap) was.bitmap.close();
+  }, [editPic]);
+  // Import game's Position from image tile, where the reader can run
+  const visionOk = React.useMemo(() => !!window.Vision && window.Vision.supported(), []);
+  // Read board: from Back to crop it replaces the editor's board, edits and marks with the new read; else the editor opens
+  // on it (in the Play dialog's mode when that is where it came from, so Done starts the game)
+  const visionRead = ({ setup, unsure, url, bitmap, box, grey, found }) => {
+    const v = vision,
+      image = { url, unsure, bitmap, box, grey, found };
+    setVision(null);
+    if (v && v.again && editing)
+      setEditing((e) => e && { ...e, setup, text: window.EditCore.toFen(setup), msg: '', image });
+    else openEditor(v && v.play, { setup, image });
+  };
+  // Cancel goes back to what showed before: the editor as it was (Back to crop), else the Play dialog as it was, or Import game
+  const visionClose = () => {
+    const v = vision;
+    setVision(null);
+    if (v && v.again) focusBack.current = '.edit-back-to-crop'; // Back to crop › Cancel: back on the button that opened it
+    if (v && v.back) openImport('');
+    if (v && !v.again && v.play) reopenPlay(v.play.mode, { from: 'image', tc: v.play.tc, you: v.play.you });
+  };
+  const editDone = () => {
+    const fen = window.EditCore.toFen(editing.setup),
+      play = editing.play,
+      chess960 = window.EditCore.number960(editing.setup);
+    if (play) startGame(play.mode, { fen, chess960, tc: play.tc, you: play.you });
+    else {
+      commitBoard(window.BoardCore.fromFen(fen, { chess960 }));
+    }
+  };
+  // Cancel goes back to what showed before: a game left for the editor resumes, its clock running from now, and the Play
+  // dialog or Import game that opened it comes back as it was
+  const editCancel = () => {
+    const { resume: r, play, image, back } = editing || {};
+    setEditing(null);
+    if (back != null) openImport(back);
+    if (r) commitBoard(window.PlayCore.runClock(r, Date.now()));
+    if (play) reopenPlay(play.mode, { from: image ? 'image' : 'setup', tc: play.tc, you: play.you });
+  };
+  return {
+    editing,
+    setEditing,
+    vision,
+    setVision,
+    visionOk,
+    openEditor,
+    editTo,
+    editText,
+    editTurn,
+    backToCrop,
+    visionRead,
+    visionClose,
+    editDone,
+    editCancel,
+  };
+}

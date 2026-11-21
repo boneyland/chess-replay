@@ -655,6 +655,72 @@ function evalNow(M, T, S) {
 }
 
 // ---------- shared ----------
+// A button inside a panel (theme colours, sized with the panel text)
+// compact: a size down, for a phone's tight panels (Edit position held sideways)
+// app: the app's own button (.twk-btn: filled accent, or the raised secondary one), as in the dialogs and Settings
+function FrameButton({ primary, color, onClick, children, label, disabled, compact, className, app, danger }) {
+  const c = color || C.best;
+  if (app)
+    return (
+      <button
+        type="button"
+        className={['twk-btn', danger ? 'danger' : !primary && 'secondary', className].filter(Boolean).join(' ')}
+        aria-label={label}
+        disabled={disabled}
+        onClick={(e) => {
+          e.stopPropagation();
+          onClick();
+        }}
+        onPointerDown={(e) => e.stopPropagation()}
+        style={{
+          ...NO_SELECT,
+          whiteSpace: 'nowrap',
+          fontSize: tx(16),
+          minHeight: tx(36),
+          padding: `${tx(4)}px ${tx(16)}px`,
+        }}
+      >
+        {children}
+      </button>
+    );
+  return (
+    <button
+      type="button"
+      className={['frame-btn', primary && 'frame-btn-primary', className].filter(Boolean).join(' ')}
+      aria-label={label}
+      disabled={disabled}
+      onClick={(e) => {
+        e.stopPropagation();
+        onClick();
+      }}
+      onPointerDown={(e) => e.stopPropagation()}
+      style={{
+        whiteSpace: 'nowrap',
+        font: `600 ${tx(primary ? (compact ? 17 : 20) : compact ? 14 : 15)}px ${MONO}`,
+        letterSpacing: primary ? '0.02em' : '0.1em',
+        textTransform: primary ? 'none' : 'uppercase',
+        padding: primary
+          ? compact
+            ? `${tx(7)}px ${tx(18)}px`
+            : `${tx(12)}px ${tx(22)}px`
+          : compact
+            ? `${tx(4)}px ${tx(10)}px`
+            : `${tx(5)}px ${tx(12)}px`,
+        borderRadius: 4,
+        cursor: disabled ? 'default' : 'pointer',
+        opacity: disabled ? 0.4 : 1,
+        userSelect: 'none',
+        WebkitUserSelect: 'none',
+        border: `1.5px solid ${c}`,
+        background: primary ? c : 'transparent',
+        color: primary ? C.bg : c,
+      }}
+    >
+      {children}
+    </button>
+  );
+}
+
 // One line that scrolls sideways when it's too long (a finger or trackpad swipe), fading out at an edge with more past it
 function SideScroll({ style, children }) {
   const ref = React.useRef(null);
@@ -1789,7 +1855,7 @@ function DragGhost({ el, piece, x, y, ox = 0, oy = 0, back, onBack }) {
 
 // The pieces a pawn can become, in the picker's order, and where each sits: a column on the promotion square's file
 const PROMO_PIECES = ['q', 'n', 'r', 'b'];
-// the board's keys, for a screen reader (BoardTouch) and the Keyboard shortcuts dialog (SHORTCUTS)
+// the board's keys, read to a screen reader (BoardTouch); SHORTCUTS (dialogs.jsx) writes them out for the dialog too
 const BOARD_KEYS =
   'Arrows move the square; Enter or Space picks up a piece, then plays it on the square you choose; Esc puts it down; Q, R, B or N chooses a promotion.';
 const promoPieces = (pr) => PROMO_PIECES.map((t, k) => ({ t, sq: pr.to + (pr.white ? 8 : -8) * k }));
