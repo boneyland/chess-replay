@@ -18,7 +18,7 @@ Most mediums sit where the page is still live during long work: an export (keys 
 Hot spots (last 300 commits): `app/game-video-core.jsx` 68, `app/shell.html` 56, `app/free-board.jsx` 37, `app/game-app.jsx` 35, `app/stockfish.jsx` 31.
 
 ## Fix plan
-In progress: item 1 merged 2026-11-19 (its open part 2026-11-20), items 2 and 3 on 2026-11-20; the straight-to-`main` note below is done. Each item is one PR on a `claude/<topic>` branch (they change the page; see CLAUDE.md's Workflow), in this order. Line numbers are at commit ba6a515: if they have moved, find the code by the quoted evidence. Tick an item here, with its PR, when it merges.
+Done: item 1 merged 2026-11-19 (its open part 2026-11-20), items 2 to 4 on 2026-11-20, items 5 to 7 on 2026-11-21; the straight-to-`main` note below is done too. Each item is one PR on a `claude/<topic>` branch (they change the page; see CLAUDE.md's Workflow), in this order. Line numbers are at commit ba6a515: if they have moved, find the code by the quoted evidence. Tick an item here, with its PR, when it merges.
 
 **First, straight to `main` (tooling and tests, no PR):** done 2026-11-19.
 - [x] Put back the `HEAVY_TESTS` alternative `desktop: the Lichess explorer lists` in test.yml. That test had run in WebKit's main part, near its 30-minute limit, since PR 254 renamed it. (70e5f4c)
@@ -71,12 +71,14 @@ In progress: item 1 merged 2026-11-19 (its open part 2026-11-20), items 2 and 3 
   Ride-alongs: free the canvases outside `free()`'s reach, a double Export while a board picture renders, the stale export.jsx header, the dead `depth`/`dev` parameters (Low, Export).
 
   Done as planned, ride-alongs included: the overlay is modal by `useModal` in `app/export.jsx` (the rest of the page `inert`, Tab kept in it, Esc closes "Export failed", focus back to Share and export); Share and export says to close Edit position first; drops are refused during an export and under any dialog but Import game; the soundtrack is rendered 30 s at a time (`Sfx.renderTrack`'s `chunks()`) and fed on the encoder's `dequeue`. Only `depth` was dead (`dev` is used, so kept). The memory saving was not measured on a device. New live tests for each part, each failing on the code before.
-- [ ] 5. **Offline after a deploy**:
+- [x] 5. **Offline after a deploy**: PR #281 (1aa8bb7).
   - `cacheFirst` falls back to the kept copy when another version's fetch fails.
   - Handle a page older than its worker: drop `skipWaiting`/`claim`, keep the previous cache while a client uses it, or reload on `controllerchange` (the unfinished half of 2026-11-09 item 6).
 
   Ride-alongs: the "never a comment's" CDN-URL overclaim, `VENDOR` derived from vendor/, ESLint's worker globals, the page name and `/` rewrite written in four places (Low, Build).
-- [ ] 6. **Panel messages and the Transport bar CSS**:
+
+  Done as planned, ride-alongs included. `skipWaiting`/`claim` stay; another deploy's `?v=` is answered from that deploy's cache (`chess-replay-<v>`), then the network, then (offline) this deploy's plain copy; older caches are kept while a window shows a page this worker didn't serve, the two newest at most, and never deleted while a newer worker installs or waits (decisions log, 2026-11-21). The page's name and rewrite are `render-headers.cjs`'s `page()`, read from render.yaml. Unit tests only for the worker (`tests/sw.test.cjs`); the two-tab case wasn't run in a browser.
+- [x] 6. **Panel messages and the Transport bar CSS**: PR #283 (dd65ce8).
   - The tablebase-lost note survives the run's commit.
   - Queen's 4xx answers say what happened.
   - The explorer and tablebase re-ask after a back-off or coming back online (Medium, Engines and Online).
@@ -84,12 +86,18 @@ In progress: item 1 merged 2026-11-19 (its open part 2026-11-20), items 2 and 3 
   - Delete the overridden Transport bar declarations (Medium, Layout). Screenshot Chromium and Firefox at each tier, as CLAUDE.md asks for layout changes.
 
   Ride-alongs: `EngineEmptyState` without its reason, the stored partial-run shape check, Queen's POST timeout and HF token expiry, one `.sr-only`, the dead `.q-evalsf`, the theme-colour copies in `.q-tag` and the check glow (Low).
-- [ ] 7. **Split the big views** (the largest; last):
+
+  Done as planned, ride-alongs included. The retry is `useLichessRetry` (on `online`, when a 429 back-off ends, else 30 s doubling to 5 min). `--pbar-total` is set on `body` per layout and the bar's `--pbar-pb` is worked out from it; the bar's box was measured unchanged at six sizes in Chromium and Firefox. Also in the PR, at the user's request: the sideways phone's slim folded menu starts under 400 px tall (it was 350). New live tests for the three message fixes and the Settings overlap, each failing on the code before.
+- [x] 7. **Split the big views** (the largest; last): PR #282 (12032e8).
   - `GameApp`: the dock into a component, the editor and vision flow into a hook, close Queen once on a `gameKey`/`onBoard` change.
   - The dock dialogs out of `free-board.jsx` into a joined `dialogs.jsx`, added to `build.cjs`'s list.
   - `FrameButton` out of `stockfish.jsx`.
 
   (Medium, App and Boards; Low, Engines.) No behaviour change: the live tests stay unedited as the proof.
+
+  Done as planned: `Dock` (`app/dock.jsx`), `useEditorFlow` (`app/edit-board.jsx`), `app/dialogs.jsx`, `FrameButton` in game-video-core.jsx's shared UI; Queen's panel closes in the render a new game or the board arrives (a Queen file with its PGN keeps it open). game-app.jsx 1957 → 1681 lines, free-board.jsx 1869 → 1137. The live suite passed unedited (277/277, Chromium and Firefox, locally).
+
+  CI on these PRs met an old WebKit flake (2026-11-20 on `main` too): the page's own HTML never arrived in 30 s from the live tests' server. Fixed on `main` in ca5a779 (the server keeps idle keep-alive connections open); likely, not proven.
 
 The rest can ride along with the PR that touches the same file, or wait for the next audit.
 
