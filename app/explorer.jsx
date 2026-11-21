@@ -138,6 +138,7 @@ function useExplorer(fen, on, filters) {
     token = LA.auth && LA.auth.token; // follows a sign-in or out as it happens
   const [st, setSt] = React.useState({ key: null, x: undefined });
   const hit = key ? EXPL.explorerCached(fen, filters) : undefined;
+  const retry = useLichessRetry(EXPL, 'explorer', key, !!key && !hit && st.key === key && st.x === null);
   React.useEffect(() => {
     if (!key || (hit && !hit.auth)) return;
     const ctl = new AbortController();
@@ -153,8 +154,8 @@ function useExplorer(fen, on, filters) {
       clearTimeout(id);
       ctl.abort();
     };
-    // eslint-disable-next-line react-hooks/exhaustive-deps -- key stands for fen and filters; a cached answer that lands later needs no new request; a sign-in asks again
-  }, [key, token]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- key stands for fen and filters; a cached answer that lands later needs no new request; a sign-in asks again, and so does retry (after a failure)
+  }, [key, token, retry]);
   if (!key) return null;
   const x = hit || (st.key === key ? st.x : undefined);
   if (x && x.auth) return { state: 'auth', x: null, signedIn: !!token };

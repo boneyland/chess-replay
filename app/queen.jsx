@@ -6,6 +6,8 @@ const QUEEN_SPACE = 'https://huggingface.co/spaces/boneyland/queen-pawn-8';
 const QUEEN_TOKENS = 1536;
 // the longest wait for an answer's stream
 const QUEEN_WAIT_MS = 180000;
+// the longest wait for the Space to take a call (its first answer, the event id: the queue and the answer come after)
+const QUEEN_POST_MS = 30000;
 
 const { queenPayload, queenEval, queenProse, readSse, capQueenCache, queenAnswer, queenFile } = window.QueenCore;
 
@@ -17,6 +19,8 @@ function queenError(e) {
     return 'The Queen Space reported an error: ' + String((e && e.message) || '').slice(0, 300);
   if (code === 'server_unavailable')
     return `No answer from the Queen Space${e.secs != null ? ` after ${e.secs} s` : ''}${e.retryable ? ', even after a retry' : ''}. It may be busy, waking up or out of ZeroGPU quota. Try again in a minute.`;
+  if (code === 'refused')
+    return `The Queen Space refused the request (${e.status}): its interface may have changed, so trying again won’t help. Stockfish still analyses this position.`;
   if (code === 'cancelled') return 'Stopped.';
   if (code === 'direct_auth') return e.message;
   return (e && e.message) || 'Queen could not analyse this position.';
@@ -65,19 +69,34 @@ async function directCall(moves, token, signal, fen = '') {
     signal && signal.aborted
       ? { code: 'cancelled', message: 'Stopped.' }
       : { code: 'server_unavailable', retryable: true, message: 'Could not reach the Space.' };
+  // the call itself has a time limit of its own (a Space that takes the connection and never answers), and the Stop
+  // button's signal stops it too
+  const post = new AbortController(),
+    postGive = setTimeout(() => post.abort(), QUEEN_POST_MS);
+  const stopPost = () => post.abort();
+  if (signal) {
+    if (signal.aborted) post.abort();
+    else signal.addEventListener('abort', stopPost, { once: true });
+  }
   let r;
   try {
     r = await fetch(`${DIRECT_API}/call/analyse_position`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json', ...auth },
       body: JSON.stringify({ data: [fen, moves, QUEEN_TOKENS, 0.6, 20260823] }),
-      signal,
+      signal: post.signal,
     });
   } catch (e) {
     throw unreachable();
+  } finally {
+    clearTimeout(postGive);
+    if (signal) signal.removeEventListener('abort', stopPost);
   }
   if (r.status === 401 || r.status === 403)
     throw { code: 'direct_auth', message: 'The Space refused the sign-in. Sign out and try again.' };
+  // another 4xx (a renamed endpoint's 404, a changed interface's 422) won't go away by waiting: said as it is
+  if (!r.ok && r.status >= 400 && r.status < 500 && r.status !== 429)
+    throw { code: 'refused', status: r.status, message: `The Space answered ${r.status}.` };
   if (!r.ok)
     throw {
       code: 'server_unavailable',
@@ -163,6 +182,15 @@ function useHfAuth() {
     } catch (e) {}
     setAuth(null);
   };
+  // the token to send now: a sign-in that expired during the visit is signed out (Hugging Face would refuse it) and the
+  // call goes anonymously, saying so
+  const token = () => {
+    if (!auth) return null;
+    if (auth.expires > Date.now()) return auth.token;
+    signOut();
+    setNote('Your Hugging Face sign-in expired: Queen asks without it until you sign in again.');
+    return null;
+  };
   React.useEffect(() => {
     const onStorage = (e) => {
       if (e.key === AUTH_STORE) setAuth(readAuth());
@@ -178,7 +206,7 @@ function useHfAuth() {
     return () => window.removeEventListener('storage', onStorage);
     // eslint-disable-next-line react-hooks/exhaustive-deps -- once, on load: Hugging Face's sign-in returns in the page's URL
   }, []);
-  return { auth, enabled, preview: HF_PREVIEW, start, signOut, note, clearNote: () => setNote('') };
+  return { auth, token, enabled, preview: HF_PREVIEW, start, signOut, note, clearNote: () => setNote('') };
 }
 
 function readQueenCache() {
@@ -249,7 +277,7 @@ function useQueen(M, hf) {
         const started = Date.now();
         setBusy({ at, label, started, attempt });
         try {
-          const res = await directCall(movesAt(at), hf && hf.auth ? hf.auth.token : null, ctrl.signal, startFen);
+          const res = await directCall(movesAt(at), hf ? hf.token() : null, ctrl.signal, startFen);
           const p = queenPayload(res);
           const str = (v) => (typeof v === 'string' ? v : '');
           const r = queenAnswer(

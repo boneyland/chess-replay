@@ -340,6 +340,8 @@
       },
       explorerCached: (fen, o = {}) => cache.get(explorerKey(fen, o)),
       backedOff: (name) => now() < gate(name).until,
+      // how long until a 429 back-off ends (ms), 0 when there is none
+      backOffLeft: (name) => Math.max(0, gate(name).until - now()),
     };
   }
 

@@ -942,6 +942,33 @@ for (const name of BROWSERS)
 
       // any box that scrolls takes a mouse drag, as the Moves panel does, and nothing outside a text field selects
       // (640 px tall: at 900 no tab overflows since the engine settings moved to the Analysis panel)
+      // every panel's offset reads the bar's height (--pbar-total in shell.html): at 1181+ px wide and 500-560 px tall
+      // Settings had sat 8 px into the bar (its offset was the tablet bar's 52 px under a 60 px desktop one)
+      await t.test('desktop: Settings opens clear of the Transport bar in a wide, short window', async () => {
+        for (const [width, height] of [
+          [1440, 540],
+          [1440, 900],
+          [1000, 540],
+          [1000, 800],
+        ]) {
+          const s2 = await open(browser, { width, height });
+          const p = s2.page;
+          await p.goto(base, { waitUntil: 'load' });
+          await loadedOn(p);
+          await p.getByRole('button', { name: 'Settings' }).click();
+          const panel = await p.locator('.twk-panel').boundingBox(),
+            bar = await p.locator('.part-transport-bar').boundingBox();
+          assert.ok(
+            panel.y + panel.height <= bar.y,
+            `${width}×${height}: panel ends at ${panel.y + panel.height}, bar starts at ${bar.y}`,
+          );
+          assert.ok(panel.y >= 0, `${width}×${height}: the panel's top is on screen`);
+          if (width === 1440 && height === 540)
+            await p.screenshot({ path: path.join(OUT, host + '-settings-1440x540.png') });
+          assert.deepEqual(s2.errors, []);
+          await s2.ctx.close();
+        }
+      });
       await t.test('desktop: Settings scrolls with a mouse drag, and a drag selects no text', async () => {
         await page.setViewportSize({ width: 1440, height: 640 });
         await page.getByRole('button', { name: 'Settings' }).click();
@@ -5539,6 +5566,9 @@ for (const name of BROWSERS)
             const fen = decodeURIComponent(url.split('fen=')[1] || ''),
               key = fen.trim().split(/\s+/).slice(0, 5).join(' '); // LichessCore.tbKey
             window.__tb.push(fen);
+            // as offline: from the start, or after the first __tbOfflineAfter requests
+            if (window.__tbOffline || (window.__tbOfflineAfter != null && window.__tb.length > window.__tbOfflineAfter))
+              return Promise.reject(new TypeError('Failed to fetch'));
             if (!ans[key]) {
               console.error('no tablebase answer in tb-live.json for ' + fen);
               return Promise.resolve(new Response('', { status: 404 }));
@@ -5624,6 +5654,73 @@ for (const name of BROWSERS)
           await tb.ctx.close();
         },
       );
+      // a tablebase answer that failed (offline) is asked again when the browser says it's back online, with the
+      // position still on the board: before, the box said Not available until the viewer stepped away and back
+      await t.test('desktop: a failed tablebase answer is asked again when the page comes back online', async () => {
+        const tb = await open(browser, { width: 1440, height: 900 });
+        await fakeTablebase(tb.ctx);
+        const p = tb.page;
+        await p.goto(base, { waitUntil: 'load' });
+        await loadedOn(p);
+        await p.evaluate(() => (window.__tbOffline = true));
+        await setUpFen(p, '8/8/8/4k3/8/8/3KB3/7N w - - 0 1');
+        await p.waitForFunction(() => window.__tb.length === 1, null, { timeout: 10000 });
+        await p.waitForFunction(() => /Endgame tablebase[\s\S]*Not available/i.test(document.body.innerText), null, {
+          timeout: 10000,
+        });
+        await p.evaluate(() => {
+          window.__tbOffline = false;
+          window.dispatchEvent(new Event('online'));
+        });
+        await assert.doesNotReject(
+          p.waitForFunction(
+            () => /Endgame tablebase\s+DTZ 55 · DTM 55\s+White wins/i.test(document.body.innerText),
+            null,
+            {
+              timeout: 10000,
+            },
+          ),
+        );
+        assert.equal(await p.evaluate(() => window.__tb.length), 2, 'asked once more');
+        assert.deepEqual(tb.errors, []);
+        await tb.ctx.close();
+      });
+      // a run whose tablebase stops answering part-way says so, and the note stays once the run's analysis is in (the
+      // run's own commit had cleared it, so a finished run never told the viewer its endgames were Stockfish's)
+      await t.test('desktop: the tablebase-lost note stays after the game analysis finishes', async () => {
+        const ta = await open(browser, { width: 1440, height: 900 });
+        await fakeTablebase(ta.ctx);
+        const p = ta.page;
+        await p.addInitScript(() => {
+          window.__tbOfflineAfter = 1;
+          try {
+            localStorage.setItem('chess-video.tweaks.v1', JSON.stringify({ sfTime: 1 }));
+          } catch (e) {}
+        });
+        await p.goto(base, { waitUntil: 'load' });
+        await loadedOn(p);
+        const pgn =
+          '[White "Kay"]\n[Black "Bee"]\n[SetUp "1"]\n[FEN "8/8/8/4k3/8/8/3KB3/7N w - - 0 1"]\n\n1. Ke3 Kd5 2. Bc4+ Kxc4 *';
+        await p.setInputFiles('#game-files', { name: 'kbnk.pgn', mimeType: 'text/plain', buffer: Buffer.from(pgn) });
+        await p.waitForFunction(() => /Kxc4/.test(document.body.innerText), null, { timeout: 10000 });
+        await p
+          .getByRole('button', { name: /^Analyse with Stockfish/ })
+          .first()
+          .click();
+        await p
+          .getByRole('dialog', { name: 'Analyse the game' })
+          .getByRole('button', { name: /^Analyse with Stockfish/ })
+          .click();
+        await p.waitForFunction(
+          () => !/Analysing \d|Starting Stockfish|Analyse with Stockfish/i.test(document.body.innerText),
+          null,
+          { timeout: 60000 },
+        );
+        await p.waitForTimeout(500);
+        assert.match(await p.evaluate(() => document.body.innerText), /tablebase stopped answering/i);
+        assert.deepEqual(ta.errors, []);
+        await ta.ctx.close();
+      });
       // Lichess's cloud evaluation (the real service), off by default: on, the free board's position asks it once (the
       // start's before and after are one position) and its deeper answer shows, labelled; a position it hasn't analysed
       // falls back to Stockfish; Prefer cloud leaves the browser engine idle where the cloud is deep enough

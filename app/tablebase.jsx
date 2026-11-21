@@ -4,6 +4,27 @@
 // Commentary box (in place of the opening explorer), never during a game; the stored analysis is left alone.
 const TB = window.LichessCore ? window.LichessCore.create() : null;
 const TB_DEBOUNCE_MS = 300; // after the last position change (stepping through moves sends nothing for the ones passed)
+// A position whose answer failed (offline, an error, a timeout, a 429 back-off) is asked again while it is on the board:
+// when the browser says it is back online, as soon as a back-off ends, else after LI_RETRY_MS, doubling each time up to
+// LI_RETRY_MAX_MS. The count it returns goes in the asking effect's deps; key: the position (a new one starts over)
+const LI_RETRY_MS = 30000,
+  LI_RETRY_MAX_MS = 300000;
+function useLichessRetry(client, name, key, failed) {
+  const [r, setR] = React.useState({ key, n: 0 });
+  const n = r.key === key ? r.n : 0;
+  React.useEffect(() => {
+    if (!failed || !client) return;
+    const bump = () => setR((x) => ({ key, n: (x.key === key ? x.n : 0) + 1 }));
+    const left = client.backOffLeft(name);
+    const id = setTimeout(bump, left ? left + 100 : Math.min(LI_RETRY_MAX_MS, LI_RETRY_MS * 2 ** n));
+    window.addEventListener('online', bump);
+    return () => {
+      clearTimeout(id);
+      window.removeEventListener('online', bump);
+    };
+  }, [client, name, key, failed, n]);
+  return n;
+}
 
 // The tablebase's answer for the position on the board, or null when it isn't asked (off, more than 7 pieces):
 // { state: 'loading' | 'none' (offline, an error, a back-off) | 'ready', tb, turn }. fen: its full FEN (ChessCore.fenAfter),
@@ -14,6 +35,7 @@ function useTablebase(boardFen, on) {
   const [st, setSt] = React.useState({ fen: null, tb: null });
   const hit = fen ? TB.tablebaseCached(fen) : undefined,
     tbKey = fen && LC.tbKey(fen);
+  const retry = useLichessRetry(TB, 'tablebase', tbKey, !!fen && !hit && st.fen === fen && st.tb === null);
   React.useEffect(() => {
     if (!fen || hit) return;
     const ctl = new AbortController();
@@ -28,8 +50,8 @@ function useTablebase(boardFen, on) {
       clearTimeout(id);
       ctl.abort();
     };
-    // eslint-disable-next-line react-hooks/exhaustive-deps -- tbKey stands for fen; a cached answer that lands later needs no new request
-  }, [tbKey]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- tbKey stands for fen; a cached answer that lands later needs no new request; retry asks a failed one again
+  }, [tbKey, retry]);
   if (!fen) return null;
   const tb = hit || (st.fen === fen ? st.tb : undefined);
   const turn = fen.split(' ')[1] === 'b' ? 'b' : 'w';
