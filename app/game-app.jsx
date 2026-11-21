@@ -435,14 +435,36 @@ function GameApp() {
   // Edit position or Position from image), auto to fetch it at once (a Lichess link the explorer opens)
   const [importOpen, setImportOpen] = React.useState(false);
   const [resetOpen, setResetOpen] = React.useState(false);
-  // Edit position: { setup, text, msg, resume, play, image } while the editor shows in place of the board or the loaded
-  // game; text is the FEN field's, msg why it doesn't parse, resume the paused game in progress left to open it (Cancel
-  // goes back to it), image the picture it was read from ({ url, unsure, bitmap, box }, or null)
-  const [editing, setEditing] = React.useState(null);
-  // Position from image's dialog while it is open: { play, again, back }, play the Play dialog's choices it came from (or null),
-  // again the picture, box, greyscale copy and found squares for Back to crop (or null), back true when Import game opened it
-  const [vision, setVision] = React.useState(null);
   const focusBack = React.useRef(null); // see the focus's return when a dialog closes
+  // Edit position and Position from image: their state and the steps between them (useEditorFlow, edit-board.jsx)
+  const {
+    editing,
+    setEditing,
+    vision,
+    setVision,
+    visionOk,
+    openEditor,
+    editTo,
+    editText,
+    editTurn,
+    backToCrop,
+    visionRead,
+    visionClose,
+    editDone,
+    editCancel,
+  } = useEditorFlow({
+    boardRef,
+    nav,
+    commitBoard,
+    focusBack,
+    closeQueen: () => setQueenOpen(false),
+    openImport: (text) => setImportOpen({ text }),
+    reopenPlay: (mode, init) => {
+      setPlayInit(init);
+      setPlayOpen(mode);
+    },
+    startGame: (mode, choice) => startGame(mode, choice),
+  });
   const [fenNote, setFenNote] = React.useState(null); // { fen, ok } after Copy FEN; a copy that failed stays up to select
 
   // the Play dialog's mode while it is open: 'human' or 'stockfish'
@@ -579,6 +601,17 @@ function GameApp() {
   const gameNow = React.useRef(gameKey);
   gameNow.current = gameKey;
   const queenLive = React.useCallback(() => gameNow.current === gameKey, [gameKey]);
+  // Queen's panel closes when another game loads or the board takes the game's place, whichever way (a file, a paste, My
+  // games, Back to the loaded game, a game started...), in the render that brings it: the panel never shows the next game
+  // with the last one's state. A Queen file loaded with its PGN keeps it open for that game (queenStays, set by loadFiles)
+  const queenFor = onBoard ? 'board' : gameKey,
+    queenSeen = React.useRef(queenFor),
+    queenStays = React.useRef(false);
+  if (queenSeen.current !== queenFor) {
+    queenSeen.current = queenFor;
+    if (queenStays.current) queenStays.current = false;
+    else if (queenOpen) setQueenOpen(false);
+  }
   const queenStop = React.useRef(null);
   queenStop.current = Q.stop;
   React.useEffect(
@@ -614,133 +647,12 @@ function GameApp() {
   const open960Board = ({ fen, chess960, pick }) => {
     setOpen960(false);
     remember960(pick);
-    setQueenOpen(false);
     commitBoard(window.BoardCore.fromFen(fen, { chess960 }));
   };
   const close960 = React.useCallback(() => setOpen960(false), []);
-  // the editor opens on the position on the board (empty when there is none); a game in progress is paused for it (and
-  // kept, when it has moves, by guard's Leave). play: the Play dialog's { mode, tc, you } when its Set-up position opened
-  // the editor, whose Done starts that game
-  // read: Position from image's { setup, image }, the editor opening on it with the picture, or Import game's
-  // { setup, image: null, back }, an illegal pasted FEN, back the paste box's text for Cancel to restore
-  const openEditor = (play, read) => {
-    // the board as it is now: Stockfish may have replied, or a flag fallen, while the Leave dialog was up
-    const E = window.EditCore,
-      P = window.PlayCore,
-      b = boardRef.current,
-      fen = nav.current && nav.current.fen && nav.current.fen();
-    const s = (fen && E.fromFen(fen).setup) || E.empty();
-    const resume = editing ? editing.resume : b && P.inProgress(b) ? P.pause(b, Date.now()) : null;
-    if (resume && !editing) commitBoard(resume);
-    const setup = read ? read.setup : s;
-    setQueenOpen(false);
-    setEditing({
-      setup,
-      text: E.toFen(setup),
-      msg: '',
-      resume,
-      play: play || null,
-      image: read ? read.image : null,
-      back: read && read.back != null ? read.back : null,
-    });
-  };
   const editPosition = () => {
     closeOverlays();
     guard(() => openEditor());
-  };
-  // a square the reader was unsure of stops being outlined once its piece changes, however it was edited
-  const sureOf = (e, setup) => {
-    const im = e.image;
-    if (!im || !im.unsure.some((i) => e.setup.b[i] !== setup.b[i])) return im;
-    return { ...im, unsure: im.unsure.filter((i) => e.setup.b[i] === setup.b[i]) };
-  };
-  const editTo = (setup) =>
-    setEditing((e) => e && { ...e, setup, text: window.EditCore.toFen(setup), msg: '', image: sureOf(e, setup) });
-  // a typed FEN sets up the board as soon as it is well-formed, legal or not; until then the board stays as it was
-  const editText = (text) =>
-    setEditing((e) => {
-      if (!e) return e;
-      const r = window.EditCore.fromFen(text);
-      return r.setup
-        ? { ...e, setup: r.setup, text, msg: '', image: sureOf(e, r.setup) }
-        : { ...e, text, msg: r.error };
-    });
-  // Turn board 180° turns the board as it stands, edits included, and the outlines still showing with it
-  const editTurn = () =>
-    setEditing((e) => {
-      if (!e) return e;
-      const V = window.VisionCore,
-        setup = V.turn(e.setup);
-      return {
-        ...e,
-        setup,
-        text: window.EditCore.toFen(setup),
-        msg: '',
-        image: e.image && { ...e.image, unsure: V.turnSquares(e.image.unsure) },
-      };
-    });
-  const backToCrop = () => {
-    if (editing && editing.image) {
-      const { bitmap, box, grey, found } = editing.image;
-      setVision({ play: editing.play, again: { bitmap, box, grey, found } });
-    }
-  };
-  // The picture's object URL and bitmap are GameApp's while the editor shows it: one the editor no longer holds (Done,
-  // Cancel, a new editor, another read) is let go here, whichever way it went, but never one the next state still holds
-  // (Back to crop's read may keep the bitmap and replace the URL)
-  const heldPic = React.useRef(null),
-    editPic = editing && editing.image;
-  React.useEffect(() => {
-    const was = heldPic.current;
-    heldPic.current = editPic || null;
-    if (!was) return;
-    if (!editPic || editPic.url !== was.url) URL.revokeObjectURL(was.url);
-    if (!editPic || editPic.bitmap !== was.bitmap) was.bitmap.close();
-  }, [editPic]);
-  // Import game's Position from image tile, where the reader can run
-  const visionOk = React.useMemo(() => !!window.Vision && window.Vision.supported(), []);
-  // Read board: from Back to crop it replaces the editor's board, edits and marks with the new read; else the editor opens
-  // on it (in the Play dialog's mode when that is where it came from, so Done starts the game)
-  const visionRead = ({ setup, unsure, url, bitmap, box, grey, found }) => {
-    const v = vision,
-      image = { url, unsure, bitmap, box, grey, found };
-    setVision(null);
-    if (v && v.again && editing)
-      setEditing((e) => e && { ...e, setup, text: window.EditCore.toFen(setup), msg: '', image });
-    else openEditor(v && v.play, { setup, image });
-  };
-  // Cancel goes back to what showed before: the editor as it was (Back to crop), else the Play dialog as it was, or Import game
-  const visionClose = () => {
-    const v = vision;
-    setVision(null);
-    if (v && v.again) focusBack.current = '.edit-back-to-crop'; // Back to crop › Cancel: back on the button that opened it
-    if (v && v.back) setImportOpen({ text: '' });
-    if (v && !v.again && v.play) {
-      setPlayInit({ from: 'image', tc: v.play.tc, you: v.play.you });
-      setPlayOpen(v.play.mode);
-    }
-  };
-  const editDone = () => {
-    const fen = window.EditCore.toFen(editing.setup),
-      play = editing.play,
-      chess960 = window.EditCore.number960(editing.setup);
-    if (play) startGame(play.mode, { fen, chess960, tc: play.tc, you: play.you });
-    else {
-      setQueenOpen(false);
-      commitBoard(window.BoardCore.fromFen(fen, { chess960 }));
-    }
-  };
-  // Cancel goes back to what showed before: a game left for the editor resumes, its clock running from now, and the Play
-  // dialog or Import game that opened it comes back as it was
-  const editCancel = () => {
-    const { resume: r, play, image, back } = editing || {};
-    setEditing(null);
-    if (back != null) setImportOpen({ text: back });
-    if (r) commitBoard(window.PlayCore.runClock(r, Date.now()));
-    if (play) {
-      setPlayInit({ from: image ? 'image' : 'setup', tc: play.tc, you: play.you });
-      setPlayOpen(play.mode);
-    }
   };
   const importGame = () => {
     closeOverlays();
@@ -777,7 +689,6 @@ function GameApp() {
   // (pick960 the choice that gave it); a game from the open board's position (Set-up position, This position) keeps that
   // board's Chess960 label, and one from a loaded Chess960 game's moves that game's
   const startGame = (mode, { fen, here, chess960, pick960, tc, you }) => {
-    setQueenOpen(false);
     setTweak('playClock', tc || 'Off');
     if (mode === 'stockfish') setTweak('playSide', you);
     if (pick960) remember960(pick960);
@@ -843,7 +754,6 @@ function GameApp() {
     guard(() => {
       const b = window.BoardCore.restore(e.board);
       if (!b) return;
-      setQueenOpen(false);
       commit({ pgn: window.PlayCore.pgn(b), pgnName: `my-game-${b.game.date}.pgn`, gameIndex: 0 });
     });
   };
@@ -852,7 +762,6 @@ function GameApp() {
     guard(() => {
       const b = window.BoardCore.restore(e.board);
       if (!b) return;
-      setQueenOpen(false);
       commitBoard(window.PlayCore.runClock(b, Date.now()));
     });
   };
@@ -875,7 +784,6 @@ function GameApp() {
   // #ply opens the replay paused after that ply
   const pgnLoad = (text, link) => {
     setImportOpen(false);
-    setQueenOpen(false);
     if (link) setTweak('flip', link.side === 'b');
     seekPly.current = link && link.ply ? link.ply : null;
     if (!commit({ pgn: text, pgnName: link ? `lichess-${link.id}.pgn` : 'pasted.pgn', gameIndex: 0 }))
@@ -892,7 +800,6 @@ function GameApp() {
     setImportOpen(false);
     // a numbered Chess960 start keeps its number (Game info's "Chess960 #n", the PGN tag)
     if (window.EditCore.ok(setup)) {
-      setQueenOpen(false);
       commitBoard(
         window.BoardCore.fromFen(window.EditCore.toFen(setup), { chess960: window.EditCore.number960(setup) }),
       );
@@ -915,7 +822,6 @@ function GameApp() {
       const l = files.lastGame;
       if (!l) return;
       seekAfter.current = l.at;
-      setQueenOpen(false);
       if (!commit({ ...l.files, fromBoard: files.board })) seekAfter.current = null;
     });
   // a Lichess link's #ply: once the replay has its timeline (probe), paused just after that ply, as Queen's moves seek
@@ -1016,7 +922,7 @@ function GameApp() {
         if (answers) Q.merge(answers);
         return;
       }
-    } else if (batch.pgn) setQueenOpen(false); // another game: Queen's panel closes, as the other ways to load one close it
+    }
     if (!batch.pgn && !batch.analysis && !batch.notes) {
       setErr('That file isn’t a PGN, an analysis JSON or a notes file.');
       return;
@@ -1048,6 +954,7 @@ function GameApp() {
       Q.merge(answers, game);
       // the note outlives the game change this load makes, and no other: one that keeps the open game makes none
       queenNoteNext.current = !!game && (next.pgn !== files.pgn || next.gameIndex !== files.gameIndex);
+      queenStays.current = queenNoteNext.current;
     }
   };
   // Drag-and-drop: the overlay shows while files are held over the page (watchFileDrag); Position from image takes
@@ -1324,215 +1231,32 @@ function GameApp() {
       fmtLen(TM.total);
   const shownErr = err || built.error;
 
-  const newGroups = [
-    {
-      label: 'Explore',
-      items: [
-        { label: 'Starting position', run: newBoard },
-        { label: 'Edit position', run: editPosition },
-        { label: 'Chess960 position', run: explore960 },
-      ],
-    },
-    {
-      label: 'Play',
-      items: [
-        { label: 'Play vs human', run: playHuman },
-        { label: 'Play vs computer', run: playSf },
-        { label: 'My games', run: myGames },
-      ],
-    },
-    // Ask Queen sits here on the wide layouts; the folded menu keeps it in its last row. The folded menu's shortcuts item is hidden on a touch screen
-    {
-      label: 'More',
-      items: [
-        { label: 'Keyboard shortcuts', run: openKeys },
-        ...(!phone && askable
-          ? [
-              {
-                label: 'Ask Queen',
-                cls: 'dock-queen',
-                run: () => {
-                  setNewMenu(false);
-                  askQueen();
-                },
-              },
-            ]
-          : []),
-      ],
-    },
-  ];
-  const newItems = newGroups.map((g) => (
-    <div key={g.label} className={`dock-group dock-group-${g.label.toLowerCase()}`}>
-      <span className="dock-menu-label">{g.label}</span>
-      {g.items.map((it) => (
-        <button key={it.label} type="button" className={it.cls ? 'dock-btn ' + it.cls : 'dock-btn'} onClick={it.run}>
-          {it.label}
-        </button>
-      ))}
-    </div>
-  ));
-  const fsLabel = fullscreen.on ? 'Exit full screen' : 'Full screen';
-  const fsIcon = (
-    <svg className="dock-icon" width="28" height="28" viewBox="0 0 16 16" fill="none" aria-hidden="true">
-      <path
-        d={fullscreen.on ? 'M6 2v4H2M10 2v4h4M14 10h-4v4M2 10h4v4' : 'M2 6V2h4M10 2h4v4M14 10v4h-4M6 14H2v-4'}
-        stroke="currentColor"
-        strokeWidth="1.8"
-        strokeLinecap="round"
-        strokeLinejoin="round"
-      />
-    </svg>
-  );
+  const fsLabel = fullscreenLabel(fullscreen.on);
   // a phone held sideways with its browser's bars showing (tiny) has Full screen on the transport bar too, by the menu:
   // the bars cost the page a third of its height there (863×286 in Firefox for Android), so the way out of them is one tap
   const fsOnBar = fullscreen.ok && phone && short && tiny;
-  const dockItems = (
-    <div id="dock-items" className="dock-items part-dock">
-      {phone && <span className="dock-menu-status">{shownErr || status}</span>}
-      {/* Import game and Menu are icons on the bar, their names in the folded menu (the name stays in the button, hidden, for screen readers) */}
-      <button type="button" className="dock-btn dock-primary dock-glyphed" title="Import game" onClick={importGame}>
-        <svg className="dock-glyph" width="28" height="28" viewBox="0 0 16 16" fill="none" aria-hidden="true">
-          <path
-            d="M8 2v8M4.5 6.5L8 10l3.5-3.5M2.5 10v3.5h11V10"
-            stroke="currentColor"
-            strokeWidth="1.6"
-            strokeLinecap="round"
-            strokeLinejoin="round"
-          />
-        </svg>
-        <span className="dock-label">Import game</span>
-      </button>
-      {/* a list of starting points and tools in groups, each under its heading; on the phone they sit in the folded menu */}
-      {phone ? (
-        newItems
-      ) : (
-        <div ref={newRef} className="dock-new">
-          <button
-            ref={newBtn}
-            type="button"
-            className="dock-btn dock-glyphed"
-            title="Menu"
-            aria-expanded={newMenu}
-            aria-controls="dock-new-items"
-            onClick={() => {
-              setNewMenu((m) => !m);
-              setPanel(false);
-              setQueenOpen(false);
-            }}
-          >
-            <svg className="dock-glyph" width="30" height="30" viewBox="0 0 18 18" fill="none" aria-hidden="true">
-              <path d="M3 5h12M3 9h12M3 13h12" stroke="currentColor" strokeWidth="2" strokeLinecap="round" />
-            </svg>
-            <span className="dock-label">Menu</span>
-          </button>
-          {newMenu && (
-            <div id="dock-new-items" className="dock-pop part-play-explore-menu">
-              {newItems}
-            </div>
-          )}
-        </div>
-      )}
-      {/* Share and export, Settings and Full screen are icons in every layout; on the phone they share the menu's last row with Ask Queen */}
-      <div className="dock-icons">
-        {phone && askable && (
-          <button
-            type="button"
-            className="dock-btn dock-queen"
-            aria-expanded={queenOpen}
-            onClick={() => {
-              setMenu(false);
-              askQueen();
-            }}
-          >
-            Ask Queen
-          </button>
-        )}
-        <button
-          type="button"
-          className="dock-btn dock-iconic"
-          aria-label="Share and export"
-          title="Share and export"
-          aria-haspopup="dialog"
-          onClick={openShare}
-        >
-          <svg className="dock-icon" width="28" height="28" viewBox="0 0 16 16" fill="none" aria-hidden="true">
-            <path d={SHARE} stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round" />
-          </svg>
-        </button>
-        <button
-          type="button"
-          className="dock-btn dock-iconic"
-          aria-label="Settings"
-          title="Settings"
-          aria-expanded={panel}
-          onClick={() => {
-            setMenu(false);
-            setPanel((p) => !p);
-            setQueenOpen(false);
-          }}
-        >
-          <svg className="dock-icon" width="28" height="28" viewBox="0 0 16 16" aria-hidden="true">
-            <path fill="currentColor" fillRule="evenodd" d={GEAR} />
-          </svg>
-        </button>
-        {phone && short && (
-          <SoundButton className="dock-btn dock-iconic" on={t.sound !== false} onChange={(v) => setTweak('sound', v)} />
-        )}
-        {fullscreen.ok && (
-          <button
-            type="button"
-            className="dock-btn dock-iconic"
-            aria-label={fsLabel}
-            title={fsLabel}
-            onClick={() => {
-              setMenu(false);
-              fullscreen.toggle();
-            }}
-          >
-            {fsIcon}
-          </button>
-        )}
-      </div>
-    </div>
+  const dock = (
+    <Dock
+      a={{ importGame, newBoard, editPosition, explore960, playHuman, playSf, myGames, openKeys, askQueen, openShare }}
+      phone={phone}
+      short={short}
+      shownErr={shownErr}
+      status={status}
+      askable={askable}
+      queenOpen={queenOpen}
+      setQueenOpen={setQueenOpen}
+      newMenu={newMenu}
+      setNewMenu={setNewMenu}
+      menu={menu}
+      setMenu={setMenu}
+      panel={panel}
+      setPanel={setPanel}
+      refs={{ newRef, newBtn, menuBtn, dockRef }}
+      fullscreen={fullscreen}
+      sound={t.sound !== false}
+      setSound={(v) => setTweak('sound', v)}
+    />
   );
-  const menuEl = (
-    <div ref={dockRef} className={'pmenu part-menu' + (shownErr ? ' pmenu-err' : '') + (menu ? ' pmenu-open' : '')}>
-      <button
-        ref={menuBtn}
-        type="button"
-        className="pbtn dock-menu"
-        aria-label="Menu"
-        aria-expanded={menu}
-        aria-controls="dock-items"
-        onClick={() => {
-          setMenu((m) => !m);
-          setPanel(false);
-          setQueenOpen(false);
-        }}
-      >
-        <svg width="30" height="30" viewBox="0 0 18 18" fill="none" aria-hidden="true">
-          {menu ? (
-            <path d="M4 4l10 10M14 4L4 14" stroke="currentColor" strokeWidth="2" strokeLinecap="round" />
-          ) : (
-            <path d="M3 5h12M3 9h12M3 13h12" stroke="currentColor" strokeWidth="2" strokeLinecap="round" />
-          )}
-        </svg>
-      </button>
-      {dockItems}
-    </div>
-  );
-  // landscape: the buttons sit at the end of the transport bar, with an error above them
-  const deskDock = (
-    <div className="pdock">
-      {shownErr && (
-        <span className="dock-status" role="alert">
-          {shownErr}
-        </span>
-      )}
-      {dockItems}
-    </div>
-  );
-
   return (
     <React.Fragment>
       <EngineMenuContext.Provider value={board && board.game ? null : engineMenu}>
@@ -1563,10 +1287,10 @@ function GameApp() {
                     fullscreen.toggle();
                   }}
                 >
-                  {fsIcon}
+                  <FullscreenIcon on={fullscreen.on} />
                 </button>
               )}
-              {phone ? menuEl : deskDock}
+              {dock}
             </React.Fragment>
           }
           dockExtra={fsOnBar ? 40 : 0}

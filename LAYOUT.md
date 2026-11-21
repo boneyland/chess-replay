@@ -5,7 +5,7 @@ What each part of the repo is, with the pinned SHA-256 of every vendored file. B
 - `app/`: page sources
   - `shell.html`: the page shell, its CSS and the settings defaults (`window.TWEAK_DEFAULTS`)
   - `theme.js`: the page's colours in both themes (`window.THEME`), which `build.cjs` writes into `shell.html`'s CSS and the views' palettes read
-  - `game-app.jsx`: the app (the stored game or board, loading games, the dock and menus, the dialogs); `settings-tabs.jsx` the Settings panel's tabs and the engine settings; `share-dialog.jsx` Share and export and the export settings; `tweaks.jsx` the Settings controls
+  - `game-app.jsx`: the app (the stored game or board, loading games, which menu, panel or dialog is open); `dock.jsx` the dock (`Dock`: Import game, Menu, Share and export, Settings, Full screen); `dialogs.jsx` the dock's dialogs (Import game, Play, Chess960, Leave, My games, Keyboard shortcuts) and `DialogBox`, which every dialog sits in; `settings-tabs.jsx` the Settings panel's tabs and the engine settings; `share-dialog.jsx` Share and export and the export settings; `tweaks.jsx` the Settings controls
   - `engine.jsx`: the animation engine (the replay is one element tree drawn as a function of time); `game-video-core.jsx` the replay's scenes, the board's scaled space (`BoardSpace`) and text sizing (`tx()`)
   - `layout-core.js`: the page's layout (`LayoutCore`: one or two columns, the boxes for the board and panels, the export scale)
   - `chess-core.js`: PGN, analysis and notes turned into the game model the replay draws
@@ -15,7 +15,7 @@ What each part of the repo is, with the pinned SHA-256 of every vendored file. B
   - `openings-core.js`: opening names and book continuations (the opening explorer)
   - `lichess-core.js`: Lichess's public data (URLs, parsers, a polite client); `explorer.jsx` the Lichess opening explorer (Settings › Online); `tablebase.jsx` the endgame tablebase; `import-core.js` what Import game's paste box holds (a Lichess link, a FEN, a PGN)
   - `board-core.js`, `free-board.jsx`: the free board (Menu › Explore); `play-core.js` its games (rules, clocks, takebacks, the end); `games-core.js` My games
-  - `edit-core.js`, `edit-board.jsx`: Edit position (its rules and its board)
+  - `edit-core.js`, `edit-board.jsx`: Edit position (its rules, its board, and `useEditorFlow`: the steps between the editor, Position from image, the Play dialog and Import game)
   - `draw-core.js`: the viewer's own circles and arrows on the board
   - `dead-core.js`, `dead.jsx`, `dead-worker.js`: dead positions, proven by chasolver in a Worker
   - `vision-core.js`, `vision.js`, `vision-worker.js`, `vision-grid.js`, `vision.jsx`: Position from image (the board reader's files, the reader and its Worker, the board auto-crop, the dialog)

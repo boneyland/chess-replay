@@ -80,6 +80,10 @@ const units = [
         '\n' +
         read(path.join(app, 'free-board.jsx')) +
         '\n' +
+        read(path.join(app, 'dialogs.jsx')) +
+        '\n' +
+        read(path.join(app, 'dock.jsx')) +
+        '\n' +
         read(path.join(app, 'edit-board.jsx')) +
         '\n' +
         read(path.join(app, 'sfx.jsx')) +

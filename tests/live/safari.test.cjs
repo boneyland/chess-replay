@@ -496,7 +496,7 @@ const ce = console.error; console.error = (...a) => { __errs.push(a.map(String).
     );
     await shot('import-bad');
     // Safari focuses no button on a click, so after Open the focus is on the page, outside the dialog: the dialog still
-    // takes Tab and Esc (DialogBox, app/free-board.jsx), which it heard only from inside until this test found it (2026-11-08)
+    // takes Tab and Esc (DialogBox, app/dialogs.jsx), which it heard only from inside until this test found it (2026-11-08)
     t.diagnostic(
       `focus after clicking Open: ${await js(() => (document.activeElement ? document.activeElement.tagName : 'none'))}`,
     );
