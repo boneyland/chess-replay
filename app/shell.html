@@ -306,9 +306,9 @@ body:has(.stage) .twk-panel { bottom: calc(var(--pbar-total) + 10px + var(--safe
   .pmenu .dock-group-more { grid-area: mo; }
   .pmenu .dock-icons { grid-area: tail; align-self: end; }
 }
-/* and slimmer items, gaps and headings there, so the menu fits with less scrolling (from under 500 px high, the phone
-   tier's breakpoint, like the grid above: the user, 2026-11-21; it was under 350 px) */
-@media (orientation: landscape) and (max-height: 499px) {
+/* a short phone held sideways (under 400 px high: the user, 2026-11-21; it was under 350 px): slimmer items, gaps and
+   headings, so the menu fits with less scrolling */
+@media (orientation: landscape) and (max-height: 399px) {
   .pmenu .dock-items, .pmenu .dock-group { gap: 4px; }
   .pmenu .dock-items { padding: 6px; bottom: calc(100% + 8px); }
   .pmenu-open .dock-items { max-height: calc(100dvh - 52px); }
