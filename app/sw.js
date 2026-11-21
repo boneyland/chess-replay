@@ -1,4 +1,4 @@
-// The site's service worker (build.cjs fills in VERSION, LOCAL, REMOTE, KEEP_HOSTS, VISION_CACHE and ISOLATION): it keeps a copy of the page and everything
+// The site's service worker (build.cjs fills in VERSION, LOCAL, REMOTE, PAGE, KEEP_HOSTS, VISION_CACHE and ISOLATION): it keeps a copy of the page and everything
 // it loads, so the player, Stockfish and the export work with no connection. What needs the network: Ask Queen and its
 // Hugging Face sign-in; Lichess (the tablebase, the opening explorer and its sign-in, cloud evaluation, importing a
 // Lichess link); and the first download of Full Stockfish (from unpkg) or of the board reader (vision/), each kept in
@@ -7,7 +7,7 @@
 const VERSION = '__VERSION__';
 const LOCAL = __LOCAL__; // next to the page, the page first
 const REMOTE = __REMOTE__; // pinned CDN files: React, the export's libraries, the fonts' stylesheet
-const PAGE = 'chess-game-video.html';
+const PAGE = '__PAGE__'; // render.yaml's rewrite of the folder
 // the folder the page is served from: the page answers there (Render rewrites it) and at its own name
 const SCOPE = new URL('./', self.location.href).pathname;
 const CACHE = 'chess-replay-' + VERSION;
@@ -67,14 +67,38 @@ self.addEventListener('install', (e) => {
 self.addEventListener('activate', (e) => {
   e.waitUntil(
     (async () => {
-      // older deploys' copies, and a board reader kept under an older name (a model or runtime update bumps VISION_CACHE)
-      for (const k of await caches.keys())
-        if ((k.startsWith('chess-replay-') && k !== CACHE) || (k.startsWith('chess-vision-') && k !== VISION_CACHE))
-          await caches.delete(k);
+      await prune();
       await self.clients.claim();
     })(),
   );
 });
+
+// A page older than this worker (open in a tab when the deploy's worker took over) still asks for its own deploy's
+// files (?v=), and its board reader reads its own VISION_CACHE: cacheFirst answers them from that deploy's copy, so it
+// must outlive the tab. Older deploys' copies, and a board reader kept under an older name (a model or runtime update
+// bumps VISION_CACHE), are deleted only when every window of the site shows a page this worker served (FRESH: the
+// navigations it answered; a restarted worker knows none, so it waits for the next visit with no other window open), and
+// never while a newer worker is installing or waiting (it deletes them itself, and this worker would take its new copy
+// for an old one). The worker checks at activate and a moment after each visit to the page (a reloaded tab's old
+// document is still a window while the new one loads). Whatever the windows, no more than KEEP_OLD older copies stay
+// (the newest: caches.keys() lists caches in the order they were made), so a browser that never names a navigation's
+// client (resultingClientId) or a tab left open for weeks doesn't pile up a copy per deploy
+const FRESH = new Set();
+const PRUNE_DELAY_MS = 5000;
+const KEEP_OLD = 2;
+async function prune() {
+  const reg = self.registration;
+  if (reg && (reg.installing || reg.waiting)) return;
+  const open = await self.clients.matchAll({ type: 'window', includeUncontrolled: true });
+  const all = open.every((c) => FRESH.has(c.id));
+  const old = (await caches.keys()).filter(
+    (k) => (k.startsWith('chess-replay-') && k !== CACHE) || (k.startsWith('chess-vision-') && k !== VISION_CACHE),
+  );
+  const replays = old.filter((k) => k.startsWith('chess-replay-'));
+  for (const k of old)
+    if (all || (k.startsWith('chess-replay-') && replays.indexOf(k) < replays.length - KEEP_OLD))
+      await caches.delete(k);
+}
 
 self.addEventListener('fetch', (e) => {
   const req = e.request,
@@ -102,6 +126,7 @@ async function vision(req) {
 // A 404 is the network's answer. Keeping the page is held open with waitUntil, called now while the event can still take
 // it: the network may answer after the copy has, and the browser may stop an idle worker before a write ends
 function page(e) {
+  if (e.resultingClientId) FRESH.add(e.resultingClientId);
   let saved = Promise.resolve();
   const net = fetch(e.request).then((r) => {
     if (r.ok && r.type === 'basic') {
@@ -112,7 +137,14 @@ function page(e) {
   });
   net.catch(() => {}); // when the copy has answered, a later failure has no one to tell
   e.waitUntil(net.then(() => saved).catch(() => {}));
-  return answer(net);
+  const answered = answer(net);
+  e.waitUntil(
+    answered
+      .then(() => new Promise((ok) => setTimeout(ok, PRUNE_DELAY_MS)))
+      .then(prune)
+      .catch(() => {}),
+  );
+  return answered;
 }
 
 async function answer(net) {
@@ -143,17 +175,21 @@ function isolated(r) {
   return new Response(r.body, { status: r.status, statusText: r.statusText, headers });
 }
 
-// a kept GET answers a HEAD too (Stockfish checks its file with one), without its body (Firefox refuses one with a body)
+// a kept GET answers a HEAD too (Stockfish checks its file with one), without its body (Firefox refuses one with a body).
+// caches.match with cacheName opens no cache that isn't there (caches.open would make an empty one)
 async function kept(req, name = CACHE, key = req.url) {
-  const hit = await (await caches.open(name)).match(key, { ignoreVary: true });
+  const hit = await caches.match(key, { cacheName: name, ignoreVary: true });
   return hit && req.method === 'HEAD'
     ? new Response(null, { status: hit.status, statusText: hit.statusText, headers: hit.headers })
     : hit;
 }
 
 // The page asks for its Workers and libraries with its deploy's VERSION (?v=, window.siteFile in build.cjs). This
-// deploy's is answered from the copy, kept under the file's plain URL; another deploy's (a page newer than this worker,
-// fetched while the new one installs) comes from the network and isn't kept, so the page never runs this deploy's file.
+// deploy's is answered from the copy, kept under the file's plain URL. Another deploy's comes from that deploy's own
+// copy where it is still kept (a page older than this worker: prune keeps it while the page is open; or newer, its
+// worker installed but not yet active), else from the network, and isn't kept here, so the page runs its own deploy's
+// file. Only offline is it answered with this deploy's copy, the closest there is (a new page kept by this worker,
+// whose worker never installed): one that works, perhaps out of step, rather than none.
 // Only a whole answer is kept (a CDN's error would otherwise stick until the next deploy): a CDN file is fetched with
 // CORS, which the CDNs and font hosts allow, so its status can be read. The write is held open with waitUntil, which the
 // event still takes while its answer is pending
@@ -162,10 +198,20 @@ async function cacheFirst(e) {
     url = new URL(req.url);
   const here = url.origin === self.location.origin,
     v = here ? url.searchParams.get('v') : null;
-  if (v !== null && v !== VERSION) return fetch(req);
   if (v !== null) url.searchParams.delete('v');
-  const key = url.href,
-    cache = await caches.open(CACHE);
+  const key = url.href;
+  if (v !== null && v !== VERSION) {
+    const own = /^[0-9a-f]{16}$/.test(v) && (await kept(req, 'chess-replay-' + v, key));
+    if (own) return own;
+    try {
+      return await fetch(req);
+    } catch (err) {
+      const near = await kept(req, CACHE, key);
+      if (near) return near;
+      throw err;
+    }
+  }
+  const cache = await caches.open(CACHE);
   const hit = await kept(req, CACHE, key);
   if (hit) return hit;
   const r = await (here ? fetch(req) : fetch(req.url, { method: req.method, mode: 'cors', credentials: 'omit' }));

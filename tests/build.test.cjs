@@ -486,3 +486,33 @@ test('render-headers reads every header entry, however its keys are written', ()
   assert.throws(() => RH.headers('headers:\n  - path: /*\n    name: X\n'), /without path, name and value/);
   assert.equal(Object.keys(RH.headers()).length, 7, "render.yaml's seven headers");
 });
+
+// the page's name is written once, as render.yaml's rewrite of `/`: the build, sw.js and the local server read it there
+test("the page's name is render.yaml's rewrite of /, in the build and sw.js", () => {
+  const RH = require('../render-headers.cjs');
+  const name = RH.page(),
+    sw = fs.readFileSync(path.join(ROOT, 'out', 'site', 'sw.js'), 'utf8');
+  assert.equal(name, 'chess-game-video.html');
+  assert.equal(sw.match(/^const PAGE = '([^']+)';/m)[1], name);
+  assert.ok(fs.statSync(path.join(ROOT, 'out', 'site', name)).isFile());
+  assert.equal(
+    RH.page(
+      'x:\n    routes:\n      # a note\n      - destination: "/p.html"\n        source: /\n        type: rewrite\n',
+    ),
+    'p.html',
+  );
+  assert.throws(() => RH.page('routes:\n  - type: rewrite\n    source: /x\n    destination: /p.html\n'), /no rewrite/);
+});
+
+// vendor/'s files are served and kept without a list to keep in step
+test('every file of vendor/ but the licences is served next to the page and kept at install', () => {
+  const sw = fs.readFileSync(path.join(ROOT, 'out', 'site', 'sw.js'), 'utf8'),
+    local = JSON.parse(sw.match(/const LOCAL = (\[.*\]);/)[1]);
+  const files = fs
+    .readdirSync(path.join(ROOT, 'vendor'))
+    .filter((f) => fs.statSync(path.join(ROOT, 'vendor', f)).isFile() && !f.startsWith('.'));
+  assert.ok(files.includes('chasolver.wasm') && files.includes('mediabunny.min.js'));
+  for (const f of files)
+    if (/\.LICENSE$/.test(f)) assert.ok(!local.includes(f), f + ' not served');
+    else assert.ok(local.includes(f), f + ' kept');
+});

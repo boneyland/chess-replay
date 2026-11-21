@@ -1,13 +1,14 @@
 // A static server for out/site that answers the way Render does with render.yaml's settings: `/` rewritten to the
-// page, render.yaml's headers on every file (read from it), and the right types. Keep the rewrite in step with it.
+// page and render.yaml's headers on every file (both read from it), and the right types.
 //   node tests/live/serve.cjs [dir] [port]   (defaults: out/site, 8765)
 const http = require('http'),
   fs = require('fs'),
   path = require('path');
 
-const PAGE = '/chess-game-video.html';
-// render.yaml's `headers:` entries, all for every path (/*)
-const HEADERS = require('../../render-headers.cjs').headers();
+const RH = require('../../render-headers.cjs');
+// render.yaml's rewrite of `/`, and its `headers:` entries, all for every path (/*)
+const PAGE = '/' + RH.page(),
+  HEADERS = RH.headers();
 const TYPES = {
   '.html': 'text/html; charset=utf-8',
   '.js': 'text/javascript; charset=utf-8',
