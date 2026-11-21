@@ -57,7 +57,10 @@ body { height: 100%; margin: 0; background: var(--bg); color: var(--ink); font: 
 }
 button { font: inherit; color: inherit; }
 /* read by a screen reader, not shown (the page's title as its one level-1 heading) */
-.sr-only { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; }
+/* shown to screen readers only, the page's one visually-hidden rule: the page's title, the Transport bar's move name (the
+   board and Moves panel already show it, and the track gets the room), Queen's table caption, and the bar's Import game
+   and Menu names where an icon stands for them */
+.sr-only, .plabel, .q-sr, .pbar .dock-glyphed:not(.pmenu .dock-btn) .dock-label { position: absolute; width: 1px; height: 1px; overflow: hidden; clip-path: inset(50%); white-space: nowrap; }
 /* nothing on the page selects but what's typed in a field (a mouse drag scrolls instead: drag-scroll.js) */
 body { user-select: none; -webkit-user-select: none; -webkit-touch-callout: none; }
 input, textarea, [contenteditable]:not([contenteditable="false"]) { user-select: text; -webkit-user-select: text; -webkit-touch-callout: default; }
@@ -76,10 +79,8 @@ button:focus-visible, select:focus-visible, input:focus-visible, [role="slider"]
 .stage-one .stage-view { overflow-clip-margin: 48px; }
 .stage-error { position: absolute; inset: 0; display: grid; place-items: center; color: var(--danger); font: 500 0.9375rem var(--mono); }
 
-.pbar {
-  flex: none; display: flex; align-items: center; gap: 10px; width: 100%; max-width: 720px;
-  padding: 6px 12px; border-radius: 4px; background: var(--panel); border: 1px solid var(--line); user-select: none;
-}
+/* the Transport bar: its height, padding, gaps, border and surface are set per layout in the full-height bar block below */
+.pbar { flex: none; display: flex; width: 100%; user-select: none; }
 .pbtn {
   flex: none; width: 34px; height: 34px; display: grid; place-items: center; padding: 0; cursor: pointer;
   border-radius: 3px; border: 1px solid var(--btn-line); background: var(--btn); color: var(--ink);
@@ -102,7 +103,6 @@ button:focus-visible, select:focus-visible, input:focus-visible, [role="slider"]
 .dock-glyph { display: none; }
 .pbar .dock-glyphed:not(.pmenu .dock-btn) { display: inline-flex; align-items: center; justify-content: center; width: 34px; padding: 0; }
 .pbar .dock-glyphed:not(.pmenu .dock-btn) .dock-glyph { display: block; flex: none; }
-.pbar .dock-glyphed:not(.pmenu .dock-btn) .dock-label { position: absolute; width: 1px; height: 1px; overflow: hidden; clip-path: inset(50%); white-space: nowrap; }
 /* no double-tap zoom anywhere (pinch is the viewport's to allow); the board and the seek bar set their own */
 * { touch-action: manipulation; }
 /* Chrome for Android (and Safari) flash their own tap highlight over a tapped control, on top of the page's pressed look,
@@ -110,8 +110,6 @@ button:focus-visible, select:focus-visible, input:focus-visible, [role="slider"]
    the controls have a pressed look of their own */
 html { -webkit-tap-highlight-color: transparent; }
 .pnav { touch-action: manipulation; -webkit-touch-callout: none; }
-/* the move name is announced to screen readers only: the board and Moves panel already show it, and the track gets the room */
-.plabel { position: absolute; width: 1px; height: 1px; overflow: hidden; clip-path: inset(50%); white-space: nowrap; }
 .ptime { flex: none; width: 64px; text-align: right; font: 500 0.75rem var(--mono); font-variant-numeric: tabular-nums; color: var(--ink); }
 .ptime-total { text-align: left; color: var(--dim); }
 .pspacer { flex: 1; min-width: 0; }
@@ -133,17 +131,24 @@ html { -webkit-tap-highlight-color: transparent; }
 .pbar[data-mouse] .ptrack:hover .ptrack-bg { background: var(--line-strong); }
 @media (max-width: 480px) { .ptime-total, .ptime { display: none; } }
 
-.stage:not(.stage-one) .pbar { max-width: 1200px; }
-.pdock { position: relative; flex: none; display: flex; align-items: center; gap: 6px; padding-left: 10px; border-left: 1px solid var(--line); }
+.pdock { position: relative; flex: none; display: flex; }
 .dock-status {
   position: absolute; z-index: 50; right: -6px; bottom: calc(100% + 12px); width: max-content; max-width: min(640px, calc(100vw - 32px));
   padding: 6px 10px; border-radius: 4px; background: var(--panel-glass); border: 1px solid var(--line); box-shadow: 0 8px 24px var(--shadow), var(--halo);
   font: 500 0.75rem var(--mono); color: var(--danger); white-space: normal; overflow: hidden; pointer-events: none;
 }
-/* landscape: panels open above the transport bar, so they leave its buttons uncovered */
-body:has(.stage:not(.stage-one)) .twk-panel { bottom: calc(70px + var(--safe-b)); max-height: calc(100% - 86px); }
-/* portrait: the same above its slimmer bar */
-body:has(.stage-one) .twk-panel { bottom: calc(51px + var(--safe-b)); max-height: calc(100% - 67px); }
+/* The Transport bar's height from the page's foot, above the bottom safe area (--pbar-total), for everything placed
+   against it: the panels that open above it, and the scrolling page that runs on under it (.stage-under). Per layout, as
+   LayoutCore's tiers: the two-column bottom bar is its --pbar-h and the stage's bottom padding it takes in (--pbar-pb,
+   worked out from this), a short window's is its 34 px in the sidebar and the 4 px under it. On body, so the panels
+   (fixed, outside the bar) read it too */
+body { --pbar-total: 60px; }
+@media (max-width: 1180px) { body { --pbar-total: 52px; } }
+@media (max-width: 599px), (max-height: 499px) { body { --pbar-total: 48px; } }
+body:has(.stage-one) { --pbar-total: 41px; }
+body:has(.stage-short) { --pbar-total: 38px; }
+/* panels open 10 px above the transport bar, so they leave its buttons uncovered */
+body:has(.stage) .twk-panel { bottom: calc(var(--pbar-total) + 10px + var(--safe-b)); max-height: calc(100% - var(--pbar-total) - 26px); }
 .dock-btn { flex: none; font: 600 0.9375rem var(--mono); padding: 0 10px; height: 34px; border-radius: 3px; cursor: pointer; white-space: nowrap; border: 1px solid var(--btn-line); background: var(--btn); color: var(--ink); }
 /* Settings and Full screen: square icon buttons in every layout */
 .dock-icons { display: contents; }
@@ -161,7 +166,6 @@ body:has(.stage-one) .twk-panel { bottom: calc(51px + var(--safe-b)); max-height
    icons) and gaps, so the seek bar keeps a usable width; below 360 px the first and last move buttons go, rather than
    the seek bar */
 .stage-one { padding-block: 0 5px; gap: 0; padding-inline: 0; }
-.stage-one .pbar { padding: 3px 6px; gap: 4px; padding-block: 2px; margin-inline: max(4px, var(--safe-l)) max(4px, var(--safe-r)); width: calc(100% - max(4px, var(--safe-l)) - max(4px, var(--safe-r))); }
 /* one column's padding round the page is the area's own, not the stage's, so the area (which clips, as it scrolls) runs to
    the screen's edges and the panels' halos (the dark theme's glow) fade out there rather than stop at a line 4 px in; the
    frame and the view's root (.stage-view) let them out as far. Stage measures the area inside its padding */
@@ -200,17 +204,14 @@ body:has(.stage-one) .twk-panel { bottom: calc(51px + var(--safe-b)); max-height
 .part-pinned-board::before { animation: pin-in 0.18s ease-out; }
 @media (prefers-reduced-motion: reduce) { .part-pinned-board::before { animation: none; } }
 .part-pinned-board::before { content: ""; position: absolute; z-index: -1; top: -2px; bottom: 0; left: calc(-1 * max(4px, var(--safe-l))); right: calc(-1 * max(4px, var(--safe-r))); background: inherit; box-shadow: 0 1px 0 var(--pin-edge), 0 2px 4px rgba(0, 0, 0, 0.12); }
-.stage-one .pbtn { width: 30px; height: 30px; }
 .stage-one .ptrack { min-width: 96px; }
 @media (max-width: 359px) { .stage-one .pbtn-end { display: none; } }
 /* a short two-column window (a phone held sideways): the slim bar sits at the foot of the sidebar, as wide as its panels
    (Stage places it at LayoutCore's L.dock, whose DOCK_H is its height), and the area takes the whole height. A narrow
    sidebar drops the first and last move buttons, rather than the seek bar */
 .stage-short { padding-block: 0 var(--safe-b); gap: 0; padding-left: max(4px, var(--safe-l)); padding-right: max(4px, var(--safe-r)); }
-.stage-short .pbar-dock { position: absolute; max-width: none; padding: 2px 6px; gap: 6px; }
-.stage-short .pbtn { width: 34px; height: 28px; }
+.stage-short .pbar-dock { position: absolute; max-width: none; }
 .stage-short .pbar-narrow .pbtn-end { display: none; }
-.stage-short .pdock .dock-btn:not(.dock-pop .dock-btn) { height: 28px; }
 /* Device tiers, the same breakpoints as LayoutCore's (app/layout-core.js): a tablet or foldable (a viewport under 1181 px wide) and
    a phone (under 600 px wide, or under 500 px high held sideways) are tighter than a desktop, not just rearranged. The
    overlays' text (dock, transport bar, Settings, menus, all in rem) is a size smaller, 15 px a rem on a tablet and a
@@ -218,8 +219,6 @@ body:has(.stage-one) .twk-panel { bottom: calc(51px + var(--safe-b)); max-height
 @media (max-width: 1180px) {
   html { font-size: calc(15px * var(--text, 1)); }
   .stage:not(.stage-one):not(.stage-short) { padding-block: 8px; gap: 8px; padding-left: max(10px, var(--safe-l)); padding-right: max(10px, var(--safe-r)); }
-  .pbar { gap: 8px; padding: 4px 10px; }
-  .pdock { gap: 5px; padding-left: 8px; }
 }
 @media (max-width: 599px), (max-height: 499px) {
   html { font-size: calc(15px * var(--text, 1)); }
@@ -233,8 +232,8 @@ body:has(.stage-one) .twk-panel { bottom: calc(51px + var(--safe-b)); max-height
 .pbar { --pbar-h: 48px; --pbtn-w: 44px; --pgap: 10px; --disc: 34px; gap: 0; padding-block: 0; align-items: stretch; min-height: var(--pbar-h); }
 @media (max-width: 1180px) { .pbar { --pbar-h: 44px; --pbtn-w: 42px; --pgap: 8px; } }
 @media (max-width: 599px), (max-height: 499px) { .pbar { --pbar-h: 40px; --pbtn-w: 38px; --disc: 30px; } }
-.stage-one .pbar { --pbar-h: 36px; --pbtn-w: 34px; --pgap: 4px; --disc: 30px; padding-block: 0; gap: 0; }
-.stage-short .pbar { --pbar-h: 34px; --pbtn-w: 40px; --pgap: 6px; --disc: 28px; padding-block: 0; gap: 0; }
+.stage-one .pbar { --pbar-h: 36px; --pbtn-w: 34px; --pgap: 4px; --disc: 30px; }
+.stage-short .pbar { --pbar-h: 34px; --pbtn-w: 40px; --pgap: 6px; --disc: 28px; }
 .pbar .pbtn, .pbar .pdock .dock-btn:not(.dock-pop .dock-btn) { width: var(--pbtn-w); height: auto; align-self: stretch; border-radius: 0; }
 .pbar .ptime, .pbar .ptrack, .pbar .pspacer { align-self: center; margin-inline: calc(var(--pgap) / 2); }
 .pbar .pdock { align-items: stretch; gap: 0; padding-left: 0; margin-left: calc(var(--pgap) / 2); }
@@ -247,12 +246,15 @@ body:has(.stage-one) .twk-panel { bottom: calc(51px + var(--safe-b)); max-height
 /* every layout but a short window's: a bottom bar rather than a box, the page's full width, square and borderless, in
    the panel colour down to the page's foot (it takes the stage's bottom padding, --pbar-pb, into its height, its items
    centred in the whole of it and its buttons running all of it, so the page keeps its height); its items keep the
-   stage's side padding (--pbar-sl, --pbar-sr), in line with the page above */
-.stage:not(.stage-one):not(.stage-short) .pbar { --pbar-pb: 12px; --pbar-sl: max(16px, var(--safe-l)); --pbar-sr: max(16px, var(--safe-r)); }
-@media (max-width: 1180px) { .stage:not(.stage-one):not(.stage-short) .pbar { --pbar-pb: 8px; --pbar-sl: max(10px, var(--safe-l)); --pbar-sr: max(10px, var(--safe-r)); } }
+   stage's side padding (--pbar-sl, --pbar-sr), in line with the page above. Its whole height is body's --pbar-total, so
+   --pbar-pb is what that leaves under --pbar-h (12 px on a desktop, 8 px below 1181 px wide, 5 px in one column: the
+   stage's bottom padding, which the bar's negative margin takes back) */
+.stage:not(.stage-short) .pbar { --pbar-pb: calc(var(--pbar-total) - var(--pbar-h)); }
+.stage:not(.stage-one):not(.stage-short) .pbar { --pbar-sl: max(16px, var(--safe-l)); --pbar-sr: max(16px, var(--safe-r)); }
+@media (max-width: 1180px) { .stage:not(.stage-one):not(.stage-short) .pbar { --pbar-sl: max(10px, var(--safe-l)); --pbar-sr: max(10px, var(--safe-r)); } }
 .stage:not(.stage-one):not(.stage-short) .pbar { margin: 0 calc(-1 * var(--pbar-sr)) calc(-1 * var(--pbar-pb)) calc(-1 * var(--pbar-sl)); width: calc(100% + var(--pbar-sl) + var(--pbar-sr)); }
-.stage-one .pbar { --pbar-pb: 5px; --pbar-sl: max(4px, var(--safe-l)); --pbar-sr: max(4px, var(--safe-r)); margin: 0 0 -5px; width: 100%; }
-.stage:not(.stage-short) .pbar { max-width: none; border: none; border-radius: 0; padding: 0 var(--pbar-sr) 0 var(--pbar-sl); min-height: calc(var(--pbar-h) + var(--pbar-pb)); }
+.stage-one .pbar { --pbar-sl: max(4px, var(--safe-l)); --pbar-sr: max(4px, var(--safe-r)); margin: 0 0 calc(-1 * var(--pbar-pb)); width: 100%; }
+.stage:not(.stage-short) .pbar { max-width: none; border: none; border-radius: 0; padding: 0 var(--pbar-sr) 0 var(--pbar-sl); min-height: var(--pbar-total); }
 /* a short window: the bar stays at the foot of the sidebar, square and borderless */
 .stage-short .pbar { border: none; border-radius: 0; }
 /* its box runs on to the screen's right and bottom edges (Stage's dockBox); the items are padded in by the extra width
@@ -273,9 +275,9 @@ body:has(.stage-one) .twk-panel { bottom: calc(51px + var(--safe-b)); max-height
   box-shadow: inset 0 1px 0 var(--line-strong), inset 0 2px 0 var(--rim-soft), 0 0 4px 1px color-mix(in srgb, var(--accent) 25%, transparent);
 }
 /* a page that scrolls (Stage's stage-under: paused, one column) runs on under the glass: the area reaches down behind
-   the bar (41 px: the one-column bar's --pbar-h 36 px and --pbar-pb 5 px) and as much padding at its foot lets the end of
-   the page scroll clear of it. The page's height (Stage's h, the area's height less its padding) doesn't change */
-.stage-under .stage-area { padding-bottom: calc(6px + 41px); margin-bottom: -41px; }
+   the bar (--pbar-total, 41 px in one column) and as much padding at its foot lets the end of the page scroll clear of
+   it. The page's height (Stage's h, the area's height less its padding) doesn't change */
+.stage-under .stage-area { padding-bottom: calc(6px + var(--pbar-total)); margin-bottom: calc(-1 * var(--pbar-total)); }
 .pmenu { position: relative; flex: none; }
 .pmenu-err .dock-menu { border-color: var(--danger); color: var(--danger); }
 .pmenu .dock-items {
@@ -304,8 +306,9 @@ body:has(.stage-one) .twk-panel { bottom: calc(51px + var(--safe-b)); max-height
   .pmenu .dock-group-more { grid-area: mo; }
   .pmenu .dock-icons { grid-area: tail; align-self: end; }
 }
-/* a very short phone held sideways (under 350 px high): slimmer items, gaps and headings, so the menu fits with less scrolling */
-@media (orientation: landscape) and (max-height: 349px) {
+/* a short phone held sideways (under 400 px high: the user, 2026-11-21; it was under 350 px): slimmer items, gaps and
+   headings, so the menu fits with less scrolling */
+@media (orientation: landscape) and (max-height: 399px) {
   .pmenu .dock-items, .pmenu .dock-group { gap: 4px; }
   .pmenu .dock-items { padding: 6px; bottom: calc(100% + 8px); }
   .pmenu-open .dock-items { max-height: calc(100dvh - 52px); }
@@ -492,7 +495,7 @@ body:has(.stage-one) .twk-panel { bottom: calc(51px + var(--safe-b)); max-height
    and close button in one row and each tab's rows in two columns. The columns are an inner box of natural height that
    the body scrolls: a multi-column box of capped height adds columns past its right edge in Firefox */
 @media (max-height: 560px) and (min-width: 600px), (max-height: 499px) and (orientation: landscape), (min-width: 900px) {
-  body:has(.stage) .twk-panel.twk-tabbed { width: min(760px, calc(100% - 32px)); bottom: calc(52px + var(--safe-b)); height: calc(100% - 68px - var(--safe-b)); max-height: none; display: grid; grid-template-columns: auto 1fr auto; grid-template-rows: auto minmax(0, 1fr); align-items: center; }
+  body:has(.stage) .twk-panel.twk-tabbed { width: min(760px, calc(100% - 32px)); bottom: calc(var(--pbar-total) + 4px + var(--safe-b)); height: calc(100% - var(--pbar-total) - 20px - var(--safe-b)); max-height: none; display: grid; grid-template-columns: auto 1fr auto; grid-template-rows: auto minmax(0, 1fr); align-items: center; }
   body:has(.stage) .twk-panel.twk-tabbed .twk-hd { display: contents; }
   body:has(.stage) .twk-panel.twk-tabbed .twk-hd b { grid-row: 1; grid-column: 1; padding: 0 4px 0 14px; }
   body:has(.stage) .twk-panel.twk-tabbed .twk-tabs { grid-row: 1; grid-column: 2; margin: 8px 6px; grid-template-columns: none; grid-auto-flow: column; grid-auto-columns: 1fr; }
@@ -502,21 +505,20 @@ body:has(.stage-one) .twk-panel { bottom: calc(51px + var(--safe-b)); max-height
   body:has(.stage) .twk-panel.twk-tabbed .twk-group { display: block; }
   body:has(.stage) .twk-panel.twk-tabbed :is(.twk-flow > :not(.twk-group), .twk-group > *) { break-inside: avoid; margin-bottom: 10px; }
   body:has(.stage) .twk-panel.twk-tabbed .twk-btn { display: block; width: 100%; }
-  /* the bar in the sidebar: 4 px margin, 34 px high */
-  body:has(.stage.stage-short) .twk-panel.twk-tabbed { bottom: calc(44px + var(--safe-b)); height: calc(100% - 52px - var(--safe-b)); }
+  /* the bar in the sidebar: 6 px above it */
+  body:has(.stage.stage-short) .twk-panel.twk-tabbed { bottom: calc(var(--pbar-total) + 6px + var(--safe-b)); height: calc(100% - var(--pbar-total) - 14px - var(--safe-b)); }
 }
 /* a wide, tall window: two columns as above, above the transport bar, no taller than the usual panel */
 @media (min-width: 900px) and (min-height: 561px) {
-  body:has(.stage) .twk-panel.twk-tabbed { bottom: calc(76px + var(--safe-b)); height: min(720px, calc(100% - 92px - var(--safe-b))); }
+  body:has(.stage) .twk-panel.twk-tabbed { bottom: calc(var(--pbar-total) + 16px + var(--safe-b)); height: min(720px, calc(100% - var(--pbar-total) - 32px - var(--safe-b))); }
 }
 /* panels (Settings, Queen) open above the bar in the sidebar */
-body:has(.stage.stage-short) .twk-panel { bottom: calc(44px + var(--safe-b)); max-height: calc(100% - 52px); }
+body:has(.stage.stage-short) .twk-panel { bottom: calc(var(--pbar-total) + 6px + var(--safe-b)); max-height: calc(100% - var(--pbar-total) - 14px); }
 /* a very small screen (the phone tier, upright or sideways): Settings takes all the room above the transport bar, 4 px
-   from the edges and 4 px over the bar (its top 41 px from the foot in one column, 38 px when it is in the sidebar) */
+   from the edges and 4 px over the bar (--pbar-total) */
 @media (max-width: 599px), (max-height: 499px) {
   body:has(.stage) .twk-panel.twk-tabbed { top: 4px; left: max(4px, var(--safe-l)); right: max(4px, var(--safe-r)); width: auto; height: auto; max-height: none; }
-  body:has(.stage.stage-one) .twk-panel.twk-tabbed.twk-tabbed { bottom: calc(45px + var(--safe-b)); height: auto; }
-  body:has(.stage.stage-short) .twk-panel.twk-tabbed.twk-tabbed { bottom: calc(42px + var(--safe-b)); height: auto; }
+  body:has(.stage) .twk-panel.twk-tabbed.twk-tabbed { bottom: calc(var(--pbar-total) + 4px + var(--safe-b)); height: auto; }
 }
 /* a phone held sideways: Settings covers the transport bar too (full height, up to 760 px wide at the right), and drops its title (the panel keeps it as its label) so
    the tabs get the row; they wrap only where one row can't hold them */
@@ -638,8 +640,8 @@ body:has(.stage.stage-short) .twk-panel { bottom: calc(44px + var(--safe-b)); ma
 .q-queen { color: var(--queen); font-size: 1rem; }
 .q-line { color: var(--dim); }
 .q-tag { padding: 1px 6px; border-radius: 2px; font: 600 0.8125rem var(--mono); letter-spacing: 0.04em; }
-.q-tag.q-ok { background: rgba(98, 196, 131, 0.16); }
-.q-tag.q-no { background: rgba(236, 148, 66, 0.16); }
+.q-tag.q-ok { background: color-mix(in srgb, var(--ok) 16%, transparent); }
+.q-tag.q-no { background: color-mix(in srgb, var(--warn) 16%, transparent); }
 .q-ok { color: var(--ok); }
 .q-no { color: var(--warn); }
 .q-dim { color: var(--dim); }
@@ -650,12 +652,10 @@ body:has(.stage.stage-short) .twk-panel { bottom: calc(44px + var(--safe-b)); ma
 .q-evals td { text-align: right; padding: 3px 0 3px 12px; color: var(--ink); white-space: nowrap; }
 .q-evals td.q-evalv { color: var(--queen); }
 .q-evals tr.q-change th, .q-evals tr.q-change td { border-top: 1px solid var(--line); padding-top: 5px; font-size: 0.875rem; }
-.q-sr { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); }
 .q-mini { padding: 1px 8px; border-radius: 3px; border: 1px solid color-mix(in srgb, var(--queen) 55%, transparent); background: transparent; color: var(--queen); font: 600 0.8125rem var(--mono); cursor: pointer; }
 .q-evalnote { font: 500 0.8125rem/1.4 var(--mono); color: var(--dim); }
 .q-evaltext span { font: 600 0.875rem/1.3 var(--sans); letter-spacing: 0.005em; font-style: normal; color: var(--dim); }
 .q-evalv { color: var(--queen); }
-.q-evalsf { color: var(--ink); }
 .q-evaltext { margin: 0; padding-left: 10px; border-left: 2px solid var(--queen); font: italic 1.0625rem/1.4 "Instrument Serif", Georgia, serif; color: var(--ink); max-width: 65ch; }
 .q-why summary { cursor: pointer; color: var(--ink); font-weight: 500; }
 .q-why p { margin: 8px 0 0; color: var(--ink); font: 0.8125rem/1.5 var(--sans); max-width: 65ch; }

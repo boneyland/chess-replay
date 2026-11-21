@@ -370,11 +370,20 @@ const sfPartialKey = (ucis, settings, fen, tb) =>
 // A run's identity apart from its game: the engine settings and whether the tablebase answers (tb). The page's own
 // (the settings as they are now) against a run's says whether that run's progress is what "Resume from move N" shows
 const sfRunKey = (settings, tb) => JSON.stringify(settings) + (tb ? ' tablebase' : '');
+// Each search a run keeps has a number cp (runAnalysis throws on one without, a tablebase answer has one too). A stored
+// run of another shape (hand-edited, or a bad write) is dropped, not resumed: every Start would throw on it
+const sfSearchesOk = (a) => Array.isArray(a) && a.every((r) => r && typeof r === 'object' && typeof r.cp === 'number');
 function readSfPartial(ucis, settings, fen, tb) {
   try {
     const s = JSON.parse(localStorage.getItem(SF_PARTIAL_STORE) || 'null');
-    return s && s.key === sfPartialKey(ucis, settings, fen, tb) && Array.isArray(s.searched) ? s.searched : [];
+    if (!s || s.key !== sfPartialKey(ucis, settings, fen, tb)) return [];
+    if (sfSearchesOk(s.searched)) return s.searched;
+    localStorage.removeItem(SF_PARTIAL_STORE);
+    return [];
   } catch (e) {
+    try {
+      localStorage.removeItem(SF_PARTIAL_STORE); // unreadable JSON
+    } catch (e2) {}
     return [];
   }
 }
@@ -477,15 +486,28 @@ function useGameAnalysis(M, files, getFiles, commit, engine, settings, tbOn) {
   };
   const gameIndex = files.gameIndex || 0,
     isSample = !!files.sample;
+  // Other files (another game, the sample, an analysis loaded or removed) stop a run and clear its note. The analysis a
+  // finished run commits itself (own) is not other files: its note (the tablebase lost) stays until the next run starts
+  const own = React.useRef(null);
+  const gameSeen = React.useRef(null);
+  React.useEffect(() => {
+    const game = [files.pgn, gameIndex, isSample],
+      same = gameSeen.current && game.every((x, i) => x === gameSeen.current[i]);
+    gameSeen.current = game;
+    if (same && files.analysis && files.analysis === own.current) return;
+    own.current = null;
+    if (run.current) {
+      run.current.ctl.abort();
+      run.current = null;
+    }
+    setSt(SF_RUN_IDLE);
+  }, [files.pgn, gameIndex, isSample, files.analysis]);
   React.useEffect(
     () => () => {
-      if (run.current) {
-        run.current.ctl.abort();
-        run.current = null;
-      }
-      setSt(SF_RUN_IDLE);
+      if (run.current) run.current.ctl.abort();
+      run.current = null;
     },
-    [files.pgn, gameIndex, isSample, files.analysis],
+    [],
   );
   const start = async () => {
     if (run.current) return;
@@ -578,6 +600,7 @@ function useGameAnalysis(M, files, getFiles, commit, engine, settings, tbOn) {
       }
       const name = (M.white.short + '_' + M.black.short).replace(/[^\w-]+/g, '_') + '_analysis.json';
       setSt((s) => ({ ...idle, note: s.note }));
+      own.current = json;
       commit({ ...getFiles(), analysis: json, analysisName: name, evalSource: null }); // shown, even over PGN evals
     } catch (e) {
       if (run.current !== me) return;
@@ -675,7 +698,7 @@ function EngineEmptyState({ M, sf, paused, compact, ask = true }) {
     return (
       <div style={{ display: 'flex', flexDirection: 'column', gap: tx(12) }}>
         {text}
-        <span style={{ font: `500 ${tx(17)}px ${MONO}`, color: C.dim }}>Stockfish can't run here.</span>
+        <span style={{ font: `500 ${tx(17)}px ${MONO}`, color: C.dim }}>{sfDownText('unavailable', sf.why)}.</span>
         <div>
           <FrameButton app onClick={() => sf.engine.get().catch(() => {})} label="Try starting Stockfish again">
             Try again

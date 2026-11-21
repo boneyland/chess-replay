@@ -72,6 +72,10 @@ const clsColor = (cls) => C[cls] || C.ink;
 // The board looks the same in both themes: what's drawn on it (highlights, badges, arrows, check glow) uses these
 // Queen's arrow keeps the pink it had before the theme's was made lighter for text (a shape on the squares, not text)
 const BOARD = { ...PALETTES.dark, queen: '#e0609f' };
+// a #rrggbb colour at opacity a, as rgba() (the export's painter reads rgba(), not color-mix())
+const rgbaHex = (hex, a) => `rgba(${[1, 3, 5].map((i) => parseInt(hex.slice(i, i + 2), 16)).join(',')},${a})`;
+// the glow on a king in check (and on a mated one), in the board's blunder colour
+const CHECK_GLOW = `radial-gradient(circle, ${BOARD.blunder} 0%, ${rgbaHex(BOARD.blunder, 0.55)} 40%, ${rgbaHex(BOARD.blunder, 0)} 72%)`;
 const boardCls = (cls) => BOARD[cls] || BOARD.last;
 // A move's SAN chip, light for White's moves and dark for Black's in both themes (like the board's squares): the move
 // list's and a line's at 16 px; rowChip, the explorers' rows, at 17 px and one width, so their columns line up. extra
@@ -1149,7 +1153,7 @@ function Board({ M, T, S, a, arrows, pieces, queen, vline, hide, lines, sel, idl
             width: SQ,
             height: SQ,
             opacity: cl01((T - S.tp[c] - S.md[c]) / 0.2),
-            background: `radial-gradient(circle, ${BOARD.blunder} 0%, rgba(228,85,63,0.55) 40%, rgba(228,85,63,0) 72%)`,
+            background: CHECK_GLOW,
           }}
         />,
       );
@@ -1672,7 +1676,7 @@ function LineBoard({ a, sq, v, hide, arrows, sel, glide, preview }) {
           top: y * SQ,
           width: SQ,
           height: SQ,
-          background: `radial-gradient(circle, ${BOARD.blunder} 0%, rgba(228,85,63,0.55) 40%, rgba(228,85,63,0) 72%)`,
+          background: CHECK_GLOW,
         }}
       />,
     );
@@ -4816,7 +4820,7 @@ function GameVideo({ M, tw, d, probe, queen, nav, sf, orient }) {
             position: 'absolute',
             inset: 0,
             pointerEvents: 'none',
-            boxShadow: `inset 0 0 220px rgba(228,85,63,${0.55 * flash})`,
+            boxShadow: `inset 0 0 220px ${rgbaHex(BOARD.blunder, 0.55 * flash)}`,
           }}
         />
         {video && <TitleCard M={M} T={T} CUES={CUES} />}

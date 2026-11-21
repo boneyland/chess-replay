@@ -78,7 +78,7 @@
     ANALYSIS_PLOT_MIN = 240;
   // a short two-column window (a phone held sideways; Stage's call, as dock): the transport bar sits at the foot of the
   // sidebar rather than under the whole page, the header goes and the margins are slimmer, so the board gets the height.
-  // DOCK_H is the bar's height (shell.html's .pbar-dock: 28 px buttons, 2 px padding and a border)
+  // DOCK_H is the bar's height (shell.html's .stage-short .pbar --pbar-h; its --pbar-total adds the 4 px under it)
   const DOCK_H = 34,
     DOCK_MARGIN = 4;
   // a phone held sideways (docked) with the room of full screen (minH: the stage at least that high) also hugs the player

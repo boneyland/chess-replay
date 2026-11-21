@@ -152,6 +152,8 @@ test('a 429 backs off for a minute: nothing is sent meanwhile', async () => {
   const c = LC.create({ fetchFn: f, now: () => t });
   assert.equal(await c.tablebase(fen), null);
   assert.equal(c.backedOff('tablebase'), true);
+  assert.equal(c.backOffLeft('tablebase'), LC.BACKOFF_MS, 'how long the page waits before asking again');
+  assert.equal(c.backOffLeft('explorer'), 0);
   t += LC.BACKOFF_MS - 1;
   assert.equal(await c.tablebase(fen), null);
   assert.equal(f.calls.length, 1);
