@@ -15,10 +15,14 @@ const VISION = window.VisionCore.CACHE,
   OLD_VISION = VISION.replace(/\d+$/, (n) => n - 1);
 
 // Loads the built sw.js in a vm with a fake self, caches and fetch, and dispatches fetch events at it
-// status: what the network answers (200 unless given); fetched gets each URL, fetchOpts the options a URL was fetched with
-function load({ status = 200 } = {}) {
+// status: what the network answers (200 unless given; offline: the fetch fails); fetched gets each URL, fetchOpts the
+// options a URL was fetched with; windows: the ids of the site's open windows (clients.matchAll); reg: the registration
+function load({ status = 200, offline = false, windows = [], reg = {} } = {}) {
   execFileSync(process.execPath, [path.join(ROOT, 'build.cjs')], { cwd: ROOT });
-  const src = fs.readFileSync(path.join(ROOT, 'out', 'site', 'sw.js'), 'utf8');
+  // the prune a moment after a visit to the page runs at once (awaited through held)
+  const src = fs
+    .readFileSync(path.join(ROOT, 'out', 'site', 'sw.js'), 'utf8')
+    .replace(/^const PRUNE_DELAY_MS = \d+;/m, 'const PRUNE_DELAY_MS = 0;');
   const stores = {},
     puts = [],
     fetched = [],
@@ -34,6 +38,8 @@ function load({ status = 200 } = {}) {
       },
       addAll: async () => {},
     }),
+    match: async (u, { cacheName } = {}) =>
+      cacheName in stores ? stores[cacheName].get(typeof u === 'string' ? u : u.url) : undefined,
     keys: async () => Object.keys(stores),
     delete: async (name) => delete stores[name],
   };
@@ -43,12 +49,14 @@ function load({ status = 200 } = {}) {
       handlers[t] = f;
     },
     skipWaiting: async () => {},
-    clients: { claim: async () => {} },
+    registration: reg,
+    clients: { claim: async () => {}, matchAll: async () => windows.map((id) => ({ id })) },
   };
   // a same-origin answer, as the browser's fetch gives one (Node's Response says 'default')
   const fakeFetch = async (req, opts) => {
     fetched.push(typeof req === 'string' ? req : req.url);
     fetchOpts.push(opts);
+    if (offline) throw new TypeError('Failed to fetch');
     return Object.defineProperty(new Response('from network', { status }), 'type', {
       value: typeof req === 'string' ? 'cors' : 'basic',
     });
@@ -56,11 +64,12 @@ function load({ status = 200 } = {}) {
   vm.runInNewContext(src, { self, caches, fetch: fakeFetch, Response, Headers, URL, Promise, setTimeout, console });
   // the event's waitUntil promises are kept in held (the cache writes the worker must stay alive for)
   const held = [];
-  const fetchEvent = async (url, method = 'GET', mode = 'cors') => {
+  const fetchEvent = async (url, method = 'GET', mode = 'cors', resultingClientId = '') => {
     let answer;
     const req = { url, method, mode };
     handlers.fetch({
       request: req,
+      resultingClientId,
       respondWith: (p) => {
         answer = p;
       },
@@ -80,7 +89,7 @@ function load({ status = 200 } = {}) {
     await done;
   };
   const VERSION = src.match(/^const VERSION = '([0-9a-f]+)';/m)[1];
-  return { stores, store, puts, fetched, fetchOpts, held, fetchEvent, activate, VERSION };
+  return { stores, store, puts, fetched, fetchOpts, held, fetchEvent, activate, VERSION, windows };
 }
 
 const WASM = 'https://site.test/vision/ort.wasm.min.mjs';
@@ -146,7 +155,7 @@ for (const u of [
     const r = await sw.fetchEvent(u, 'GET', 'navigate');
     assert.equal(await r.text(), 'from network');
     assert.equal(r.headers.get('Cross-Origin-Embedder-Policy'), 'require-corp');
-    assert.equal(sw.held.length, 1);
+    assert.equal(sw.held.length, 2, "the page's copy, and the prune after the visit");
     await Promise.all(sw.held);
     assert.equal(sw.puts.length, 1);
     assert.match(sw.puts[0][0], /^chess-replay-/);
@@ -190,7 +199,7 @@ test("this deploy's file not kept yet is fetched and kept under its plain URL", 
   );
 });
 
-test("another deploy's file comes from the network, never from the copy, and is not kept", async () => {
+test("another deploy's file comes from the network, never from this deploy's copy, and is not kept", async () => {
   const sw = load();
   sw.store('chess-replay-' + sw.VERSION).set('https://site.test/dead-worker.js', new Response('kept', { status: 200 }));
   const u = 'https://site.test/dead-worker.js?v=0123456789abcdef';
@@ -220,4 +229,67 @@ test('a CDN file is fetched with CORS, so its status can be read, and kept', asy
     sw.puts.map((p) => p[1]),
     [u],
   );
+});
+
+const OTHER = '0123456789abcdef';
+
+test("another deploy's file still kept in that deploy's copy is answered from it (a page older than its worker)", async () => {
+  const sw = load();
+  sw.store('chess-replay-' + sw.VERSION).set('https://site.test/dead-worker.js', new Response('this', { status: 200 }));
+  sw.store('chess-replay-' + OTHER).set('https://site.test/dead-worker.js', new Response('its own', { status: 200 }));
+  const r = await sw.fetchEvent('https://site.test/dead-worker.js?v=' + OTHER);
+  assert.equal(await r.text(), 'its own');
+  assert.equal(r.headers.get('Cross-Origin-Embedder-Policy'), 'require-corp');
+  assert.deepEqual(sw.fetched, []);
+});
+
+test("another deploy's file not kept, asked for offline, is answered with this deploy's copy", async () => {
+  const sw = load({ offline: true });
+  sw.store('chess-replay-' + sw.VERSION).set('https://site.test/dead-worker.js', new Response('this', { status: 200 }));
+  const r = await sw.fetchEvent('https://site.test/dead-worker.js?v=' + OTHER);
+  assert.equal(await r.text(), 'this');
+  assert.deepEqual(Object.keys(sw.stores), ['chess-replay-' + sw.VERSION], 'no cache made for the other deploy');
+});
+
+test("another deploy's file offline with no copy anywhere fails as the network did", async () => {
+  const sw = load({ offline: true });
+  await assert.rejects(sw.fetchEvent('https://site.test/dead-worker.js?v=' + OTHER), /Failed to fetch/);
+});
+
+test("activate keeps older deploys' copies while a window of the site is open", async () => {
+  const sw = load({ windows: ['old-tab'] });
+  for (const n of [OLD_VISION, VISION, 'chess-replay-old']) sw.store(n);
+  await sw.activate();
+  assert.deepEqual(Object.keys(sw.stores).sort(), [OLD_VISION, VISION, 'chess-replay-old'].sort());
+});
+
+test('a visit to the page deletes older copies once every window shows a page this worker served', async () => {
+  const sw = load({ windows: ['old-tab'] });
+  for (const n of [OLD_VISION, VISION, 'chess-replay-old']) sw.store(n);
+  await sw.activate();
+  sw.windows.push('new-tab');
+  await (await sw.fetchEvent('https://site.test/', 'GET', 'navigate', 'new-tab')).text();
+  await Promise.all(sw.held);
+  assert.ok('chess-replay-old' in sw.stores, 'kept while the old tab is open');
+  sw.windows.splice(0, 1); // the old tab reloads, through this worker
+  sw.windows.push('old-tab-reloaded');
+  await (await sw.fetchEvent('https://site.test/', 'GET', 'navigate', 'old-tab-reloaded')).text();
+  await Promise.all(sw.held);
+  assert.deepEqual(Object.keys(sw.stores).sort(), [VISION, 'chess-replay-' + sw.VERSION].sort());
+});
+
+test("no copy is deleted while a newer worker is installing or waiting: its new copy isn't an old one", async () => {
+  for (const reg of [{ installing: {} }, { waiting: {} }]) {
+    const sw = load({ reg });
+    for (const n of ['chess-replay-newer', OLD_VISION]) sw.store(n);
+    await sw.activate();
+    assert.deepEqual(Object.keys(sw.stores).sort(), ['chess-replay-newer', OLD_VISION].sort(), JSON.stringify(reg));
+  }
+});
+
+test('with a window open, only the two newest older copies are kept', async () => {
+  const sw = load({ windows: ['old-tab'] });
+  for (const n of ['chess-replay-a', 'chess-replay-b', 'chess-replay-c', OLD_VISION]) sw.store(n);
+  await sw.activate();
+  assert.deepEqual(Object.keys(sw.stores).sort(), ['chess-replay-b', 'chess-replay-c', OLD_VISION].sort());
 });

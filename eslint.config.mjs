@@ -19,6 +19,8 @@ const sources = (d) =>
     .filter((f) => /\.jsx?$/.test(f))
     .map((f) => `${d}/${f}`);
 const pageFiles = [...sources('app'), ...sources('src')];
+// the files that run as a Worker or the service worker, not in the page
+const WORKERS = ['app/sw.js', 'app/dead-worker.js', 'app/vision-worker.js'];
 
 // window.X = … and Object.assign(window, { … }): readable as a bare X from any unit
 const shared = {};
@@ -116,6 +118,7 @@ export default [
   },
   {
     files: ['app/**/*.{js,jsx}', 'src/**/*.js'],
+    ignores: WORKERS,
     plugins: { 'react-hooks': reactHooks, local },
     languageOptions: {
       ecmaVersion: 2024,
@@ -136,7 +139,13 @@ export default [
       ],
     },
   },
-  { files: ['app/dead-worker.js', 'app/vision-worker.js'], languageOptions: { globals: globals.worker } },
+  {
+    // the Workers and the service worker run apart from the page: none of its globals, no window or document
+    files: WORKERS,
+    plugins: { 'react-hooks': reactHooks, local },
+    languageOptions: { ecmaVersion: 2024, sourceType: 'script', globals: globals.worker },
+    rules: correctness,
+  },
   {
     // build.cjs fills these placeholders in (sw.js's own comments say with what)
     files: ['app/sw.js'],

@@ -113,17 +113,12 @@ const DESCRIPTION =
   'Replay an annotated chess game as a broadcast-style video: move ratings, best lines, commentary and an eval graph, with Stockfish in your browser.';
 // A link preview's image needs an absolute URL: the host's own (Render sets RENDER_EXTERNAL_URL; a local build points at Render)
 const SITE_URL = (process.env.RENDER_EXTERNAL_URL || 'https://chess-replay.onrender.com').replace(/\/$/, '');
-const VENDOR = [
-  'stockfish-19-asm.js',
-  'stockfish-19-lite-single.js',
-  'stockfish-19-lite-single.wasm',
-  'stockfish-19-lite.js',
-  'stockfish-19-lite.wasm',
-  'webp_enc_simd.js',
-  'webp_enc_simd.wasm',
-  'mediabunny.min.js',
-  'chasolver.wasm',
-];
+// vendor/'s own files (the engines, the WebP encoder, Mediabunny, chasolver; not its licences or folders), all served
+// next to the page and kept: a file added there is served without a list to update (LAYOUT.md pins each, tests/pins.test.cjs)
+const VENDOR = fs
+  .readdirSync(path.join(dir, 'vendor'))
+  .filter((f) => !f.startsWith('.') && !/\.LICENSE$/.test(f) && fs.statSync(path.join(dir, 'vendor', f)).isFile())
+  .sort(); // the same order on every system, so VERSION's hash is too
 const ICON =
   'data:image/svg+xml,' +
   encodeURIComponent(
@@ -194,15 +189,20 @@ const API_HOSTS = [
   'unpkg.com',
 ];
 // The CDN URLs are read only where the page uses them: shell.html's src and href attributes, export.jsx's quoted strings
-// (EXPORT_LIBS), never a comment's. (A folder URL, such as a preconnect's, names no file: cache.addAll would fail the
-// worker's install on it)
+// (EXPORT_LIBS), never a comment's (each read with its comments dropped: shell.html's <!-- -->, export.jsx's as
+// build-js.cjs drops them, which may change a string's quotes). (A folder URL, such as a preconnect's, names no file:
+// cache.addAll would fail the worker's install on it)
 const cdnUrl = `https://(?:${CDN_HOSTS.map((h) => h.replace(/\./g, '\\.')).join('|')})/[^'"\\s\`]+`;
 const SW_REMOTE = [
   ...new Set([
-    ...[...read(path.join(app, 'shell.html')).matchAll(new RegExp(`\\s(?:src|href)="(${cdnUrl})"`, 'g'))].map(
-      (m) => m[1],
+    ...[
+      ...read(path.join(app, 'shell.html'))
+        .replace(/<!--[\s\S]*?-->/g, '')
+        .matchAll(new RegExp(`\\s(?:src|href)="(${cdnUrl})"`, 'g')),
+    ].map((m) => m[1]),
+    ...[...jsx(read(path.join(app, 'export.jsx')), 'export.jsx').matchAll(new RegExp(`(['"])(${cdnUrl})\\1`, 'g'))].map(
+      (m) => m[2],
     ),
-    ...[...read(path.join(app, 'export.jsx')).matchAll(new RegExp(`'(${cdnUrl})'`, 'g'))].map((m) => m[1]),
   ]),
 ].filter((u) => !/\/$/.test(u));
 const CDN_SCRIPTS = SW_REMOTE.filter((u) => /\.js$/.test(u));
@@ -228,8 +228,9 @@ const cspFor = (html) => {
 };
 // Everything served next to the page goes through put(), which says whether the service worker keeps it at install
 // (SW_LOCAL below is built from those, so a file copied here is never left out of the offline copy by mistake)
+// the page's file name: render.yaml's rewrite of `/` (also sw.js's, and the local server's)
 const SITE = path.join(dir, 'out', 'site'),
-  PAGE = 'chess-game-video.html';
+  PAGE = require('./render-headers.cjs').page();
 const kept = [],
   served = [];
 // a folder's files (no dotfiles, no folders)
@@ -286,7 +287,7 @@ const manifest = {
 put('manifest.webmanifest', null, { keep: true, text: JSON.stringify(manifest, null, 2) + '\n' });
 // The service worker (app/sw.js) and what it keeps: the page and the files put() kept, and the CDN files the page names
 // (React and the fonts' stylesheet in shell.html, the export's libraries in export.jsx). The rest it is given here, each
-// from the one place it is set: the board reader's cache name (VisionCore's CACHE, which a model update bumps), the
+// from the one place it is set: the page's name (render.yaml's rewrite), the board reader's cache name (VisionCore's CACHE, which a model update bumps), the
 // cross-origin isolation headers (render.yaml's: removing them there removes them from the worker's answers too) and
 // the hosts it keeps files from. Its VERSION is a hash of all that and of the kept files, so a deploy that changes one
 // replaces the kept copies; the page itself is fetched afresh on every visit. The hash covers every file served next to
@@ -301,6 +302,7 @@ const VISION_CACHE = (() => {
 const swFilled = read(path.join(app, 'sw.js'))
   .replace('__LOCAL__', () => JSON.stringify(SW_LOCAL))
   .replace('__REMOTE__', () => JSON.stringify(SW_REMOTE, null, 2))
+  .replace('__PAGE__', () => PAGE)
   .replace('__VISION_CACHE__', () => VISION_CACHE)
   .replace('__ISOLATION__', () => JSON.stringify(require('./render-headers.cjs').isolation()))
   .replace('__KEEP_HOSTS__', () => JSON.stringify(CDN_HOSTS));
