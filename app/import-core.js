@@ -10,6 +10,11 @@
     if (!t) return { error: 'Paste a PGN, a FEN or a Lichess link first.' };
     const link = window.LichessCore && window.LichessCore.gameLink(t);
     if (link) return { link };
+    // Chess.com lets no other site read its games (its pages and game data send no CORS header), so the way in is its PGN
+    if (/^(https?:\/\/)?([a-z]+\.)?chess\.com(\/\S*)?$/i.test(t))
+      return {
+        error: 'Chess.com games can’t be fetched here: on Chess.com, choose Share › PGN, copy it and paste it here.',
+      };
     if (/^(https?:\/\/|www\.|lichess\.org)\S*$/i.test(t))
       return { error: 'That link isn’t a Lichess game, broadcast or study.' };
     if (looksFen(t)) {

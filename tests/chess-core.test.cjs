@@ -1510,3 +1510,13 @@ test('PGN import: a glued NAG, % escape lines, one-line header-less games, cutec
   assert.equal(CC.splitGames('1. e4 {1-0 2. d4} e5 (1... c5 1-0 2. d4) 2. Nf3 *').length, 1);
   assert.equal(CC.splitGames('%x\n1. e4 *\n%y\n\n1. d4 *').length, 2);
 });
+
+test("buildGame keeps a Link tag's web address when Site has none (Chess.com's PGNs)", () => {
+  const M = (tags) => CC.buildGame({ pgn: tags + '\n[Result "*"]\n\n1. e4 *' });
+  const url = 'https://www.chess.com/games/view/18250648';
+  assert.equal(M(`[Site ""]\n[Link "${url}"]`).link, url);
+  assert.equal(M(`[Site "Chess.com"]\n[Link "${url}"]`).link, url);
+  assert.equal(M(`[Site "https://lichess.org/abcdefgh"]\n[Link "${url}"]`).link, '', 'Site has one already');
+  assert.equal(M('[Site "Chess.com"]\n[Link "see the club page"]').link, '', 'not a web address');
+  assert.equal(M('[Site "Chess.com"]').link, '');
+});

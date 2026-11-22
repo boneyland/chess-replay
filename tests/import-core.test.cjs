@@ -49,6 +49,15 @@ test('a Lichess link is a link', () => {
   assert.match(I.read('https://example.com/x').error, /isn’t a Lichess game/);
 });
 
+test('a Chess.com link says to paste its PGN', () => {
+  for (const t of [
+    'https://www.chess.com/games/view/18250648',
+    'chess.com/game/live/140000000000',
+    'www.chess.com/game/daily/1',
+  ])
+    assert.match(I.read(t).error, /Chess\.com games can’t be fetched here: .*PGN/, t);
+});
+
 test('a variant game is refused, naming it', () => {
   assert.match(
     I.read('[Variant "Crazyhouse"]\n[Result "1-0"]\n\n1. e4 d5 2. exd5 1-0').error,
