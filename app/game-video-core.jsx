@@ -761,10 +761,11 @@ function SideScroll({ style, children }) {
 // head: the title row's own contents, in place of title, right and extra (the Analysis panel's)
 // part: the panel's name, as the class part-<part> (docs/parts.md)
 // progress: 0–1, drawn along the top border (the Analysis panel's while the game analysis runs, else while Stockfish
-// searches for it: no live search runs during a game analysis); null draws none
+// searches for it: no live search runs during a game analysis); null draws none, as does any while exporting (EXPORTING)
 // label: the panel's name for a screen reader (its region), when its title isn't a plain string; a title is also its
 // heading (level 2), as is the title in a head that marks it so
-function Panel({ box, part, title, label, info, right, extra, head, a, style, progress, tight, children }) {
+function Panel({ box, part, title, label, info, right, extra, head, a, style, progress: progress0, tight, children }) {
+  const progress = EXPORTING ? null : progress0; // never in an export's frames
   const { x, y, w, h } = box;
   // the entrance slide only while it fades in (a video's): a settled panel has no transform. A flowing panel (a paused
   // one-column page) takes its place in the view's column, as tall as its contents
@@ -4463,6 +4464,9 @@ function useReplayNav({ nav, M, S, c, line, input, goTo, fen, keys = true }) {
 // without rising, the Moves list jumps to a new move, and there's no camera push or blunder glow. Never in an export:
 // the file is the same whoever makes it. GameVideo sets CALM before its children render, as setLayout does.
 let CALM = false;
+// set by GameVideo as CALM is: an export records the page, so no panel draws its progress line into the frames (a game
+// analysis or a live search running meanwhile)
+let EXPORTING = false;
 const CALM_MQ = window.matchMedia ? window.matchMedia('(prefers-reduced-motion: reduce)') : null;
 function useReducedMotion() {
   const [on, setOn] = React.useState(() => !!(CALM_MQ && CALM_MQ.matches));
@@ -4487,6 +4491,7 @@ function GameVideo({ M, tw, d, probe, queen, nav, sf, orient }) {
   setLayout(frame); // before the children render, which read the layout
   const reduced = useReducedMotion();
   CALM = reduced && !tw.exporting;
+  EXPORTING = !!tw.exporting;
   // an export records the page, so a whole-game analysis running meanwhile must not put its progress in the frames
   const sfPanel = React.useMemo(
     () => (sf && tw.exporting && sf.run.state === 'running' ? { ...sf, run: { ...sf.run, state: 'idle' } } : sf),
