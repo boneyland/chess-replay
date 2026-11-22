@@ -1341,7 +1341,9 @@ const iconCtl = {
   padding: 0,
   display: 'grid',
   placeItems: 'center',
-  borderColor: 'transparent',
+  // the whole shorthand, not borderColor: a theme switch changes headCtl's border, which React then sets again, and
+  // that reset the colour while React saw borderColor unchanged and left it (the border showed until a reload)
+  border: '1.5px solid transparent',
 };
 const stopHere = (e) => e.stopPropagation();
 // The Analysis panel's title row (on the right: the Stockfish switch, the engine, the game analysis's computer button,
