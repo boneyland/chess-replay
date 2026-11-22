@@ -2782,13 +2782,14 @@ function StackedBar({ side, a, name, rating, shown, pts, clock, lay = L, ghost =
 // ---------- right column ----------
 // Where the game was played, in three lines: event, round and teams, then place and date, then the opening (a Chess960 game
 // has its own line, Chess960 and the start's number, before the opening); each
-// scrolls sideways when it's long; a web address (a Site of lichess.org/…) is a link that opens in a new tab. The players,
+// scrolls sideways when it's long; a web address (a Site of lichess.org/…, or Chess.com's Link tag, shown after Site) is a
+// link that opens in a new tab. The players,
 // titles and ratings are the player bars'
 function Header({ M, a }) {
   const teams = M.white.team && M.black.team ? `${M.white.team} vs ${M.black.team}` : M.white.team || M.black.team;
   const lines = [
     [M.event, M.round && 'Round ' + M.round, teams].filter(Boolean).join(' · '),
-    [M.site, M.date].filter(Boolean).join(' · '),
+    [M.site, M.link, M.date].filter(Boolean).join(' · '),
     M.chess960 === true ? 'Chess960' : Number.isInteger(M.chess960) ? `Chess960 #${M.chess960}` : '',
     [M.eco, M.opening].filter(Boolean).join(' '),
   ].filter(Boolean);

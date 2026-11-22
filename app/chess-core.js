@@ -1071,12 +1071,16 @@
     }
     if (!opening) opening = { eco: clean(H.ECO), name: '' };
     const round = clean(H.Round) || (A && clean(A.round_num)) || '';
+    const site = clean(H.Site) || (A && A.site) || '';
+    // Chess.com's PGNs give the game's page in a Link tag (Site is "Chess.com" or empty); Game info shows it after Site
+    const link = !/https?:\/\//i.test(site) && /^https?:\/\/\S+$/i.test((H.Link || '').trim()) ? H.Link.trim() : '';
     return {
       white: player('w'),
       black: player('b'),
       event: clean(H.Event) || (A && A.event) || '',
       round,
-      site: clean(H.Site) || (A && A.site) || '',
+      site,
+      link,
       date: fmtDate(clean(H.Date) || (A && A.date)),
       pgnDate: clean(H.Date) || (A && clean(A.date)) || '',
       eco: opening.eco,
