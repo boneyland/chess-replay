@@ -1116,8 +1116,22 @@ function GameApp() {
     setShareOpen(null);
     setPanel(false);
     setQueenOpen(false);
+    const p = probe.current;
+    exportFrom.current = p ? { S: p.S, T: p.T, c: p.c } : null;
     X.run();
   };
+  // the export steps the player through every frame and leaves it on the last: once it ends (saved, cancelled or
+  // failed), the replay goes back to where the viewer was. The same moment if the timing is the one exported; else (an
+  // analysis or a Queen answer landed meanwhile, moving every later move) the same move, settled
+  const exportFrom = React.useRef(null);
+  React.useEffect(() => {
+    const from = exportFrom.current,
+      p = probe.current;
+    if (video.busy || !from || !p) return;
+    exportFrom.current = null;
+    const time = p.S === from.S ? from.T : window.ChessCore.settledAt(p.S, p.CUES, Math.min(from.c, p.S.N - 1));
+    window.dispatchEvent(new CustomEvent('chess-video:seek', { detail: { time } }));
+  }, [video.busy]);
   const askQueen = () => {
     setQueenOpen((q) => !q);
     setPanel(false);

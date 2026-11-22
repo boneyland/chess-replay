@@ -4692,7 +4692,7 @@ function GameVideo({ M, tw, d, probe, queen, nav, sf, orient }) {
       f = Math.max(f, MOTION.move(cl01((T - t0) / 0.7)) * (1 - MOTION.move(cl01((T - t1) / 0.7))));
     });
   const c = lastPly(T, S);
-  if (probe) probe.current = { S, CUES, c };
+  if (probe) probe.current = { S, CUES, c, T };
   const flash =
     video && tw.blunderGlow !== false && !CALM && c >= 0 && (M.plies[c].cls === 'blunder' || M.plies[c].checkmate)
       ? Math.max(0, 1 - Math.abs(T - S.tp[c] - S.md[c] - 0.25) / 0.6)
