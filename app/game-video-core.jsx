@@ -4487,6 +4487,11 @@ function GameVideo({ M, tw, d, probe, queen, nav, sf, orient }) {
   setLayout(frame); // before the children render, which read the layout
   const reduced = useReducedMotion();
   CALM = reduced && !tw.exporting;
+  // an export records the page, so a whole-game analysis running meanwhile must not put its progress in the frames
+  const sfPanel = React.useMemo(
+    () => (sf && tw.exporting && sf.run.state === 'running' ? { ...sf, run: { ...sf.run, state: 'idle' } } : sf),
+    [sf, tw.exporting],
+  );
   // a paused one-column page is as tall as its panels; the stage scrolls it
   const flowRef = React.useRef(null);
   useFlowHeight(frame, flowRef);
@@ -4794,7 +4799,7 @@ function GameVideo({ M, tw, d, probe, queen, nav, sf, orient }) {
             onPreview={onPreview}
             onReplyHover={onReplyHover}
             paused={!playing}
-            sf={sf}
+            sf={sfPanel}
             own={own}
             onReply={onReply}
             deep={gameEval}
