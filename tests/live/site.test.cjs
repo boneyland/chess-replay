@@ -1468,7 +1468,21 @@ for (const name of BROWSERS)
                   .length,
             );
           await page.keyboard.press('ArrowRight');
-          assert.ok((await glides()) > 0, 'the step glides');
+          // the glide starts once React has drawn the step: WebKit in CI draws a frame only every 0.3 s or so
+          const glided = await page
+            .waitForFunction(
+              () =>
+                document
+                  .getAnimations()
+                  .some((a) => a.playState === 'running' && a.effect && a.effect.target instanceof HTMLImageElement),
+              null,
+              { timeout: 2000 },
+            )
+            .then(
+              () => true,
+              () => false,
+            );
+          assert.ok(glided, 'the step glides');
           await page.keyboard.press('Space');
           assert.equal(await glides(), 0, 'Play stopped the glide');
           await page.keyboard.press('Space');
