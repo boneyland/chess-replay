@@ -134,7 +134,9 @@ function CountField({ value, label, min, text, onText, msgId, set, setup, onChan
       style={{
         ...editField(),
         width: tx(96),
-        ...(bad && { borderColor: C.blunder, boxShadow: `inset 0 0 0 1px ${C.blunder}` }),
+        // the whole shorthand, not borderColor: React re-applies editField's border when the theme changes it, which
+        // would reset a borderColor it sees as unchanged
+        ...(bad && { border: `1px solid ${C.blunder}`, boxShadow: `inset 0 0 0 1px ${C.blunder}` }),
       }}
     />
   );

@@ -473,11 +473,15 @@ function useVideoExport({ fps, format, webp, mp4Quality, mp4Vfr = false, save, s
       await save(stem + suffix + ext, blob);
       setState(null);
     } catch (e) {
+      // the console keeps the stack, which the dialog's one line can't: a failure seen once can be traced afterwards
+      console.error('Export failed', e);
       if (stage) stage.done();
       try {
         if (enc) await enc.cancel();
       } catch (_) {}
-      setState({ phase: 'error', msg: 'Export failed: ' + ((e && e.message) || e) });
+      // its kind too (RangeError, TypeError…): "invalid array length" alone doesn't say whether memory ran out
+      const kind = e && e.name && e.name !== 'Error' ? e.name + ': ' : '';
+      setState({ phase: 'error', msg: 'Export failed: ' + kind + ((e && e.message) || e) });
     } finally {
       freeCanvas(cv);
       runningRef.current = false;

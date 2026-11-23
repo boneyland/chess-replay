@@ -134,13 +134,17 @@ async function open(browser, viewport, opts) {
   // whose message WebKit can hand Playwright cut short at the URL's colon (the whole sentence is then in its stack). The
   // dead-position prover's worker (chasolver.wasm) is cut off the same way by a reload while it loads (CI, 2026-11-08).
   // The files carry the deploy's version (?v=, window.siteFile) and a glue script its wasm's URL after a #, so both
-  // patterns allow a query and fragment: without that, nothing matched from #232 on and WebKit jobs failed at random
+  // patterns allow a query and fragment: without that, nothing matched from #232 on and WebKit jobs failed at random.
+  // The worker's own script can be cut off too, logged as "Cannot load …stockfish-19-lite.js?v=… due to access control
+  // checks." (PR 285's CI, 2026-11-22, a reload in Back to the loaded game)
   const webkit = browser.browserType().name() === 'webkit';
   const wasmCut = (text) =>
-    /Fetch API cannot load \S+\/(stockfish-[\w-]+|chasolver)\.wasm(\?\S*)? due to access control checks\./.test(text);
+    /(Fetch API c|C)annot load \S+\/(stockfish-[\w-]+|chasolver)\.(wasm|js)(\?\S*)? due to access control checks\./.test(
+      text,
+    );
   const cutOff = (m) =>
     webkit &&
-    ((wasmCut(m.text()) && /^Fetch API/.test(m.text())) ||
+    ((wasmCut(m.text()) && /^(Fetch API|Cannot load)/.test(m.text())) ||
       (/^Unhandled Promise Rejection: /.test(m.text()) && /\/stockfish-[\w-]+\.js([?#].*)?$/.test(m.location().url)));
   page.on('console', (m) => {
     if (m.type() === 'error' && !cutOff(m))
