@@ -647,8 +647,8 @@ const lastPly = (T, S) => {
 const cpOf = (M, i) => (i < 0 ? M.evalStart : plyCp(M.plies[i]));
 // a game without an analysis: no evals and no best lines (a PGN's own evals count as one)
 const bareGame = (M) => !M.hasEval && !M.plies.some((p) => p.best);
-// a move on screen for under a second (a short Seconds per move, or a long game squeezed into the video) shows its
-// analysis at once: the eval count and the panel's fade would end too late to read
+// a move on screen for under a second (a short Seconds per move, or a long game squeezed into the video) moves the eval
+// bar and graph at once: their glide would end too late to read
 const QUICK_MOVE = 1;
 const quickMove = (S, c) => c + 1 < S.N && S.tp[c + 1] - S.tp[c] < QUICK_MOVE;
 function evalNow(M, T, S) {
@@ -2351,7 +2351,7 @@ function EvalBar({ M, T, S, a, tb, dead, deep }) {
       ? fmtEval(shown)
       : shown && (shown.mate != null || shown.won)
         ? fmtEval(shown)
-        : fmtEval({ cp });
+        : fmtEval({ cp: cpOf(M, c) }); // the move's eval at once: the bar glides, its number doesn't count
   return <EvalBarView cp={M.hasEval ? cp : 0} txt={txt} a={a} />;
 }
 // the bar itself: White's share from cp (White's view), and txt in the part of the bar it favours
@@ -2874,7 +2874,7 @@ function MoveList({ M, T, S, a, paused, onPick, deadAt, end, startAt }) {
   // a flowing list grows up to maxRows lines, then scrolls; a placed one takes all the box's height under its title
   // (LayoutCore's moves.chrome: the panel's padding, title row and borders, tight where the panel is)
   const listH = L.moves.flow ? null : Math.max(ROW, L.moves.h - L.moves.chrome);
-  const k = c >= 0 && !CALM ? MOTION.move(cl01((T - S.tp[c]) / 0.35)) : 1,
+  const k = c >= 0 && !CALM ? MOTION.enter(cl01((T - S.tp[c]) / 0.25)) : 1,
     listRef = React.useRef(null);
   // a new move scrolls the list by whole lines so the move's line keeps one line under it (none in a box of one line,
   // where the move's own line must show), sliding there as the move plays, and leaves it
@@ -3083,7 +3083,7 @@ function Commentary({ M, T, S, a, book, line }) {
           : null;
   const txt = (c >= 0 ? M.plies[c].comment : M.intro) || '';
   const qtxt = (c >= 0 && M.plies[c].queenText) || '';
-  // with the Analysis panel's fade, before the piece lands
+  // as the piece is landing (a little after the Analysis panel shows the move)
   const t0 = c >= 0 ? S.tp[c] + S.md[c] * 0.6 : S.tp[0] - 1.5;
   // one typewriter across the comment, then Queen's sentence
   const total = txt.length + qtxt.length;
@@ -3163,7 +3163,7 @@ function Commentary({ M, T, S, a, book, line }) {
               : 'This game has no commentary.'
             : c < 0
               ? 'Comments appear here as the game plays.'
-              : `No comment on ${label(M, c)}.`}
+              : 'No comment on this move.'}
         </span>
       )}
     </Panel>
@@ -3326,8 +3326,8 @@ function Analysis({
     );
   const P = M.plies[c],
     cls = P.cls;
-  const k = quickMove(S, c) ? 1 : cl01((T - S.tp[c] - S.md[c] * 0.6) / 0.25);
-  const { cp } = evalNow(M, T, S);
+  // a new move's analysis shows at once, its eval the settled one: a panel that faded and an eval that counted on every
+  // move drew the eye from the board (2026-11-26)
   const col = cls === 'none' ? C.ink : clsColor(cls);
   const big = headline();
   // Queen's line from the position after this move (its scores are left out: often off, and they squeezed the move's labels onto more lines)
@@ -3366,18 +3366,10 @@ function Analysis({
   const qLegal = qLine.length ? playLineCached(M, c + 1, qLine) : [];
   return (
     <AnalysisPanel box={box} a={a} paused={paused} depth={depth} deep={M.hasEval ? deep : null}>
-      <div style={{ opacity: k, transform: `translateY(${(1 - k) * 8}px)` }}>
+      <div>
         <div style={{ display: 'flex', flexWrap: 'wrap', alignItems: 'flex-end', columnGap: tx(28) }}>
           <span style={{ font: `700 ${big}px ${MONO}`, color: col }}>{label(M, c)}</span>
-          {M.hasEval && (
-            <EvalWithStat>
-              {deeper
-                ? fmtSf(deeper.cp, deeper.tb)
-                : (P.mate != null || P.won) && k >= 1
-                  ? fmtEval(P)
-                  : fmtEval({ cp })}
-            </EvalWithStat>
-          )}
+          {M.hasEval && <EvalWithStat>{deeper ? fmtSf(deeper.cp, deeper.tb) : fmtEval(P)}</EvalWithStat>}
         </div>
         {/* the verdict spans the panel under the move and the eval; spaced parts rather than " · " separators, so a
             line too long for a narrow panel breaks between them */}
@@ -3419,7 +3411,6 @@ function Analysis({
           display: 'flex',
           flexDirection: 'column',
           gap: anGap(8),
-          opacity: k,
         }}
       >
         {betterLegal.length > 0 && (
