@@ -4747,7 +4747,7 @@ function GameVideo({ M, tw, d, probe, queen, nav, sf, orient }) {
                 preview={!!pv}
                 hide={input.drag && input.drag.moved ? input.drag.from : null}
                 lines={
-                  tw.bestArrows
+                  tw.bestArrows && !pv
                     ? own
                       ? lineArrows(own.after)
                       : !playing && !pv && !vline && cNow >= 0
