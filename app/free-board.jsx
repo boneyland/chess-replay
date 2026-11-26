@@ -1035,7 +1035,7 @@ function FreeBoard({ board, onChange, tw, setTweak, onLichess, sf, nav, orient, 
             arrows={
               hintMove
                 ? [{ uci: had.best, k: 1 }]
-                : hovArrows(!G && tw.bestArrows !== false ? lineArrows(ev.after) : null, hov)
+                : hovArrows(!G && !(pv && pv.length) && tw.bestArrows !== false ? lineArrows(ev.after) : null, hov)
             }
             sel={input.sel}
           />

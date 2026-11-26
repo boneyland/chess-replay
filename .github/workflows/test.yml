@@ -99,6 +99,9 @@ jobs:
           echo 'APT::Keep-Downloaded-Packages "true"; Binary::apt::APT::Keep-Downloaded-Packages "true";' | sudo tee /etc/apt/apt.conf.d/99keep-debs
           sudo rm -f /etc/apt/apt.conf.d/docker-clean
           if ls ~/apt-debs/*.deb >/dev/null 2>&1; then sudo cp ~/apt-debs/*.deb /var/cache/apt/archives/; fi
+          # the runner image's packages.microsoft.com source isn't needed for WebKit's packages, and when it answers 403
+          # (PR 287's CI, 2026-11-27, twice on one job) its apt-get update fails the whole install
+          sudo grep -l packages.microsoft.com /etc/apt/sources.list.d/* 2>/dev/null | xargs -r sudo rm -f
           npx playwright install --with-deps webkit
           # autoclean drops the .debs the index no longer offers (superseded versions), so the cache doesn't grow with them
           sudo apt-get autoclean -qq
