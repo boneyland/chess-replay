@@ -82,3 +82,9 @@ test('a Lichess Chess960 game opens', () => {
   assert.deepEqual(I.pgn(pgn), { pgn });
   assert.equal(window.ChessCore.buildGame({ pgn }).chess960, 722);
 });
+
+test('a one-line PGN that starts with its FEN tag is a PGN', () => {
+  const r = I.read('[FEN "rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1"] [SetUp "1"] 1. e4 e5 *');
+  assert.ok(r.pgn, JSON.stringify(r));
+  assert.ok(I.read('[FEN "rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1"]').setup);
+});

@@ -3,7 +3,7 @@
 // where it opens); anything else must be standard chess and build as a PGN (pgn()). read(text) → { link } | { setup } | { pgn } | { error }
 (function () {
   const looksFen = (t) =>
-    !/\n/.test(t) && (/^\[\s*FEN\s/i.test(t) || (t.split(/\s/)[0].match(/\//g) || []).length === 7);
+    !/\n/.test(t) && (/^\[\s*FEN\s+"[^"]*"\s*\]$/i.test(t) || (t.split(/\s/)[0].match(/\//g) || []).length === 7);
 
   function read(text) {
     const t = String(text == null ? '' : text).trim();

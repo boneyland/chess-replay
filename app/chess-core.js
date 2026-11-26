@@ -297,12 +297,12 @@
       inMoves = false;
       ended = false;
     };
-    const RESULT = /^(?:1-0|0-1|1\/2-1\/2|\*)$/;
+    const RESULT = /^(?:1-0|0-1|1\/2-1\/2|½-½|\*)$/;
     // a line, or the part of one up to where a game's result is followed by more moves (header-less games on one line)
     const take = (line, hdr, outside) => {
       if ((hdr && inMoves) || (ended && outside.trim())) flush();
       if (outside.trim()) inMoves = true;
-      if (depth === 0 && /(?:^|\s)(?:1-0|0-1|1\/2-1\/2|\*)\s*$/.test(outside)) ended = true;
+      if (depth === 0 && /(?:^|\s)(?:1-0|0-1|1\/2-1\/2|½-½|\*)\s*$/.test(outside)) ended = true;
       cur.push(line);
     };
     text
@@ -363,17 +363,26 @@
     return games.filter((g) => /\S/.test(g));
   }
   const NAG = { 1: '!', 2: '?', 3: '!!', 4: '??', 5: '!?', 6: '?!' };
+  // the longest game the page opens: each ply costs about 1 KB once replayed, so a pasted or dropped file of millions of
+  // plies would take gigabytes; no real game comes near (the longest on record is 269 moves)
+  const MAX_PLIES = 6000,
+    TOO_LONG = 'That game is longer than 3,000 moves, the most this page opens.';
   function parsePGN(text) {
     const headers = {};
     // a line starting with % is PGN's escape: no part of the game
-    // a comment ({…} or ; to the end of the line) is passed over whole, so a tag written inside one stays its text
+    // a comment ({…} or ; to the end of the line) is passed over whole, so a tag written inside one stays its text. A tag
+    // whose value has a stray quote or ends in a backslash ([Event "The "Big" Match"], [Annotator "C:\"]) is read as the
+    // whole line, as splitGames reads it
     const body = text
       .replace(/^%[^\n]*/gm, '')
-      .replace(/\{[^}]*\}?|;[^\n]*|\[(\w+)\s+"((?:[^"\\]|\\.)*)"\]/g, (m, k, v) => {
-        if (!k) return m;
-        headers[k] = v.replace(/\\(["\\])/g, '$1');
-        return ' ';
-      });
+      .replace(
+        /\{[^}]*\}?|;[^\n]*|\[(\w+)\s+"((?:[^"\\]|\\.)*)"\]|^[ \t]*\[(\w+)[ \t]+"(.*)"\][ \t]*$/gm,
+        (m, k, v, lk, lv) => {
+          if (!k && !lk) return m;
+          headers[k || lk] = (k ? v : lv).replace(/\\(["\\])/g, '$1');
+          return ' ';
+        },
+      );
     // a [FEN] start with Black to move: the first ply is Black's (cutechess evals below are the mover's)
     const black0 = (headers.FEN || '').trim().split(/\s+/)[1] === 'b';
     const plies = [];
@@ -400,20 +409,23 @@
         if (txt) intro = (intro + ' ' + txt).trim();
         return;
       }
+      // an eval or clock that isn't a number ([%eval abc], [%clk .]) is left out
       if (ev) {
-        if (ev[1][0] === '#') t.mate = parseInt(ev[1].slice(1), 10);
-        else t.cp = Math.round(parseFloat(ev[1]) * 100);
+        const n = ev[1][0] === '#' ? parseInt(ev[1].slice(1), 10) : Math.round(parseFloat(ev[1]) * 100);
+        if (Number.isFinite(n)) t[ev[1][0] === '#' ? 'mate' : 'cp'] = n;
       }
       if (ae) {
         const sign = (ae[1] === '-' ? -1 : 1) * ((plies.length - 1 + (black0 ? 1 : 0)) % 2 ? -1 : 1);
         if (ae[3]) t.mate = sign * Math.ceil(parseInt(ae[3], 10) / 2);
         else t.cp = sign * Math.round(parseFloat(ae[2]) * 100);
       }
-      if (ck)
-        t.clk = ck[1]
+      const clk =
+        ck &&
+        ck[1]
           .split(':')
           .map(Number)
           .reduce((a, x) => a * 60 + x, 0);
+      if (Number.isFinite(clk)) t.clk = clk;
       if (txt) t.comment = (t.comment ? t.comment + ' ' : '') + txt;
     };
     while (i < body.length) {
@@ -475,16 +487,19 @@
         continue;
       }
       tok = tok.replace(/^\d+\.+/, '');
-      if (!tok || /^(1-0|0-1|1\/2-1\/2|\*|e\.p\.[+#]?)$/.test(tok)) continue;
+      if (!tok || /^(1-0|0-1|1\/2-1\/2|½-½|\*|e\.p\.[+#]?)$/.test(tok)) continue;
       const mm = tok.match(/^(.*?)([!?]{1,2})?$/);
-      if (depth === 0) plies.push({ san: mm[1], mark: mm[2] || null });
-      else if (depth === 1) varSans.push(mm[1]);
+      if (depth === 0) {
+        if (plies.length >= MAX_PLIES) throw new Error(TOO_LONG);
+        plies.push({ san: mm[1], mark: mm[2] || null });
+      } else if (depth === 1) varSans.push(mm[1]);
     }
+    if (depth > 0) throw new Error('A variation isn’t closed: a “(” has no “)” after it.');
     return { headers, plies, intro };
   }
   function parseNotes(text) {
     const out = { plies: {} },
-      re = /^\s*\[(\d+|INTRO|RESULT|CONCLUSION)\]/gim,
+      re = /^[ \t]*\[(\d+|INTRO|RESULT|CONCLUSION)\]/gim,
       keys = [];
     let m;
     while ((m = re.exec(text))) keys.push({ k: m[1].toUpperCase(), s: m.index, e: m.index + m[0].length });
@@ -524,7 +539,7 @@
     } catch (e) {}
     if (
       /_notes\.txt$/i.test(name) ||
-      (/^\s*\[(\d+|INTRO|RESULT|CONCLUSION)\]/im.test(text) && !/^\s*\[\w+\s+"/m.test(text))
+      (/^[ \t]*\[(\d+|INTRO|RESULT|CONCLUSION)\]/im.test(text) && !/^[ \t]*\[\w+[ \t]+"/m.test(text))
     )
       return 'notes';
     return 'pgn';
@@ -632,6 +647,8 @@
       half = f[4] || '0',
       full = f[5] || '1';
     if (!/^[wb]$/.test(turn) || !/^\d+$/.test(half) || !/^\d+$/.test(full) || !/^(-|[a-h][1-8])$/.test(ep)) return bad;
+    // a move number no game reaches (the longest possible is under 9,000 moves) is a mistake, and past 2^53 not a number
+    if (+full > 99999) return bad;
     if (castle !== '-' && !/^[KQkqA-Ha-h]{1,4}$/.test(castle)) return bad;
     const b = fromFen(f[0]),
       epIdx = ep === '-' ? -1 : sqIdx(ep),
@@ -1053,7 +1070,8 @@
         acc: useA && A[s + '_stats'] && A[s + '_stats'].accuracy,
       };
     };
-    const result = clean(H.Result) || (A && A.result) || '*';
+    // ½-½ (ChessBase and some exports) is written 1/2-1/2
+    const result = (clean(H.Result) || (A && A.result) || '*').replace(/^½-½$/, '1/2-1/2');
     // the PGN's opening, else the analysis file's, else Lichess's opening book (as AnalysisData.name_opening)
     const known = (n) => clean(n) && n !== 'Unknown';
     let opening = known(H.Opening)
@@ -1117,6 +1135,7 @@
       stdStart = start.fen === START_FEN;
     const sans = P ? P.plies.map((p) => p.san) : A ? A.moves.map((m) => m.move_san) : [];
     if (!sans.length) throw new Error('No moves found');
+    if (sans.length > MAX_PLIES) throw new Error(TOO_LONG);
     const firstStd = () => {
       try {
         return canon(start.pos, sanToMove(start.pos, sans[0]));
@@ -1940,7 +1959,8 @@
   function evalTicks(ply0, N) {
     const step = N > 120 ? 20 : 10,
       ticks = [];
-    for (let m = step; 2 * m - ply0 <= N; m += step)
+    // from the first multiple of step at or after the game's first move
+    for (let m = Math.max(step, Math.ceil((ply0 / 2 + 1) / step) * step); 2 * m - ply0 <= N; m += step)
       if (2 * (m - 1) - ply0 >= 0) ticks.push({ m, at: 2 * (m - 1) - ply0 });
     return ticks;
   }
@@ -1952,13 +1972,20 @@
     let at = 0,
       m;
     while ((m = re.exec(text))) {
-      let u = m[0];
+      // the brackets counted once, then the end moved back a character at a time (a recount per character was quadratic)
+      const w = m[0],
+        open = (w.match(/\(/g) || []).length;
+      let close = (w.match(/\)/g) || []).length,
+        e = w.length;
       for (;;) {
-        const t = u.slice(-1);
-        if (/[.,;:!?]/.test(t)) u = u.slice(0, -1);
-        else if (t === ')' && (u.match(/\(/g) || []).length < (u.match(/\)/g) || []).length) u = u.slice(0, -1);
-        else break;
+        const t = w[e - 1];
+        if (/[.,;:!?]/.test(t)) e--;
+        else if (t === ')' && open < close) {
+          e--;
+          close--;
+        } else break;
       }
+      const u = w.slice(0, e);
       if (u.length <= u.indexOf('//') + 2) continue;
       if (m.index > at) out.push({ text: text.slice(at, m.index) });
       out.push({ text: u, url: u });
