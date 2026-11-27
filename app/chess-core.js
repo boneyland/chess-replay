@@ -1256,10 +1256,13 @@
     READ_CAP = 6,
     LEAD = 1.2,
     TAIL = 2.6;
+  // a stored setting that isn't a number in range is its default (a string would join instead of add, NaN would end the
+  // scene list and the Stage with it)
+  const setting = (x, dflt, min) => (typeof x === 'number' && Number.isFinite(x) && x >= min ? x : dflt);
   function timing(M, o) {
-    const spm = o.secondsPerMove || 1.6,
-      hold = o.keyHold == null ? 1.5 : o.keyHold,
-      read = o.readSpeed || 22; // characters a second
+    const spm = setting(o.secondsPerMove, 1.6, 0.1),
+      hold = setting(o.keyHold, 1.5, 0),
+      read = setting(o.readSpeed, 22, 1); // characters a second
     const ranges = plan(M);
     let d = M.plies.map((p) => {
       // reading time for the comment and Queen's sentence together, at most READ_CAP s; on a marked move it stands in

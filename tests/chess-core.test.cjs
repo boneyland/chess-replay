@@ -1620,3 +1620,11 @@ test('readFen refuses a half-move clock that would not be written back as a numb
 test('½-½ is 1/2-1/2 in the game’s headers too', () => {
   assert.equal(CC.buildGame({ pgn: '[Result "½-½"]\n\n1. e4 e5 ½-½' }).headers.Result, '1/2-1/2');
 });
+
+test('timing reads a stored setting that is not a number as its default', () => {
+  const M = CC.buildGame({ pgn: '1. e4 e5 2. Nf3 Nc6 *' });
+  const ok = CC.timing(M, { secondsPerMove: 1.6, keyHold: 1.5 });
+  for (const bad of ['2', 'abc', NaN, null, -1, Infinity, {}])
+    assert.deepEqual(CC.timing(M, { secondsPerMove: bad, keyHold: bad, readSpeed: bad }), ok, String(bad));
+  assert.ok(CC.timing(M, { secondsPerMove: 3, keyHold: 0 }).total > ok.total);
+});
