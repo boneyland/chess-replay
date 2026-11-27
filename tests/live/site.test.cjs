@@ -2438,7 +2438,15 @@ for (const name of BROWSERS)
           await p.getByRole('radio', { name: 'WebP' }).click();
           await p.getByRole('button', { name: /^Export animated WebP/ }).click();
           const exporting = p.getByRole('dialog', { name: 'Exporting' });
-          await exporting.getByRole('button', { name: 'Cancel' }).waitFor({ timeout: 60000 });
+          // drawing frames (Cancel shows from the click, while the playhead is still where the viewer left it)
+          await p.waitForFunction(
+            () =>
+              /Frame [1-9]\d* of/.test(
+                document.querySelector('.part-exporting-dialog .export-line')?.textContent || '',
+              ),
+            null,
+            { timeout: 60000, polling: 50 },
+          );
           await p.keyboard.press('f');
           assert.equal(await flip(), false, 'F during an export');
           // nor do the replay's keys seek it: the playhead only moves on, frame by frame
