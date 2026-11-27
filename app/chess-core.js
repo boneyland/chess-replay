@@ -372,17 +372,19 @@
     // a line starting with % is PGN's escape: no part of the game
     // a comment ({…} or ; to the end of the line) is passed over whole, so a tag written inside one stays its text. A tag
     // whose value has a stray quote or ends in a backslash ([Event "The "Big" Match"], [Annotator "C:\"]) is read as the
-    // whole line, as splitGames reads it
+    // whole line, as splitGames reads it (only where the tag isn't a well-formed one: an indented line of two tags is two)
     const body = text
       .replace(/^%[^\n]*/gm, '')
       .replace(
-        /\{[^}]*\}?|;[^\n]*|\[(\w+)\s+"((?:[^"\\]|\\.)*)"\]|^[ \t]*\[(\w+)[ \t]+"(.*)"\][ \t]*$/gm,
+        /\{[^}]*\}?|;[^\n]*|\[(\w+)\s+"((?:[^"\\]|\\.)*)"\]|^[ \t]*(?!\[\w+\s+"(?:[^"\\]|\\.)*"\])\[(\w+)[ \t]+"(.*)"\][ \t]*$/gm,
         (m, k, v, lk, lv) => {
           if (!k && !lk) return m;
           headers[k || lk] = (k ? v : lv).replace(/\\(["\\])/g, '$1');
           return ' ';
         },
       );
+    // ½-½ (ChessBase and some exports) is written 1/2-1/2, so the game's headers (an analysis file's result) carry it too
+    if (headers.Result === '½-½') headers.Result = '1/2-1/2';
     // a [FEN] start with Black to move: the first ply is Black's (cutechess evals below are the mover's)
     const black0 = (headers.FEN || '').trim().split(/\s+/)[1] === 'b';
     const plies = [];
@@ -647,8 +649,9 @@
       half = f[4] || '0',
       full = f[5] || '1';
     if (!/^[wb]$/.test(turn) || !/^\d+$/.test(half) || !/^\d+$/.test(full) || !/^(-|[a-h][1-8])$/.test(ep)) return bad;
-    // a move number no game reaches (the longest possible is under 9,000 moves) is a mistake, and past 2^53 not a number
-    if (+full > 99999) return bad;
+    // a move number no game reaches (the longest possible is under 9,000 moves) is a mistake, and past 2^53 not a number;
+    // a half-move clock that big would be written back as 1e+21 or Infinity, which no FEN reader takes
+    if (+full > 99999 || +half > 99999) return bad;
     if (castle !== '-' && !/^[KQkqA-Ha-h]{1,4}$/.test(castle)) return bad;
     const b = fromFen(f[0]),
       epIdx = ep === '-' ? -1 : sqIdx(ep),

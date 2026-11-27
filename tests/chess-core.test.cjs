@@ -1602,3 +1602,20 @@ test('½-½ is a result', () => {
   assert.equal(M.result, '1/2-1/2');
   assert.equal(CC.splitGames('1. e4 e5 ½-½\n1. d4 *').length, 2);
 });
+
+test('an indented line of two tags is two tags', () => {
+  const M = CC.buildGame({ pgn: '  [White "A"] [Black "B"]\n  [Event "The "Big" Match"]\n\n1. e4 *' });
+  assert.equal(M.white.name, 'A');
+  assert.equal(M.black.name, 'B');
+  assert.equal(M.event, 'The "Big" Match');
+});
+
+test('readFen refuses a half-move clock that would not be written back as a number', () => {
+  const at = (n) => CC.readFen(`k7/8/8/8/8/8/8/K7 w - - ${n} 1`);
+  assert.equal(at(99999).error, undefined);
+  assert.ok(at('9'.repeat(30)).error);
+});
+
+test('½-½ is 1/2-1/2 in the game’s headers too', () => {
+  assert.equal(CC.buildGame({ pgn: '[Result "½-½"]\n\n1. e4 e5 ½-½' }).headers.Result, '1/2-1/2');
+});
