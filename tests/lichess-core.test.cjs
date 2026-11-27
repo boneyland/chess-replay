@@ -292,6 +292,50 @@ test('parseExplorer totals the counts and keeps the moves, top games and opening
   assert.throws(() => LC.parseExplorer({ error: 'x' }));
 });
 
+// the answer comes from the network: a field of the wrong type (a san that is an object reaches React as a child and
+// crashes the panel) drops its move or game, or reads as missing
+test('parseExplorer checks field types: a move or game with a wrong one is dropped, other fields read as missing', () => {
+  const e = LC.parseExplorer({
+    white: '7',
+    draws: {},
+    black: 1,
+    moves: [
+      { uci: 'e7e5', san: 'e5', white: 1 },
+      { uci: 'c7c5', san: { x: 1 } },
+      { uci: ['d7d5'], san: 'd5' },
+      { uci: 'zz', san: 'Nf6' },
+      { uci: 'g8f6', san: '' },
+      null,
+      'e7e6',
+    ],
+    topGames: [
+      {
+        id: 'abcd1234',
+        white: { name: 'A', rating: 2000 },
+        black: { name: ['B'], rating: '<b>' },
+        winner: 'nobody',
+        year: '2019',
+      },
+      { id: { toString: 1 }, white: { name: 'C' }, black: { name: 'D' } },
+      { id: '../evil', white: { name: 'C' }, black: { name: 'D' } },
+      null,
+    ],
+    opening: { eco: 5, name: { n: 1 } },
+  });
+  assert.equal(e.total, 8);
+  assert.deepEqual(
+    e.moves.map((m) => [m.uci, m.san]),
+    [['e7e5', 'e5']],
+  );
+  assert.deepEqual(e.games, [{ id: 'abcd1234', white: 'A (2000)', black: '?', winner: null, year: null }]);
+  assert.equal(e.opening, null);
+  assert.deepEqual(LC.parseExplorer({ moves: [], opening: { eco: 5, name: 'Sicilian' } }).opening, {
+    eco: '',
+    name: 'Sicilian',
+  });
+  assert.deepEqual(LC.parseExplorer({ moves: [], topGames: 'x' }).games, []);
+});
+
 test('explorerUrl picks the database and sends the filters for Lichess games only', () => {
   const u = LC.explorerUrl(EXFEN, { db: 'lichess', ratings: [2000, 2200], speeds: ['blitz', 'rapid'] });
   assert.ok(u.startsWith('https://explorer.lichess.ovh/lichess?'));
