@@ -110,6 +110,15 @@ test('readSse finds the complete event, or the error event as JSON or text', () 
   assert.deepEqual(Q.readSse(''), { result: null, error: null });
 });
 
+test('readSse reads a stream with CRLF line ends as it reads LF', () => {
+  const crlf = 'event: heartbeat\r\ndata: null\r\n\r\nevent: complete\r\ndata: [{"best_move_uci":"e2e4"}]\r\n\r\n';
+  assert.deepEqual(Q.readSse(crlf), { result: [{ best_move_uci: 'e2e4' }], error: null });
+  const err = 'event: error\r\ndata: plain text\r\n\r\n';
+  assert.deepEqual(Q.readSse(err), { result: null, error: 'plain text' });
+  // a lone CR ends a line too (the event stream format allows all three)
+  assert.deepEqual(Q.readSse('event: complete\rdata: [1]\r\r'), { result: [1], error: null });
+});
+
 test('capQueenCache drops the oldest answers until the JSON fits, keeping the newest even when it alone is too big', () => {
   const c = {};
   for (let i = 0; i < 10; i++) c['k' + i] = { prose: 'x'.repeat(90) };
