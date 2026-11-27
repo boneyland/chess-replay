@@ -87,6 +87,9 @@ self.addEventListener('activate', (e) => {
 // (the newest: caches.keys() lists caches in the order they were made), so a browser that never names a navigation's
 // client (resultingClientId) or a tab left open for weeks doesn't pile up a copy per deploy
 const FRESH = new Set();
+// a board reader's cache number (chess-vision-N), NaN for another cache: only an older one is deleted, never a newer
+// one a newer worker filled before its install failed (the 56 MB download would repeat on every visit)
+const visionNo = (k) => (/^chess-vision-\d+$/.test(k) ? +k.slice('chess-vision-'.length) : NaN);
 const PRUNE_DELAY_MS = 5000;
 const KEEP_OLD = 2;
 async function prune() {
@@ -95,7 +98,7 @@ async function prune() {
   const open = await self.clients.matchAll({ type: 'window', includeUncontrolled: true });
   const all = open.every((c) => FRESH.has(c.id));
   const old = (await caches.keys()).filter(
-    (k) => (k.startsWith('chess-replay-') && k !== CACHE) || (k.startsWith('chess-vision-') && k !== VISION_CACHE),
+    (k) => (k.startsWith('chess-replay-') && k !== CACHE) || visionNo(k) < visionNo(VISION_CACHE),
   );
   const replays = old.filter((k) => k.startsWith('chess-replay-'));
   for (const k of old)

@@ -166,6 +166,16 @@ test('activate deletes a board reader kept under an older name, and keeps the cu
   assert.deepEqual(Object.keys(sw.stores).sort(), [VISION, 'stockfish-full-19'].sort());
 });
 
+// a newer worker that bumped the name and failed to install leaves its 56 MB download: an older worker keeps it
+test('activate keeps a board reader kept under a newer name', async () => {
+  const sw = load();
+  const NEWER = VISION.replace(/\d+$/, (n) => +n + 1),
+    LATER = VISION.replace(/\d+$/, (n) => +n + 10);
+  for (const n of [OLD_VISION, VISION, NEWER, LATER]) sw.store(n);
+  await sw.activate();
+  assert.deepEqual(Object.keys(sw.stores).sort(), [VISION, NEWER, LATER].sort());
+});
+
 const PAGE = 'chess-game-video.html';
 
 for (const u of [
