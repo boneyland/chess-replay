@@ -20,11 +20,11 @@ The rest are mostly narrow lifecycle bugs: a stuck Hint, a threaded-engine resta
 Hot spots (last 300 commits): `app/game-video-core.jsx` 72, `app/shell.html` 50, `app/game-app.jsx` 39, `app/free-board.jsx` 37, `app/stockfish.jsx` 32.
 
 ## Fix plan
-In progress: item 1 merged (2026-11-27). Each item is one PR on a `claude/<topic>` branch (they change the page; see CLAUDE.md's Workflow), in this order. Line numbers are at commit 04db4ed: find the code by the quoted evidence if they have moved. Tick an item here, with its PR, when it merges.
+In progress: items 1–2 merged (2026-11-27). Each item is one PR on a `claude/<topic>` branch (they change the page; see CLAUDE.md's Workflow), in this order. Line numbers are at commit 04db4ed: find the code by the quoted evidence if they have moved. Tick an item here, with its PR, when it merges.
 
 - [x] 1. **Hostile PGN input** (Medium ×3, Rules; [#288](https://github.com/boneyland/chess-replay/pull/288)): `evalTicks` starts at the game's first move, and `readFen` caps the full-move field. `links()` counts its brackets once. Games over a ply cap (e.g. 5000) are refused with a message. Each gets a node test with the input that freezes it today.
   Ride-alongs (Low, Rules): `/^\s*\[/m` → `^[ \t]*\[`, NaN `[%eval]`/`[%clk]` dropped, `½-½` read as a result, an unclosed `(` is an error, a tag with an inner quote falls back to a line-anchored read, a one-line PGN starting with `[FEN` isn't taken for a FEN.
-- [ ] 2. **Stored state after a reload** (Medium ×2, App and Rules):
+- [x] 2. **Stored state after a reload** (Medium ×2, App and Rules; [#289](https://github.com/boneyland/chess-replay/pull/289)):
   - `commit` removes `STORE` when the write fails.
   - `PlayCore.resume` keeps a stored `reason: 'dead'` draw.
 
