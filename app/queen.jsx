@@ -80,7 +80,8 @@ async function directCall(moves, token, signal, fen = '') {
     if (signal.aborted) post.abort();
     else signal.addEventListener('abort', stopPost, { once: true });
   }
-  let r;
+  // the event id is read under the same limit and Stop: a body that stalls is the call not taken
+  let r, eventId;
   try {
     r = await fetch(`${DIRECT_API}/call/analyse_position`, {
       method: 'POST',
@@ -88,6 +89,10 @@ async function directCall(moves, token, signal, fen = '') {
       body: JSON.stringify({ data: [fen, moves, QUEEN_TOKENS, 0.6, 20260823] }),
       signal: post.signal,
     });
+    if (r.ok)
+      try {
+        eventId = (await r.json()).event_id;
+      } catch (e) {}
   } catch (e) {
     throw unreachable();
   } finally {
@@ -105,10 +110,6 @@ async function directCall(moves, token, signal, fen = '') {
       retryable: r.status >= 500 || r.status === 429,
       message: `The Space answered ${r.status}.`,
     };
-  let eventId;
-  try {
-    eventId = (await r.json()).event_id;
-  } catch (e) {}
   if (!eventId) throw unreachable();
   // the answer's stream stays open until Queen is done (20-33 s, under ZeroGPU's reserved 61 s plus the queue): one
   // that hasn't ended QUEEN_WAIT_MS after the call was taken is given up, as a failure not retried

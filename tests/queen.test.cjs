@@ -154,3 +154,20 @@ test('the Stop button during the stream is a cancel, not a failure', async () =>
   });
   await assert.rejects(directCall('e2e4', null, ctrl.signal), (e) => e.code === 'cancelled');
 });
+
+// the event id comes in the call's own answer body: Stop while that body hangs stops the call
+test('the Stop button while the event id is read is a cancel', async () => {
+  const ctrl = new AbortController();
+  const { directCall } = load({
+    fetchFn: async (url, opts) => {
+      const body = new ReadableStream({
+        start(c) {
+          opts.signal.addEventListener('abort', () => c.error(new DOMException('aborted', 'AbortError')));
+        },
+      });
+      setTimeout(() => ctrl.abort(), 20);
+      return new Response(body, { status: 200 });
+    },
+  });
+  await assert.rejects(directCall('e2e4', null, ctrl.signal), (e) => e.code === 'cancelled');
+});
