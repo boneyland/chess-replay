@@ -160,7 +160,8 @@ function useStoredFiles({ stored, setErr, onCommit, clockRef }) {
   );
   if (built.M) lastGood.current = built.M;
   const M = built.M || lastGood.current || window.ChessCore.buildGame(SAMPLE);
-  // false when it couldn't be remembered (the error says so)
+  // true when shown and stored; 'unstored' when shown but it couldn't be remembered (the error says so, and nothing is
+  // stored in its place, so a reload doesn't bring back what was there before); false when it isn't a game (not shown)
   // keep: the editor stays open (an analysis finishing in the background isn't the viewer leaving it)
   // The loaded game left for a board is kept in the board's place (lastGame: { files, at }, at its playhead) for Back to the
   // loaded game; the board's own commits carry it, loading or replacing a game drops it
@@ -187,6 +188,7 @@ function useStoredFiles({ stored, setErr, onCommit, clockRef }) {
     }
     setErr('');
     setFiles(withLast);
+    filesRef.current = withLast;
     onCommit(keep);
     try {
       // the sample as it comes needs no storing; once its analysis is replaced (a run, Remove analysis) the change is kept
@@ -197,15 +199,19 @@ function useStoredFiles({ stored, setErr, onCommit, clockRef }) {
         } catch (e) {
           if (withLast === next) throw e;
           setFiles(next);
+          filesRef.current = next;
           localStorage.setItem(STORE, JSON.stringify(next));
         }
     } catch (e) {
+      try {
+        localStorage.removeItem(STORE);
+      } catch (e2) {}
       setErr(
         next.board
           ? 'The board couldn’t be remembered after reload: the browser’s storage is full.'
           : 'Loaded, but the files are too large to remember after reload.',
       );
-      return false;
+      return 'unstored';
     }
     return true;
   };
@@ -236,7 +242,7 @@ function useStoredFiles({ stored, setErr, onCommit, clockRef }) {
     const saved = window.BoardCore.save(b),
       prev = board;
     boardSaved.current = { saved, board: b };
-    const ok = commit({ board: saved });
+    const ok = commit({ board: saved }) === true;
     if (b.game && !back && !(prev && prev.game === b.game && prev.steps === b.steps))
       updateGames(
         (list) => window.GamesCore.keep(list, b, Date.now()),
@@ -907,6 +913,9 @@ function GameApp() {
       setErr('Could not read that file: ' + ((e && e.message) || e));
       return;
     }
+    // the files as they are now, after the reads: an analysis or a load may have been committed meanwhile
+    const cur = filesRef.current,
+      onBoard = !!cur.board;
     // Queen answers join the cache once the files with them are loaded, so their note counts against the game shown
     let answers = null;
     if (batch.queen) {
@@ -928,7 +937,7 @@ function GameApp() {
       return;
     }
     // a free board has no game for notes or an analysis to go with
-    if (board && !batch.pgn) {
+    if (onBoard && !batch.pgn) {
       if (answers) Q.merge(answers);
       setErr('Load a PGN first: notes and analysis files go with a game.');
       return;
@@ -936,14 +945,14 @@ function GameApp() {
     let next;
     if (batch.pgn) {
       next = { ...batch, gameIndex: 0 };
-      if (!batch.analysis && files.analysis && !files.sample) {
+      if (!batch.analysis && cur.analysis && !cur.sample) {
         try {
-          window.ChessCore.buildGame({ ...next, analysis: files.analysis });
-          next.analysis = files.analysis;
-          next.analysisName = files.analysisName;
+          window.ChessCore.buildGame({ ...next, analysis: cur.analysis });
+          next.analysis = cur.analysis;
+          next.analysisName = cur.analysisName;
         } catch (e) {}
       }
-    } else next = { ...(board ? {} : files), ...batch, sample: false };
+    } else next = { ...(onBoard ? {} : cur), ...batch, sample: false };
     const ok = commit(next) !== false;
     if (answers) {
       let game;
@@ -953,7 +962,7 @@ function GameApp() {
         } catch (e) {}
       Q.merge(answers, game);
       // the note outlives the game change this load makes, and no other: one that keeps the open game makes none
-      queenNoteNext.current = !!game && (next.pgn !== files.pgn || next.gameIndex !== files.gameIndex);
+      queenNoteNext.current = !!game && (next.pgn !== cur.pgn || next.gameIndex !== cur.gameIndex);
       queenStays.current = queenNoteNext.current;
     }
   };
