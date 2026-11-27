@@ -4200,18 +4200,24 @@ function useHeldSchedule(T0, S) {
 // viewer's own moves, from base) or the panel it was picked from, n its moves that came from the panel (the rest are
 // Stockfish's replies played on from it). pv: the same shape, previewed until the mouse leaves
 function useShownLine(M, cNow, playing) {
-  const [vline, setVline] = React.useState(null);
+  // a line belongs to the move it was shown from, while paused: worked out here in render, so no frame after a seek-bar
+  // drag or Play draws it against the new move (audit 2026-11-27); the effects then drop the stale state
+  const live = (v) => (v && !playing && v.c === cNow ? v : null);
+  const [shown, setVline] = React.useState(null);
+  const vline = live(shown);
   React.useEffect(() => {
-    if (vline && (playing || cNow !== vline.c)) setVline(null);
+    if (shown && (playing || cNow !== shown.c)) setVline(null);
     // eslint-disable-next-line react-hooks/exhaustive-deps -- a shown line drops when play starts or the game's move changes, not when the line itself changes
   }, [playing, cNow]);
-  const [pv, setPv] = React.useState(null);
+  const [previewed, setPv] = React.useState(null);
+  const pv = live(previewed);
   React.useEffect(() => {
     setPv(null);
   }, [playing, cNow]);
   // a line steps back to its first move (the viewer's own line back to its starting position), then closes
   const stepLine = (d) =>
-    setVline((v) => {
+    setVline((was) => {
+      const v = live(was);
       if (!v) return v;
       const u = v.upto + d,
         min = v.src === 'you' ? -1 : 0;
@@ -4219,10 +4225,14 @@ function useShownLine(M, cNow, playing) {
     });
   const gamePos = (cc) => window.ChessCore.posAt(M, cc + 1);
   const newLine = () => ({ c: cNow, at: cNow + 1, src: 'you', moves: [], upto: -1, base: gamePos(cNow) });
-  const leaveIfEmpty = () => setVline((v) => (v && v.src === 'you' && v.upto < 0 ? null : v));
+  const leaveIfEmpty = () =>
+    setVline((was) => {
+      const v = live(was);
+      return v && v.src === 'you' && v.upto < 0 ? null : v;
+    });
   const playOwn = (step) =>
     setVline((v) => {
-      const b = v || newLine();
+      const b = live(v) || newLine();
       const prefix = b.moves.slice(0, b.upto + 1);
       return { ...b, src: 'you', moves: [...prefix, step], upto: prefix.length };
     });
