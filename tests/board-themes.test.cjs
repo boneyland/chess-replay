@@ -141,3 +141,35 @@ test('rendered: a flat board has no picture; a picture board at the defaults is 
   assert.equal(B.rendered('wood', {}), 'boards/wood.jpg');
   assert.equal(B.rendered('wood', { hue: 10 }), null);
 });
+
+// render() in Node, with fakes of the picture, the canvas and Blob URLs: toBlob may call back with null (a canvas too
+// big for the browser, or out of memory), which is a clear failure rather than createObjectURL's TypeError
+test('render: a canvas that gives no PNG fails with a message, and leaves no picture behind', async () => {
+  const saved = { Image: globalThis.Image, document: globalThis.document, URL: globalThis.URL };
+  let blob = null;
+  globalThis.Image = class {
+    decode() {
+      return Promise.resolve();
+    }
+  };
+  globalThis.document = {
+    createElement: () => ({
+      getContext: () => ({
+        drawImage() {},
+        getImageData: (x, y, w, h) => ({ data: new Uint8ClampedArray(w * h * 4) }),
+        putImageData() {},
+      }),
+      toBlob: (ok) => setTimeout(() => ok(blob), 0),
+    }),
+  };
+  globalThis.URL = { createObjectURL: (b) => 'blob:' + b.size };
+  try {
+    await assert.rejects(B.render('wood', { hue: 20 }), (e) => e.name === 'Error' && /board’s picture/.test(e.message));
+    assert.equal(B.rendered('wood', { hue: 20 }), null);
+    blob = { size: 7 };
+    assert.equal(await B.render('wood', { hue: 20 }), 'blob:7');
+    assert.equal(B.rendered('wood', { hue: 20 }), 'blob:7');
+  } finally {
+    Object.assign(globalThis, saved);
+  }
+});
