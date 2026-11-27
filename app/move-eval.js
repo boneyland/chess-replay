@@ -2,8 +2,9 @@
 // Lichess's cloud, with the session's finished searches and its presses of Go deeper. No React: stockfish.jsx's
 // useMoveEval subscribes to a watch; tests script the engine and the cloud.
 //
-// create({ cloud, debounceMs }): one per page (its caches are shared by the replay and the free board). cloud: a
+// create({ cloud, debounceMs, keep }): one per page (its caches are shared by the replay and the free board). cloud: a
 // LichessCore client (cloudCached(fen, lines): undefined until asked; cloudEval(fen, lines, { signal })), or null.
+// keep: how many finished searches, Go deeper presses and auto runs the session keeps, each the newest (used last).
 //
 // A request: { engine, before, after, settings, fen, stored, cloud, off, auto }
 //   engine: get() resolves to an SFEngine (search(), failed()); null only with off
@@ -47,13 +48,33 @@
 (function () {
   const EMPTY = { before: null, after: null, cloud: {}, pending: false, progress: 0 };
   const WHICH = ['after', 'before'];
+  // a session's worth: a 300-move game stepped through at every Go deeper level is well under it
+  const KEEP = 2000;
+  // a Map of the newest max entries: a get or set makes an entry the newest, and a set past max drops the oldest
+  const recent = (max) => {
+    const m = new Map();
+    return {
+      get(k) {
+        if (!m.has(k)) return undefined;
+        const v = m.get(k);
+        m.delete(k);
+        m.set(k, v);
+        return v;
+      },
+      set(k, v) {
+        m.delete(k);
+        m.set(k, v);
+        if (m.size > max) m.delete(m.keys().next().value);
+      },
+    };
+  };
 
-  function create({ cloud = null, debounceMs = 300 } = {}) {
+  function create({ cloud = null, debounceMs = 300, keep = KEEP } = {}) {
     const A = window.AnalysisCore,
       START = window.ChessCore.START_FEN;
-    const finishedSearches = new Map(); // by settings and move list, for the session
-    const presses = new Map(); // of Go deeper, by position (positionKey), for the session
-    const autoRan = new Set(); // the positions (positionKey) auto has searched, for the session
+    const finishedSearches = recent(keep); // by settings and move list, for the session
+    const presses = recent(keep); // of Go deeper, by position (positionKey), for the session
+    const autoRan = recent(keep); // the positions (positionKey) auto has searched (true), for the session
 
     // what a request's keys and cached results are worked out from
     function plan({ before, after, settings: own, fen, stored }) {
@@ -97,7 +118,7 @@
       const { settings: own, fen, stored, engine, off } = req,
         p = plan(req);
       // auto asks the cloud as a press does, and that stays (with the cloud's answers) once the switch goes off
-      if (req.auto && stored) autoRan.add(p.base);
+      if (req.auto && stored) autoRan.set(p.base, true);
       // the Stockfish switch on: the live search is what shows, shallower than the stored result or not
       let liveFirst = !!(req.auto && stored && !off);
       let st = EMPTY,
@@ -115,7 +136,7 @@
         if (off) while (level > 0 && !p.finished(level)) level--;
         search = p.toSearch(A.deeperSearch(own, level));
         // a stored result asks the cloud once Go deeper is pressed (or auto ran), whatever the local searches got to (off keeps it asked)
-        const cloudOn = !!(req.cloud && req.cloud.on && cloud && (!stored || pressed > 0 || autoRan.has(p.base))),
+        const cloudOn = !!(req.cloud && req.cloud.on && cloud && (!stored || pressed > 0 || autoRan.get(p.base))),
           prefer = cloudOn && !!req.cloud.prefer;
         const lv = level,
           lines = p.linesOf,
