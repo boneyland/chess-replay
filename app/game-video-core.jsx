@@ -57,7 +57,6 @@ const setPalette = (mode) => Object.assign(C, PALETTES[mode] || PALETTES.dark);
 const SANS = '"IBM Plex Sans", system-ui, sans-serif';
 const MONO = '"JetBrains Mono", monospace';
 const SERIF = '"Instrument Serif", serif';
-const VALUE = { p: 1, n: 3, b: 3, r: 5, q: 9, k: 0 };
 const CLASS_LABEL = {
   best: 'Best move',
   inaccuracy: 'Inaccuracy',
@@ -2483,19 +2482,9 @@ const barPlace = (side) => ({
   alignItems: 'center',
   top: side === ORIENT ? L.board.y + L.board.size + L.bars.gap : L.board.y - L.bars.gap - L.bars.h,
 });
-// The pieces a side has taken and its material edge, counted from the pieces on the board (left(colour, type)) against a
-// full set, so a position set up with an edge shows it: { taken, pts } for SideBar
-const FULL_SET = { q: 1, r: 2, b: 2, n: 2, p: 8 };
-function materialOf(side, left) {
-  const lost = (col, t) => Math.max(0, FULL_SET[t] - left(col, t));
-  const worth = (col) => Object.keys(FULL_SET).reduce((s, t) => s + left(col, t) * VALUE[t], 0);
-  const opp = side === 'w' ? 'b' : 'w',
-    taken = {};
-  Object.keys(FULL_SET).forEach((t) => {
-    taken[t] = lost(opp, t) - lost(side, t);
-  });
-  return { taken, pts: worth(side) - worth(opp) };
-}
+// The pieces a side has taken and its material edge, from the pieces on the board (left(colour, type)): { taken, pts }
+// for SideBar (ChessCore.materialOf)
+const materialOf = (side, left) => window.ChessCore.materialOf(side, left);
 // A game's player bar: the captures and material edge from the pieces on the board at time T (taken off as they are
 // captured, a pawn counted as its new piece once it has promoted, as the board draws them), the clock from the PGN's clocks
 function PlayerBar({ M, T, S, side, a, pieces, strip }) {

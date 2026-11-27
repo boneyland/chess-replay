@@ -1628,3 +1628,20 @@ test('timing reads a stored setting that is not a number as its default', () => 
     assert.deepEqual(CC.timing(M, { secondsPerMove: bad, keyHold: bad, readSpeed: bad }), ok, String(bad));
   assert.ok(CC.timing(M, { secondsPerMove: 3, keyHold: 0 }).total > ok.total);
 });
+
+// audit 2026-11-27, Replay: the edge counted piece by piece, not clamped to a full set
+test('materialOf counts a promoted piece beyond the full set', () => {
+  const left = (pieces) => (col, t) => pieces[col][t] || 0;
+  const full = { q: 1, r: 2, b: 2, n: 2, p: 8 };
+  // White has promoted a pawn to a second queen with the first still on
+  const promo = left({ w: { ...full, q: 2, p: 7 }, b: full });
+  assert.deepEqual(CC.materialOf('w', promo), { taken: { q: 1, r: 0, b: 0, n: 0, p: -1 }, pts: 8 });
+  assert.deepEqual(CC.materialOf('b', promo), { taken: { q: -1, r: 0, b: 0, n: 0, p: 1 }, pts: -8 });
+  // a capture: Black has taken a knight
+  const capt = left({ w: { ...full, n: 1 }, b: full });
+  assert.deepEqual(CC.materialOf('b', capt).taken.n, 1);
+  assert.equal(CC.materialOf('b', capt).pts, 3);
+  // a set-up position with an edge shows it
+  const setup = left({ w: { q: 1, p: 2 }, b: { p: 1 } });
+  assert.deepEqual(CC.materialOf('w', setup), { taken: { q: 1, r: 0, b: 0, n: 0, p: 1 }, pts: 10 });
+});
