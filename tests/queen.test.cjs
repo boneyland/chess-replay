@@ -115,6 +115,22 @@ test('directCall reads an answer and sends the token it is given', async () => {
   );
 });
 
+// once the Space has given the event id the call is queued and costs ZeroGPU: a cut or slow stream is not asked again
+// by itself (the viewer may), while a failure before the event id is
+test('a stream cut short after the event id is not retryable', async () => {
+  const { directCall } = load({ fetchFn: space('event: heartbeat\ndata: null\n\n') });
+  await assert.rejects(directCall('e2e4', null, null), (e) => e.code === 'server_unavailable' && !e.retryable);
+});
+
+test('a stream that fails after the event id is not retryable', async () => {
+  const { directCall } = load({
+    fetchFn: space(() => {
+      throw new TypeError('network');
+    }),
+  });
+  await assert.rejects(directCall('e2e4', null, null), (e) => e.code === 'server_unavailable' && !e.retryable);
+});
+
 test('a failure before the event id is retryable: no answer to the call, a 503, no event id', async () => {
   const unreachable = load({
     fetchFn: async () => {

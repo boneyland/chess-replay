@@ -4,7 +4,7 @@ const QUEEN_SPACE = 'https://huggingface.co/spaces/boneyland/queen-pawn-8';
 // The Space reserves 15 s + 0.03 s per token of ZeroGPU for each call: 1536 tokens reserves 61 s instead of 76 s.
 // Typical answers are ~900-1300 tokens; a longer one is cut and the Space falls back to Queen's line or candidates.
 const QUEEN_TOKENS = 1536;
-// the longest wait for an answer's stream
+// the longest wait for an answer's stream, from the call's first answer to the stream's end (not an idle limit)
 const QUEEN_WAIT_MS = 180000;
 // the longest wait for the Space to take a call (its first answer, the event id: the queue and the answer come after)
 const QUEEN_POST_MS = 30000;
@@ -65,10 +65,12 @@ const HF_PREVIEW = /-pr-\d+[\w-]*\.onrender\.com$/.test(location.hostname);
 
 async function directCall(moves, token, signal, fen = '') {
   const auth = token ? { Authorization: 'Bearer ' + token } : {};
-  const unreachable = () =>
+  // retryable only before the Space gives the event id: after it the call is queued and spends ZeroGPU, so a cut or
+  // slow stream is not asked again by itself (a second call would cost as much again); the viewer may ask again
+  const unreachable = (queued = false) =>
     signal && signal.aborted
       ? { code: 'cancelled', message: 'Stopped.' }
-      : { code: 'server_unavailable', retryable: true, message: 'Could not reach the Space.' };
+      : { code: 'server_unavailable', retryable: !queued, message: 'Could not reach the Space.' };
   // the call itself has a time limit of its own (a Space that takes the connection and never answers), and the Stop
   // button's signal stops it too
   const post = new AbortController(),
@@ -103,8 +105,13 @@ async function directCall(moves, token, signal, fen = '') {
       retryable: r.status >= 500 || r.status === 429,
       message: `The Space answered ${r.status}.`,
     };
-  // the answer's stream stays open until Queen is done (20-33 s, under ZeroGPU's reserved 61 s plus the queue):
-  // one that says nothing for QUEEN_WAIT_MS is given up, as a failure the caller may try again
+  let eventId;
+  try {
+    eventId = (await r.json()).event_id;
+  } catch (e) {}
+  if (!eventId) throw unreachable();
+  // the answer's stream stays open until Queen is done (20-33 s, under ZeroGPU's reserved 61 s plus the queue): one
+  // that hasn't ended QUEEN_WAIT_MS after the call was taken is given up, as a failure not retried
   const timed = new AbortController(),
     give = setTimeout(() => timed.abort(), QUEEN_WAIT_MS);
   const stop = () => timed.abort();
@@ -114,13 +121,11 @@ async function directCall(moves, token, signal, fen = '') {
   }
   let text;
   try {
-    const { event_id } = await r.json();
-    if (!event_id) throw new Error('no event id');
-    const s = await fetch(`${DIRECT_API}/call/analyse_position/${event_id}`, { headers: auth, signal: timed.signal });
+    const s = await fetch(`${DIRECT_API}/call/analyse_position/${eventId}`, { headers: auth, signal: timed.signal });
     if (!s.ok) throw new Error('status ' + s.status);
     text = await s.text();
   } catch (e) {
-    throw unreachable();
+    throw unreachable(true);
   } finally {
     clearTimeout(give);
     if (signal) signal.removeEventListener('abort', stop);
@@ -130,8 +135,8 @@ async function directCall(moves, token, signal, fen = '') {
   // Gradio errors arrive as {error, title}, e.g. "You have exceeded your ZeroGPU runs limit. Authenticate with…"
   const msg = error && typeof error === 'object' ? error.error || error.title || JSON.stringify(error) : error;
   if (msg) throw { code: 'tool_error', message: String(msg) };
-  // a stream that ended with neither an answer nor an error was cut short
-  throw { code: 'server_unavailable', retryable: true, message: 'The Space’s answer was cut short.' };
+  // a stream that ended with neither an answer nor an error was cut short (after the event id: not retried)
+  throw { code: 'server_unavailable', retryable: false, message: 'The Space’s answer was cut short.' };
 }
 
 function readAuth() {
