@@ -100,10 +100,14 @@ const fakeSound = (windows = 2, gapMs = 20) => ({
 function encodeSoundWith(fake) {
   const ctx = vm.createContext({ AudioEncoder: fake.AudioEncoder, AudioData, setTimeout, clearTimeout, Promise });
   vm.runInContext(
-    source('export.jsx', 'const opusPacketSeconds') + '\n' + source('export.jsx', 'async function encodeSound'),
+    [
+      source('export.jsx', 'const opusPacketSeconds'),
+      fs.readFileSync(path.join(APP, 'export.jsx'), 'utf8').match(/^const CANCELLED = .*$/m)[0],
+      source('export.jsx', 'async function encodeSound'),
+    ].join('\n'),
     ctx,
   );
-  return ctx.encodeSound;
+  return Object.assign(ctx.encodeSound, { CANCELLED: vm.runInContext('CANCELLED', ctx) });
 }
 
 test('encodeSound: the soundtrack comes out as packets, one per slice, timed by AAC frames', async () => {
@@ -125,6 +129,17 @@ test('encodeSound: an encoder that fails while the slices wait for room isn’t 
   const fake = fakeEncoder({ failAt: 1, fullAfter: 1 });
   await assert.rejects(encodeSoundWith(fake)(MB, fakeSound(1), 'aac'), { name: 'EncodingError' });
   assert.equal(fake.made[0].encoded, 1);
+});
+
+test('encodeSound: Cancel ends the encode at the next slice, the codec closed', async () => {
+  const fake = fakeEncoder(),
+    encodeSound = encodeSoundWith(fake);
+  await assert.rejects(
+    encodeSound(MB, fakeSound(2), 'aac', () => fake.made[0].encoded >= 1),
+    (e) => e === encodeSound.CANCELLED,
+  );
+  assert.equal(fake.made[0].encoded, 1);
+  assert.equal(fake.made[0].state, 'closed');
 });
 
 // ---- saveFile: a download through a Blob URL ----

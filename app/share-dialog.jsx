@@ -161,36 +161,29 @@ function useExportSettings({
   // the game and timing the export started from: the stage keeps showing them until it ends (GameApp), as its stretch,
   // frame count and soundtrack were worked out from them, though an analysis or a Queen answer that lands meanwhile
   // changes MV and TM (new marks and reading times move every later move)
-  const held = React.useRef(null),
-    starting = React.useRef(false);
-  // a second Export while the board's picture renders (before the export's own state says it's busy) starts nothing
+  const held = React.useRef(null);
+  // the export's overlay shows (and the page is inert) from the click; the board's picture renders under it, as the
+  // export's first step. A second Export meanwhile starts nothing (video.run's own guard, set at once)
   const run = () => {
-    if (starting.current || video.busy) return Promise.resolve();
-    starting.current = true;
+    if (video.busy) return Promise.resolve();
     held.current = { MV, TM };
-    return window.BoardThemes.render(boardTheme.id, boardAdj)
-      .catch(() => null)
-      .finally(() => {
-        starting.current = false;
-      })
-      .then(() =>
-        video.run({
-          start: clipT.start,
-          end: clipT.end,
-          suffix: clipSuffix,
-          audio:
-            t.sound === false || webp
-              ? null
-              : () =>
-                  window.Sfx.renderTrack(
-                    window.Sfx.fetchSound,
-                    soundSet,
-                    window.Sfx.track(MV, clipOpts.S, clipT.start, clipT.end),
-                    soundVolume,
-                    clipT.end - clipT.start,
-                  ),
-        }),
-      );
+    return video.run({
+      start: clipT.start,
+      end: clipT.end,
+      suffix: clipSuffix,
+      prepare: () => window.BoardThemes.render(boardTheme.id, boardAdj).catch(() => null),
+      audio:
+        t.sound === false || webp
+          ? null
+          : () =>
+              window.Sfx.renderTrack(
+                window.Sfx.fetchSound,
+                soundSet,
+                window.Sfx.track(MV, clipOpts.S, clipT.start, clipT.end),
+                soundVolume,
+                clipT.end - clipT.start,
+              ),
+    });
   };
   return {
     video,
