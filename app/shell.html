@@ -35,8 +35,9 @@ html { height: 100%; box-sizing: border-box; font-size: calc(16px * var(--text, 
 /* a phone in full screen keeps the page clear of the camera: upright, the page's own top padding (the safe-area inset,
    in build.cjs) is the cut-out's strip (the status bar's height, 37–41 px; a big or low camera needs all of it), held
    sideways the stage's side padding (--safe-l, --safe-r) is at least that side's inset. A screen without a cut-out
-   reports 0 and gets no gap */
-:root { --safe-l: env(safe-area-inset-left, 0px); --safe-r: env(safe-area-inset-right, 0px); }
+   reports 0 and gets no gap. --safe-t: the top inset, for what is fixed to the screen's top (Settings on a phone,
+   Queen, the dialogs), which the page's padding doesn't move */
+:root { --safe-l: env(safe-area-inset-left, 0px); --safe-r: env(safe-area-inset-right, 0px); --safe-t: env(safe-area-inset-top, 0px); --dlg-room: calc(100dvh - max(16px, var(--safe-t)) - max(16px, var(--safe-b))); }
 *, *::before, *::after { box-sizing: inherit; }
 body { height: 100%; margin: 0; background: var(--bg); color: var(--ink); font: 0.875rem/1.4 var(--sans); overflow: hidden; }
 #root { position: relative; height: 100%; }
@@ -147,8 +148,10 @@ body { --pbar-total: 60px; }
 @media (max-width: 599px), (max-height: 499px) { body { --pbar-total: 48px; } }
 body:has(.stage-one) { --pbar-total: 41px; }
 body:has(.stage-short) { --pbar-total: 38px; }
-/* panels open 10 px above the transport bar, so they leave its buttons uncovered */
-body:has(.stage) .twk-panel { bottom: calc(var(--pbar-total) + 10px + var(--safe-b)); max-height: calc(100% - var(--pbar-total) - 26px); }
+/* panels open 10 px above the transport bar, so they leave its buttons uncovered, and grow no higher than 16 px under
+   the top or its inset (the bottom inset taken off too: on an iPhone home-screen app Queen's header started above the
+   screen, audit 2026-11-27) */
+body:has(.stage) .twk-panel { bottom: calc(var(--pbar-total) + 10px + var(--safe-b)); max-height: calc(100% - var(--pbar-total) - 10px - var(--safe-b) - max(16px, var(--safe-t))); }
 .dock-btn { flex: none; font: 600 0.9375rem var(--mono); padding: 0 10px; height: 34px; border-radius: 3px; cursor: pointer; white-space: nowrap; border: 1px solid var(--btn-line); background: var(--btn); color: var(--ink); }
 /* Settings and Full screen: square icon buttons in every layout */
 .dock-icons { display: contents; }
@@ -333,8 +336,9 @@ body:has(.stage) .twk-panel { bottom: calc(var(--pbar-total) + 10px + var(--safe
   .dock-pop .dock-group { display: flex; flex-direction: column; gap: 6px; }
 }
 .dock-menu-label { padding: 6px 4px 0; font: 600 0.875rem/1.3 var(--sans); letter-spacing: 0.005em; color: var(--accent); }
-/* the dialogs (Import game, Play, My games): a centred box over a scrim, which also keeps taps off the board */
-.dlg-scrim { position: fixed; inset: 0; z-index: 85; display: grid; grid-template-columns: minmax(0, 1fr); place-items: center; padding: 16px; background: var(--scrim); }
+/* the dialogs (Import game, Play, My games): a centred box over a scrim, which also keeps taps off the board, 16 px
+   from the screen's edges or their insets (--dlg-room: the height left for a box that scrolls) */
+.dlg-scrim { position: fixed; inset: 0; z-index: 85; display: grid; grid-template-columns: minmax(0, 1fr); place-items: center; padding: max(16px, var(--safe-t)) max(16px, var(--safe-r)) max(16px, var(--safe-b)) max(16px, var(--safe-l)); background: var(--scrim); }
 .dlg-box {
   width: min(560px, 100%); display: flex; flex-direction: column; gap: 12px; padding: 16px 18px 18px; border-radius: 6px;
   background: var(--panel-glass); color: var(--ink); border: 1px solid var(--line); box-shadow: 0 16px 48px var(--shadow), var(--halo);
@@ -352,7 +356,7 @@ body:has(.stage) .twk-panel { bottom: calc(var(--pbar-total) + 10px + var(--safe
 /* Keyboard shortcuts: groups of keys and what they do, scrolling inside the dialog */
 /* Position from image: a wider dialog with larger text; its pick step's tiles, and the drop area over them (or the
    picture) while an image is held over them */
-.dlg-box.vision-box { width: min(760px, 100%); max-height: calc(100dvh - 32px); overflow-y: auto; gap: 16px; padding: 22px 26px 24px; }
+.dlg-box.vision-box { width: min(760px, 100%); max-height: var(--dlg-room); overflow-y: auto; gap: 16px; padding: 22px 26px 24px; }
 .vision-box .dlg-title { font-size: 0.875rem; }
 .vision-box .dlg-note, .vision-box .twk-note { font-size: 0.9375rem; line-height: 1.5; }
 .vision-box .dlg-msg { font-size: 0.875rem; }
@@ -376,14 +380,14 @@ body:has(.stage) .twk-panel { bottom: calc(var(--pbar-total) + 10px + var(--safe
   .dlg-box.vision-box { padding: 16px 16px 18px; gap: 12px; }
   .vision-tile { min-height: 128px; font-size: 1rem; }
 }
-.dlg-box:has(.keys-body) { width: min(640px, 100%); max-height: calc(100dvh - 32px); }
+.dlg-box:has(.keys-body) { width: min(640px, 100%); max-height: var(--dlg-room); }
 /* Import game: the file and picture tiles (vision-tile) over the paste box; the page's drop overlay shows over it */
-.dlg-box.import-box { width: min(640px, 100%); max-height: calc(100dvh - 32px); overflow-y: auto; }
+.dlg-box.import-box { width: min(640px, 100%); max-height: var(--dlg-room); overflow-y: auto; }
 .import-box .vision-tile { min-height: 120px; }
 /* Share and export: Settings' controls in sections (FEN, PGN, Export video), scrolling inside the dialog. Its classes are
    xfer-*, never share-*: content blockers' social lists (Fanboy's, in uBlock Origin) hide .share-row, .share-box and the like,
    which hid the whole box in a Firefox with one (2026-11-04) */
-.dlg-box.xfer-box { width: min(520px, 100%); max-height: calc(100dvh - 32px); overflow-y: auto; gap: 18px; font: 0.875rem/1.4 var(--sans); scrollbar-width: thin; }
+.dlg-box.xfer-box { width: min(520px, 100%); max-height: var(--dlg-room); overflow-y: auto; gap: 18px; font: 0.875rem/1.4 var(--sans); scrollbar-width: thin; }
 /* a row: the FEN's field or a Download button, and a square copy button on its right */
 .xfer-row { display: flex; gap: 8px; }
 .xfer-row > .twk-btn:not(.xfer-copy) { flex: 1; min-height: 34px; }
@@ -495,7 +499,7 @@ body:has(.stage) .twk-panel { bottom: calc(var(--pbar-total) + 10px + var(--safe
    and close button in one row and each tab's rows in two columns. The columns are an inner box of natural height that
    the body scrolls: a multi-column box of capped height adds columns past its right edge in Firefox */
 @media (max-height: 560px) and (min-width: 600px), (max-height: 499px) and (orientation: landscape), (min-width: 900px) {
-  body:has(.stage) .twk-panel.twk-tabbed { width: min(760px, calc(100% - 32px)); bottom: calc(var(--pbar-total) + 4px + var(--safe-b)); height: calc(100% - var(--pbar-total) - 20px - var(--safe-b)); max-height: none; display: grid; grid-template-columns: auto 1fr auto; grid-template-rows: auto minmax(0, 1fr); align-items: center; }
+  body:has(.stage) .twk-panel.twk-tabbed { width: min(760px, calc(100% - 32px)); bottom: calc(var(--pbar-total) + 4px + var(--safe-b)); height: calc(100% - var(--pbar-total) - 4px - var(--safe-b) - max(16px, var(--safe-t))); max-height: none; display: grid; grid-template-columns: auto 1fr auto; grid-template-rows: auto minmax(0, 1fr); align-items: center; }
   body:has(.stage) .twk-panel.twk-tabbed .twk-hd { display: contents; }
   body:has(.stage) .twk-panel.twk-tabbed .twk-hd b { grid-row: 1; grid-column: 1; padding: 0 4px 0 14px; }
   body:has(.stage) .twk-panel.twk-tabbed .twk-tabs { grid-row: 1; grid-column: 2; margin: 8px 6px; grid-template-columns: none; grid-auto-flow: column; grid-auto-columns: 1fr; }
@@ -506,18 +510,19 @@ body:has(.stage) .twk-panel { bottom: calc(var(--pbar-total) + 10px + var(--safe
   body:has(.stage) .twk-panel.twk-tabbed :is(.twk-flow > :not(.twk-group), .twk-group > *) { break-inside: avoid; margin-bottom: 10px; }
   body:has(.stage) .twk-panel.twk-tabbed .twk-btn { display: block; width: 100%; }
   /* the bar in the sidebar: 6 px above it */
-  body:has(.stage.stage-short) .twk-panel.twk-tabbed { bottom: calc(var(--pbar-total) + 6px + var(--safe-b)); height: calc(100% - var(--pbar-total) - 14px - var(--safe-b)); }
+  body:has(.stage.stage-short) .twk-panel.twk-tabbed { bottom: calc(var(--pbar-total) + 6px + var(--safe-b)); height: calc(100% - var(--pbar-total) - 6px - var(--safe-b) - max(8px, var(--safe-t))); }
 }
 /* a wide, tall window: two columns as above, above the transport bar, no taller than the usual panel */
 @media (min-width: 900px) and (min-height: 561px) {
-  body:has(.stage) .twk-panel.twk-tabbed { bottom: calc(var(--pbar-total) + 16px + var(--safe-b)); height: min(720px, calc(100% - var(--pbar-total) - 32px - var(--safe-b))); }
+  body:has(.stage) .twk-panel.twk-tabbed { bottom: calc(var(--pbar-total) + 16px + var(--safe-b)); height: min(720px, calc(100% - var(--pbar-total) - 16px - var(--safe-b) - max(16px, var(--safe-t)))); }
 }
 /* panels (Settings, Queen) open above the bar in the sidebar */
-body:has(.stage.stage-short) .twk-panel { bottom: calc(var(--pbar-total) + 6px + var(--safe-b)); max-height: calc(100% - var(--pbar-total) - 14px); }
+body:has(.stage.stage-short) .twk-panel { bottom: calc(var(--pbar-total) + 6px + var(--safe-b)); max-height: calc(100% - var(--pbar-total) - 6px - var(--safe-b) - max(8px, var(--safe-t))); }
 /* a very small screen (the phone tier, upright or sideways): Settings takes all the room above the transport bar, 4 px
-   from the edges and 4 px over the bar (--pbar-total) */
+   from the edges (or their insets: under a status bar or cut-out, e.g. an iPhone home-screen app, its title, ✕ and tabs
+   sat under it, audit 2026-11-27) and 4 px over the bar (--pbar-total) */
 @media (max-width: 599px), (max-height: 499px) {
-  body:has(.stage) .twk-panel.twk-tabbed { top: 4px; left: max(4px, var(--safe-l)); right: max(4px, var(--safe-r)); width: auto; height: auto; max-height: none; }
+  body:has(.stage) .twk-panel.twk-tabbed { top: max(4px, var(--safe-t)); left: max(4px, var(--safe-l)); right: max(4px, var(--safe-r)); width: auto; height: auto; max-height: none; }
   body:has(.stage) .twk-panel.twk-tabbed.twk-tabbed { bottom: calc(var(--pbar-total) + 4px + var(--safe-b)); height: auto; }
 }
 /* a phone held sideways: Settings covers the transport bar too (full height, up to 760 px wide at the right), and drops its title (the panel keeps it as its label) so
