@@ -11,6 +11,10 @@ Deferred by the per-plan reviews; each was true when recorded and may since have
 - **Verify** on a real iPhone that tap-tap and drag moves work. In the Simulator a captured touch's pointerup came at 0,0 (its touchend had the real point), so every tap read as a drag to the board's corner and played nothing; the board now lets go where the drag last was there (`liftPoint`, 2026-11-17) and the job passes. Whether a real iPhone does the same, or only safaridriver's input, is unknown.
 - The service worker is slow to take over in the Simulator (often still installing after 60 s, its cache not yet opened); Playwright's WebKit runs the same worker, so this isn't asserted there.
 
+**Export** (2026-11-27, audit item 5)
+- Sound files the service worker never kept (a first visit gone offline) give a silent MP4 or WebM with no word; only a browser without an audio encoder is said before the export.
+- The 60 s Blob URL `saveFile` keeps for iOS Safari's download question isn't checked on a device: the 1 s it replaced failed there in theory (FileSaver.js waits 40 s), not in a test.
+
 **Free board** (2026-10-19)
 - Playwright's Firefox drops mouse drags when `hasTouch` is on, so the phone parts of the free-board live tests tap or check layout only.
 
