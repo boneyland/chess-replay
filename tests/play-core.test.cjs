@@ -1068,3 +1068,51 @@ test('a 960 position whose only legal move is a castle is not stalemate', () => 
   // the same squares in a standard position (no rooks) with no castle are stalemate
   assert.equal(CC.hasLegal(CC.parseFen('4k3/8/8/8/2b5/7p/r6P/6KR w - - 0 1').pos), false);
 });
+
+// audit 2026-11-27 item 2: a stored result comes back as it was stored, when it fits its reason
+test('a draw by dead position survives a reload, without the prover', () => {
+  const g = game('5+0', [
+    ['e2e4', 0],
+    ['e7e5', 3000],
+  ]);
+  P.setProver(() => true);
+  const d = P.recheck(g, 4000);
+  P.setProver(null);
+  assert.deepEqual(d.game.result, { result: '1/2-1/2', reason: 'dead' });
+  const back = B.restore(JSON.parse(JSON.stringify(B.save(d))), 10000);
+  assert.deepEqual(back.game.result, d.game.result);
+  assert.equal(back.game.clock.since, null, 'its clock stays stopped');
+});
+test('a stored result whose score contradicts its reason is dropped', () => {
+  const g = game('5+0', [
+    ['e2e4', 0],
+    ['e7e5', 3000],
+  ]);
+  const saved = JSON.parse(JSON.stringify(B.save(g)));
+  const as = (result) => B.restore({ ...saved, game: { ...saved.game, result } }).game.result;
+  assert.deepEqual(as({ result: '0-1', reason: 'resign', side: 'w' }), { result: '0-1', reason: 'resign', side: 'w' });
+  assert.equal(as({ result: '1-0', reason: 'resign', side: 'w' }), null);
+  assert.equal(as({ result: '1/2-1/2', reason: 'resign', side: 'w' }), null);
+  assert.deepEqual(as({ result: '1-0', reason: 'time', side: 'b' }), { result: '1-0', reason: 'time', side: 'b' });
+  assert.deepEqual(as({ result: '1/2-1/2', reason: 'time', side: 'b' }), {
+    result: '1/2-1/2',
+    reason: 'time',
+    side: 'b',
+  });
+  assert.equal(as({ result: '0-1', reason: 'time', side: 'b' }), null);
+  assert.equal(as({ result: '1-0', reason: 'dead' }), null);
+  assert.equal(as({ result: '1-0', reason: 'agreement' }), null);
+});
+test('resigning, agreeing or claiming a draw after the flag fell is a loss on time', () => {
+  const shuffle = ['g1f3', 'g8f6', 'f3g1', 'f6g8', 'g1f3', 'g8f6', 'f3g1', 'f6g8'].map((u, i) => [u, i * 1000]);
+  const g = game('5+0', shuffle);
+  assert.equal(P.claimable(g), 'repetition');
+  const late = 7000 + 300001;
+  const lost = { result: '0-1', reason: 'time', side: 'w' };
+  for (const end of [P.claimDraw, P.agreeDraw, P.resign]) {
+    const r = end(g, late);
+    assert.deepEqual(r.game.result, lost, end.name);
+    assert.equal(r.game.clock.left.w, 0, `${end.name}: the clock is stored at 0, not negative`);
+  }
+  assert.deepEqual(P.claimDraw(g, 7500).game.result, { result: '1/2-1/2', reason: 'repetition' }, 'in time');
+});
