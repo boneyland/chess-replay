@@ -1520,3 +1520,103 @@ test("buildGame keeps a Link tag's web address when Site has none (Chess.com's P
   assert.equal(M('[Site "Chess.com"]\n[Link "see the club page"]').link, '', 'not a web address');
   assert.equal(M('[Site "Chess.com"]').link, '');
 });
+
+// ---------- hostile input (audit 2026-11-27): each of these froze the tab or misread the game before ----------
+const ms = (fn) => {
+  const t = performance.now();
+  fn();
+  return performance.now() - t;
+};
+
+test('evalTicks starts at the game’s first move, however large its number', () => {
+  const ply0 = 2 * (1e10 - 1);
+  let ticks;
+  assert.ok(ms(() => (ticks = CC.evalTicks(ply0, 45))) < 50, 'no count up from move 10');
+  assert.deepEqual(
+    ticks.map((t) => [t.m, t.at]),
+    [
+      [1e10, 0],
+      [1e10 + 10, 20],
+      [1e10 + 20, 40],
+    ],
+  );
+});
+
+test('readFen refuses a move number no game reaches', () => {
+  const at = (n) => CC.readFen(`rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 ${n}`);
+  assert.equal(at(9999).error, undefined);
+  assert.ok(at(10000).error);
+  assert.ok(at('9'.repeat(400)).error);
+});
+
+test('links stays linear in trailing brackets', () => {
+  const site = 'http://a' + ')'.repeat(20000);
+  let out;
+  assert.ok(ms(() => (out = CC.links(site))) < 200);
+  assert.deepEqual(out, [{ text: 'http://a', url: 'http://a' }, { text: ')'.repeat(20000) }]);
+});
+
+test('a game longer than 3,000 moves is refused before it is replayed', () => {
+  const pgn = 'Nf3 Nf6 Ng1 Ng8 '.repeat(1501) + '*';
+  let err;
+  const t = ms(() => {
+    try {
+      CC.buildGame({ pgn });
+    } catch (e) {
+      err = e;
+    }
+  });
+  assert.ok(err && /3,000 moves/.test(err.message), err && err.message);
+  assert.ok(t < 300, `took ${t} ms`);
+  assert.throws(() => CC.buildGame({ analysis: { moves: Array(6001).fill({ move_san: 'Nf3' }) } }), /3,000 moves/);
+});
+
+test('classifyFile and notes stay linear on blank lines', () => {
+  const text = '\n'.repeat(40000) + 'x';
+  assert.ok(ms(() => CC.classifyFile('a.pgn', text)) < 100);
+  assert.ok(ms(() => CC.buildGame({ pgn: PGN, notes: text })) < 100);
+  assert.equal(CC.classifyFile('a.txt', '  \t[INTRO] Hello'), 'notes');
+});
+
+test('a tag value with a stray quote or a trailing backslash is still a tag', () => {
+  const M = CC.buildGame({ pgn: '[Event "The "Big" Match"]\n[Annotator "C:\\"]\n[Result "*"]\n\n1. e4 *' });
+  assert.equal(M.plies.length, 1);
+  assert.equal(M.event, 'The "Big" Match');
+});
+
+test('an eval or clock that isn’t a number is left out', () => {
+  const M = CC.buildGame({ pgn: '1. e4 {[%eval abc] [%clk .]} 1... e5 {[%eval #]} *' });
+  assert.equal(M.plies[0].cp, undefined);
+  assert.equal(M.plies[0].clk, undefined);
+  assert.equal(M.plies[1].mate, undefined);
+  assert.ok(!/NaN/.test(CC.annotatedPgn(M)));
+});
+
+test('a variation that is never closed is an error, not a shorter game', () => {
+  assert.throws(() => CC.buildGame({ pgn: '1. e4 (1. d4 d5 2. c4 e5 2. Nf3 Nc6 *' }), /variation isn’t closed/);
+});
+
+test('½-½ is a result', () => {
+  const M = CC.buildGame({ pgn: '[Result "½-½"]\n\n1. e4 e5 ½-½' });
+  assert.equal(M.plies.length, 2);
+  assert.equal(M.result, '1/2-1/2');
+  assert.equal(CC.splitGames('1. e4 e5 ½-½\n1. d4 *').length, 2);
+});
+
+test('an indented line of two tags is two tags', () => {
+  const M = CC.buildGame({ pgn: '  [White "A"] [Black "B"]\n  [Event "The "Big" Match"]\n\n1. e4 *' });
+  assert.equal(M.white.name, 'A');
+  assert.equal(M.black.name, 'B');
+  assert.equal(M.event, 'The "Big" Match');
+});
+
+test('readFen refuses a half-move clock that would not be written back as a number', () => {
+  const at = (n) => CC.readFen(`k7/8/8/8/8/8/8/K7 w - - ${n} 1`);
+  assert.equal(at(9999).error, undefined);
+  assert.ok(at(10000).error);
+  assert.ok(at('9'.repeat(30)).error);
+});
+
+test('½-½ is 1/2-1/2 in the game’s headers too', () => {
+  assert.equal(CC.buildGame({ pgn: '[Result "½-½"]\n\n1. e4 e5 ½-½' }).headers.Result, '1/2-1/2');
+});
