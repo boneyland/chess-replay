@@ -3,7 +3,7 @@
 // with its settings (useExportSettings)
 
 // Share and export's copy button: an icon that turns to a tick for 1.5 s once the clipboard has taken text();
-// onFail(text) where the clipboard is refused
+// onFail(text) where the clipboard is refused, onFail(null, error) where text() itself failed
 function CopyButton({ label, text, onFail }) {
   const [done, setDone] = React.useState(false);
   React.useEffect(() => {
@@ -13,14 +13,17 @@ function CopyButton({ label, text, onFail }) {
     }
   }, [done]);
   const run = () => {
-    const v = text();
+    let v = null;
     try {
+      v = text();
       navigator.clipboard.writeText(v).then(
         () => setDone(true),
         () => onFail(v),
       );
     } catch (e) {
-      onFail(v);
+      if (v != null) return onFail(v);
+      console.error('Copy failed', e);
+      onFail(null, e);
     }
   };
   return (
@@ -68,10 +71,12 @@ function useExportSettings({
   const exportFps = EXPORT_FPS_OPTIONS.includes(+t.exportFps) ? +t.exportFps : 8;
   // the formats this browser can export (no MP4 or WebM without a video encoder, no WebM without VP9, no WebP without
   // WebAssembly SIMD; maybe none); the stored choice is kept for another browser
-  const [webmOk, setWebmOk] = React.useState(WEBM_OK);
+  const [webmOk, setWebmOk] = React.useState(WEBM_OK),
+    [audioOk, setAudioOk] = React.useState(AUDIO_OK);
   React.useEffect(() => {
     let on = true;
     WEBM_EXPORT.then((ok) => on && setWebmOk(ok));
+    AUDIO_EXPORT.then((ok) => on && setAudioOk(ok));
     return () => {
       on = false;
     };
@@ -105,6 +110,9 @@ function useExportSettings({
   const webpQuality = Math.min(WEBP_QUALITY.max, Math.max(WEBP_QUALITY.min, +t.webpQuality || 75));
   const mp4Quality = MP4_QUALITIES.includes(t.mp4Quality) ? t.mp4Quality : 'High';
   const mp4Vfr = t.mp4Vfr === true;
+  // sound on, but no encoder for it here: the MP4 or WebM comes out silent (null while unknown)
+  const silent =
+    !webp && t.sound !== false && !!audioOk && !(exportFormat === 'WebM' ? audioOk.opus : audioOk.aac || audioOk.opus);
   const video = useVideoExport({
     fps: exportFps,
     format: exportFormat,
@@ -158,36 +166,29 @@ function useExportSettings({
   // the game and timing the export started from: the stage keeps showing them until it ends (GameApp), as its stretch,
   // frame count and soundtrack were worked out from them, though an analysis or a Queen answer that lands meanwhile
   // changes MV and TM (new marks and reading times move every later move)
-  const held = React.useRef(null),
-    starting = React.useRef(false);
-  // a second Export while the board's picture renders (before the export's own state says it's busy) starts nothing
+  const held = React.useRef(null);
+  // the export's overlay shows (and the page is inert) from the click; the board's picture renders under it, as the
+  // export's first step. A second Export meanwhile starts nothing (video.run's own guard, set at once)
   const run = () => {
-    if (starting.current || video.busy) return Promise.resolve();
-    starting.current = true;
+    if (video.busy) return Promise.resolve();
     held.current = { MV, TM };
-    return window.BoardThemes.render(boardTheme.id, boardAdj)
-      .catch(() => null)
-      .finally(() => {
-        starting.current = false;
-      })
-      .then(() =>
-        video.run({
-          start: clipT.start,
-          end: clipT.end,
-          suffix: clipSuffix,
-          audio:
-            t.sound === false || webp
-              ? null
-              : () =>
-                  window.Sfx.renderTrack(
-                    window.Sfx.fetchSound,
-                    soundSet,
-                    window.Sfx.track(MV, clipOpts.S, clipT.start, clipT.end),
-                    soundVolume,
-                    clipT.end - clipT.start,
-                  ),
-        }),
-      );
+    return video.run({
+      start: clipT.start,
+      end: clipT.end,
+      suffix: clipSuffix,
+      prepare: () => window.BoardThemes.render(boardTheme.id, boardAdj).catch(() => null),
+      audio:
+        t.sound === false || webp
+          ? null
+          : () =>
+              window.Sfx.renderTrack(
+                window.Sfx.fetchSound,
+                soundSet,
+                window.Sfx.track(MV, clipOpts.S, clipT.start, clipT.end),
+                soundVolume,
+                clipT.end - clipT.start,
+              ),
+    });
   };
   return {
     video,
@@ -203,6 +204,7 @@ function useExportSettings({
     mp4Quality,
     mp4Vfr,
     ncNote,
+    silent,
     clipFrom,
     clipTo,
     clipFromOpts,
@@ -377,7 +379,9 @@ function ShareDialog({ fen, board, editing, pgn, x, setTweak, onFail, onReplay, 
             Each move’s clip runs from just before it until the board settles. {x.ncNote}
             {x.webp
               ? 'No sound, and it loops; a smaller width or quality makes a smaller file, and Lossless a much larger one.'
-              : 'Includes move sounds when on; a lower quality makes a smaller file.'}
+              : x.silent
+                ? `No move sounds: this browser can’t encode ${x.exportFormat === 'WebM' ? 'Opus' : 'AAC or Opus'} audio, so the video is silent. A lower quality makes a smaller file.`
+                : 'Includes move sounds when on; a lower quality makes a smaller file.'}
           </div>
         </TweakSection>
       ) : (

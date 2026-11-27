@@ -2148,52 +2148,76 @@ for (const name of BROWSERS)
         assert.deepEqual(fx.errors, []);
         await fx.ctx.close();
       });
-      // a second Export while the board's picture renders, before the export says it is busy, starts nothing: it once
-      // started a second run (the picture's render is slowed down here, so the second press lands in it)
-      await t.test('desktop: a second Export while the first starts runs one export', { timeout: 120000 }, async () => {
-        const fx = await open(browser, { width: 1440, height: 900 }, { newViewer: true });
-        const p = fx.page;
-        await p.goto(base, { waitUntil: 'load' });
-        await loadedOn(p);
-        // the board's picture renders until the test lets it finish (a fixed 2 s was once too short for WebKit in CI to
-        // open the dialog again: the first export ran and saved, and the second click started a real second one)
-        await p.evaluate(() => {
-          const render = window.BoardThemes.render,
-            gate = new Promise((ok) => (window.__release = ok));
-          window.__renders = 0;
-          window.BoardThemes.render = (...a) => {
-            window.__renders++;
-            return gate.then(() => render(...a));
+      // from the Export click the overlay shows and the page is inert, while the board's picture renders as the export's
+      // first step: a key or a second Export there once started a second run, or changed the game under the export (the
+      // picture's render is held here until the test lets it finish). Cancel while it loads ends it, and nothing follows
+      await t.test(
+        'desktop: from the Export click the page is inert, and Cancel works while it loads',
+        { timeout: 120000 },
+        async () => {
+          const fx = await open(browser, { width: 1440, height: 900 }, { newViewer: true });
+          const p = fx.page;
+          await p.goto(base, { waitUntil: 'load' });
+          await loadedOn(p);
+          await p.evaluate(() => {
+            const render = window.BoardThemes.render;
+            window.__renders = 0;
+            window.__gate = () => new Promise((ok) => (window.__release = ok));
+            window.BoardThemes.render = (...a) => {
+              window.__renders++;
+              return window.__gate().then(() => render(...a));
+            };
+          });
+          const downloads = [];
+          p.on('download', (d) => downloads.push(d));
+          const exportNow = async () => {
+            const dialog = await openShare(p);
+            await p.getByRole('radio', { name: 'WebP' }).click();
+            await p
+              .locator('#tw-webp-width')
+              .selectOption(await p.locator('#tw-webp-width option', { hasText: 'half' }).getAttribute('value'));
+            await p.locator('#tw-clip-from').selectOption({ index: 1 });
+            await p.locator('#tw-clip-to').selectOption({ index: 1 });
+            await dialog.getByRole('button', { name: /^Export animated WebP/ }).click();
           };
-        });
-        const downloads = [];
-        p.on('download', (d) => downloads.push(d));
-        const exportNow = async () => {
-          const dialog = await openShare(p);
-          await p.getByRole('radio', { name: 'WebP' }).click();
-          await p
-            .locator('#tw-webp-width')
-            .selectOption(await p.locator('#tw-webp-width option', { hasText: 'half' }).getAttribute('value'));
-          await p.locator('#tw-clip-from').selectOption({ index: 1 });
-          await p.locator('#tw-clip-to').selectOption({ index: 1 });
-          await dialog.getByRole('button', { name: /^Export animated WebP/ }).click();
-        };
-        await exportNow();
-        assert.equal(await p.getByRole('dialog', { name: 'Exporting' }).count(), 0, 'the picture still renders');
-        await exportNow();
-        assert.equal(await p.getByRole('dialog', { name: 'Exporting' }).count(), 0, 'the picture still renders');
-        assert.equal(await p.evaluate(() => window.__renders), 1, 'the second Export rendered nothing');
-        await p.evaluate(() => window.__release());
-        // the one export runs and saves; nothing else follows
-        await p.waitForEvent('download', { timeout: 90000 });
-        await p.getByRole('dialog', { name: 'Exporting' }).waitFor({ state: 'detached', timeout: 10000 });
-        await p.waitForTimeout(4000);
-        assert.equal(await p.evaluate(() => window.__renders), 1, 'one export started');
-        assert.equal(downloads.length, 1, 'one file saved');
-        assert.equal(await p.getByRole('dialog', { name: /Export/ }).count(), 0, 'no export running or failed');
-        assert.deepEqual(fx.errors, []);
-        await fx.ctx.close();
-      });
+          const overlay = p.getByRole('dialog', { name: 'Exporting' });
+          const inert = () =>
+            p.evaluate(() => !!document.querySelector('[aria-label="Share and export"]').closest('[inert]'));
+          await exportNow();
+          await assert.doesNotReject(overlay.waitFor({ timeout: 5000 }), 'the overlay shows while the picture renders');
+          assert.ok(await inert(), 'the page behind is inert from the click');
+          assert.match(await overlay.innerText(), /Loading the encoder/);
+          // no key reaches the page's shortcuts (F flips the board, the arrows step through the moves)
+          await p.evaluate(() => {
+            window.__keys = 0;
+            window.addEventListener('keydown', () => window.__keys++);
+          });
+          await p.keyboard.press('f');
+          await p.keyboard.press('ArrowRight');
+          assert.equal(await p.evaluate(() => window.__keys), 0, 'no key reached the page');
+          assert.equal(await p.evaluate(() => window.__renders), 1);
+          // Cancel while it loads: the overlay goes, nothing is inert, and the picture finishing starts nothing
+          await overlay.getByRole('button', { name: 'Cancel' }).click();
+          await assert.doesNotReject(overlay.waitFor({ state: 'detached', timeout: 5000 }));
+          assert.equal(await p.locator('[inert]').count(), 0, 'nothing left inert');
+          await p.evaluate(() => window.__release());
+          await p.waitForTimeout(2000);
+          assert.equal(await overlay.count(), 0, 'nothing started after the Cancel');
+          assert.equal(downloads.length, 0, 'nothing saved');
+          // an export after it runs and saves once
+          await p.evaluate(() => (window.__gate = () => Promise.resolve()));
+          const saved = p.waitForEvent('download', { timeout: 90000 });
+          await exportNow();
+          await saved;
+          await overlay.waitFor({ state: 'detached', timeout: 10000 });
+          await p.waitForTimeout(2000);
+          assert.equal(await p.evaluate(() => window.__renders), 2, 'one more export started');
+          assert.equal(downloads.length, 1, 'one file saved');
+          assert.equal(await p.getByRole('dialog', { name: /Export/ }).count(), 0, 'no export running or failed');
+          assert.deepEqual(fx.errors, []);
+          await fx.ctx.close();
+        },
+      );
       // the export's overlay is modal: the page behind it is inert (a Tab or a key there once put frames from the wrong
       // moment into the file), the focus stays in it, a file dropped meanwhile is refused (and kept from the browser), and
       // once it closes the focus is back on the button that opened the export
@@ -2414,7 +2438,15 @@ for (const name of BROWSERS)
           await p.getByRole('radio', { name: 'WebP' }).click();
           await p.getByRole('button', { name: /^Export animated WebP/ }).click();
           const exporting = p.getByRole('dialog', { name: 'Exporting' });
-          await exporting.getByRole('button', { name: 'Cancel' }).waitFor({ timeout: 60000 });
+          // drawing frames (Cancel shows from the click, while the playhead is still where the viewer left it)
+          await p.waitForFunction(
+            () =>
+              /Frame [1-9]\d* of/.test(
+                document.querySelector('.part-exporting-dialog .export-line')?.textContent || '',
+              ),
+            null,
+            { timeout: 60000, polling: 50 },
+          );
           await p.keyboard.press('f');
           assert.equal(await flip(), false, 'F during an export');
           // nor do the replay's keys seek it: the playhead only moves on, frame by frame
@@ -8262,6 +8294,30 @@ for (const name of BROWSERS)
         await assert.doesNotReject(dialog.locator('#tw-webp-width').waitFor({ timeout: 3000 }));
         assert.deepEqual(ne.errors, []);
         await ne.ctx.close();
+      });
+      // without an AAC or Opus encoder the video is silent: Share and export says so before the export, not afterwards
+      await t.test('desktop: without an audio encoder, Share and export says the video is silent', async () => {
+        const na = await open(browser, { width: 1440, height: 900 });
+        await na.page.addInitScript(() => {
+          if (window.AudioEncoder)
+            window.AudioEncoder.isConfigSupported = async (c) => ({ supported: false, config: c });
+        });
+        await na.page.goto(base, { waitUntil: 'load' });
+        await loadedOn(na.page);
+        const dialog = await openShare(na.page);
+        await dialog.getByRole('radio', { name: 'MP4' }).click();
+        await assert.doesNotReject(
+          dialog.getByText(/No move sounds: this browser can’t encode AAC or Opus audio/).waitFor({ timeout: 3000 }),
+        );
+        if (await dialog.getByRole('radio', { name: 'WebM' }).count()) {
+          await dialog.getByRole('radio', { name: 'WebM' }).click();
+          await assert.doesNotReject(
+            dialog.getByText(/No move sounds: this browser can’t encode Opus audio/).waitFor({ timeout: 3000 }),
+          );
+        }
+        assert.equal(await dialog.getByText(/Includes move sounds/).count(), 0);
+        assert.deepEqual(na.errors, []);
+        await na.ctx.close();
       });
       // without WebAssembly SIMD the WebP's encoder can't run: no WebP to choose, and said why; with no video encoder either
       // there is nothing to export, and the dialog says so in place of the export's settings

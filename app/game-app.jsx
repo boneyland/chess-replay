@@ -664,10 +664,15 @@ function GameApp() {
     closeOverlays();
     guard(() => setImportOpen({ text: '' }));
   };
-  // where the clipboard is refused, Share and export closes and the note shows the text to select
-  const copyFailed = (what) => (text) => {
+  // where the clipboard is refused, Share and export closes and the note shows the text to select; where the text
+  // couldn't be made (err), the note says so
+  const copyFailed = (what) => (text, err) => {
     setShareOpen(null);
-    setFenNote({ fen: text, ok: false, what });
+    setFenNote(
+      err
+        ? { ok: false, what, err: (err.name && err.name !== 'Error' ? err.name + ': ' : '') + (err.message || err) }
+        : { fen: text, ok: false, what },
+    );
   };
   React.useEffect(() => {
     if (fenNote && fenNote.ok) {
@@ -1003,7 +1008,8 @@ function GameApp() {
     if (vision) setDrag(false);
   }, [vision]);
 
-  // txt is a string or a Blob
+  // txt is a string or a Blob. The Blob URL is kept for a minute: iOS Safari asks "Download …?" before it fetches the
+  // file, and a URL revoked meanwhile saved nothing (a minutes-long export lost). FileSaver.js waits 40 s for this
   const saveFile = (name, txt, type) => {
     const a = document.createElement('a');
     a.href = URL.createObjectURL(new Blob([txt], { type }));
@@ -1011,9 +1017,9 @@ function GameApp() {
     document.body.appendChild(a);
     a.click();
     a.remove();
-    setTimeout(() => URL.revokeObjectURL(a.href), 1000);
+    setTimeout(() => URL.revokeObjectURL(a.href), 60000);
   };
-  const fileStem = (M.white.short + '_' + M.black.short).replace(/[^\w-]+/g, '_');
+  const fileStem = window.ChessCore.fileStem(M);
   const browserAnalysis = React.useMemo(() => sfIsBrowserAnalysis(files.analysis), [files.analysis]);
   const saveAnalysis = () => {
     const a = typeof files.analysis === 'string' ? files.analysis : JSON.stringify(files.analysis, null, 2);
@@ -1391,8 +1397,12 @@ function GameApp() {
       {fenNote && !hf.note && (
         <div className="signin-note net-note copy-note" role="status">
           <span>
-            {fenNote.ok ? `${fenNote.what || 'FEN'} copied` : `Copy this ${fenNote.what || 'FEN'}`}
-            {(!fenNote.ok || !fenNote.what) && (
+            {fenNote.err
+              ? `The ${fenNote.what} couldn’t be made, so nothing was copied: ${fenNote.err}`
+              : fenNote.ok
+                ? `${fenNote.what || 'FEN'} copied`
+                : `Copy this ${fenNote.what || 'FEN'}`}
+            {!fenNote.err && (!fenNote.ok || !fenNote.what) && (
               <>
                 :{' '}
                 <textarea

@@ -531,6 +531,13 @@
     return m ? `${+m[3]} ${MONTHS[+m[2] - 1]} ${m[1]}` : (d || '').replace(/\.\?\?/g, '');
   };
   const surname = (n) => (n || '').split(',')[0].trim();
+  // a game's files' name (Share and export's downloads): the players' surnames, letters of any script, digits, - and _
+  // kept (every other run of characters one _, so no path characters), at most 50 characters to leave room for the
+  // suffix and the extension within a file system's 255 bytes
+  const fileStem = (M) =>
+    [...(M.white.short + '_' + M.black.short).normalize('NFC').replace(/[^\p{L}\p{M}\p{N}_-]+/gu, '_')]
+      .slice(0, 50)
+      .join('');
   const clean = (v) => (v && v !== '?' && v !== '-' ? v : '');
 
   function classifyFile(name, text) {
@@ -2003,6 +2010,7 @@
   };
   window.ChessCore = {
     START_FEN,
+    fileStem,
     links,
     splitGames,
     fmtDate,
