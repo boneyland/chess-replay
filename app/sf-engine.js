@@ -56,6 +56,9 @@
   // A search still running this long past its movetime has hung (Stockfish stops within a few ms of it)
   const HANG_MS = 5000,
     HANG_TRIES = 3;
+  // A worker that doesn't start in time (readyTimeoutMs, the probe) gets this many tries in all: a first start's are the
+  // page's (stockfish.jsx starts a new engine each time), a replacement's after a hang this engine's own
+  const START_TRIES = 3;
 
   // Whether the threaded builds can run here, as Lichess decides it (lila's sharedMemoryTest): the page cross-origin
   // isolated, shared memory a WebAssembly module can use, and not Safari 26.2 (a WebKit crash). g: the page's globals
@@ -98,8 +101,8 @@
   // without them by then: in Firefox a threaded engine can hang while it starts its threads, or answer readyok and then
   // never search (no info, no bestmove, even after stop), while a fresh worker mostly works (found 2026-10-28, Firefox 159)
   // hangMs: a search can hang after the probe too (WebKit's threaded engine, GitHub Actions 2026-10-28); one still running
-  // this long past its movetime moves to a fresh worker (started and probed as the first was), the same engine to the
-  // page; HANG_TRIES workers in a row that hang on searches fail the engine
+  // this long past its movetime moves to a fresh worker (started and probed as the first was, with START_TRIES tries),
+  // the same engine to the page; HANG_TRIES workers in a row that hang on searches fail the engine
   // hashFallbackMB, onHashFail(mb, to): a hash table the engine can't get memory for ("Failed to allocate 512MB for
   // transposition table.", after which it answers nothing) moves to a fresh worker with hashFallbackMB, the search that was
   // running starting again there, and onHashFail says so; one at hashFallbackMB or less fails the engine
@@ -118,7 +121,9 @@
     } = {},
   ) {
     let worker = null,
-      hangs = 0;
+      hangs = 0,
+      started = false, // a boot has finished: a later one is a replacement's
+      startFails = 0; // the replacement's start tries that ran out of time
     const waiting = []; // [regex, resolve] for ready()
     const queue = [];
     let cur = null,
@@ -310,9 +315,16 @@
     // worker's steps stop where they are
     let bootDone = null,
       bootTimers = [];
+    // a start that runs out of time: a first start ends the engine (the page tries again with a new one), a replacement
+    // tries a fresh worker until START_TRIES have run out
+    const startFailed = (msg) => {
+      if (failed) return;
+      if (!started || ++startFails >= START_TRIES) return fail(new Error(msg));
+      restart(null);
+    };
     const runBoot = () => {
       const w = worker;
-      bootTimers = [setTimeout(() => fail(new Error('Stockfish did not start')), readyTimeoutMs)];
+      bootTimers = [setTimeout(() => startFailed('Stockfish did not start'), readyTimeoutMs)];
       (async () => {
         const ok = expect(/^uciok/);
         w.postMessage('uci');
@@ -321,7 +333,7 @@
         // loaded: from here a threaded engine has probeMs to start its threads and answer a depth-1 search
         if (probeMs && !failed) {
           bootTimers.forEach(clearTimeout);
-          bootTimers = [setTimeout(() => fail(new Error('Stockfish’s threads didn’t start')), probeMs)];
+          bootTimers = [setTimeout(() => startFailed('Stockfish’s threads didn’t start'), probeMs)];
         }
         w.postMessage(`setoption name Hash value ${hashWant}`);
         hashSet = hashWant;
@@ -341,6 +353,8 @@
           if (w !== worker) return;
         }
         bootTimers.forEach(clearTimeout);
+        started = true;
+        startFails = 0;
         const done = bootDone;
         bootDone = null;
         if (!failed && done) done();
@@ -439,5 +453,5 @@
     return { ready, search, setHash, setThreads, threaded, quit, failed: () => failed, hashMB: () => hashWant };
   }
 
-  window.SFEngine = { create, threadSupport, simdSupport, positionCommand, READY_TIMEOUT_MS, HANG_MS };
+  window.SFEngine = { create, threadSupport, simdSupport, positionCommand, READY_TIMEOUT_MS, HANG_MS, START_TRIES };
 })();
