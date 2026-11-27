@@ -1003,7 +1003,8 @@ function GameApp() {
     if (vision) setDrag(false);
   }, [vision]);
 
-  // txt is a string or a Blob
+  // txt is a string or a Blob. The Blob URL is kept for a minute: iOS Safari asks "Download …?" before it fetches the
+  // file, and a URL revoked meanwhile saved nothing (a minutes-long export lost). FileSaver.js waits 40 s for this
   const saveFile = (name, txt, type) => {
     const a = document.createElement('a');
     a.href = URL.createObjectURL(new Blob([txt], { type }));
@@ -1011,7 +1012,7 @@ function GameApp() {
     document.body.appendChild(a);
     a.click();
     a.remove();
-    setTimeout(() => URL.revokeObjectURL(a.href), 1000);
+    setTimeout(() => URL.revokeObjectURL(a.href), 60000);
   };
   const fileStem = (M.white.short + '_' + M.black.short).replace(/[^\w-]+/g, '_');
   const browserAnalysis = React.useMemo(() => sfIsBrowserAnalysis(files.analysis), [files.analysis]);

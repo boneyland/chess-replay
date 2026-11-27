@@ -1,5 +1,6 @@
-// The export's sound encoding, run from its source in export.jsx (a joined JSX file, so not a unit loadUnit can load):
-// each function is taken out by name and run against fakes of the browser APIs it calls.
+// The export's sound encoding and the page's file saving, run from their source in export.jsx and game-app.jsx (joined
+// JSX files, so not units loadUnit can load): each function is taken out by name and run against fakes of the browser
+// APIs it calls.
 const test = require('node:test');
 const assert = require('node:assert');
 const fs = require('fs');
@@ -124,4 +125,41 @@ test('encodeSound: an encoder that fails while the slices wait for room isn’t 
   const fake = fakeEncoder({ failAt: 1, fullAfter: 1 });
   await assert.rejects(encodeSoundWith(fake)(MB, fakeSound(1), 'aac'), { name: 'EncodingError' });
   assert.equal(fake.made[0].encoded, 1);
+});
+
+// ---- saveFile: a download through a Blob URL ----
+function saveFileWith() {
+  const made = [],
+    revoked = [],
+    timers = [];
+  const ctx = vm.createContext({
+    Blob: class {
+      constructor(parts, o) {
+        this.parts = parts;
+        this.type = o.type;
+      }
+    },
+    URL: {
+      createObjectURL: (b) => (made.push(b), 'blob:' + made.length),
+      revokeObjectURL: (u) => revoked.push(u),
+    },
+    document: {
+      createElement: () => ({ click() {}, remove() {} }),
+      body: { appendChild() {} },
+    },
+    setTimeout: (f, ms) => timers.push({ f, ms }),
+  });
+  vm.runInContext(source('game-app.jsx', 'const saveFile'), ctx);
+  return { saveFile: vm.runInContext('saveFile', ctx), made, revoked, timers };
+}
+
+test('saveFile keeps the Blob URL for a minute, as iOS Safari asks before it fetches the file', () => {
+  const s = saveFileWith();
+  s.saveFile('a.pgn', '1. e4', 'application/x-chess-pgn');
+  assert.equal(s.made.length, 1);
+  assert.deepEqual(s.revoked, []);
+  assert.equal(s.timers.length, 1);
+  assert.ok(s.timers[0].ms >= 60000, `revoked after ${s.timers[0].ms} ms`);
+  s.timers[0].f();
+  assert.deepEqual(s.revoked, ['blob:1']);
 });
