@@ -1590,6 +1590,16 @@
     );
   }
 
+  // What a position's Go deeper results keep, given the one kept so far (had, or null) and a newly finished one (r: { cp,
+  // depth, pv, lines }): the deepest finished result stands (decisions, 2026-11-08), so a shallower one never replaces
+  // it, even with more lines; one as deep replaces it when it brings the several lines (Lines above one) it lacks.
+  // Returns had when it stays, else the entry to keep
+  function keepDeeper(had, r) {
+    const many = (x) => !!(x && x.lines && x.lines.length > 1);
+    if (had && !(r.depth > had.depth || (r.depth === had.depth && many(r) && !many(had)))) return had;
+    return { cp: r.cp, depth: r.depth, pv: r.pv || [], lines: many(r) ? r.lines : null };
+  }
+
   // The pieces a side has taken and its material edge, from the pieces on the board (left(colour, type)): { taken, pts }
   // for a player bar. taken[t]: how many more of type t the side has than the other (a capture, or a promotion), drawn
   // when above 0; pts: its edge in points. Counted piece by piece, not against a full set: a pawn promoted with the queen
@@ -2095,6 +2105,7 @@
     setupTags,
     annotatedPgn,
     withSearches,
+    keepDeeper,
     materialOf,
     notesText,
   };

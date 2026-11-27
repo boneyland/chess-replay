@@ -1629,6 +1629,22 @@ test('timing reads a stored setting that is not a number as its default', () => 
   assert.ok(CC.timing(M, { secondsPerMove: 3, keyHold: 0 }).total > ok.total);
 });
 
+// audit 2026-11-27, Replay: the deepest finished result stands (decisions, 2026-11-08); lines (Lines above one) come
+// only from a result at least as deep
+test('keepDeeper never replaces a deeper eval with a shallower one', () => {
+  const one = { cp: 40, depth: 30, pv: ['e2e4'], lines: null };
+  const three = { cp: 10, depth: 24, pv: ['d2d4'], lines: [{ cp: 10 }, { cp: 5 }, { cp: 0 }] };
+  assert.equal(CC.keepDeeper(one, three), one, 'a shallower multi-line result keeps the deeper eval');
+  assert.deepEqual(CC.keepDeeper(null, three), three);
+  assert.deepEqual(CC.keepDeeper(three, one), one, 'a deeper single-line result replaces');
+  const sameDepth = { ...three, depth: 30 };
+  assert.deepEqual(CC.keepDeeper(one, sameDepth), sameDepth, 'as deep, with lines it lacked');
+  assert.equal(CC.keepDeeper(sameDepth, { ...one }), sameDepth, 'as deep, without lines: kept');
+  assert.equal(CC.keepDeeper(one, { cp: 50, depth: 30, pv: [] }), one, 'as deep, nothing new');
+  assert.deepEqual(CC.keepDeeper(null, { cp: 5, depth: 12 }), { cp: 5, depth: 12, pv: [], lines: null });
+  assert.deepEqual(CC.keepDeeper(null, { cp: 5, depth: 12, lines: [{ cp: 5 }] }).lines, null, 'one line is no lines');
+});
+
 // audit 2026-11-27, Replay: the edge counted piece by piece, not clamped to a full set
 test('materialOf counts a promoted piece beyond the full set', () => {
   const left = (pieces) => (col, t) => pieces[col][t] || 0;

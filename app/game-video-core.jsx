@@ -4332,15 +4332,9 @@ function useGoDeeper(M, c, on, sf, tw) {
     // only a pressed Go deeper's
     const known = p && p.search && p.search.depth;
     if (!r || (known ? r.depth < known : !(ev.level > 0))) return;
-    const k = deeperKey(M, c),
-      had = DEEPER_SHOWN.get(k);
-    if (!had || r.depth > had.depth || (r.lines && r.lines.length > 1 && !(had.lines && had.lines.length > 1)))
-      DEEPER_SHOWN.set(k, {
-        cp: r.cp,
-        depth: r.depth,
-        pv: r.pv || [],
-        lines: r.lines && r.lines.length > 1 ? r.lines : null,
-      });
+    // the deepest result stands: a shallower one (the automatic search after Go deeper went further) changes nothing
+    const k = deeperKey(M, c);
+    DEEPER_SHOWN.set(k, window.ChessCore.keepDeeper(DEEPER_SHOWN.get(k) || null, r));
     // eslint-disable-next-line react-hooks/exhaustive-deps -- r is a new object for each new result; M, c, p and ev.level are the ones it was found for
   }, [r]);
   return ev;
