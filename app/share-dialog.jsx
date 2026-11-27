@@ -3,7 +3,7 @@
 // with its settings (useExportSettings)
 
 // Share and export's copy button: an icon that turns to a tick for 1.5 s once the clipboard has taken text();
-// onFail(text) where the clipboard is refused
+// onFail(text) where the clipboard is refused, onFail(null, error) where text() itself failed
 function CopyButton({ label, text, onFail }) {
   const [done, setDone] = React.useState(false);
   React.useEffect(() => {
@@ -13,14 +13,17 @@ function CopyButton({ label, text, onFail }) {
     }
   }, [done]);
   const run = () => {
-    const v = text();
+    let v = null;
     try {
+      v = text();
       navigator.clipboard.writeText(v).then(
         () => setDone(true),
         () => onFail(v),
       );
     } catch (e) {
-      onFail(v);
+      if (v != null) return onFail(v);
+      console.error('Copy failed', e);
+      onFail(null, e);
     }
   };
   return (

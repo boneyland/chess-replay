@@ -664,10 +664,15 @@ function GameApp() {
     closeOverlays();
     guard(() => setImportOpen({ text: '' }));
   };
-  // where the clipboard is refused, Share and export closes and the note shows the text to select
-  const copyFailed = (what) => (text) => {
+  // where the clipboard is refused, Share and export closes and the note shows the text to select; where the text
+  // couldn't be made (err), the note says so
+  const copyFailed = (what) => (text, err) => {
     setShareOpen(null);
-    setFenNote({ fen: text, ok: false, what });
+    setFenNote(
+      err
+        ? { ok: false, what, err: (err.name && err.name !== 'Error' ? err.name + ': ' : '') + (err.message || err) }
+        : { fen: text, ok: false, what },
+    );
   };
   React.useEffect(() => {
     if (fenNote && fenNote.ok) {
@@ -1392,8 +1397,12 @@ function GameApp() {
       {fenNote && !hf.note && (
         <div className="signin-note net-note copy-note" role="status">
           <span>
-            {fenNote.ok ? `${fenNote.what || 'FEN'} copied` : `Copy this ${fenNote.what || 'FEN'}`}
-            {(!fenNote.ok || !fenNote.what) && (
+            {fenNote.err
+              ? `The ${fenNote.what} couldn’t be made, so nothing was copied: ${fenNote.err}`
+              : fenNote.ok
+                ? `${fenNote.what || 'FEN'} copied`
+                : `Copy this ${fenNote.what || 'FEN'}`}
+            {!fenNote.err && (!fenNote.ok || !fenNote.what) && (
               <>
                 :{' '}
                 <textarea
