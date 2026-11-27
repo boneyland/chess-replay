@@ -292,6 +292,19 @@
       },
     };
   }
+  // A stopped run's stored key (stockfish.jsx's sfPartialKey: a JSON list holding the run's settings object) as the run
+  // would have it at one thread, or null for one that isn't such a list: a run whose threads were turned off (the
+  // threaded engine stopped) resumes as one thread, and finds its searches under this key
+  function keyAtOneThread(key) {
+    try {
+      const k = JSON.parse(key);
+      if (!Array.isArray(k)) return null;
+      const plain = (x) => !!x && typeof x === 'object' && !Array.isArray(x);
+      return JSON.stringify(k.map((x) => (plain(x) && 'threads' in x ? { ...x, threads: 1 } : x)));
+    } catch (e) {
+      return null;
+    }
+  }
   // Rough seconds a game position takes: 1.3 s measured on a laptop at depth 22 / 3 s, each depth about 1.45 times
   // the one before, never more than the time limit (all of it with no depth limit). factor: this device's pace against
   // that laptop's (paceFactor)
@@ -613,6 +626,7 @@
     threadChoices,
     defaultThreads,
     engineSettings,
+    keyAtOneThread,
     secondsPerPosition,
     paceFactor,
     blendPace,

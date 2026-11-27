@@ -374,10 +374,17 @@ const sfRunKey = (settings, tb) => JSON.stringify(settings) + (tb ? ' tablebase'
 // Each search a run keeps has a number cp (runAnalysis throws on one without, a tablebase answer has one too). A stored
 // run of another shape (hand-edited, or a bad write) is dropped, not resumed: every Start would throw on it
 const sfSearchesOk = (a) => Array.isArray(a) && a.every((r) => r && typeof r === 'object' && typeof r.cp === 'number');
+// With the threads turned off (a threaded engine that stopped, or wouldn't start again), a run stored at more threads
+// resumes at one, as the run itself does when its engine fell back to one thread
 function readSfPartial(ucis, settings, fen, tb) {
   try {
-    const s = JSON.parse(localStorage.getItem(SF_PARTIAL_STORE) || 'null');
-    if (!s || s.key !== sfPartialKey(ucis, settings, fen, tb)) return [];
+    const s = JSON.parse(localStorage.getItem(SF_PARTIAL_STORE) || 'null'),
+      key = sfPartialKey(ucis, settings, fen, tb);
+    const fits =
+      !!s &&
+      (s.key === key ||
+        (!sfThreading.on && settings.threads === 1 && window.AnalysisCore.keyAtOneThread(s.key) === key));
+    if (!fits) return [];
     if (sfSearchesOk(s.searched)) return s.searched;
     localStorage.removeItem(SF_PARTIAL_STORE);
     return [];
