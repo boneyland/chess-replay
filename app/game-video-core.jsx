@@ -3545,6 +3545,9 @@ function EvalPlot({ M, T, S, a, paused, onPick }) {
         height={H + 14}
         style={{ display: 'block', overflow: 'visible', cursor: 'pointer', touchAction: 'none' }}
         onPointerDown={(e) => {
+          // the primary button only: a right-click sought, and its context menu swallowed the release in desktop Firefox
+          // on Linux, so the graph went on seeking under a mouse with no button held (audit 2026-11-27)
+          if (e.button !== 0) return;
           try {
             e.currentTarget.setPointerCapture(e.pointerId);
           } catch (err) {}
@@ -3556,6 +3559,9 @@ function EvalPlot({ M, T, S, a, paused, onPick }) {
           onPick(j);
         }}
         onPointerMove={(e) => {
+          // a press whose release went missing (outside the window, or under a menu): a mouse moving with no button held
+          // only hovers
+          if (down.current && e.pointerType === 'mouse' && !(e.buttons & 1)) down.current = false;
           if (!down.current && e.pointerType !== 'mouse') return;
           const j = plyAt(e);
           setHover(j);
