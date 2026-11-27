@@ -526,3 +526,51 @@ test('keyOf: empty for a request that asks nothing, and changed by what needs a 
   assert.deepEqual(w.get(), { ...ME.EMPTY, deeper: null, deeperTo: null, failed: null });
   w.stop();
 });
+
+// the session's finished searches, Go deeper presses and auto runs keep only the newest `keep` (each a search key or a
+// position), so a long session doesn't grow them without end
+test('the session keeps only its newest finished searches, presses and auto runs (keep)', async () => {
+  const evals = ME.create({ keep: 3 }),
+    e = fakeEngine();
+  const at = (after) => request(e, { after });
+  // answers each search the watch asks, in turn, until it asks no more
+  const finishAll = async (en, from) => {
+    for (let k = from; ; k++) {
+      await tick();
+      if (!en.calls[k]) return;
+      en.calls[k].finish(found(30, 12));
+    }
+  };
+  // A (keys: e2e4, the start), B (d2d4, the start again: newest), C (c2c4): A, the oldest, goes
+  for (const m of ['e2e4', 'd2d4', 'c2c4']) {
+    const n = e.calls.length;
+    evals.watch(at([m]), () => {});
+    await finishAll(e, n);
+  }
+  assert.equal(e.calls.length, 4, 'the start position searched once');
+  const b = evals.watch(at(['d2d4']), () => {});
+  assert.deepEqual([b.get().after.cp, b.get().pending], [30, false], 'B is still kept');
+  await tick();
+  assert.equal(e.calls.length, 4);
+  const a = evals.watch(at(['e2e4']), () => {});
+  assert.equal(a.get().pending, true, 'A was dropped');
+  await tick();
+  assert.equal(e.calls.length, 5);
+  assert.deepEqual(e.calls[4].q.moves, ['e2e4']);
+  a.stop();
+  // a press is kept the same way: the oldest position's goes
+  const presses = ME.create({ keep: 2 }),
+    e2 = fakeEngine();
+  const w0 = presses.watch(request(e2, { after: ['e2e4'] }), () => {});
+  await finishAll(e2, 0);
+  w0.get().deeper();
+  w0.stop();
+  assert.equal(presses.watch(request(e2, { after: ['e2e4'] }), () => {}).get().level, 1, 'the press is kept');
+  for (const m of ['d2d4', 'c2c4']) {
+    const w = presses.watch(request(e2, { after: [m] }), () => {});
+    await finishAll(e2, e2.calls.length);
+    w.get().deeper();
+    w.stop();
+  }
+  assert.equal(presses.watch(request(e2, { after: ['e2e4'] }), () => {}).get().level, 0, 'the oldest press went');
+});

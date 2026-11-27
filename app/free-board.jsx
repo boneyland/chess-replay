@@ -400,12 +400,14 @@ function useEngineOpponent(board, onChange, sf) {
   const hint = async () => {
     const c = before.current;
     if (!active || !c || c.key !== key) return null;
-    const best = window.AnalysisCore.bestOf(await c.promise);
-    if (best || before.current !== c) return best;
-    const again = window.AnalysisCore.bestOf(await c.again());
-    // Stockfish answered after all: its "can't run" note goes
-    if (again && before.current === c) setDown(null);
-    return again;
+    let best = window.AnalysisCore.bestOf(await c.promise);
+    if (!best && before.current === c) {
+      best = window.AnalysisCore.bestOf(await c.again());
+      // Stockfish answered after all: its "can't run" note goes
+      if (best && before.current === c) setDown(null);
+    }
+    // a search put in its place meanwhile (Try again) answers instead: this one's null was its stop
+    return best || before.current === c ? best : hint();
   };
   return { down: active ? down : null, retry: () => setTries((n) => n + 1), hint };
 }
@@ -776,17 +778,23 @@ function FreeBoard({ board, onChange, tw, setTweak, onLichess, sf, nav, orient, 
   // the viewer's circles and arrows, until another position
   const draw = useBoardDraw(boardKey);
   // a hint against Stockfish: the one had for the position, drawn as an arrow and named in the Game box while the game
-  // waits at it; hintAt: the position a hint is being looked for in ({ key, failed })
+  // waits at it; hintAt: the game and position a hint is being looked for in ({ key, failed })
   const myTurn = sfGame && live && !behind && gameTurn(board) === G.you,
     had = myTurn ? P.hintFor(board) : null;
   const [hintAt, setHintAt] = React.useState(null);
-  const hintNow = hintAt && hintAt.key === boardKey ? hintAt : null;
+  const hintKey = (b) => (b.game ? b.game.id : '') + '|' + b.fen + '|' + B.ucis(b).join(' ');
+  const hintNow = hintAt && hintAt.key === hintKey(board) ? hintAt : null;
   const askHint = async () => {
-    const k = boardKey;
+    const k = hintKey(board);
     setHintAt({ key: k });
     const best = await opponent.hint();
     const { board: b, onChange: set } = latest.current;
-    if (b.fen + '|' + B.ucis(b).join(' ') !== k) return;
+    // the position (or the game: Play again) changed while it looked: the hint is dropped, and Hint can be asked again
+    // back there
+    if (hintKey(b) !== k) {
+      setHintAt((h) => (h && h.key === k ? null : h));
+      return;
+    }
     const nb = best ? P.addHint(b, b.steps.length, best) : b;
     setHintAt(nb !== b ? null : { key: k, failed: true });
     if (nb !== b) set(nb);

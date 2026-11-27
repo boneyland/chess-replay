@@ -376,10 +376,26 @@ test("thinkMs: 3 s without a clock, a share of Stockfish's time left with one, a
   assert.equal(P.thinkMs(low, 27000), 100, 'its clock runs while it thinks');
   const inc = sfGame('b', '15+10', []);
   assert.equal(
-    P.thinkMs({ ...inc, game: { ...inc.game, clock: { ...inc.game.clock, left: { w: 3000, b: 1000 } } } }, 0),
+    P.thinkMs({ ...inc, game: { ...inc.game, clock: { ...inc.game.clock, left: { w: 60000, b: 1000 } } } }, 0),
     3000,
     'half the increment',
   );
+});
+// the increment comes after the move, so Stockfish never thinks more than half of what it has left
+test('thinkMs: never more than half of the time Stockfish has left, floor and increment included', () => {
+  const g = sfGame('w', '10+0', [['e2e4', 0]]);
+  const left = (b, ms) => ({
+    ...b,
+    game: { ...b.game, clock: { ...b.game.clock, left: { w: 300000, b: ms }, since: 0 } },
+  });
+  assert.equal(P.thinkMs(left(g, 3000), 0), 100, 'the floor while it fits');
+  assert.equal(P.thinkMs(left(g, 150), 0), 75);
+  assert.equal(P.thinkMs(left(g, 60), 0), 30, 'not the 0.1 s floor');
+  assert.equal(P.thinkMs(left(g, 3000), 2990), 5, 'its clock runs while it thinks');
+  assert.ok(P.thinkMs(left(g, 1), 0) >= 1, 'a movetime Stockfish takes');
+  const inc = sfGame('b', '15+10', []),
+    low = { ...inc, game: { ...inc.game, clock: { ...inc.game.clock, left: { w: 1000, b: 60000 } } } };
+  assert.equal(P.thinkMs(low, 0), 500, 'half the increment would flag');
 });
 test("critique: only the player's moves, once each, dropped with their moves, kept through a reload", () => {
   const g = sfGame('w', null, [

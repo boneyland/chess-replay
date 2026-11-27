@@ -34,11 +34,12 @@ const sfMakeWorker = (file, wasm) => () =>
 // about 0.9 s a thread in Firefox on a laptop; a slow phone has room), and the lite one load this soon (its 1.7 MB,
 // against 30 s for the single-thread one on a slow connection). In Firefox one can hang before it answers uci, while it
 // starts its threads, or on its first search, and a fresh one then mostly works (2026-10-28, Firefox 159: about 1 load
-// in 4 needed a second), so it gets up to three tries; then this page runs one thread. Nothing is remembered: a hang
+// in 4 needed a second), so it gets up to three tries (SFEngine's START_TRIES, which a replacement worker after a hang
+// gets too); then this page runs one thread. Nothing is remembered: a hang
 // can't be told from a browser that can't run threads, and remembering one would turn threads off in Firefox for good
 const SF_PROBE_MS = (threads) => 3000 + 1500 * threads,
   SF_LITE_LOAD_MS = 10000,
-  SF_THREADED_TRIES = 3;
+  SF_THREADED_TRIES = window.SFEngine.START_TRIES;
 // The asm.js engine (3.2 MB of JavaScript, compiled as it loads) gets this long to start: about 1–1.7 s in Firefox on a
 // laptop, but the Samsung SM-T510 it runs on went past 30 s on a first visit ("Stockfish did not start", 2026-11-01)
 const SF_ASM_LOAD_MS = 120000;
@@ -373,10 +374,17 @@ const sfRunKey = (settings, tb) => JSON.stringify(settings) + (tb ? ' tablebase'
 // Each search a run keeps has a number cp (runAnalysis throws on one without, a tablebase answer has one too). A stored
 // run of another shape (hand-edited, or a bad write) is dropped, not resumed: every Start would throw on it
 const sfSearchesOk = (a) => Array.isArray(a) && a.every((r) => r && typeof r === 'object' && typeof r.cp === 'number');
+// With the threads turned off (a threaded engine that stopped, or wouldn't start again), a run stored at more threads
+// resumes at one, as the run itself does when its engine fell back to one thread
 function readSfPartial(ucis, settings, fen, tb) {
   try {
-    const s = JSON.parse(localStorage.getItem(SF_PARTIAL_STORE) || 'null');
-    if (!s || s.key !== sfPartialKey(ucis, settings, fen, tb)) return [];
+    const s = JSON.parse(localStorage.getItem(SF_PARTIAL_STORE) || 'null'),
+      key = sfPartialKey(ucis, settings, fen, tb);
+    const fits =
+      !!s &&
+      (s.key === key ||
+        (!sfThreading.on && settings.threads === 1 && window.AnalysisCore.keyAtOneThread(s.key) === key));
+    if (!fits) return [];
     if (sfSearchesOk(s.searched)) return s.searched;
     localStorage.removeItem(SF_PARTIAL_STORE);
     return [];

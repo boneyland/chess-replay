@@ -341,12 +341,14 @@
 
   // Stockfish's time for its move, which also rates the player's move before it: 3 s (at 2 s a borderline inaccuracy,
   // 7. Bc4 in a Four Knights, rated as fine), or with a clock a share of its time left (and half its increment) capped
-  // there, so it never flags; at least 0.1 s
+  // there; at least 0.1 s, but never more than half its time left (the increment comes after the move), so it never
+  // flags while it thinks
   const THINK_MS = 3000;
   function thinkMs(b, now) {
     const left = timeLeft(b, other(b.game.you), now);
     if (left == null) return THINK_MS;
-    return Math.round(Math.max(100, Math.min(THINK_MS, left / 30 + parseTc(b.game.tc).inc / 2)));
+    const share = Math.max(100, Math.min(THINK_MS, left / 30 + parseTc(b.game.tc).inc / 2));
+    return Math.max(1, Math.round(Math.min(share, left / 2)));
   }
 
   // A player's move in a Stockfish game, rated from the search before it and Stockfish's search after it ({ cp, depth },

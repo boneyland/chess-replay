@@ -704,3 +704,29 @@ test('runAnalysis consults no opening book from a Chess960 start, and does from 
     window.Openings = real;
   }
 });
+
+// stockfish.jsx's sfPartialKey: [fen?, settings, ucis, 'tablebase'?]. A run stopped at 4 threads, whose threads were then
+// turned off (the threaded engine stopped), starts again at one: its searches are found under the one-thread key
+test('keyAtOneThread: a stopped run’s key at one thread, the rest as it was', () => {
+  const partialKey = (ucis, settings, fen, tb) =>
+    JSON.stringify((fen ? [fen, settings, ucis] : [settings, ucis]).concat(tb ? ['tablebase'] : []));
+  const four = A.engineSettings({ sfGameThreads: 4 }, 'lite', { on: true, cores: 8 }).game,
+    one = { ...four, threads: 1 },
+    ucis = ['e2e4', 'e7e5'],
+    fen = '4k3/8/8/8/8/8/4P3/4K3 w - - 0 1';
+  assert.equal(four.threads, 4);
+  for (const [f, tb] of [
+    [null, false],
+    [fen, false],
+    [null, true],
+    [fen, true],
+  ])
+    assert.equal(A.keyAtOneThread(partialKey(ucis, four, f, tb)), partialKey(ucis, one, f, tb));
+  assert.notEqual(A.keyAtOneThread(partialKey(ucis, four)), partialKey(['e2e4'], one), 'another game');
+  assert.notEqual(
+    A.keyAtOneThread(partialKey(ucis, { ...four, hash_mb: 128 })),
+    partialKey(ucis, one),
+    'other settings',
+  );
+  for (const bad of ['', 'not json', '{"threads":4}', 'null', '"x"']) assert.equal(A.keyAtOneThread(bad), null, bad);
+});
