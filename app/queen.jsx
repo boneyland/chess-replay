@@ -145,7 +145,14 @@ function readAuth() {
 
 // "Sign in with Hugging Face" (OAuth code flow with PKCE, no secret)
 function useHfAuth() {
-  const [auth, setAuth] = React.useState(readAuth);
+  const [auth, setAuthState] = React.useState(readAuth);
+  // token() reads the sign-in from here, not from its render: a Queen call started before Sign out (a test of marked
+  // moves runs for minutes, retries included) must not go on sending the old token, nor stay anonymous after a sign-in
+  const authRef = React.useRef(auth);
+  const setAuth = (a) => {
+    authRef.current = a;
+    setAuthState(a);
+  };
   const [note, setNote] = React.useState('');
   const enabled = !!HF_OAUTH.clientId && !HF_PREVIEW;
   const O = { store: PKCE_STORE, clientId: HF_OAUTH.clientId, redirect: HF_OAUTH.redirect };
@@ -185,8 +192,9 @@ function useHfAuth() {
   // the token to send now: a sign-in that expired during the visit is signed out (Hugging Face would refuse it) and the
   // call goes anonymously, saying so
   const token = () => {
-    if (!auth) return null;
-    if (auth.expires > Date.now()) return auth.token;
+    const a = authRef.current;
+    if (!a) return null;
+    if (a.expires > Date.now()) return a.token;
     signOut();
     setNote('Your Hugging Face sign-in expired: Queen asks without it until you sign in again.');
     return null;
