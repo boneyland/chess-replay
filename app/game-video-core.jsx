@@ -2351,13 +2351,16 @@ function EvalBar({ M, T, S, a, tb, dead, deep }) {
       : shown && (shown.mate != null || shown.won)
         ? fmtEval(shown)
         : fmtEval({ cp: cpOf(M, c) }); // the move's eval at once: the bar glides, its number doesn't count
-  return <EvalBarView cp={M.hasEval ? cp : 0} txt={txt} a={a} />;
+  // the number's side and colour go with the number, not with the gliding bar ("+1.20" sat at Black's end for half a
+  // second after a move that swung the eval, audit 2026-11-27)
+  return <EvalBarView cp={M.hasEval ? cp : 0} side={M.hasEval ? cpOf(M, c) : 0} txt={txt} a={a} />;
 }
-// the bar itself: White's share from cp (White's view), and txt in the part of the bar it favours
-function EvalBarView({ cp, txt, a }) {
+// the bar itself: White's share from cp (White's view), and txt in the part of the bar side (the eval txt says, cp
+// unless given) favours
+function EvalBarView({ cp, side = cp, txt, a }) {
   const f = (winChance(cp) + 1) / 2;
   const flip = ORIENT === 'b',
-    inWhite = cp >= 0,
+    inWhite = side >= 0,
     top = inWhite === flip; // the number sits in the part of the bar it favours
   if (!L.eval) return null;
   const H = L.board.size,
