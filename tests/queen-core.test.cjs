@@ -3,12 +3,14 @@ const assert = require('node:assert/strict');
 const { loadUnit } = require('./load.cjs');
 loadUnit('queen-core.js');
 const Q = window.QueenCore;
+// pyParse's dicts have no prototype: compared here as the plain objects they read as
+const plain = (v) => JSON.parse(JSON.stringify(v));
 
 test('pyParse reads a Python dict repr: quotes, escapes, None/True/False, numbers, nesting', () => {
   const v = Q.pyParse(
     `{'best_move_uci': 'e2e4', "analysis": 'It\\'s "fine"\\nreally', 'x': None, 'ok': True, 'no': False, 'n': -1.5e2, 'l': [1, 'a', {'k': 2},], 'u': '\\u00e9\\x41\\U0001f600'}`,
   );
-  assert.deepEqual(v, {
+  assert.deepEqual(plain(v), {
     best_move_uci: 'e2e4',
     analysis: 'It\'s "fine"\nreally',
     x: null,
@@ -21,7 +23,7 @@ test('pyParse reads a Python dict repr: quotes, escapes, None/True/False, number
 });
 
 test("pyParse reads nan and inf as null, and only Python's own spellings of its literals", () => {
-  assert.deepEqual(Q.pyParse("{'seconds': nan, 'a': inf, 'b': -inf, 'best_move_uci': 'e2e4', 'n': 1E3}"), {
+  assert.deepEqual(plain(Q.pyParse("{'seconds': nan, 'a': inf, 'b': -inf, 'best_move_uci': 'e2e4', 'n': 1E3}")), {
     seconds: null,
     a: null,
     b: null,
@@ -32,13 +34,30 @@ test("pyParse reads nan and inf as null, and only Python's own spellings of its 
 });
 
 test('pyParse reads Python tuples as arrays, a one-element tuple included', () => {
-  assert.deepEqual(Q.pyParse("{'line': ('e2e4', 'e7e5'), 'one': (1,), 'none': (), 'nest': [(1, 2), {'t': ('a',)}]}"), {
-    line: ['e2e4', 'e7e5'],
-    one: [1],
-    none: [],
-    nest: [[1, 2], { t: ['a'] }],
-  });
+  assert.deepEqual(
+    plain(Q.pyParse("{'line': ('e2e4', 'e7e5'), 'one': (1,), 'none': (), 'nest': [(1, 2), {'t': ('a',)}]}")),
+    {
+      line: ['e2e4', 'e7e5'],
+      one: [1],
+      none: [],
+      nest: [[1, 2], { t: ['a'] }],
+    },
+  );
   assert.throws(() => Q.pyParse("{'a': (1, 2}"));
+});
+
+// a '__proto__' key is a key like any other: on a {} it would replace the dict's prototype, and an answer with no
+// best move or analysis of its own would pass queenPayload's `in` check through it
+test("pyParse keeps a '__proto__' key as the dict's own, and queenPayload doesn't take it for an answer", () => {
+  const v = Q.pyParse("{'__proto__': {'best_move_uci': 'e2e4', 'analysis': 'x'}, 'n': 1}");
+  assert.equal(Object.getPrototypeOf(v), null);
+  assert.ok(Object.prototype.hasOwnProperty.call(v, '__proto__'));
+  assert.equal(v.best_move_uci, undefined);
+  assert.throws(
+    () => Q.queenPayload("{'__proto__': {'best_move_uci': 'e2e4', 'analysis': 'x'}}"),
+    (e) => e.code === 'bad_answer',
+  );
+  assert.equal(Object.prototype.best_move_uci, undefined, 'no global pollution');
 });
 
 test('pyParse throws on truncated input', () => {

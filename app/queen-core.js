@@ -10,9 +10,9 @@
       ws();
       const ch = src[i];
       if (ch === '{' || ch === '[' || ch === '(') {
-        // a tuple reads as an array
+        // a tuple reads as an array; a dict has no prototype, so a '__proto__' key is a key like any other
         const close = { '{': '}', '[': ']', '(': ')' }[ch],
-          out = ch === '{' ? {} : [];
+          out = ch === '{' ? Object.create(null) : [];
         i++;
         ws();
         while (src[i] !== close) {
