@@ -400,12 +400,14 @@ function useEngineOpponent(board, onChange, sf) {
   const hint = async () => {
     const c = before.current;
     if (!active || !c || c.key !== key) return null;
-    const best = window.AnalysisCore.bestOf(await c.promise);
-    if (best || before.current !== c) return best;
-    const again = window.AnalysisCore.bestOf(await c.again());
-    // Stockfish answered after all: its "can't run" note goes
-    if (again && before.current === c) setDown(null);
-    return again;
+    let best = window.AnalysisCore.bestOf(await c.promise);
+    if (!best && before.current === c) {
+      best = window.AnalysisCore.bestOf(await c.again());
+      // Stockfish answered after all: its "can't run" note goes
+      if (best && before.current === c) setDown(null);
+    }
+    // a search put in its place meanwhile (Try again) answers instead: this one's null was its stop
+    return best || before.current === c ? best : hint();
   };
   return { down: active ? down : null, retry: () => setTries((n) => n + 1), hint };
 }
