@@ -154,6 +154,7 @@ export default [
         ...globals.serviceworker,
         __LOCAL__: 'readonly',
         __REMOTE__: 'readonly',
+        __INTEGRITY__: 'readonly',
         __KEEP_HOSTS__: 'readonly',
         __ISOLATION__: 'readonly',
       },

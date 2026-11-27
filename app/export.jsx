@@ -36,6 +36,22 @@ const WEBM_EXPORT = !VIDEO_EXPORT
         () => false,
       )
       .then((ok) => (WEBM_OK = ok));
+// The move sounds' encoders, as the soundtrack is made (Sfx.renderTrack's 48 kHz stereo) at videoEncoder's bitrate: AAC
+// for an MP4, else Opus (which MP4 and WebM both hold). Where neither encodes, the video is silent, and Share and export
+// says so before the export. AUDIO_OK: { aac, opus } once known (null before)
+let AUDIO_OK = null;
+const AUDIO_EXPORT = Promise.all(
+  ['mp4a.40.2', 'opus'].map((codec) =>
+    VIDEO_EXPORT && typeof AudioEncoder === 'function'
+      ? Promise.resolve()
+          .then(() => AudioEncoder.isConfigSupported({ codec, sampleRate: 48000, numberOfChannels: 2, bitrate: 96000 }))
+          .then(
+            (r) => !!(r && r.supported),
+            () => false,
+          )
+      : false,
+  ),
+).then(([aac, opus]) => (AUDIO_OK = { aac, opus }));
 // WebP widths offered besides the frame's own (the screen-sized page's width at the screen's density): 1676 fills GitHub's 838 px README
 // column on 2× screens. Quality is 50–95 (lossy), or 100: lossless. Encoded straight from the drawn frames, a WebP looks better than one
 // converted from the MP4, though it is larger than the MP4 of the same clip
@@ -145,7 +161,10 @@ const opusPacketSeconds = (d) => {
   const n = (toc & 3) === 0 ? 1 : (toc & 3) === 3 ? d[1] & 63 : 2;
   return frame * n;
 };
-async function encodeSound(MB, sound, acodec) {
+// what an export step throws once the viewer has pressed Cancel: run() ends the export with no failure
+const CANCELLED = new Error('the export was cancelled');
+// stopped(): the viewer pressed Cancel, which ends the encode as an error would (with CANCELLED)
+async function encodeSound(MB, sound, acodec, stopped = () => false) {
   const sr = sound.sampleRate,
     ch = sound.numberOfChannels,
     out = [];
@@ -187,7 +206,10 @@ async function encodeSound(MB, sound, acodec) {
   // the track comes a window at a time (Sfx.renderTrack), each let go once it is sliced and queued
   for await (const { at: w0, buffer } of sound.chunks()) {
     for (let at = 0; at < buffer.length && !err; at += step) {
+      if (stopped()) err = CANCELLED;
       while (enc.encodeQueueSize >= QUEUED && !err) await room();
+      // a codec that failed while the slice waited is closed already, and encode() on it would throw in place of err
+      if (err) break;
       const n = Math.min(step, buffer.length - at),
         data = new Float32Array(n * ch);
       for (let c = 0; c < ch; c++) data.set(buffer.getChannelData(c).subarray(at, at + n), c * n);
@@ -205,7 +227,8 @@ async function encodeSound(MB, sound, acodec) {
     if (err) break;
   }
   if (!err) await enc.flush();
-  enc.close();
+  // WebCodecs closes a failed codec before it reports the error: closing it again would throw over the real error
+  if (enc.state !== 'closed') enc.close();
   if (err) throw err;
   let t = 0;
   return out.map((p, k) => {
@@ -222,7 +245,8 @@ async function encodeSound(MB, sound, acodec) {
 // pause is one long frame and fps is the most frames a second a move's animation gets. The picture is kept in a copy
 // of the canvas, as the canvas itself is drawn over with the next new frame before the held one's length is known
 // webm: VP9 in a WebM; else H.264 in an MP4, or VP9 in a WebM where the browser has no H.264 encoder
-async function videoEncoder(cv, W, H, fps, audio, { webm = false, quality = 'High', vfr = false } = {}) {
+// stop: the export's Cancel (run's), which the soundtrack's render and encode end on
+async function videoEncoder(cv, W, H, fps, audio, { webm = false, quality = 'High', vfr = false, stop = null } = {}) {
   const MB = await loadMediabunny();
   const avc = !webm && (await MB.canEncodeVideo('avc', { width: W, height: H }));
   const codec = avc ? 'avc' : (await MB.canEncodeVideo('vp9', { width: W, height: H })) ? 'vp9' : null;
@@ -249,7 +273,7 @@ async function videoEncoder(cv, W, H, fps, audio, { webm = false, quality = 'Hig
   });
   output.addVideoTrack(src, { frameRate: fps });
   // the move sounds, when the browser can encode them: AAC in an MP4, else Opus (which MP4 and WebM both hold)
-  const sound = audio ? await audio() : null;
+  const sound = audio ? await (stop ? stop.race(audio()) : audio()) : null;
   let asrc = null,
     packets = null;
   if (sound) {
@@ -260,7 +284,7 @@ async function videoEncoder(cv, W, H, fps, audio, { webm = false, quality = 'Hig
     if (acodec) {
       asrc = new MB.EncodedAudioPacketSource(acodec);
       output.addAudioTrack(asrc);
-      packets = await encodeSound(MB, sound, acodec);
+      packets = await encodeSound(MB, sound, acodec, () => !!(stop && stop.asked));
     }
   }
   await output.start();
@@ -376,29 +400,50 @@ async function webpEncoder(cv, W, H, fps, frames, { width = 0, quality = 75 } = 
 // the stage re-renders synchronously inside dispatchEvent, so the frame can be drawn straight after
 const seekStage = (t) => window.dispatchEvent(new CustomEvent('chess-video:seek', { detail: { time: t, sync: true } }));
 
-// run() takes the stretch of the timeline to export in seconds ({ start, end }), a file name suffix, and audio: an
-// async function giving the stretch's soundtrack as Sfx.renderTrack's windowed track (or null for none; a WebP has no sound).
+// run() takes the stretch of the timeline to export in seconds ({ start, end }), a file name suffix, audio: an
+// async function giving the stretch's soundtrack as Sfx.renderTrack's windowed track (or null for none; a WebP has no sound),
+// and prepare: an async function run first, once the overlay shows (the board's picture drawn through the sliders).
+// The overlay shows from the call, so the page is inert from the Export click on, and Cancel ends the export at any
+// step until the file is being finished, a wait that never ends (a hidden tab's animation frame) included.
 // format: one of EXPORT_FORMATS; webp: { width (0 the frame's own, 'Half', or pixels), quality } for webpEncoder; mp4Quality: one of MP4_QUALITIES (MP4 and WebM)
 function useVideoExport({ fps, format, webp, mp4Quality, mp4Vfr = false, save, stem }) {
   const [state, setState] = React.useState(null); // { phase: 'load' | 'render' | 'save', done, N, eta } or { phase: 'error', msg }
-  const stopRef = React.useRef(false),
+  // stopRef: the running export's stop ({ asked, race, ask }); race(p) settles as p does, or rejects with CANCELLED
+  // once Cancel is pressed
+  const stopRef = React.useRef(null),
     runningRef = React.useRef(false); // set at once, where state is only set at the next render
-  const run = async ({ start, end, suffix = '', audio }) => {
+  const run = async ({ start, end, suffix = '', audio, prepare }) => {
     if (runningRef.current) return;
     runningRef.current = true;
-    stopRef.current = false;
+    let said;
+    const asked = new Promise((_, no) => (said = no));
+    asked.catch(() => {});
+    const stop = (stopRef.current = {
+      asked: false,
+      race: (p) => Promise.race([p, asked]),
+      ask: () => {
+        stop.asked = true;
+        said(CANCELLED);
+      },
+    });
     setState({ phase: 'load', done: 0, N: 0 });
     let enc = null,
       stage = null,
       cv = null;
     try {
-      const html2canvas = await loadHtml2canvas();
+      if (prepare) {
+        await stop.race(prepare());
+        // a new state, so the stage renders again with what prepare made (the board's picture) before it is drawn
+        setState({ phase: 'load', done: 0, N: 0 });
+      }
+      const html2canvas = await stop.race(loadHtml2canvas());
       // the stage is in its screen-sized video layout once the busy state has rendered: wait a frame, then draw it from
       // its top (a paused one-column page may have been scrolled)
-      await new Promise((ok) => requestAnimationFrame(ok));
+      await stop.race(new Promise((ok) => requestAnimationFrame(ok)));
+      if (stop.asked) throw CANCELLED;
       const el = document.querySelector('.stage-frame > div');
       // its pictures decoded (a picture board's own, drawn through the sliders, has just taken the page's place)
-      await Promise.all([...el.querySelectorAll('img')].map((im) => im.decode().catch(() => {})));
+      await stop.race(Promise.all([...el.querySelectorAll('img')].map((im) => im.decode().catch(() => {}))));
       const area = el.closest('.stage-area');
       area.scrollTop = 0;
       // the export is the page as it looks without the transport bar: as wide as the viewport (as Settings' widths assume),
@@ -425,7 +470,13 @@ function useVideoExport({ fps, format, webp, mp4Quality, mp4Vfr = false, save, s
       enc =
         format === 'WebP'
           ? await webpEncoder(cv, W, H, fps, N, { ...webp, width: wpx })
-          : await videoEncoder(cv, W, H, fps, audio, { webm: format === 'WebM', quality: mp4Quality, vfr: mp4Vfr });
+          : await videoEncoder(cv, W, H, fps, audio, {
+              webm: format === 'WebM',
+              quality: mp4Quality,
+              vfr: mp4Vfr,
+              stop,
+            });
+      if (stop.asked) throw CANCELLED;
       // html2canvas copies the whole document every frame: leave out the scripts (the page inlines its
       // opening tables) and the page around the stage, but keep the head and every stylesheet (fonts and base styles)
       const keep = (n) => n.tagName === 'STYLE' || n.tagName === 'LINK' || n.tagName === 'HEAD' || n.closest('head');
@@ -445,15 +496,7 @@ function useVideoExport({ fps, format, webp, mp4Quality, mp4Vfr = false, save, s
       const t0 = performance.now();
       let shown = t0;
       for (let i = 0; i < N; i++) {
-        if (stopRef.current) {
-          // the viewer's own Cancel: an encoder that fails to stop is no export failure
-          try {
-            await enc.cancel();
-          } catch (_) {}
-          stage.done();
-          setState(null);
-          return;
-        }
+        if (stop.asked) throw CANCELLED;
         seekStage(start + i / fps);
         // a frame whose layers all match the last one's (holds, the title and end cards) leaves the canvas as it is
         await enc.frame(await stage.draw(cx));
@@ -473,12 +516,15 @@ function useVideoExport({ fps, format, webp, mp4Quality, mp4Vfr = false, save, s
       await save(stem + suffix + ext, blob);
       setState(null);
     } catch (e) {
+      // the viewer's own Cancel, at any step: an encoder that fails to stop is no export failure
+      const cancelled = e === CANCELLED || stop.asked;
       // the console keeps the stack, which the dialog's one line can't: a failure seen once can be traced afterwards
-      console.error('Export failed', e);
+      if (!cancelled) console.error('Export failed', e);
       if (stage) stage.done();
       try {
         if (enc) await enc.cancel();
       } catch (_) {}
+      if (cancelled) return setState(null);
       // its kind too (RangeError, TypeError…): "invalid array length" alone doesn't say whether memory ran out
       const kind = e && e.name && e.name !== 'Error' ? e.name + ': ' : '';
       setState({ phase: 'error', msg: 'Export failed: ' + kind + ((e && e.message) || e) });
@@ -492,7 +538,7 @@ function useVideoExport({ fps, format, webp, mp4Quality, mp4Vfr = false, save, s
     run,
     format,
     cancel: () => {
-      stopRef.current = true;
+      if (stopRef.current) stopRef.current.ask();
     },
     dismiss: () => setState(null),
     busy: !!state && state.phase !== 'error',
@@ -501,11 +547,15 @@ function useVideoExport({ fps, format, webp, mp4Quality, mp4Vfr = false, save, s
 
 // The overlay is modal while it shows (the 2026-11-16 dialogs decision): the rest of the page is inert, so no key, click
 // or Tab reaches the Transport bar, the Moves chips or Settings behind it, which once let a frame from the wrong moment
-// into the file. The focus goes into the overlay (its button, else its box) and, once it closes, back where it was.
+// into the file. No key reaches the page's own shortcuts either (F, the arrows, `,` `.`, Home), wherever the focus is:
+// they are stopped before anything else hears them, Tab keeps to the overlay and Esc runs onEscape. The focus goes
+// into the overlay (its button, else its box) and, once it closes, back where it was.
 // key: re-run when the overlay's content changes (the failure's Close replaces Cancel)
-function useModal(ref, on, key) {
+function useModal(ref, on, key, onEscape) {
   // where the focus goes back to: kept across the runs a change of content makes, and never the overlay itself
-  const back = React.useRef(null);
+  const back = React.useRef(null),
+    escape = React.useRef(onEscape);
+  escape.current = onEscape;
   React.useLayoutEffect(() => {
     const box = ref.current;
     if (!on || !box) return;
@@ -519,15 +569,21 @@ function useModal(ref, on, key) {
           made.push(sib);
         }
     (box.querySelector('button') || box).focus();
-    // Tab stays on the overlay's one button (or its box), as in the other dialogs
-    const trap = (e) => {
-      if (e.key !== 'Tab') return;
-      e.preventDefault();
-      (box.querySelector('button') || box).focus();
+    // every key stops here, before the page's listeners and React's; a button's own Enter and Space still press it (the
+    // browser's default action). Tab stays on the overlay's one button (or its box), as in the other dialogs
+    const keys = (e) => {
+      e.stopPropagation();
+      if (e.key === 'Tab') {
+        e.preventDefault();
+        (box.querySelector('button') || box).focus();
+      } else if (e.key === 'Escape' && escape.current) {
+        e.preventDefault();
+        escape.current();
+      }
     };
-    box.addEventListener('keydown', trap);
+    window.addEventListener('keydown', keys, true);
     return () => {
-      box.removeEventListener('keydown', trap);
+      window.removeEventListener('keydown', keys, true);
       for (const el of made) el.inert = false;
       const a = document.activeElement,
         to = back.current;
@@ -539,7 +595,12 @@ function useModal(ref, on, key) {
 function ExportOverlay({ x }) {
   const s = x.state,
     box = React.useRef(null);
-  useModal(box, !!s, s && (s.phase === 'error' ? 'error' : s.phase === 'render' ? 'render' : 'busy'));
+  useModal(
+    box,
+    !!s,
+    s && (s.phase === 'error' ? 'error' : s.phase === 'save' ? 'save' : 'run'),
+    s && s.phase === 'error' ? x.dismiss : null,
+  );
   if (!s) return null;
   if (s.phase === 'error')
     return (
@@ -550,12 +611,6 @@ function ExportOverlay({ x }) {
         role="alertdialog"
         aria-modal="true"
         aria-label="Export failed"
-        onKeyDown={(e) => {
-          if (e.key === 'Escape') {
-            e.stopPropagation();
-            x.dismiss();
-          }
-        }}
       >
         <div className="export-box">
           <div className="export-title">Export failed</div>
@@ -595,7 +650,7 @@ function ExportOverlay({ x }) {
           Keep this tab active and in front: the export slows or stops while the tab or window is hidden (another tab,
           or minimized). Resizing the window or turning the phone changes the layout, and the video with it.
         </div>
-        {s.phase === 'render' && (
+        {s.phase !== 'save' && (
           <button type="button" className="twk-btn secondary" onClick={x.cancel}>
             Cancel
           </button>

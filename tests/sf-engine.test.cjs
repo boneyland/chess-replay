@@ -1022,3 +1022,53 @@ test('UCI_Chess960 is set before a 960 search, back after it, and never for stan
   await run(window.ChessCore.START_FEN);
   assert.deepEqual(opt(), ['setoption name UCI_Chess960 value true', 'setoption name UCI_Chess960 value false']);
 });
+
+// A replacement worker after a hang gets the start tries a first start gets (stockfish.jsx's SF_THREADED_TRIES): in
+// Firefox a fresh threaded worker hangs while it starts about 1 load in 4, which alone mustn't end the engine
+test('a replacement worker that hangs while it starts gets START_TRIES tries in all before the engine fails', async () => {
+  assert.equal(SF.START_TRIES, 3);
+  const ws = [];
+  let reported = null;
+  // the first worker starts; the next ones (replacements) hang on the probe unless listed in answers
+  let answers = [1];
+  const e = SF.create(
+    () => {
+      const w = fakeWorker(),
+        post = w.postMessage;
+      const n = ws.push(w);
+      w.postMessage = (s) => {
+        post(s);
+        if (s === 'go depth 1' && answers.includes(n)) w.finish('e2e4');
+      };
+      return w;
+    },
+    {
+      threaded: true,
+      threads: 4,
+      probeMs: 40,
+      hangMs: 30,
+      onFail: (err) => {
+        reported = err;
+      },
+    },
+  );
+  await e.ready();
+  const wait = (ms) => new Promise((res) => setTimeout(res, ms));
+  // a hang, then two replacements that hang while they start, then one that starts: the search runs there
+  answers = [1, 4];
+  const a = e.search({ moves: [], depth: null, movetimeMs: 10 });
+  await until(() => ws.length === 4 && ws[3].posted.includes('go movetime 10'), 3000);
+  assert.equal(ws.length, 4, 'two start tries hung, the third started');
+  assert.equal(e.failed(), null);
+  ws[3].finish('d2d4');
+  assert.equal((await a.promise).best, 'd2d4');
+  // the count starts again: a later hang, then three replacements that hang while they start, fails the engine
+  answers = [];
+  const b = e.search({ moves: ['d2d4'], depth: null, movetimeMs: 10 });
+  await until(() => reported, 3000);
+  assert.equal(ws.length, 7, 'three start tries for the replacement');
+  assert.match(reported && reported.message, /threads didn’t start/);
+  assert.equal(await b.promise, null);
+  await wait(100);
+  assert.equal(ws.length, 7, 'no more workers after it failed');
+});

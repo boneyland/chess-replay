@@ -10,9 +10,9 @@
       ws();
       const ch = src[i];
       if (ch === '{' || ch === '[' || ch === '(') {
-        // a tuple reads as an array
+        // a tuple reads as an array; a dict has no prototype, so a '__proto__' key is a key like any other
         const close = { '{': '}', '[': ']', '(': ')' }[ch],
-          out = ch === '{' ? {} : [];
+          out = ch === '{' ? Object.create(null) : [];
         i++;
         ws();
         while (src[i] !== close) {
@@ -131,11 +131,12 @@
       .filter(Boolean);
   }
 
-  // Gradio's server-sent events: blocks of "event: <name>" and "data: <json>"; the last complete and error win
+  // Gradio's server-sent events: blocks of "event: <name>" and "data: <json>"; the last complete and error win. A line
+  // may end in CRLF, LF or CR, as the event stream format allows
   function readSse(text) {
     let result = null,
       error = null;
-    for (const block of text.split(/\n\n+/)) {
+    for (const block of text.replace(/\r\n?/g, '\n').split(/\n\n+/)) {
       const ev = (block.match(/^event:\s*(.+)$/m) || [])[1],
         data = (block.match(/^data:\s*(.*)$/m) || [])[1];
       if (ev === 'complete') {

@@ -62,3 +62,11 @@ test("test.yml's ENGINE_TESTS and HEAVY_TESTS each name live subtests that exist
       );
   }
 });
+
+// the jobs run npm install of unlocked packages, whose install scripts would find a token checkout left in .git/config
+test('every checkout in test.yml leaves no token behind (persist-credentials: false)', () => {
+  const yml = fs.readFileSync(path.join(ROOT, '.github', 'workflows', 'test.yml'), 'utf8');
+  const steps = [...yml.matchAll(/^(\s*)- uses: actions\/checkout@[^\n]*\n((?:\1  [^\n]*\n)*)/gm)];
+  assert.ok(steps.length >= 5, 'the checkouts were found');
+  for (const s of steps) assert.match(s[2], /^\s+persist-credentials: false$/m, s[0]);
+});

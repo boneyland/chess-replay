@@ -1661,3 +1661,14 @@ test('materialOf counts a promoted piece beyond the full set', () => {
   const setup = left({ w: { q: 1, p: 2 }, b: { p: 1 } });
   assert.deepEqual(CC.materialOf('w', setup), { taken: { q: 1, r: 0, b: 0, n: 0, p: 1 }, pts: 10 });
 });
+
+test('fileStem keeps the players’ surnames in any script, and no path characters, at most 50 characters', () => {
+  const stem = (w, b) => CC.fileStem(CC.buildGame({ pgn: `[White "${w}"]\n[Black "${b}"]\n[Result "*"]\n\n1. e4 *` }));
+  assert.equal(stem('Carlsen, Magnus', 'Nepomniachtchi, Ian'), 'Carlsen_Nepomniachtchi');
+  assert.equal(stem('Непомнящий, Ян', '丁立人'), 'Непомнящий_丁立人');
+  assert.equal(stem('Müller', 'Ló'), 'Müller_Ló');
+  assert.equal(stem('../x/../y', 'a:b*c?<>|'), '_x_y_a_b_c_');
+  const long = stem('A'.repeat(80), '丁'.repeat(80));
+  assert.equal([...long].length, 50);
+  assert.equal(long, 'A'.repeat(50));
+});

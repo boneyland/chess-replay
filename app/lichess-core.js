@@ -220,33 +220,45 @@
     /^O-O/.test(san || '') && /^e[18][ah][18]$/.test(uci || '')
       ? uci.slice(0, 2) + (/^O-O-O/.test(san) ? 'c' : 'g') + uci[3]
       : uci;
+  // the answer comes from the network, so every field is checked for its type: a move with no UCI move or SAN, or a game
+  // with no plain id (it becomes a lichess.org link), is dropped; another field of the wrong type reads as missing
+  const EX_UCI = /^[a-h][1-8][a-h][1-8][qrbn]?$/;
   function parseExplorer(j) {
     if (!j || !Array.isArray(j.moves)) throw new Error('not an explorer answer');
     const n = (x) => Math.max(0, Math.floor(+x || 0)); // not `| 0`: the start position has over 2^31 games
+    const str = (x) => (typeof x === 'string' ? x : '');
     const total = (o) => n(o.white) + n(o.draws) + n(o.black);
-    const name = (p) => (p && p.name ? p.name + (p.rating ? ' (' + p.rating + ')' : '') : '?');
+    const name = (p) =>
+      p && str(p.name)
+        ? p.name + (typeof p.rating === 'number' && Number.isFinite(p.rating) ? ' (' + n(p.rating) + ')' : '')
+        : '?';
+    const isObj = (x) => !!x && typeof x === 'object';
     return {
       total: total(j),
       white: n(j.white),
       draws: n(j.draws),
       black: n(j.black),
-      moves: j.moves.map((m) => ({
-        uci: castleUci(m.uci, m.san),
-        san: m.san,
-        white: n(m.white),
-        draws: n(m.draws),
-        black: n(m.black),
-        total: total(m),
-        averageRating: m.averageRating == null ? null : n(m.averageRating),
-      })),
-      games: (j.topGames || []).map((g) => ({
-        id: g.id,
-        white: name(g.white),
-        black: name(g.black),
-        winner: g.winner || null,
-        year: g.year || null,
-      })),
-      opening: j.opening && j.opening.name ? { eco: j.opening.eco || '', name: j.opening.name } : null,
+      moves: j.moves
+        .filter((m) => isObj(m) && typeof m.uci === 'string' && EX_UCI.test(m.uci) && str(m.san))
+        .map((m) => ({
+          uci: castleUci(m.uci, m.san),
+          san: m.san,
+          white: n(m.white),
+          draws: n(m.draws),
+          black: n(m.black),
+          total: total(m),
+          averageRating: m.averageRating == null ? null : n(m.averageRating),
+        })),
+      games: (Array.isArray(j.topGames) ? j.topGames : [])
+        .filter((g) => isObj(g) && typeof g.id === 'string' && /^[A-Za-z0-9]+$/.test(g.id))
+        .map((g) => ({
+          id: g.id,
+          white: name(g.white),
+          black: name(g.black),
+          winner: g.winner === 'white' || g.winner === 'black' ? g.winner : null,
+          year: typeof g.year === 'number' && Number.isFinite(g.year) ? g.year : null,
+        })),
+      opening: isObj(j.opening) && str(j.opening.name) ? { eco: str(j.opening.eco), name: j.opening.name } : null,
     };
   }
 

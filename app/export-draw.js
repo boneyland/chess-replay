@@ -726,12 +726,17 @@
         ignoreElements: skip(n),
         onclone,
       });
-      let bs = [];
+      // a shadow or corner radius the painter can't read (a percentage, corners of different radii) is left out, as on
+      // an html2canvas layer before
+      let bs = [],
+        r = 0;
       const s = getComputedStyle(n);
       try {
         if (s.transform === 'none') bs = shadowsOf(s.boxShadow);
+        if (bs.length) r = radiusOf(s);
       } catch (e) {
         if (!(e instanceof Unsupported)) throw e;
+        bs = [];
       }
       if (!bs.length) return { bmp: c, x: b.x * scale, y: b.y * scale };
       const x0 = b.x - MARGIN,
@@ -742,7 +747,7 @@
       const cx = cv.getContext('2d');
       cx.setTransform(scale, 0, 0, scale, -x0 * scale, -y0 * scale);
       cx.globalAlpha = px(s.opacity);
-      boxShadows(cx, bs, b, radiusOf(s), 1, scale);
+      boxShadows(cx, bs, b, r, 1, scale);
       cx.setTransform(1, 0, 0, 1, 0, 0);
       cx.globalAlpha = 1;
       cx.drawImage(c, Math.round(MARGIN * scale), Math.round(MARGIN * scale));

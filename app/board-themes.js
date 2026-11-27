@@ -241,6 +241,8 @@
     cx.putImageData(d, 0, 0);
     const blob = await new Promise((ok) => cv.toBlob(ok, 'image/png'));
     if (made.has(k)) return made.get(k);
+    // no PNG (the browser out of canvas memory): a failure saying so, not createObjectURL(null)'s TypeError
+    if (!blob) throw new Error('could not draw the board’s picture');
     const u = URL.createObjectURL(blob);
     made.set(k, u);
     while (made.size > KEEP) {
