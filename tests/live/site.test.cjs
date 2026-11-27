@@ -156,6 +156,27 @@ async function open(browser, viewport, opts) {
   });
   return { ctx, page, errors };
 }
+// Lichess's real cloud evaluation, as some tests use it: the answers it sends (status codes) are recorded from the context
+// on, and cloudShown waits for the page to show one. Where Lichess sent no 200 (it rate-limits GitHub's shared runners
+// with a 429, or doesn't answer in time: CI, 2026-11-27, four failures in a day while local runs passed) the subtest is
+// skipped with what Lichess sent; a 200 the page never shows still fails
+const watchCloud = (ctx) => {
+  const got = [];
+  ctx.on('response', (r) => {
+    if (r.url().startsWith('https://lichess.org/api/cloud-eval')) got.push(r.status());
+  });
+  return got;
+};
+const cloudShown = async (st, p, got) => {
+  try {
+    await p.waitForFunction(() => /cloud depth \d+/i.test(document.body.innerText), null, { timeout: 20000 });
+    return true;
+  } catch (e) {
+    if (got.includes(200)) throw e;
+    st.skip(`Lichess's cloud evaluation sent no answer (${got.length ? got.join(', ') : 'nothing'})`);
+    return false;
+  }
+};
 // the elements reaching past the window's right edge, when the page scrolls sideways (none when it doesn't)
 // every running animation and transition done (dialogs rise, menus fade): a measure taken mid-way reads a scaled, shifted box
 // the time-based animations only: a scroll-driven one (the pinned board's shrink, shell.html's .pin-morph) never
@@ -5776,10 +5797,11 @@ for (const name of BROWSERS)
       // falls back to Stockfish; Prefer cloud leaves the browser engine idle where the cloud is deep enough
       await t.test(
         'desktop: the cloud evaluation shows on the free board only when on, and a miss falls back to Stockfish',
-        async () => {
+        async (st) => {
           const ce = await open(browser, { width: 1440, height: 900 });
           const p = ce.page,
-            sent = [];
+            sent = [],
+            got = watchCloud(ce.ctx);
           ce.ctx.on('request', (r) => {
             if (r.url().startsWith('https://lichess.org/api/cloud-eval'))
               sent.push(new URL(r.url()).searchParams.get('fen'));
@@ -5799,7 +5821,7 @@ for (const name of BROWSERS)
           assert.equal(await p.getByRole('switch', { name: /Prefer cloud/ }).count(), 1);
           await p.keyboard.press('Escape');
           await setUpFen(p, E4.replace(' 0 1', ' 0 2')); // the same position, a new board
-          await p.waitForFunction(() => /cloud depth \d+/i.test(document.body.innerText), null, { timeout: 20000 });
+          if (!(await cloudShown(st, p, got))) return ce.ctx.close();
           // one position asked (its before and after are one); a request cut off by a re-render may go again
           assert.deepEqual(
             [...new Set(sent.map((f) => f.split(' ').slice(0, 4).join(' ')))],
@@ -6064,10 +6086,11 @@ for (const name of BROWSERS)
       // Go deeper on a loaded analysis's move asks the cloud (the setting on): with Stockfish off, stepping onto the move
       // sends nothing and the analysis's eval stands; with it on, Go deeper's first level runs by itself (auto) and the
       // cloud's deeper answer shows, labelled
-      await t.test("desktop: Go deeper on an analysed move takes the cloud's answer", async () => {
+      await t.test("desktop: Go deeper on an analysed move takes the cloud's answer", async (st) => {
         const gd = await open(browser, { width: 1440, height: 900 });
         const p = gd.page,
-          sent = [];
+          sent = [],
+          got = watchCloud(gd.ctx);
         gd.ctx.on('request', (r) => {
           if (r.url().startsWith('https://lichess.org/api/cloud-eval'))
             sent.push(new URL(r.url()).searchParams.get('fen'));
@@ -6085,7 +6108,7 @@ for (const name of BROWSERS)
         await p.waitForTimeout(800);
         assert.deepEqual(sent, [], "with Stockfish off, the analysis's eval stands");
         await sfSwitch.click();
-        await p.waitForFunction(() => /cloud depth \d+/i.test(document.body.innerText), null, { timeout: 20000 });
+        if (!(await cloudShown(st, p, got))) return gd.ctx.close();
         assert.equal(new Set(sent).size, 1, "the move's position asked");
         await p.screenshot({ path: path.join(OUT, host + '-cloud-go-deeper.png') });
         // Stockfish switched off (its deeper search likely still running): the cloud's answer stays, the + goes, and no
