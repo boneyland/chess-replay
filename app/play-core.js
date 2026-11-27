@@ -498,9 +498,12 @@
     );
   }
 
-  // The side to move resigns, or `side` (against Stockfish the player can resign while it thinks)
+  // The side to move resigns, or `side` (against Stockfish the player can resign while it thinks). Each way to end the
+  // game by hand comes after a flag that has already fallen: that game was lost on time
   function resign(b, now, side = lastPos(b).turn) {
     if (!inProgress(b)) return b;
+    const flagged = flag(b, now);
+    if (flagged !== b) return flagged;
     return withGame(b, {
       clock: b.game.clock && charged(b, now),
       result: { result: side === 'w' ? '0-1' : '1-0', reason: 'resign', side },
@@ -510,6 +513,8 @@
   // A draw both players agree to
   function agreeDraw(b, now) {
     if (!inProgress(b)) return b;
+    const flagged = flag(b, now);
+    if (flagged !== b) return flagged;
     return withGame(b, { clock: b.game.clock && charged(b, now), result: { result: '1/2-1/2', reason: 'agreement' } });
   }
 
@@ -538,6 +543,8 @@
   function claimDraw(b, now) {
     const reason = claimable(b);
     if (!reason) return b;
+    const flagged = flag(b, now);
+    if (flagged !== b) return flagged;
     return withGame(b, { clock: b.game.clock && charged(b, now), result: { result: '1/2-1/2', reason } });
   }
 
@@ -657,8 +664,10 @@
   // A stored game back on its board (BoardCore.restore): whatever localStorage held, a game that plays on. Given `now` (a
   // reload) the side to move's clock runs on from its stored start, so the time away is charged (and its flag may have
   // fallen meanwhile), or from `now` when the stored start isn't one to trust; without, the clocks are stopped. clk
-  // fits the moves, and the result comes from the moves unless it was a resignation, a flag fall, an agreed draw or a
-  // claimed draw the moves still allow. A game stored without an id gets one
+  // fits the moves, and the result comes from the moves unless it was a resignation, a flag fall, an agreed draw, a
+  // claimed draw the moves still allow or a dead position (the prover's cache is empty after a reload), each with the
+  // score its reason gives (a resignation or flag fall loses for `side`; a flag fall can be a draw). A game stored
+  // without an id gets one
   function resume(board, g, now) {
     if (!g || typeof g !== 'object' || (g.mode !== 'human' && g.mode !== 'stockfish')) return board;
     const tc = TIME_CONTROLS.includes(g.tc) || RETIRED_TCS.includes(g.tc) ? g.tc : null,
@@ -687,16 +696,17 @@
     }
     const human = g.mode === 'human',
       claimed = human && { ...board, game: { mode: 'human', ...at } };
-    const r = g.result,
+    const r = g.result && typeof g.result === 'object' ? g.result : null,
+      lost = r && (r.side === 'w' ? '0-1' : r.side === 'b' ? '1-0' : null),
       kept = !r
         ? null
-        : r.reason === 'agreement' && r.result === '1/2-1/2'
+        : (r.reason === 'agreement' || r.reason === 'dead') && r.result === '1/2-1/2'
           ? { result: r.result, reason: r.reason }
           : human && r.result === '1/2-1/2' && r.reason === claimable(claimed)
             ? { result: r.result, reason: r.reason }
             : ['resign', 'time'].includes(r.reason) &&
-                ['1-0', '0-1', '1/2-1/2'].includes(r.result) &&
-                (r.side === 'w' || r.side === 'b')
+                lost &&
+                (r.result === lost || (r.reason === 'time' && r.result === '1/2-1/2'))
               ? { result: r.result, reason: r.reason, side: r.side }
               : null;
     const result = kept || outcome(board, human);
