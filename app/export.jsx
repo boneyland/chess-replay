@@ -36,6 +36,22 @@ const WEBM_EXPORT = !VIDEO_EXPORT
         () => false,
       )
       .then((ok) => (WEBM_OK = ok));
+// The move sounds' encoders, as the soundtrack is made (Sfx.renderTrack's 48 kHz stereo) at videoEncoder's bitrate: AAC
+// for an MP4, else Opus (which MP4 and WebM both hold). Where neither encodes, the video is silent, and Share and export
+// says so before the export. AUDIO_OK: { aac, opus } once known (null before)
+let AUDIO_OK = null;
+const AUDIO_EXPORT = Promise.all(
+  ['mp4a.40.2', 'opus'].map((codec) =>
+    VIDEO_EXPORT && typeof AudioEncoder === 'function'
+      ? Promise.resolve()
+          .then(() => AudioEncoder.isConfigSupported({ codec, sampleRate: 48000, numberOfChannels: 2, bitrate: 96000 }))
+          .then(
+            (r) => !!(r && r.supported),
+            () => false,
+          )
+      : false,
+  ),
+).then(([aac, opus]) => (AUDIO_OK = { aac, opus }));
 // WebP widths offered besides the frame's own (the screen-sized page's width at the screen's density): 1676 fills GitHub's 838 px README
 // column on 2× screens. Quality is 50–95 (lossy), or 100: lossless. Encoded straight from the drawn frames, a WebP looks better than one
 // converted from the MP4, though it is larger than the MP4 of the same clip

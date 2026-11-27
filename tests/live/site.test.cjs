@@ -8287,6 +8287,30 @@ for (const name of BROWSERS)
         assert.deepEqual(ne.errors, []);
         await ne.ctx.close();
       });
+      // without an AAC or Opus encoder the video is silent: Share and export says so before the export, not afterwards
+      await t.test('desktop: without an audio encoder, Share and export says the video is silent', async () => {
+        const na = await open(browser, { width: 1440, height: 900 });
+        await na.page.addInitScript(() => {
+          if (window.AudioEncoder)
+            window.AudioEncoder.isConfigSupported = async (c) => ({ supported: false, config: c });
+        });
+        await na.page.goto(base, { waitUntil: 'load' });
+        await loadedOn(na.page);
+        const dialog = await openShare(na.page);
+        await dialog.getByRole('radio', { name: 'MP4' }).click();
+        await assert.doesNotReject(
+          dialog.getByText(/No move sounds: this browser can’t encode AAC or Opus audio/).waitFor({ timeout: 3000 }),
+        );
+        if (await dialog.getByRole('radio', { name: 'WebM' }).count()) {
+          await dialog.getByRole('radio', { name: 'WebM' }).click();
+          await assert.doesNotReject(
+            dialog.getByText(/No move sounds: this browser can’t encode Opus audio/).waitFor({ timeout: 3000 }),
+          );
+        }
+        assert.equal(await dialog.getByText(/Includes move sounds/).count(), 0);
+        assert.deepEqual(na.errors, []);
+        await na.ctx.close();
+      });
       // without WebAssembly SIMD the WebP's encoder can't run: no WebP to choose, and said why; with no video encoder either
       // there is nothing to export, and the dialog says so in place of the export's settings
       await t.test('desktop: without WebAssembly SIMD, Share and export offers no WebP and says why', async () => {
