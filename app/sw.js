@@ -1,4 +1,4 @@
-// The site's service worker (build.cjs fills in VERSION, LOCAL, REMOTE, PAGE, KEEP_HOSTS, VISION_CACHE and ISOLATION): it keeps a copy of the page and everything
+// The site's service worker (build.cjs fills in VERSION, LOCAL, REMOTE, INTEGRITY, PAGE, KEEP_HOSTS, VISION_CACHE and ISOLATION): it keeps a copy of the page and everything
 // it loads, so the player, Stockfish and the export work with no connection. What needs the network: Ask Queen and its
 // Hugging Face sign-in; Lichess (the tablebase, the opening explorer and its sign-in, cloud evaluation, importing a
 // Lichess link); and the first download of Full Stockfish (from unpkg) or of the board reader (vision/), each kept in
@@ -7,6 +7,9 @@
 const VERSION = '__VERSION__';
 const LOCAL = __LOCAL__; // next to the page, the page first
 const REMOTE = __REMOTE__; // pinned CDN files: React, the export's libraries, the fonts' stylesheet
+// the CDN scripts' integrity hashes, the page's own: each is fetched with its hash and kept only if it passes, so a wrong
+// answer (a proxy, a CDN edge) is never kept for the page to refuse on every visit until the next deploy
+const INTEGRITY = __INTEGRITY__;
 const PAGE = '__PAGE__'; // render.yaml's rewrite of the folder
 // the folder the page is served from: the page answers there (Render rewrites it) and at its own name
 const SCOPE = new URL('./', self.location.href).pathname;
@@ -34,7 +37,7 @@ self.addEventListener('install', (e) => {
           const ctl = new AbortController(),
             timer = setTimeout(() => ctl.abort(), KEEP_TIMEOUT_MS);
           try {
-            const r = await fetch(url, { mode: 'cors', signal: ctl.signal });
+            const r = await fetch(url, { mode: 'cors', signal: ctl.signal, integrity: INTEGRITY[url] || '' });
             if (r.ok) {
               await cache.put(url, r.clone());
               return r;
@@ -191,7 +194,8 @@ async function kept(req, name = CACHE, key = req.url) {
 // file. Only offline is it answered with this deploy's copy, the closest there is (a new page kept by this worker,
 // whose worker never installed): one that works, perhaps out of step, rather than none.
 // Only a whole answer is kept (a CDN's error would otherwise stick until the next deploy): a CDN file is fetched with
-// CORS, which the CDNs and font hosts allow, so its status can be read. The write is held open with waitUntil, which the
+// CORS, which the CDNs and font hosts allow, so its status can be read, and a CDN script with its integrity hash, so a
+// wrong body fails the fetch and isn't kept. The write is held open with waitUntil, which the
 // event still takes while its answer is pending
 async function cacheFirst(e) {
   const req = e.request,
@@ -214,7 +218,11 @@ async function cacheFirst(e) {
   const cache = await caches.open(CACHE);
   const hit = await kept(req, CACHE, key);
   if (hit) return hit;
-  const r = await (here ? fetch(req) : fetch(req.url, { method: req.method, mode: 'cors', credentials: 'omit' }));
+  // a CDN GET carries its pinned hash, else the one the page asked with (a HEAD has no body to check)
+  const integrity = req.method === 'GET' ? INTEGRITY[key] || req.integrity || '' : '';
+  const r = await (here
+    ? fetch(req)
+    : fetch(req.url, { method: req.method, mode: 'cors', credentials: 'omit', integrity }));
   if (req.method === 'GET' && r.ok) e.waitUntil(cache.put(key, r.clone()).catch(() => {}));
   return r;
 }

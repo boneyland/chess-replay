@@ -210,6 +210,25 @@ const SW_REMOTE = [
   ]),
 ].filter((u) => !/\/$/.test(u));
 const CDN_SCRIPTS = SW_REMOTE.filter((u) => /\.js$/.test(u));
+// each CDN script's integrity hash, as the page pins it (shell.html's integrity attribute; in export.jsx a URL's key
+// with Hash after it, as html2canvasHash): the service worker fetches the script with it and keeps only a copy that
+// passes, so a wrong answer once (a proxy, a CDN edge) can't be kept and refused by the page on every later visit
+const SW_INTEGRITY = (() => {
+  const out = {};
+  const shell = read(path.join(app, 'shell.html')).replace(/<!--[\s\S]*?-->/g, '');
+  for (const [tag] of shell.matchAll(/<(?:script|link)\b[^>]*>/g)) {
+    const u = tag.match(new RegExp(`\\s(?:src|href)="(${cdnUrl})"`)),
+      h = tag.match(/\sintegrity="([^"]+)"/);
+    if (u && h) out[u[1]] = h[1];
+  }
+  const ex = jsx(read(path.join(app, 'export.jsx')), 'export.jsx');
+  for (const m of ex.matchAll(new RegExp(`(\\w+): (['"])(${cdnUrl})\\2`, 'g'))) {
+    const h = ex.match(new RegExp(`\\b${m[1]}Hash: (['"])(sha(?:256|384|512)-[\\w+/=]+)\\1`));
+    if (h) out[m[3]] = h[2];
+  }
+  for (const u of CDN_SCRIPTS) if (!out[u]) throw new Error('no integrity hash for the CDN script ' + u);
+  return out;
+})();
 const cspFor = (html) => {
   const inlineHashes = [...html.matchAll(/<script>([\s\S]*?)<\/script>/g)].map(
     (m) => `'sha256-${require('crypto').createHash('sha256').update(m[1]).digest('base64')}'`,
@@ -306,6 +325,7 @@ const VISION_CACHE = (() => {
 const swFilled = read(path.join(app, 'sw.js'))
   .replace('__LOCAL__', () => JSON.stringify(SW_LOCAL))
   .replace('__REMOTE__', () => JSON.stringify(SW_REMOTE, null, 2))
+  .replace('__INTEGRITY__', () => JSON.stringify(SW_INTEGRITY, null, 2))
   .replace('__PAGE__', () => PAGE)
   .replace('__VISION_CACHE__', () => VISION_CACHE)
   .replace('__ISOLATION__', () => JSON.stringify(require('./render-headers.cjs').isolation()))

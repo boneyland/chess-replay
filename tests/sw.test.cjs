@@ -17,7 +17,8 @@ const VISION = window.VisionCore.CACHE,
 // Loads the built sw.js in a vm with a fake self, caches and fetch, and dispatches fetch events at it
 // status: what the network answers (200 unless given; offline: the fetch fails); fetched gets each URL, fetchOpts the
 // options a URL was fetched with; windows: the ids of the site's open windows (clients.matchAll); reg: the registration
-function load({ status = 200, offline = false, windows = [], reg = {} } = {}) {
+// tampered: a CDN answers a wrong body, which a fetch given its integrity refuses (as the browser's does)
+function load({ status = 200, offline = false, windows = [], reg = {}, tampered = false } = {}) {
   execFileSync(process.execPath, [path.join(ROOT, 'build.cjs')], { cwd: ROOT });
   // the prune a moment after a visit to the page runs at once (awaited through held)
   const src = fs
@@ -57,11 +58,24 @@ function load({ status = 200, offline = false, windows = [], reg = {} } = {}) {
     fetched.push(typeof req === 'string' ? req : req.url);
     fetchOpts.push(opts);
     if (offline) throw new TypeError('Failed to fetch');
+    if (tampered && opts && opts.integrity) throw new TypeError('Failed integrity metadata check');
     return Object.defineProperty(new Response('from network', { status }), 'type', {
       value: typeof req === 'string' ? 'cors' : 'basic',
     });
   };
-  vm.runInNewContext(src, { self, caches, fetch: fakeFetch, Response, Headers, URL, Promise, setTimeout, console });
+  vm.runInNewContext(src, {
+    self,
+    caches,
+    fetch: fakeFetch,
+    Response,
+    Headers,
+    URL,
+    Promise,
+    setTimeout,
+    clearTimeout,
+    AbortController,
+    console,
+  });
   // the event's waitUntil promises are kept in held (the cache writes the worker must stay alive for)
   const held = [];
   const fetchEvent = async (url, method = 'GET', mode = 'cors', resultingClientId = '') => {
@@ -88,8 +102,17 @@ function load({ status = 200, offline = false, windows = [], reg = {} } = {}) {
     });
     await done;
   };
+  const install = async () => {
+    let done;
+    handlers.install({
+      waitUntil: (p) => {
+        done = p;
+      },
+    });
+    await done;
+  };
   const VERSION = src.match(/^const VERSION = '([0-9a-f]+)';/m)[1];
-  return { stores, store, puts, fetched, fetchOpts, held, fetchEvent, activate, VERSION, windows };
+  return { stores, store, puts, fetched, fetchOpts, held, fetchEvent, activate, install, VERSION, windows, src };
 }
 
 const WASM = 'https://site.test/vision/ort.wasm.min.mjs';
@@ -292,4 +315,46 @@ test('with a window open, only the two newest older copies are kept', async () =
   for (const n of ['chess-replay-a', 'chess-replay-b', 'chess-replay-c', OLD_VISION]) sw.store(n);
   await sw.activate();
   assert.deepEqual(Object.keys(sw.stores).sort(), ['chess-replay-b', 'chess-replay-c', OLD_VISION].sort());
+});
+
+// The page refuses a CDN script that fails its integrity hash; a copy kept unchecked would then blank the page on every
+// visit until the next deploy. The worker fetches each with its hash, and keeps only what passes
+const REMOTE_OF = (src) => JSON.parse(src.match(/^const REMOTE = (\[[\s\S]*?\]);/m)[1]);
+const INTEGRITY_OF = (src) => JSON.parse(src.match(/^const INTEGRITY = (\{[\s\S]*?\});/m)[1]);
+
+test("install fetches each CDN script with the page's integrity hash", async () => {
+  const sw = load();
+  await sw.install();
+  const INTEGRITY = INTEGRITY_OF(sw.src);
+  const scripts = REMOTE_OF(sw.src).filter((u) => /\.js$/.test(u));
+  assert.ok(scripts.length >= 3, 'React, ReactDOM, html2canvas-pro');
+  for (const u of scripts) {
+    const i = sw.fetched.indexOf(u);
+    assert.ok(i >= 0, u + ' fetched');
+    assert.match(sw.fetchOpts[i].integrity, /^sha384-[\w+/=]+$/, u);
+    assert.equal(sw.fetchOpts[i].integrity, INTEGRITY[u], u);
+  }
+});
+
+test('install keeps no CDN script whose body fails its integrity hash', async () => {
+  const sw = load({ tampered: true });
+  await sw.install();
+  const kept = sw.puts.map((p) => p[1]);
+  for (const u of REMOTE_OF(sw.src).filter((u) => /\.js$/.test(u))) assert.ok(!kept.includes(u), u + ' not kept');
+});
+
+test('a CDN script the page asks for is fetched with its hash, and a tampered one is not kept', async () => {
+  const sw = load({ tampered: true });
+  const u = REMOTE_OF(sw.src).find((x) => /react\.production/.test(x));
+  await assert.rejects(sw.fetchEvent(u), /integrity/);
+  await Promise.all(sw.held);
+  assert.equal(sw.fetchOpts[0].integrity, INTEGRITY_OF(sw.src)[u]);
+  assert.deepEqual(sw.puts, []);
+});
+
+test('a CDN file with no pinned hash goes with the integrity the page asked for, or none', async () => {
+  const sw = load();
+  const u = 'https://fonts.gstatic.com/s/x.woff2';
+  await (await sw.fetchEvent(u)).text();
+  assert.ok(!sw.fetchOpts[0].integrity, 'none pinned, none asked');
 });
