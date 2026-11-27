@@ -1014,7 +1014,7 @@ function GameApp() {
     a.remove();
     setTimeout(() => URL.revokeObjectURL(a.href), 60000);
   };
-  const fileStem = (M.white.short + '_' + M.black.short).replace(/[^\w-]+/g, '_');
+  const fileStem = window.ChessCore.fileStem(M);
   const browserAnalysis = React.useMemo(() => sfIsBrowserAnalysis(files.analysis), [files.analysis]);
   const saveAnalysis = () => {
     const a = typeof files.analysis === 'string' ? files.analysis : JSON.stringify(files.analysis, null, 2);
