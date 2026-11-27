@@ -9521,11 +9521,17 @@ for (const name of BROWSERS)
               top: a.scrollTop,
               pinned: !!document.querySelector('.part-pinned-board'),
             }));
-          // from the top (clicking the move scrolled to it)
-          await p.locator('.stage-area').evaluate((a) => {
-            a.scrollTop = 0;
-          });
-          await p.waitForTimeout(600);
+          // from the top (clicking the move scrolled to it, and may have started the settle's glide to the pin: a glide
+          // isn't stopped by a script's scroll and writes over it, so on a slow runner (Firefox on GitHub) the page went on
+          // to the pin, the most it scrolls here, and the first 30 found it pinned): put it back until it holds still there
+          for (let t0 = Date.now(), still = 0; still < 2 && Date.now() - t0 < 8000; ) {
+            await p.locator('.stage-area').evaluate((a) => {
+              a.scrollTop = 0;
+            });
+            await p.waitForTimeout(300);
+            const s = await state();
+            still = s.top === 0 && !s.pinned ? still + 1 : 0;
+          }
           // scrolled by script, by exact amounts (a wheel's distance differs by browser), each settling as a scroll does
           for (const [dy, pinned] of [
             [30, false],
