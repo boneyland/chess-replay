@@ -1544,8 +1544,8 @@ test('evalTicks starts at the game’s first move, however large its number', ()
 
 test('readFen refuses a move number no game reaches', () => {
   const at = (n) => CC.readFen(`rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 ${n}`);
-  assert.equal(at(99999).error, undefined);
-  assert.ok(at(100000).error);
+  assert.equal(at(9999).error, undefined);
+  assert.ok(at(10000).error);
   assert.ok(at('9'.repeat(400)).error);
 });
 
@@ -1612,7 +1612,8 @@ test('an indented line of two tags is two tags', () => {
 
 test('readFen refuses a half-move clock that would not be written back as a number', () => {
   const at = (n) => CC.readFen(`k7/8/8/8/8/8/8/K7 w - - ${n} 1`);
-  assert.equal(at(99999).error, undefined);
+  assert.equal(at(9999).error, undefined);
+  assert.ok(at(10000).error);
   assert.ok(at('9'.repeat(30)).error);
 });
 

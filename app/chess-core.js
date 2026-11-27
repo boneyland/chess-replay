@@ -651,7 +651,7 @@
     if (!/^[wb]$/.test(turn) || !/^\d+$/.test(half) || !/^\d+$/.test(full) || !/^(-|[a-h][1-8])$/.test(ep)) return bad;
     // a move number no game reaches (the longest possible is under 9,000 moves) is a mistake, and past 2^53 not a number;
     // a half-move clock that big would be written back as 1e+21 or Infinity, which no FEN reader takes
-    if (+full > 99999 || +half > 99999) return bad;
+    if (+full > 9999 || +half > 9999) return bad;
     if (castle !== '-' && !/^[KQkqA-Ha-h]{1,4}$/.test(castle)) return bad;
     const b = fromFen(f[0]),
       epIdx = ep === '-' ? -1 : sqIdx(ep),
