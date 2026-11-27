@@ -504,11 +504,15 @@ function useVideoExport({ fps, format, webp, mp4Quality, mp4Vfr = false, save, s
 
 // The overlay is modal while it shows (the 2026-11-16 dialogs decision): the rest of the page is inert, so no key, click
 // or Tab reaches the Transport bar, the Moves chips or Settings behind it, which once let a frame from the wrong moment
-// into the file. The focus goes into the overlay (its button, else its box) and, once it closes, back where it was.
+// into the file. No key reaches the page's own shortcuts either (F, the arrows, `,` `.`, Home), wherever the focus is:
+// they are stopped before anything else hears them, Tab keeps to the overlay and Esc runs onEscape. The focus goes
+// into the overlay (its button, else its box) and, once it closes, back where it was.
 // key: re-run when the overlay's content changes (the failure's Close replaces Cancel)
-function useModal(ref, on, key) {
+function useModal(ref, on, key, onEscape) {
   // where the focus goes back to: kept across the runs a change of content makes, and never the overlay itself
-  const back = React.useRef(null);
+  const back = React.useRef(null),
+    escape = React.useRef(onEscape);
+  escape.current = onEscape;
   React.useLayoutEffect(() => {
     const box = ref.current;
     if (!on || !box) return;
@@ -522,15 +526,21 @@ function useModal(ref, on, key) {
           made.push(sib);
         }
     (box.querySelector('button') || box).focus();
-    // Tab stays on the overlay's one button (or its box), as in the other dialogs
-    const trap = (e) => {
-      if (e.key !== 'Tab') return;
-      e.preventDefault();
-      (box.querySelector('button') || box).focus();
+    // every key stops here, before the page's listeners and React's; a button's own Enter and Space still press it (the
+    // browser's default action). Tab stays on the overlay's one button (or its box), as in the other dialogs
+    const keys = (e) => {
+      e.stopPropagation();
+      if (e.key === 'Tab') {
+        e.preventDefault();
+        (box.querySelector('button') || box).focus();
+      } else if (e.key === 'Escape' && escape.current) {
+        e.preventDefault();
+        escape.current();
+      }
     };
-    box.addEventListener('keydown', trap);
+    window.addEventListener('keydown', keys, true);
     return () => {
-      box.removeEventListener('keydown', trap);
+      window.removeEventListener('keydown', keys, true);
       for (const el of made) el.inert = false;
       const a = document.activeElement,
         to = back.current;
@@ -542,7 +552,12 @@ function useModal(ref, on, key) {
 function ExportOverlay({ x }) {
   const s = x.state,
     box = React.useRef(null);
-  useModal(box, !!s, s && (s.phase === 'error' ? 'error' : s.phase === 'render' ? 'render' : 'busy'));
+  useModal(
+    box,
+    !!s,
+    s && (s.phase === 'error' ? 'error' : s.phase === 'render' ? 'render' : 'busy'),
+    s && s.phase === 'error' ? x.dismiss : null,
+  );
   if (!s) return null;
   if (s.phase === 'error')
     return (
@@ -553,12 +568,6 @@ function ExportOverlay({ x }) {
         role="alertdialog"
         aria-modal="true"
         aria-label="Export failed"
-        onKeyDown={(e) => {
-          if (e.key === 'Escape') {
-            e.stopPropagation();
-            x.dismiss();
-          }
-        }}
       >
         <div className="export-box">
           <div className="export-title">Export failed</div>
