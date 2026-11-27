@@ -188,6 +188,8 @@ async function encodeSound(MB, sound, acodec) {
   for await (const { at: w0, buffer } of sound.chunks()) {
     for (let at = 0; at < buffer.length && !err; at += step) {
       while (enc.encodeQueueSize >= QUEUED && !err) await room();
+      // a codec that failed while the slice waited is closed already, and encode() on it would throw in place of err
+      if (err) break;
       const n = Math.min(step, buffer.length - at),
         data = new Float32Array(n * ch);
       for (let c = 0; c < ch; c++) data.set(buffer.getChannelData(c).subarray(at, at + n), c * n);
@@ -205,7 +207,8 @@ async function encodeSound(MB, sound, acodec) {
     if (err) break;
   }
   if (!err) await enc.flush();
-  enc.close();
+  // WebCodecs closes a failed codec before it reports the error: closing it again would throw over the real error
+  if (enc.state !== 'closed') enc.close();
   if (err) throw err;
   let t = 0;
   return out.map((p, k) => {
