@@ -905,7 +905,8 @@ function FitOrHide({ style, children }) {
 // nor drags a piece's image out
 const NO_SELECT = { userSelect: 'none', WebkitUserSelect: 'none', WebkitTouchCallout: 'none' };
 // slide: the board just stepped one move (GameVideo's goTo): a piece that changed square glides there from where it was;
-// glides: glides may run (not in a video): a running one is cancelled when it turns off, and when the board flips
+// glides: glides may run (not in a video): a running one is cancelled when it turns off, when the board flips, and when
+// the piece jumps (moves without slide)
 function Piece({ p, T, S, slide, glides }) {
   const imgRef = React.useRef(null),
     was = React.useRef(null),
@@ -933,7 +934,10 @@ function Piece({ p, T, S, slide, glides }) {
   React.useLayoutEffect(() => {
     const w = was.current;
     was.current = o > 0 ? [x, y, ORIENT] : null;
-    if (glide.current && (!glides || glide.current.orient !== ORIENT)) {
+    // a jump (not a one-move step) puts the piece straight on its new square: a step's glide still running would slide
+    // it in from an offset worked out for the old one (audit 2026-11-27)
+    const jumped = !slide && w && (w[0] !== x || w[1] !== y);
+    if (glide.current && (!glides || glide.current.orient !== ORIENT || jumped)) {
       glide.current.anim.cancel();
       glide.current = null;
     }
