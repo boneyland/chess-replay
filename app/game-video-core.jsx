@@ -57,7 +57,6 @@ const setPalette = (mode) => Object.assign(C, PALETTES[mode] || PALETTES.dark);
 const SANS = '"IBM Plex Sans", system-ui, sans-serif';
 const MONO = '"JetBrains Mono", monospace';
 const SERIF = '"Instrument Serif", serif';
-const VALUE = { p: 1, n: 3, b: 3, r: 5, q: 9, k: 0 };
 const CLASS_LABEL = {
   best: 'Best move',
   inaccuracy: 'Inaccuracy',
@@ -906,7 +905,8 @@ function FitOrHide({ style, children }) {
 // nor drags a piece's image out
 const NO_SELECT = { userSelect: 'none', WebkitUserSelect: 'none', WebkitTouchCallout: 'none' };
 // slide: the board just stepped one move (GameVideo's goTo): a piece that changed square glides there from where it was;
-// glides: glides may run (not in a video): a running one is cancelled when it turns off, and when the board flips
+// glides: glides may run (not in a video): a running one is cancelled when it turns off, when the board flips, and when
+// the piece jumps (moves without slide)
 function Piece({ p, T, S, slide, glides }) {
   const imgRef = React.useRef(null),
     was = React.useRef(null),
@@ -934,7 +934,10 @@ function Piece({ p, T, S, slide, glides }) {
   React.useLayoutEffect(() => {
     const w = was.current;
     was.current = o > 0 ? [x, y, ORIENT] : null;
-    if (glide.current && (!glides || glide.current.orient !== ORIENT)) {
+    // a jump (not a one-move step) puts the piece straight on its new square: a step's glide still running would slide
+    // it in from an offset worked out for the old one (audit 2026-11-27)
+    const jumped = !slide && w && (w[0] !== x || w[1] !== y);
+    if (glide.current && (!glides || glide.current.orient !== ORIENT || jumped)) {
       glide.current.anim.cancel();
       glide.current = null;
     }
@@ -2352,13 +2355,16 @@ function EvalBar({ M, T, S, a, tb, dead, deep }) {
       : shown && (shown.mate != null || shown.won)
         ? fmtEval(shown)
         : fmtEval({ cp: cpOf(M, c) }); // the move's eval at once: the bar glides, its number doesn't count
-  return <EvalBarView cp={M.hasEval ? cp : 0} txt={txt} a={a} />;
+  // the number's side and colour go with the number, not with the gliding bar ("+1.20" sat at Black's end for half a
+  // second after a move that swung the eval, audit 2026-11-27)
+  return <EvalBarView cp={M.hasEval ? cp : 0} side={M.hasEval ? cpOf(M, c) : 0} txt={txt} a={a} />;
 }
-// the bar itself: White's share from cp (White's view), and txt in the part of the bar it favours
-function EvalBarView({ cp, txt, a }) {
+// the bar itself: White's share from cp (White's view), and txt in the part of the bar side (the eval txt says, cp
+// unless given) favours
+function EvalBarView({ cp, side = cp, txt, a }) {
   const f = (winChance(cp) + 1) / 2;
   const flip = ORIENT === 'b',
-    inWhite = cp >= 0,
+    inWhite = side >= 0,
     top = inWhite === flip; // the number sits in the part of the bar it favours
   if (!L.eval) return null;
   const H = L.board.size,
@@ -2483,19 +2489,9 @@ const barPlace = (side) => ({
   alignItems: 'center',
   top: side === ORIENT ? L.board.y + L.board.size + L.bars.gap : L.board.y - L.bars.gap - L.bars.h,
 });
-// The pieces a side has taken and its material edge, counted from the pieces on the board (left(colour, type)) against a
-// full set, so a position set up with an edge shows it: { taken, pts } for SideBar
-const FULL_SET = { q: 1, r: 2, b: 2, n: 2, p: 8 };
-function materialOf(side, left) {
-  const lost = (col, t) => Math.max(0, FULL_SET[t] - left(col, t));
-  const worth = (col) => Object.keys(FULL_SET).reduce((s, t) => s + left(col, t) * VALUE[t], 0);
-  const opp = side === 'w' ? 'b' : 'w',
-    taken = {};
-  Object.keys(FULL_SET).forEach((t) => {
-    taken[t] = lost(opp, t) - lost(side, t);
-  });
-  return { taken, pts: worth(side) - worth(opp) };
-}
+// The pieces a side has taken and its material edge, from the pieces on the board (left(colour, type)): { taken, pts }
+// for SideBar (ChessCore.materialOf)
+const materialOf = (side, left) => window.ChessCore.materialOf(side, left);
 // A game's player bar: the captures and material edge from the pieces on the board at time T (taken off as they are
 // captured, a pawn counted as its new piece once it has promoted, as the board draws them), the clock from the PGN's clocks
 function PlayerBar({ M, T, S, side, a, pieces, strip }) {
@@ -3556,6 +3552,9 @@ function EvalPlot({ M, T, S, a, paused, onPick }) {
         height={H + 14}
         style={{ display: 'block', overflow: 'visible', cursor: 'pointer', touchAction: 'none' }}
         onPointerDown={(e) => {
+          // the primary button only: a right-click sought, and its context menu swallowed the release in desktop Firefox
+          // on Linux, so the graph went on seeking under a mouse with no button held (audit 2026-11-27)
+          if (e.button !== 0) return;
           try {
             e.currentTarget.setPointerCapture(e.pointerId);
           } catch (err) {}
@@ -3567,6 +3566,9 @@ function EvalPlot({ M, T, S, a, paused, onPick }) {
           onPick(j);
         }}
         onPointerMove={(e) => {
+          // a press whose release went missing (outside the window, or under a menu): a mouse moving with no button held
+          // only hovers
+          if (down.current && e.pointerType === 'mouse' && !(e.buttons & 1)) down.current = false;
           if (!down.current && e.pointerType !== 'mouse') return;
           const j = plyAt(e);
           setHover(j);
@@ -4198,18 +4200,24 @@ function useHeldSchedule(T0, S) {
 // viewer's own moves, from base) or the panel it was picked from, n its moves that came from the panel (the rest are
 // Stockfish's replies played on from it). pv: the same shape, previewed until the mouse leaves
 function useShownLine(M, cNow, playing) {
-  const [vline, setVline] = React.useState(null);
+  // a line belongs to the move it was shown from, while paused: worked out here in render, so no frame after a seek-bar
+  // drag or Play draws it against the new move (audit 2026-11-27); the effects then drop the stale state
+  const live = (v) => (v && !playing && v.c === cNow ? v : null);
+  const [shown, setVline] = React.useState(null);
+  const vline = live(shown);
   React.useEffect(() => {
-    if (vline && (playing || cNow !== vline.c)) setVline(null);
+    if (shown && (playing || cNow !== shown.c)) setVline(null);
     // eslint-disable-next-line react-hooks/exhaustive-deps -- a shown line drops when play starts or the game's move changes, not when the line itself changes
   }, [playing, cNow]);
-  const [pv, setPv] = React.useState(null);
+  const [previewed, setPv] = React.useState(null);
+  const pv = live(previewed);
   React.useEffect(() => {
     setPv(null);
   }, [playing, cNow]);
   // a line steps back to its first move (the viewer's own line back to its starting position), then closes
   const stepLine = (d) =>
-    setVline((v) => {
+    setVline((was) => {
+      const v = live(was);
       if (!v) return v;
       const u = v.upto + d,
         min = v.src === 'you' ? -1 : 0;
@@ -4217,10 +4225,14 @@ function useShownLine(M, cNow, playing) {
     });
   const gamePos = (cc) => window.ChessCore.posAt(M, cc + 1);
   const newLine = () => ({ c: cNow, at: cNow + 1, src: 'you', moves: [], upto: -1, base: gamePos(cNow) });
-  const leaveIfEmpty = () => setVline((v) => (v && v.src === 'you' && v.upto < 0 ? null : v));
+  const leaveIfEmpty = () =>
+    setVline((was) => {
+      const v = live(was);
+      return v && v.src === 'you' && v.upto < 0 ? null : v;
+    });
   const playOwn = (step) =>
     setVline((v) => {
-      const b = v || newLine();
+      const b = live(v) || newLine();
       const prefix = b.moves.slice(0, b.upto + 1);
       return { ...b, src: 'you', moves: [...prefix, step], upto: prefix.length };
     });
@@ -4343,15 +4355,9 @@ function useGoDeeper(M, c, on, sf, tw) {
     // only a pressed Go deeper's
     const known = p && p.search && p.search.depth;
     if (!r || (known ? r.depth < known : !(ev.level > 0))) return;
-    const k = deeperKey(M, c),
-      had = DEEPER_SHOWN.get(k);
-    if (!had || r.depth > had.depth || (r.lines && r.lines.length > 1 && !(had.lines && had.lines.length > 1)))
-      DEEPER_SHOWN.set(k, {
-        cp: r.cp,
-        depth: r.depth,
-        pv: r.pv || [],
-        lines: r.lines && r.lines.length > 1 ? r.lines : null,
-      });
+    // the deepest result stands: a shallower one (the automatic search after Go deeper went further) changes nothing
+    const k = deeperKey(M, c);
+    DEEPER_SHOWN.set(k, window.ChessCore.keepDeeper(DEEPER_SHOWN.get(k) || null, r));
     // eslint-disable-next-line react-hooks/exhaustive-deps -- r is a new object for each new result; M, c, p and ev.level are the ones it was found for
   }, [r]);
   return ev;

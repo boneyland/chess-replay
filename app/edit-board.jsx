@@ -184,6 +184,10 @@ function useEditInput({ setup, onChange }) {
     const p = at(e);
     setDrag((d) => d && { ...d, x: p.x, y: p.y, moved: moved(d, p) });
   };
+  // the drag ends without a move: cancelled, or its element lost the pointer with no release or cancel (kept, it would
+  // have taken this pointer's later moves and ignored every new finger, another pointerId; audit 2026-11-27). After a
+  // release, whose lostpointercapture follows it, it is already gone
+  const drop = (e) => setDrag((d) => (d && e.pointerId === d.id ? null : d));
   const E = window.EditCore;
   const handlers = {
     onDown: (e) => {
@@ -203,9 +207,15 @@ function useEditInput({ setup, onChange }) {
         p = liftPoint(e, d, at, false);
       setDrag(null);
       const to = dropSquare(d, p, false);
-      if (moved(d, p)) onChange(to < 0 ? E.put(setup, d.from, null) : E.move(setup, d.from, to));
+      if (!moved(d, p)) return;
+      // a tray piece's drag, should its release reach the board (its button lost the pointer): placed, not moved from
+      // nowhere, which blanked the square
+      if (d.from == null) {
+        if (p.sq >= 0) onChange(E.put(setup, p.sq, d.piece));
+      } else onChange(to < 0 ? E.put(setup, d.from, null) : E.move(setup, d.from, to));
     },
-    onCancel: (e) => setDrag((d) => (d && e.pointerId === d.id ? null : d)),
+    onCancel: drop,
+    onLost: drop,
   };
   // a tray press that doesn't move is a click (as Enter or Space on the button is): it holds the piece, or lets it go
   const trayHandlers = (piece) => ({
@@ -224,7 +234,8 @@ function useEditInput({ setup, onChange }) {
       dragged.current = true;
       if (p.sq >= 0) onChange(E.put(setup, p.sq, piece));
     },
-    onPointerCancel: (e) => setDrag((d) => (d && e.pointerId === d.id ? null : d)),
+    onPointerCancel: drop,
+    onLostPointerCapture: drop,
     // picked by keyboard (a click with no pointer: detail 0), the board takes the focus to place it
     onClick: (e) => {
       if (dragged.current) {
@@ -464,6 +475,7 @@ function EditBoard({
             kf.press();
             H.onCancel(e);
           }}
+          onLostPointerCapture={H.onLost}
           onDragStart={(e) => e.preventDefault()}
           tabIndex={0}
           role="application"

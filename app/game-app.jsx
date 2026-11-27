@@ -1059,19 +1059,20 @@ function GameApp() {
     }
   }, [sfKind]);
   // Lichess's opening book per ply, built after the first paint (about 0.25 s the first time)
-  // kept with the game it was built for: in the render after another game loads, before the effect clears it, the old
-  // game's book would name the new game's moves
+  // kept with the moves it was built for (bookKey: the start and the moves): in the render after another game loads,
+  // before the effect builds its own, the old game's book would name the new game's moves; the same moves rebuilt (an
+  // analysis landing) keep theirs, where keying it by M blinked the book's name off for 50 ms (audit 2026-11-27)
+  const bookKey = React.useMemo(() => M.start.fen + '|' + M.plies.map((p) => p.uci).join(' '), [M]);
   const [bookOf, setBook] = React.useState(null);
-  const book = bookOf && bookOf.M === M ? bookOf.byPly : null;
   // no book for the start on show when it is Chess960 (a free board's, else the replay's)
   const noBook = window.ChessCore.is960(board ? board.start.pos : M.start.pos);
+  const book = !noBook && bookOf && bookOf.key === bookKey ? bookOf.byPly : null;
   React.useEffect(() => {
-    setBook(null);
     if (noBook) return undefined;
     const id = setTimeout(() => {
       try {
         setBook({
-          M,
+          key: bookKey,
           byPly: window.Openings.book().byPly(
             M.plies.map((p) => p.uci),
             M.start.fen,
@@ -1080,7 +1081,8 @@ function GameApp() {
       } catch (e) {}
     }, 50);
     return () => clearTimeout(id);
-  }, [M, noBook]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- bookKey stands for M's start and moves, all the book is built from: a rebuilt M with the same moves keeps its book
+  }, [bookKey, noBook]);
   const soundSet = window.Sfx.SETS.includes(t.soundSet) ? t.soundSet : window.Sfx.SETS[0];
   const soundVolume = Number.isFinite(+t.soundVolume) ? +t.soundVolume : 70;
   // the page's rem is 16 px × this, so the overlays (dock, bars, Settings, menus, dialogs) follow the Text size setting; the panels get it through Stage's text

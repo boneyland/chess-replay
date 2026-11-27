@@ -137,6 +137,11 @@ function InfoTip({ info, label }) {
   React.useEffect(() => {
     if (!open) return;
     const close = () => setOpen(false);
+    // a scroll that moves the ⓘ (a box it sits in, or the page): any scroll in the page closed it, so during playback
+    // the Moves list's scroll closed it on every move (audit 2026-11-27)
+    const scrolled = (e) => {
+      if (e.target && e.target.contains && e.target.contains(btn.current)) close();
+    };
     const away = (e) => {
       if (!btn.current.contains(e.target)) close();
     };
@@ -146,12 +151,12 @@ function InfoTip({ info, label }) {
         close();
       }
     };
-    window.addEventListener('scroll', close, true);
+    window.addEventListener('scroll', scrolled, true);
     window.addEventListener('resize', close);
     document.addEventListener('pointerdown', away);
     window.addEventListener('keydown', esc, true);
     return () => {
-      window.removeEventListener('scroll', close, true);
+      window.removeEventListener('scroll', scrolled, true);
       window.removeEventListener('resize', close);
       document.removeEventListener('pointerdown', away);
       window.removeEventListener('keydown', esc, true);

@@ -139,8 +139,10 @@
     const now = performance.now(),
       a = d.pts[0],
       b = d.pts[d.pts.length - 1];
-    // no glide under reduced motion: the page stops where the pointer let go
-    if (!calm.matches && a && b !== a && now - b.t < 60) {
+    // no glide under reduced motion: the page stops where the pointer let go. Nor when the last two points share a time
+    // (a coarse clock, e.g. Firefox's): divided by 0, the speed was NaN, which never fell under GLIDE_MIN, so the glide
+    // never ended (nor BoardGroup's settle after it), or Infinity, a full-speed fling (audit 2026-11-27)
+    if (!calm.matches && a && b !== a && b.t > a.t && now - b.t < 60) {
       const cap = (v) => Math.max(-GLIDE_MAX, Math.min(GLIDE_MAX, v));
       flick(d.el, cap(-(b.x - a.x) / (b.t - a.t)), cap(-(b.y - a.y) / (b.t - a.t)), d.k);
     }

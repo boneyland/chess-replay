@@ -1629,6 +1629,39 @@ test('timing reads a stored setting that is not a number as its default', () => 
   assert.ok(CC.timing(M, { secondsPerMove: 3, keyHold: 0 }).total > ok.total);
 });
 
+// audit 2026-11-27, Replay: the deepest finished result stands (decisions, 2026-11-08); lines (Lines above one) come
+// only from a result at least as deep
+test('keepDeeper never replaces a deeper eval with a shallower one', () => {
+  const one = { cp: 40, depth: 30, pv: ['e2e4'], lines: null };
+  const three = { cp: 10, depth: 24, pv: ['d2d4'], lines: [{ cp: 10 }, { cp: 5 }, { cp: 0 }] };
+  assert.equal(CC.keepDeeper(one, three), one, 'a shallower multi-line result keeps the deeper eval');
+  assert.deepEqual(CC.keepDeeper(null, three), three);
+  assert.deepEqual(CC.keepDeeper(three, one), one, 'a deeper single-line result replaces');
+  const sameDepth = { ...three, depth: 30 };
+  assert.deepEqual(CC.keepDeeper(one, sameDepth), sameDepth, 'as deep, with lines it lacked');
+  assert.equal(CC.keepDeeper(sameDepth, { ...one }), sameDepth, 'as deep, without lines: kept');
+  assert.equal(CC.keepDeeper(one, { cp: 50, depth: 30, pv: [] }), one, 'as deep, nothing new');
+  assert.deepEqual(CC.keepDeeper(null, { cp: 5, depth: 12 }), { cp: 5, depth: 12, pv: [], lines: null });
+  assert.deepEqual(CC.keepDeeper(null, { cp: 5, depth: 12, lines: [{ cp: 5 }] }).lines, null, 'one line is no lines');
+});
+
+// audit 2026-11-27, Replay: the edge counted piece by piece, not clamped to a full set
+test('materialOf counts a promoted piece beyond the full set', () => {
+  const left = (pieces) => (col, t) => pieces[col][t] || 0;
+  const full = { q: 1, r: 2, b: 2, n: 2, p: 8 };
+  // White has promoted a pawn to a second queen with the first still on
+  const promo = left({ w: { ...full, q: 2, p: 7 }, b: full });
+  assert.deepEqual(CC.materialOf('w', promo), { taken: { q: 1, r: 0, b: 0, n: 0, p: -1 }, pts: 8 });
+  assert.deepEqual(CC.materialOf('b', promo), { taken: { q: -1, r: 0, b: 0, n: 0, p: 1 }, pts: -8 });
+  // a capture: Black has taken a knight
+  const capt = left({ w: { ...full, n: 1 }, b: full });
+  assert.deepEqual(CC.materialOf('b', capt).taken.n, 1);
+  assert.equal(CC.materialOf('b', capt).pts, 3);
+  // a set-up position with an edge shows it
+  const setup = left({ w: { q: 1, p: 2 }, b: { p: 1 } });
+  assert.deepEqual(CC.materialOf('w', setup), { taken: { q: 1, r: 0, b: 0, n: 0, p: 1 }, pts: 10 });
+});
+
 test('fileStem keeps the players’ surnames in any script, and no path characters, at most 50 characters', () => {
   const stem = (w, b) => CC.fileStem(CC.buildGame({ pgn: `[White "${w}"]\n[Black "${b}"]\n[Result "*"]\n\n1. e4 *` }));
   assert.equal(stem('Carlsen, Magnus', 'Nepomniachtchi, Ian'), 'Carlsen_Nepomniachtchi');
